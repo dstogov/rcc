@@ -202,6 +202,8 @@ try_expand_macro:
 					}
 				}
 			}
+			//TODO: this is necessary only for preprocessor (-E)
+			yy_text = yy_sym2strl(ret & ~PP_NOSUBST, &yy_len);
 		}
 		return ret;
 	}
