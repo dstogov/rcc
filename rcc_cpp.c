@@ -1264,7 +1264,7 @@ static yy_sym pp_find_include(yy_dyn_str *name, bool is_user, const char **buf_p
 		}
 	}
 
-	*buf_ptr = NULL;
+	if (buf_ptr) *buf_ptr = NULL;
 	return 0;
 
 read_file:
