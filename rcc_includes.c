@@ -1,0 +1,122 @@
+/*
+ * RCC - Rational C Compiler
+ * (Standard include files)
+ * Copyright (C) 2025 Dmitry Stogov <dmitrystogov@gmail.com>
+ */
+
+#include <ir.h>
+
+const char *c_boot_h =
+"#define __IRCC__                 1\n"
+"#define __STDC__                 1\n"
+"#define __STDC_HOSTED__          1\n"
+"#define __STDC_VERSION__         201112L\n"
+//"#define __STDC_ISO_10646__       201103L\n"
+//"#define __STDC_MB_MIGHT_NEQ_WC__ 1\n"
+//"#define __STDC_UTF_16__          1\n"
+//"#define __STDC_UTF_32__          1\n"
+//"#define __STDC_ANALYZABLE__      1\n"
+//"#define __STDC_IEC_559__         1\n"
+//"#define __STDC_IEC_559_COMPLEX__ 1\n"
+//"#define __STDC_LIB_EXT1__        201ymmL\n"
+"#define __STDC_NO_ATOMICS__      1\n"
+"#define __STDC_NO_COMPLEX__      1\n"
+"#define __STDC_NO_THREADS__      1\n"
+"#define __STDC_NO_VLA__          1\n"
+/* allow GCC extensions: __attribute__ */
+//"#define __GNUC__                 3\n"
+//"#define __GNUC_MINOR__           2\n"
+//"#define __GNUC_PATCHLEVEL__      0\n"
+#if defined(IR_TARGET_X64)
+"#define __x86_64__               1\n"
+"#define __SIZEOF_SHORT__         2\n"
+"#define __SIZEOF_INT__           4\n"
+"#define __SIZEOF_LONG__          8\n"
+"#define __SIZEOF_LONG_LONG__     8\n"
+"#define __SIZEOF_POINTER__       8\n"
+"#define __SIZEOF_PTRDIFF_T__     8\n"
+"#define __SIZEOF_SIZE_T__        8\n"
+"#define __SIZEOF_FLOAT__          4\n"
+"#define __SIZEOF_DOUBLE__         8\n"
+//"#define __SIZEOF_LONG_DOUBLE__   16\n"
+"#define __CHAR_BIT__             8\n"
+"#define __BYTE_ORDER__           1234\n"
+"#define __ORDER_LITTLE_ENDIAN__  1234\n"
+"#define __ORDER_BIG_ENDIAN__     4321\n"
+
+"#define __SCHAR_MAX__            0x7f\n"
+"#define __SHRT_MAX__             0x7fff\n"
+"#define __INT_MAX__              0x7fffffff\n"
+"#define __LONG_MAX__             0x7fffffffffffffffL\n"
+"#define __LONG_LONG_MAX__        0x7fffffffffffffffLL\n"
+
+"#define __FLT_MANT_DIG__         24\n"
+"#define __FLT_DIG__              6\n"
+"#define __FLT_DECIMAL_DIG__      9\n"
+"#define __FLT_MAX__              3.40282346638528859811704183484516925e+38F\n"
+"#define __FLT_MIN__              1.17549435082228750796873653722224568e-38F\n"
+"#define __FLT_EPSILON__          1.19209289550781250000000000000000000e-7F\n"
+"#define __DBL_MANT_DIG__         53\n"
+"#define __DBL_DIG__              15\n"
+"#define __DBL_DECIMAL_DIG__      17\n"
+"#define __DBL_MAX__              1.79769313486231570814527423731704357e+308\n"
+"#define __DBL_MIN__              2.22507385850720138309023271733240406e-308\n"
+"#define __DBL_EPSILON__          2.22044604925031308084726333618164062e-16\n"
+
+"#define __SIZE_TYPE__            unsigned long\n"
+"#define __UINTPTR_TYPE__         unsigned long\n"
+"#define __INTPTR_TYPE__          long\n"
+
+#elif defined(IR_TARGET_X86)
+#elif defined(IR_TARGET_AARCH64)
+#endif
+"\n";
+
+const char *c_srdarg_h =
+"#ifndef __STDARG_H\n"
+"#define __STDARG_H\n"
+"\n"
+"typedef struct {\n"
+"  unsigned int gp_offset;\n"
+"  unsigned int fp_offset;\n"
+"  void *overflow_arg_area;\n"
+"  void *reg_save_area;\n"
+"} va_list[1];\n"
+"\n"
+"#define va_start(ap, param) __builtin_va_start (ap)\n"
+"#define va_arg(ap, type) __builtin_va_arg(ap, (type *) 0)\n"
+"#define va_end(ap) 0\n"
+"#define va_copy(dest, src) ((dest)[0] = (src)[0])\n"
+"\n"
+"#ifndef __GNUC_VA_LIST\n"
+"#define __GNUC_VA_LIST 1\n"
+"#endif\n"
+"typedef va_list __gnuc_va_list;\n"
+"\n"
+"#endif\n";
+
+const char *c_stddef_h =
+"#ifndef __STDDEF_H\n"
+"#define __STDDEF_H\n"
+"\n"
+"typedef long ptrdiff_t;\n"
+"typedef unsigned long size_t;\n"
+"typedef long double max_align_t;\n"
+"typedef int wchar_t;\n"
+"\n"
+"#define NULL ((void *) 0)\n"
+"\n"
+"#define offsetof(type, member_designator) ((size_t) & ((type *) 0)->member_designator)\n"
+"\n"
+"#endif\n";
+
+const char *c_stdbool_h =
+"#ifndef _STDBOOL_H\n"
+"#define _STDBOOL_H\n"
+"\n"
+"#define bool	_Bool\n"
+"#define true	1\n"
+"#define false	0\n"
+"#define __bool_true_false_are_defined 1\n"
+"\n"
+"#endif\n";

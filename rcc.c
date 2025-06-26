@@ -306,122 +306,9 @@ void rcc_init(void)
 	const char *s;
 	size_t len;
 	yy_hash_bucket *b;
-	typedef struct {
-		const char *name;
-		const char *val;
-	} pp_predefined_macro;
-
-	static const pp_predefined_macro pp_predefined_macros[] = {
-		{"__IRCC__",                 "1"},
-		{"__STDC__",                 "1"},
-		{"__STDC_HOSTED__",          "1"},
-		{"__STDC_VERSION__",         "201112L"},
-//		{"__STDC_ISO_10646__",       "201103L"},
-//		{"__STDC_MB_MIGHT_NEQ_WC__", "1"},
-//		{"__STDC_UTF_16__",          "1"},
-//		{"__STDC_UTF_32__",          "1"},
-//		{"__STDC_ANALYZABLE__",      "1"},
-//		{"__STDC_IEC_559__",         "1"},
-//		{"__STDC_IEC_559_COMPLEX__", "1"},
-//		{"__STDC_LIB_EXT1__",        "201ymmL"},
-		{"__STDC_NO_ATOMICS__",      "1"},
-		{"__STDC_NO_COMPLEX__",      "1"},
-		{"__STDC_NO_THREADS__",      "1"},
-		{"__STDC_NO_VLA__",          "1"},
-//		/* allow GCC extensions: __attribute__ */
-//		{"__GNUC__",                 "3"},
-//		{"__GNUC_MINOR__",           "2"},
-//		{"__GNUC_PATCHLEVEL__",      "0"},
-#if defined(IR_TARGET_X64)
-		{"__x86_64__",               "1"},
-		{"__SIZEOF_SHORT__",         "2"},
-		{"__SIZEOF_INT__",           "4"},
-		{"__SIZEOF_LONG__",          "8"},
-		{"__SIZEOF_LONG_LONG__",     "8"},
-		{"__SIZEOF_POINTER__",       "8"},
-		{"__SIZEOF_PTRDIFF_T__",     "8"},
-		{"__SIZEOF_SIZE_T__",        "8"},
-		{"__SIZEOF_FLOAT__",         "4"},
-		{"__SIZEOF_DOUBLE__",        "8"},
-//		{"__SIZEOF_LONG_DOUBLE__",   "16"},
-		{"__CHAR_BIT__",             "8"},
-		{"__BYTE_ORDER__",           "1234"},
-		{"__ORDER_LITTLE_ENDIAN__",  "1234"},
-		{"__ORDER_BIG_ENDIAN__",     "4321"},
-
-		{"__SCHAR_MAX__",            "0x7f"},
-		{"__SHRT_MAX__",             "0x7fff"},
-		{"__INT_MAX__",              "0x7fffffff"},
-		{"__LONG_MAX__",             "0x7fffffffffffffffL"},
-		{"__LONG_LONG_MAX__",        "0x7fffffffffffffffLL"},
-
-		{"__FLT_MANT_DIG__",         "24"},
-		{"__FLT_DIG__",              "6"},
-		{"__FLT_DECIMAL_DIG__",      "9"},
-		{"__FLT_MAX__",              "3.40282346638528859811704183484516925e+38F"},
-		{"__FLT_MIN__",              "1.17549435082228750796873653722224568e-38F"},
-		{"__FLT_EPSILON__",          "1.19209289550781250000000000000000000e-7F"},
-		{"__DBL_MANT_DIG__",         "53"},
-		{"__DBL_DIG__",              "15"},
-		{"__DBL_DECIMAL_DIG__",      "17"},
-		{"__DBL_MAX__",              "1.79769313486231570814527423731704357e+308"},
-		{"__DBL_MIN__",              "2.22507385850720138309023271733240406e-308"},
-		{"__DBL_EPSILON__",          "2.22044604925031308084726333618164062e-16"},
-#elif defined(IR_TARGET_X86)
-		{"__i386__",                 "1"},
-		{"__SIZEOF_SHORT__",         "2"},
-		{"__SIZEOF_INT__",           "4"},
-		{"__SIZEOF_LONG__",          "4"},
-		{"__SIZEOF_LONG_LONG__",     "8"},
-		{"__SIZEOF_POINTER__",       "4"},
-		{"__SIZEOF_PTRDIFF_T__",     "4"},
-		{"__SIZEOF_SIZE_T__",        "4"},
-		{"__SIZEOF_FLOAT__",         "4"},
-		{"__SIZEOF_DOUBLE__",        "8"},
-//		{"__SIZEOF_LONG_DOUBLE__",   "16"},
-		{"__CHAR_BIT__",             "8"},
-		{"__BYTE_ORDER__",           "1234"},
-		{"__ORDER_LITTLE_ENDIAN__",  "1234"},
-		{"__ORDER_BIG_ENDIAN__",     "4321"},
-
-		{"__SCHAR_MAX__",            "0x7f"},
-		{"__SHRT_MAX__",             "0x7fff"},
-		{"__INT_MAX__",              "0x7fffffff"},
-		{"__LONG_MAX__",             "0x7fffffffL"},
-		{"__LONG_LONG_MAX__",        "0x7fffffffffffffffLL"},
-#elif defined(IR_TARGET_AARCH64)
-		{"__aarch64__",              "1"},
-		{"__SIZEOF_SHORT__",         "2"},
-		{"__SIZEOF_INT__",           "4"},
-		{"__SIZEOF_LONG__",          "8"},
-		{"__SIZEOF_LONG_LONG__",     "8"},
-		{"__SIZEOF_POINTER__",       "8"},
-		{"__SIZEOF_PTRDIFF_T__",     "8"},
-		{"__SIZEOF_SIZE_T__",        "8"},
-		{"__SIZEOF_FLOAT__",         "4"},
-		{"__SIZEOF_DOUBLE__",        "8"},
-//		{"__SIZEOF_LONG_DOUBLE__",   "16"},
-		{"__CHAR_BIT__",             "8"},
-		{"__BYTE_ORDER__",           "1234"},
-		{"__ORDER_LITTLE_ENDIAN__",  "1234"},
-		{"__ORDER_BIG_ENDIAN__",     "4321"},
-
-		{"__SCHAR_MAX__",            "0x7f"},
-		{"__SHRT_MAX__",             "0x7fff"},
-		{"__INT_MAX__",              "0x7fffffff"},
-		{"__LONG_MAX__",             "0x7fffffffffffffffL"},
-		{"__LONG_LONG_MAX__",        "0x7fffffffffffffffLL"},
-#endif
-		/* keyword aliases */
-//		{"asm",                      "__asm__"),
-//		{"__asm",                    "__asm__"),
-		{NULL, NULL}
-	};
 
 	yy_arena = ir_arena_create(4096);
 	yy_hash_init();
-
-	pp_start();
 
 	memset(yy_hash.data, 0, YY_FIRST_KEYWORD * sizeof(yy_hash_bucket));
 	i = 0;
@@ -441,9 +328,6 @@ void rcc_init(void)
 		s += len + 1;
 	}
 
-	yy_file_name = yy_hash_lookup("builtin", sizeof("builtin")-1);
-	yy_line = 1;
-
 	pp_macro_define(YY___COUNTER__,  PP_MACRO_BUILTIN, 0, NULL);
 	pp_macro_define(YY___DATE__,     PP_MACRO_BUILTIN, 0, NULL);
 	pp_macro_define(YY___FILE__,     PP_MACRO_BUILTIN, 0, NULL);
@@ -452,77 +336,30 @@ void rcc_init(void)
 	pp_macro_define(YY___LINE__,     PP_MACRO_BUILTIN, 0, NULL);
 	pp_macro_define(YY___TIME__,     PP_MACRO_BUILTIN, 0, NULL);
 
-	const pp_predefined_macro *p;
+	yy_pos = yy_text = yy_linepos = yy_buf = c_boot_h;
+	yy_len = 0;
+	yy_line = 1;
+	yy_end = yy_buf + strlen(yy_buf);
+	yy_file_name = yy_hash_lookup("builtin", sizeof("builtin")-1);
 
-	for (p = pp_predefined_macros; p->name; p++) {
-		yy_sym name = yy_hash_lookup(p->name, (uint32_t)strlen(p->name));
-		yy_sym *tokens, *q;
+	pp_start();
 
-		if (!p->val) {
-			tokens = ir_arena_alloc(&yy_arena, sizeof(yy_sym));
-			*tokens = YY_EOF;
-		} else if (p->val[0] >= '0' && p->val[0] <= '9') {
-			tokens = ir_arena_alloc(&yy_arena, sizeof(yy_sym) * 5);
-			if (p->val[1] == 'x') {
-				*tokens = YY_HEXADECIMAL_NUMBER;
-			} else if (p->val[1] == '.') {
-				*tokens = YY_FLOATING_NUMBER;
-			} else {
-				*tokens = YY_DECIMAL_NUMBER;
-			}
-			yy_text = p->val;
-			yy_len = strlen(p->val);
-			q = pp_save_val(tokens + 1);
-			*q = YY_EOF;
-		} else if ((p->val[0] >= 'a' && p->val[0] <= 'z')
-				|| (p->val[0] >= 'A' && p->val[0] <= 'Z')
-				|| p->val[0] == '_') {
-			yy_sym val = yy_hash_lookup(p->val, (uint32_t)strlen(p->val));
-
-			IR_ASSERT(PP_IS_ID(val));
-			tokens = ir_arena_alloc(&yy_arena, sizeof(yy_sym) * 5);
-			*tokens = val;
-			tokens[1] = YY_EOF;
-		} else {
-			IR_ASSERT(0);
-			tokens = NULL;
-		}
-		pp_macro_define(name, PP_MACRO_PREDEFINED, 0, tokens);
+	while (1) {
+		yy_sym sym = yy_next();
+		if (sym == YY_EOF) break;
 	}
-
-	// TODO: replace this (system depended) ???
-	yy_sym *tokens = ir_arena_alloc(&yy_arena, sizeof(yy_sym) * 3);
-	tokens[0] = YY_UNSIGNED;
-	tokens[1] = YY_LONG;
-	tokens[2] = YY_EOF;
-	pp_macro_define(
-		yy_hash_lookup("__SIZE_TYPE__", (uint32_t)strlen("__SIZE_TYPE__")), PP_MACRO_PREDEFINED, 0, tokens);
-	pp_macro_define(
-		yy_hash_lookup("__UINTPTR_TYPE__", (uint32_t)strlen("__UINTPTR_TYPE__")), PP_MACRO_PREDEFINED, 0, tokens);
-	tokens = ir_arena_alloc(&yy_arena, sizeof(yy_sym) * 2);
-	tokens[0] = YY_LONG;
-	tokens[1] = YY_EOF;
-	pp_macro_define(
-		yy_hash_lookup("__INTPTR_TYPE__", (uint32_t)strlen("__INTPTR_TYPE__")), PP_MACRO_PREDEFINED, 0, tokens);
 
 	if (c_opt_level > 0) {
-		yy_sym name = yy_hash_lookup("__OPTIMIZE__", (uint32_t)strlen("__OPTIMIZE__"));
-#if 1
-		yy_sym *tokens = ir_arena_alloc(&yy_arena, sizeof(yy_sym));
+		yy_pos = yy_text = yy_linepos = yy_buf = "#define __OPTIMIZE__ 1\n";
+		yy_end = yy_buf + strlen(yy_buf);
 
-		*tokens = YY_EOF;
-#else
-		yy_sym *tokens, *q;
-
-		tokens = ir_arena_alloc(&yy_arena, sizeof(yy_sym) * 5);
-		*tokens = YY_DECIMAL_NUMBER;
-		yy_text = "1";
-		yy_len = 1;
-		q = pp_save_val(tokens + 1);
-		*q = YY_EOF;
-#endif
-		pp_macro_define(name, PP_MACRO_PREDEFINED, 0, tokens);
+		while (1) {
+			yy_sym sym = yy_next();
+			if (sym == YY_EOF) break;
+		}
 	}
+
+	pp_dtor();
 
 	c_arena = ir_arena_create(4096);
 	c_linker_arena = ir_arena_create(4096);

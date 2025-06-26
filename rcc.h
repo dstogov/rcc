@@ -880,6 +880,12 @@ extern bool                  c_dead_code;
 extern ir_ctx               *active_ctx;
 extern ir_ctx               *global_ctx;
 
+/* Standard include files */
+extern const char *c_boot_h;
+extern const char *c_srdarg_h;
+extern const char *c_stddef_h;
+extern const char *c_stdbool_h;
+
 /* inline helpers */
 IR_ALWAYS_INLINE const char *yy_sym2str(yy_sym sym)
 {
