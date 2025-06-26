@@ -1,0 +1,32 @@
+- prohibit storage specifiers in "for"
+- prohibit duplicate "case" labels
+- false positive "control reaches end of non-void function"
+- struct layout variations (MS, pack)
+- no-code in sizeof(), _Alignof(), typeof(), ...
+- function inlining
+- volatile
+- struct/union arguments and return value
+- variable length arrays
+- computed goto
+- _Generic
+- _Atomic
+- _Thread_local
+- _Noreturn
+- long double
+- _Complex
+- _Imaginary
+- trigraphs
+- Unicode
+- full support for "\"
+- pragmas
+- calling conventions
+- nested functions
+- local register variables
+- global register variables
+- asm names
+
+- inline asm
+
+- better linker
+
+- TBAA
