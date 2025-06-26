@@ -16,9 +16,9 @@
 # define O_BINARY 0
 #endif
 
-#include "ir.h"
-#include "ir_private.h"
-#include "ir_builder.h"
+#include <ir.h>
+#include <ir_private.h>
+#include <ir_builder.h>
 
 #include "rcc.h"
 
@@ -336,29 +336,15 @@ void rcc_init(void)
 	pp_macro_define(YY___LINE__,     PP_MACRO_BUILTIN, 0, NULL);
 	pp_macro_define(YY___TIME__,     PP_MACRO_BUILTIN, 0, NULL);
 
-	yy_pos = yy_text = yy_linepos = yy_buf = c_boot_h;
-	yy_len = 0;
-	yy_line = 1;
-	yy_end = yy_buf + strlen(yy_buf);
-	yy_file_name = yy_hash_lookup("builtin", sizeof("builtin")-1);
-
 	pp_start();
-
-	while (1) {
-		yy_sym sym = yy_next();
-		if (sym == YY_EOF) break;
-	}
-
+	c_stdinc_init();
 	if (c_opt_level > 0) {
 		yy_pos = yy_text = yy_linepos = yy_buf = "#define __OPTIMIZE__ 1\n";
 		yy_end = yy_buf + strlen(yy_buf);
-
-		while (1) {
-			yy_sym sym = yy_next();
-			if (sym == YY_EOF) break;
-		}
+		do {
+			i = yy_next();
+		} while (i != YY_EOF);
 	}
-
 	pp_dtor();
 
 	c_arena = ir_arena_create(4096);

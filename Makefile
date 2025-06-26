@@ -54,7 +54,7 @@ ifeq (NetBSD, $(OS))
   LDFLAGS = -L/usr/pkg/lib -Wl,-rpath,/usr/pkg/lib -lm
 endif
 
-OBJS_RCC = $(BUILD_DIR)/rcc_scanner.o $(BUILD_DIR)/rcc_cpp.o $(BUILD_DIR)/rcc_includes.o \
+OBJS_RCC = $(BUILD_DIR)/rcc_scanner.o $(BUILD_DIR)/rcc_cpp.o $(BUILD_DIR)/rcc_stdinc.o \
 	$(BUILD_DIR)/rcc_parser.o $(BUILD_DIR)/rcc_semantic.o $(BUILD_DIR)/rcc.o
 
 all: $(BUILD_DIR) $(BUILD_DIR)/rcc
@@ -69,6 +69,7 @@ $(BUILD_DIR)/rcc_scanner.o: $(SRC_DIR)/rcc.h
 $(BUILD_DIR)/rcc_cpp.o: $(SRC_DIR)/rcc.h
 $(BUILD_DIR)/rcc_parser.o: $(SRC_DIR)/rcc.h
 $(BUILD_DIR)/rcc_semantic.o: $(SRC_DIR)/rcc.h
+$(BUILD_DIR)/rcc_stdinc.o: $(SRC_DIR)/rcc.h
 $(BUILD_DIR)/rcc.o: $(SRC_DIR)/rcc.h
 
 $(SRC_DIR)/rcc_parser.c: $(SRC_DIR)/c.g

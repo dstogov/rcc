@@ -5,8 +5,11 @@
  */
 
 #include <ir.h>
+#include <ir_private.h>
 
-const char *c_boot_h =
+#include "rcc.h"
+
+static const char c_boot[] =
 "#define __IRCC__                 1\n"
 "#define __STDC__                 1\n"
 "#define __STDC_HOSTED__          1\n"
@@ -72,7 +75,7 @@ const char *c_boot_h =
 #endif
 "\n";
 
-const char *c_srdarg_h =
+static const char c_stdarg_h[] =
 "#ifndef __STDARG_H\n"
 "#define __STDARG_H\n"
 "\n"
@@ -95,7 +98,7 @@ const char *c_srdarg_h =
 "\n"
 "#endif\n";
 
-const char *c_stddef_h =
+static const char c_stddef_h[] =
 "#ifndef __STDDEF_H\n"
 "#define __STDDEF_H\n"
 "\n"
@@ -110,7 +113,7 @@ const char *c_stddef_h =
 "\n"
 "#endif\n";
 
-const char *c_stdbool_h =
+static const char c_stdbool_h[] =
 "#ifndef _STDBOOL_H\n"
 "#define _STDBOOL_H\n"
 "\n"
@@ -120,3 +123,51 @@ const char *c_stdbool_h =
 "#define __bool_true_false_are_defined 1\n"
 "\n"
 "#endif\n";
+
+#define STDINC_COUNT 3
+
+static struct {
+	yy_sym      name;
+	uint32_t    content_len;
+	const char *content;
+} c_stdinc[STDINC_COUNT];
+
+void c_stdinc_init(void)
+{
+	yy_sym sym;
+
+	c_stdinc[0].name = yy_hash_lookup("stdarg.h", sizeof("stdarg.h") - 1);
+	c_stdinc[0].content = c_stdarg_h;
+	c_stdinc[0].content_len = sizeof(c_stdarg_h) - 1;
+
+	c_stdinc[1].name = yy_hash_lookup("stddef.h", sizeof("stddef.h") - 1);
+	c_stdinc[1].content = c_stddef_h;
+	c_stdinc[1].content_len = sizeof(c_stddef_h) - 1;
+
+	c_stdinc[2].name = yy_hash_lookup("stdbool.h", sizeof("stdbool.h") - 1);
+	c_stdinc[2].content = c_stdbool_h;
+	c_stdinc[2].content_len = sizeof(c_stdbool_h) - 1;
+
+	yy_file_name = yy_hash_lookup("builtin", sizeof("builtin") - 1);
+	yy_pos = yy_text = yy_linepos = yy_buf = c_boot;
+	yy_len = 0;
+	yy_line = 1;
+	yy_end = yy_buf + sizeof(c_boot) - 1;
+
+	do {
+		sym = yy_next();
+	} while (sym != YY_EOF);
+}
+
+const char *c_stdinc_find(yy_sym name, size_t *len)
+{
+	int i;
+
+	for (i = 0; i < STDINC_COUNT; i++) {
+		if (c_stdinc[i].name == name) {
+			*len = c_stdinc[i].content_len;
+			return c_stdinc[i].content;
+		}
+	}
+	return NULL;
+}

@@ -136,7 +136,6 @@ const char *pp_include_paths[] = {
 };
 
 const char *pp_sys_include_paths[] = {
-	"/home/dmitry/php/ir/ircc-include",
 	"/usr/local/include",
 	"/usr/include",
 	NULL
@@ -1032,32 +1031,8 @@ static bool pp_eval_ifdef(bool ifdef, bool start_of_include)
 	return !(ifdef ^ pp_macro_is_defined(id));
 }
 
-static bool pp_push_include(yy_sym file_name, int fd)
+static void pp_push_include(yy_sym file_name, const char *buf, size_t size)
 {
-	size_t size, ret;
-	char *buf;
-	struct stat stat_buf;
-
-	if (fstat(fd, &stat_buf) != 0) {
-		fprintf(stderr, "ERROR: Cannot get size of include file \"%s\"\n", yy_sym2str(file_name));
-		return 0;
-	}
-	size = stat_buf.st_size;
-
-	buf = ir_mem_malloc(size + 1);
-	if (!buf) {
-		fprintf(stderr, "ERROR: Cannot allocate buffer to read include file \"%s\"\n", yy_sym2str(file_name));
-		return 0;
-	}
-
-	ret = read(fd, buf, size);
-	close(fd);
-	if (ret != size) {
-		fprintf(stderr, "ERROR: Cannot read include file \"%s\"\n", yy_sym2str(file_name));
-		return 0;
-	}
-	buf[size] = '\0'; /* End marker */
-
 	IR_ASSERT(pp_include_level < INCLUDE_STACK_SIZE);
 	pp_include_stack[pp_include_level].pos       = yy_pos;
 	pp_include_stack[pp_include_level].text      = yy_text;
@@ -1081,8 +1056,6 @@ static bool pp_push_include(yy_sym file_name, int fd)
 	pp_include_ifdef_level = pp_ifdef_level;
 	pp_include_ifndef_state = YY_INCLUDE_START;
 	pp_include_ifndef_macro = 0;
-
-	return 1;
 }
 
 void pp_pop_include(void)
@@ -1117,7 +1090,37 @@ void pp_pop_include(void)
 	pp_include_ifndef_macro = pp_include_stack[pp_include_level].macro;
 }
 
-static yy_sym pp_find_include(yy_dyn_str *name, bool is_user, int *fd_ptr)
+static const char *pp_read_file(yy_sym file_name, int fd, size_t *size_ptr)
+{
+	size_t size, ret;
+	char *buf;
+	struct stat stat_buf;
+
+	if (fstat(fd, &stat_buf) != 0) {
+		yy_error_fmt("cannot read file \"%s\"", yy_sym2str(file_name));
+		return NULL;
+	}
+	size = stat_buf.st_size;
+
+	buf = ir_mem_malloc(size + 1);
+	if (!buf) {
+		yy_error_fmt("cannot read file \"%s\"", yy_sym2str(file_name));
+		return NULL;
+	}
+
+	ret = read(fd, buf, size);
+	if (ret != size) {
+		ir_mem_free(buf);
+		yy_error_fmt("cannot read file \"%s\"", yy_sym2str(file_name));
+		return NULL;
+	}
+	buf[size] = '\0'; /* End marker */
+
+	*size_ptr = size;
+	return buf;
+}
+
+static yy_sym pp_find_include(yy_dyn_str *name, bool is_user, const char **buf_ptr, size_t *size_ptr)
 {
 	int fd;
 	int i;
@@ -1129,15 +1132,15 @@ static yy_sym pp_find_include(yy_dyn_str *name, bool is_user, int *fd_ptr)
 			if (resolved_name) {
 				macro_name = ir_hashtab_find(pp_include_hash, resolved_name);
 				if (macro_name != IR_INVALID_VAL && pp_macro_is_defined(macro_name)) {
-					*fd_ptr = -1;
+					if (buf_ptr) *buf_ptr = NULL;
 					return resolved_name;
 				}
 			}
 		}
 		fd = open(name->str, O_RDONLY | O_BINARY);
 		if (fd >= 0) {
-			*fd_ptr = fd;
-			return yy_hash_lookup(name->str, name->len);
+			resolved_name = yy_hash_lookup(name->str, name->len);
+			goto read_file;
 		}
 	} else {
 		if (is_user) {
@@ -1155,15 +1158,15 @@ static yy_sym pp_find_include(yy_dyn_str *name, bool is_user, int *fd_ptr)
 					if (resolved_name) {
 						macro_name = ir_hashtab_find(pp_include_hash, resolved_name);
 						if (macro_name != IR_INVALID_VAL && pp_macro_is_defined(macro_name)) {
-							*fd_ptr = -1;
+							if (buf_ptr) *buf_ptr = NULL;
 							return resolved_name;
 						}
 					}
 				}
 				fd = open(name->str, O_RDONLY | O_BINARY);
 				if (fd >= 0) {
-					*fd_ptr = fd;
-					return yy_hash_lookup(name->str, name->len);
+					resolved_name = yy_hash_lookup(name->str, name->len);
+					goto read_file;
 				}
 			} else {
 				yy_dyn_str buf;
@@ -1175,17 +1178,40 @@ static yy_sym pp_find_include(yy_dyn_str *name, bool is_user, int *fd_ptr)
 					if (resolved_name) {
 						macro_name = ir_hashtab_find(pp_include_hash, resolved_name);
 						if (macro_name != IR_INVALID_VAL && pp_macro_is_defined(macro_name)) {
-							*fd_ptr = -1;
+							if (buf_ptr) *buf_ptr = NULL;
 							return resolved_name;
 						}
 					}
 				}
 				fd = open(buf.str, O_RDONLY | O_BINARY);
 				if (fd >= 0) {
-					*fd_ptr = fd;
-					return yy_hash_lookup(buf.str, buf.len);
+					resolved_name = yy_hash_lookup(buf.str, buf.len);
+					goto read_file;
 				}
 				ir_arena_release(&yy_arena, checkpoint);
+			}
+		}
+
+		resolved_name = yy_hash_find(name->str, name->len);
+		if (resolved_name) {
+			size_t len;
+			const char *content = c_stdinc_find(resolved_name, &len);
+
+			if (content) {
+				if (pp_include_hash) {
+					macro_name = ir_hashtab_find(pp_include_hash, resolved_name);
+					if (macro_name != IR_INVALID_VAL && pp_macro_is_defined(macro_name)) {
+						if (buf_ptr) *buf_ptr = NULL;
+						return resolved_name;
+					}
+				}
+				if (buf_ptr) {
+					char *buf = ir_mem_malloc(len + 1);
+					memcpy(buf, content, len + 1);
+					*buf_ptr = buf;
+					*size_ptr = len;
+				}
+				return resolved_name;
 			}
 		}
 
@@ -1200,15 +1226,15 @@ static yy_sym pp_find_include(yy_dyn_str *name, bool is_user, int *fd_ptr)
 				if (resolved_name) {
 					macro_name = ir_hashtab_find(pp_include_hash, resolved_name);
 					if (macro_name != IR_INVALID_VAL && pp_macro_is_defined(macro_name)) {
-						*fd_ptr = -1;
+						if (buf_ptr) *buf_ptr = NULL;
 						return resolved_name;
 					}
 				}
 			}
 			fd = open(buf.str, O_RDONLY | O_BINARY);
 			if (fd >= 0) {
-				*fd_ptr = fd;
-				return yy_hash_lookup(buf.str, buf.len);
+				resolved_name = yy_hash_lookup(buf.str, buf.len);
+				goto read_file;
 			}
 			ir_arena_release(&yy_arena, checkpoint);
 		}
@@ -1224,22 +1250,27 @@ static yy_sym pp_find_include(yy_dyn_str *name, bool is_user, int *fd_ptr)
 				if (resolved_name) {
 					macro_name = ir_hashtab_find(pp_include_hash, resolved_name);
 					if (macro_name != IR_INVALID_VAL && pp_macro_is_defined(macro_name)) {
-						*fd_ptr = -1;
+						if (buf_ptr) *buf_ptr = NULL;
 						return resolved_name;
 					}
 				}
 			}
 			fd = open(buf.str, O_RDONLY | O_BINARY);
 			if (fd >= 0) {
-				*fd_ptr = fd;
-				return yy_hash_lookup(buf.str, buf.len);
+				resolved_name = yy_hash_lookup(buf.str, buf.len);
+				goto read_file;
 			}
 			ir_arena_release(&yy_arena, checkpoint);
 		}
 	}
 
-	*fd_ptr = -1;
+	*buf_ptr = NULL;
 	return 0;
+
+read_file:
+	if (buf_ptr) *buf_ptr = pp_read_file(resolved_name, fd, size_ptr);
+	close(fd);
+	return resolved_name;
 }
 
 static void pp_parse_include(void)
@@ -1301,14 +1332,16 @@ static void pp_parse_include(void)
 
 	if (pp_include_level >= INCLUDE_STACK_SIZE) yy_error("too deep include level");
 
-	int fd;
-	yy_sym resolved_name = pp_find_include(&name, is_user, &fd);
+	const char *buf;
+	size_t size;
+
+	yy_sym resolved_name = pp_find_include(&name, is_user, &buf, &size);
 
 	if (!resolved_name) {
 		yy_error_fmt("%.*s: No such file or directory", (int)name.len, name.str);
 	}
 
-	if (fd < 0) {
+	if (!buf) {
 		return;
 	}
 
@@ -1316,9 +1349,7 @@ static void pp_parse_include(void)
 		pp_debug_include(name.str, is_user);
 	}
 
-	if (!pp_push_include(resolved_name, fd)) {
-		exit(1);
-	}
+	pp_push_include(resolved_name, buf, size);
 }
 
 static bool pp_eval_has_include(void)
@@ -1377,11 +1408,7 @@ static bool pp_eval_has_include(void)
 
 	if (sym != YY__RPAREN) yy_error("')' expected");
 
-	int fd;
-	yy_sym resolved_name = pp_find_include(&name, is_user, &fd);
-
-	if (fd >= 0) close(fd);
-	return resolved_name != 0;
+	return pp_find_include(&name, is_user, NULL, NULL) != 0;
 }
 
 static bool pp_eval_expr(void)
