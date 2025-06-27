@@ -1311,6 +1311,9 @@ static void pp_parse_include(void)
 					} else if (sym == YY_EOF || sym == YY_EOL) {
 						yy_error("missing terminating > character");
 					} else {
+						if (!PP_HAS_VAL(sym)) {
+							yy_text = yy_sym2strl(sym, &yy_len);
+						}
 						yy_dyn_str_append(&name, yy_text, yy_len);
 					}
 				}
