@@ -247,7 +247,7 @@ identifier2:
 			do {
 				h = ((h << 5) + h) + ch;
 				ch = *++pos;
-			} while ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '$');
+			} while ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '$' || ch >= 0x80);
 
 			yy_pos = (const char*)pos;
 			yy_len = yy_pos - yy_text;
