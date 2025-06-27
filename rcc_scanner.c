@@ -752,6 +752,7 @@ string:
 			}
 			goto error;
 		default:
+			if (ch >= 0x80) goto identifier;
 			if (yy_flags & YY_ACCEPT_PUNCTUATOR) {
 				ret = YY_PP_PUNCTUATOR;
 				pos++;
