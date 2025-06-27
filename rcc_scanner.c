@@ -153,7 +153,7 @@ static yy_sym yy_parse_pp_number(const char *str, size_t len);
 yy_sym yy_next(void)
 {
 	uint32_t h;
-	int ch, ch2;
+	uint8_t ch, ch2;
 	yy_sym ret;
 	pp_macro *macro;
 	const unsigned char *pos;
