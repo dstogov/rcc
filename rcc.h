@@ -897,12 +897,12 @@ IR_ALWAYS_INLINE const char *yy_sym2strl(yy_sym sym, size_t *len)
 
 IR_ALWAYS_INLINE yy_sym *pp_save_ptr(yy_sym *tokens, const void *ptr)
 {
-	if (sizeof(void*) == sizeof(int32_t)) {
-		*tokens++ = (intptr_t)ptr;
-	} else {
-		*tokens++ = (int32_t)(((uintptr_t)ptr >> 32) & 0xffffffff);
-		*tokens++ = (int32_t)((uintptr_t)ptr & 0xffffffff);
-	}
+#if __SIZEOF_POINTER__ == 4
+	*tokens++ = (intptr_t)ptr;
+#else
+	*tokens++ = (int32_t)(((uintptr_t)ptr >> 32) & 0xffffffff);
+	*tokens++ = (int32_t)((uintptr_t)ptr & 0xffffffff);
+#endif
 	return tokens;
 }
 
@@ -915,13 +915,13 @@ IR_ALWAYS_INLINE yy_sym *pp_save_val(yy_sym *tokens)
 
 IR_ALWAYS_INLINE yy_sym *pp_load_ptr(yy_sym *tokens, void **ptr)
 {
-	if (sizeof(void*) == sizeof(int32_t)) {
-		*ptr = (void*)(uintptr_t)*tokens++;
-	} else {
-		uintptr_t val = (uintptr_t)*tokens++ << 32;
-		val |= (uintptr_t)*tokens++;
-		*ptr = (void*)val;
-	}
+#if __SIZEOF_POINTER__ == 4
+	*ptr = (void*)(uintptr_t)*tokens++;
+#else
+	uintptr_t val = (uintptr_t)*tokens++ << 32;
+	val |= (uintptr_t)*tokens++;
+	*ptr = (void*)val;
+#endif
 	return tokens;
 }
 
@@ -968,45 +968,25 @@ IR_ALWAYS_INLINE void pp_list_push(pp_list *l, yy_sym sym)
 
 IR_ALWAYS_INLINE void pp_list_push_ptr(pp_list *l, void *ptr)
 {
-	if (sizeof(void*) == sizeof(int32_t)) {
-		uint32_t len = l->len + 1;
+	uint32_t len = l->len + sizeof(void*)/sizeof(int32_t);
 
-		if (len > l->size) {
-			pp_list_grow(l, len);
-		}
-		pp_save_ptr(l->syms + l->len, ptr);
-		l->len += 1;
-	} else {
-		uint32_t len = l->len + 2;
-
-		if (len > l->size) {
-			pp_list_grow(l, len);
-		}
-		pp_save_ptr(l->syms + l->len, ptr);
-		l->len += 2;
+	if (len > l->size) {
+		pp_list_grow(l, len);
 	}
+	pp_save_ptr(l->syms + l->len, ptr);
+	l->len += sizeof(void*)/sizeof(int32_t);
 }
 
 IR_ALWAYS_INLINE void pp_list_push_val(pp_list *l)
 {
 	IR_ASSERT(yy_len < 0x7fffffff);
-	if (sizeof(void*) == sizeof(int32_t)) {
-		uint32_t len = l->len + 2;
+	uint32_t len = l->len + sizeof(void*)/sizeof(int32_t) + 1;
 
-		if (len > l->size) {
-			pp_list_grow(l, len);
-		}
-		pp_save_val(l->syms + l->len);
-		l->len += 2;
-	} else {
-		uint32_t len = l->len + 3;
-
-		if (len > l->size) {
-			pp_list_grow(l, len);
-		}
-		pp_save_val(l->syms + l->len);
-		l->len += 3;
+	if (len > l->size) {
+		pp_list_grow(l, len);
 	}
+	pp_save_val(l->syms + l->len);
+	l->len += sizeof(void*)/sizeof(int32_t) + 1;
 }
 
 IR_ALWAYS_INLINE void c_value_set_rval(c_value *res, const c_type *type, ir_type t, ir_ref ref)

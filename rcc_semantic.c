@@ -565,7 +565,7 @@ static void c_validate_redeclaration(c_name name, c_dcl *d, c_sym *sym)
 
 			sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
 			sym->value.u.val.ptr = addr = c_linker_allocate_data(d->type->size);
-			ir_disasm_add_symbol(yy_sym2str(name), (uint64_t)addr, d->type->size); //???
+			ir_disasm_add_symbol(yy_sym2str(name), (uintptr_t)addr, d->type->size); //???
 			sym->is_implemented = (d->flags & C_DCL_DEFINITION) != 0;
 		}
 	}
@@ -735,7 +735,7 @@ c_sym *c_declare(c_name name, c_dcl *d)
 
 				sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
 				sym->value.u.val.ptr = addr = c_linker_allocate_data(d->type->size);
-				ir_disasm_add_symbol(yy_sym2str(name), (uint64_t)addr, d->type->size); //???
+				ir_disasm_add_symbol(yy_sym2str(name), (uintptr_t)addr, d->type->size); //???
 				sym->is_implemented = (d->flags & C_DCL_DEFINITION) != 0;
 			}
 		} else {
