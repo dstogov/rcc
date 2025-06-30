@@ -44,7 +44,7 @@ static ir_arena       *c_linker_arena;
 static ir_code_buffer  c_code_buffer;
 static bool            protected = 1;
 
-void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, bool add_thunk)
+void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, uint32_t flags)
 {
 	uint32_t len;
 	c_name id;
@@ -71,7 +71,7 @@ void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, bool add_th
 				return addr;
 			}
 		}
-		if (add_thunk) {
+		if (flags & IR_RESOLVE_SYM_ADD_THUNK) {
 			/* Undefined declaration */
 			// TODO: Add thunk or relocation ???
 			size_t size;
@@ -91,6 +91,9 @@ void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, bool add_th
 				return addr;
 			}
 		}
+	}
+	if (!(flags & IR_RESOLVE_SYM_SILENT)) {
+		yy_error_fmt("undefined symbol \"%s\"", name);
 	}
 	return NULL;
 }

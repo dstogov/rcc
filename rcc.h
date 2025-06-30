@@ -846,7 +846,7 @@ void yy_warning_fmt(const char *fmt, ...);
 /* Linker */
 void *c_linker_allocate_data(size_t size);
 void *c_linker_grow_data(void *addr, size_t size);
-void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, bool add_thunk);
+void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, uint32_t flags);
 
 /* IR compiler */
 void rcc_ir_init(ir_ctx *ctx, uint32_t flags);

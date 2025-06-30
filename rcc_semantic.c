@@ -4302,7 +4302,7 @@ static bool c_do_init_fix_reloc(c_value *val)
 		IR_ASSERT(yy_hash.data[n].sym && yy_hash.data[n].sym->kind == C_SYM_FUNC);
 		if (!c_value_is_const(&yy_hash.data[n].sym->value)) {
 			/* resolve name or add thunk */
-			void *addr = c_linker_resolve_sym_name(NULL, name, 1);
+			void *addr = c_linker_resolve_sym_name(NULL, name, IR_RESOLVE_SYM_ADD_THUNK);
 			IR_ASSERT(addr);
 			(void)addr;
 		}
