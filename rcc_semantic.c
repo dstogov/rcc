@@ -544,7 +544,7 @@ static void c_validate_redeclaration(c_name name, c_dcl *d, c_sym *sym)
 			yy_error_fmt("redefinition of \"%s\"", yy_sym2str(name));
 		} else if ((d->flags & C_DCL_STATIC) && sym->linkage != C_LINK_INTERNAL) {
 			yy_error_fmt("static declaration of \"%s\" follows non-static declaration", yy_sym2str(name));
-		} else if (!(d->flags & C_DCL_STATIC) && sym->linkage == C_LINK_INTERNAL) {
+		} else if (!(d->flags & (C_DCL_STATIC|C_DCL_EXTERN)) && sym->linkage == C_LINK_INTERNAL) {
 			yy_error_fmt("non-static declaration of \"%s\" follows static declaration", yy_sym2str(name));
 		} else if ((d->flags & C_DCL_THREAD_LOCAL) && !sym->is_thread_local) {
 			yy_error_fmt("thread-local declaration of \"%s\" follows non-thread-local declaration", yy_sym2str(name));
