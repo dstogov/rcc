@@ -1607,6 +1607,16 @@ void c_gcc_attribute(c_dcl *d, c_name attr, c_value *val)
 			if (val) yy_warning_fmt("attribute \"%s\" with unused value", yy_sym2str(attr));
 			d->attr |= C_ATTR_MUSTTAIL;
 			break;
+		case YY_CDECL:
+		case YY___CDECL__:
+			if (val) yy_warning_fmt("attribute \"%s\" with unused value", yy_sym2str(attr));
+			d->attr |= C_ATTR_CDECL;
+			break;
+		case YY_FASTCALL:
+		case YY___FASTCALL__:
+			if (val) yy_warning_fmt("attribute \"%s\" with unused value", yy_sym2str(attr));
+			d->attr |= C_ATTR_FASTCALL;
+			break;
 		default:
 			yy_warning_fmt("unsupported attribure \"%s\"", yy_sym2str(attr));
 	}

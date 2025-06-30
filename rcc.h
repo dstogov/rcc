@@ -454,36 +454,35 @@ void pp_list_grow(pp_list *l, uint32_t size);
 #define C_ATTR_VOLATILE          (1<<9)
 #define C_ATTR_ATOMIC            (1<<10)
 
-/* function type attrivutes */
-#define C_ATTR_VARIADIC          (1<<11)
+/* enum or struct type attributes */
+#define C_ATTR_PACKED            (1<<11)
 
 /* array type attributes */
 #define C_ATTR_FLEXIBLE          (1<<12) /* flexible (without defined length) array */
-//#define C_ATTR_VARIABLE          (1<<13) /* flexible (with length defined by variable) array */
-#define C_ATTR_VLA               (1<<14)
-
-/* enum or struct type attributes */
-#define C_ATTR_PACKED            (1<<15)
+#define C_ATTR_VLA               (1<<13)
 
 /* struct type attributes */
-#define C_ATTR_MS_STRUCT         (1<<16)
-#define C_ATTR_GCC_STRUCT        (1<<17)
+#define C_ATTR_MS_STRUCT         (1<<14)
+#define C_ATTR_GCC_STRUCT        (1<<15)
 
 /* function attributes */
-#define C_ATTR_INLINE            (1<<18)
-#define C_ATTR_NORETURN          (1<<19)
-#define C_ATTR_ALWAYS_INLINE     (1<<10)
-#define C_ATTR_NOINLINE          (1<<21)
-#define C_ATTR_NOTHROW           (1<<22)
-#define C_ATTR_LEAF              (1<<23)
-#define C_ATTR_PURE              (1<<24)
-#define C_ATTR_HOT               (1<<25)
-#define C_ATTR_COLD              (1<<26)
-#define C_ATTR_DEPRECATED        (1<<27)
+#define C_ATTR_VARIADIC          (1<<16)
+#define C_ATTR_INLINE            (1<<17)
+#define C_ATTR_NORETURN          (1<<18)
+#define C_ATTR_ALWAYS_INLINE     (1<<19)
+#define C_ATTR_NOINLINE          (1<<20)
+#define C_ATTR_NOTHROW           (1<<21)
+#define C_ATTR_LEAF              (1<<22)
+#define C_ATTR_PURE              (1<<23)
+#define C_ATTR_HOT               (1<<24)
+#define C_ATTR_COLD              (1<<25)
+#define C_ATTR_DEPRECATED        (1<<26)
+#define C_ATTR_CDECL             (1<<27)
+#define C_ATTR_FASTCALL          (1<<28)
 
 /* statement attributes */
-#define C_ATTR_FALLTHROUGH       (1<<28)
-#define C_ATTR_MUSTTAIL          (1<<29)
+#define C_ATTR_FALLTHROUGH       (1<<29)
+#define C_ATTR_MUSTTAIL          (1<<30)
 //#define C_ATTR_ASSUME            (1<<31)
 
 #define C_TYPE_ATTRS \
@@ -500,7 +499,7 @@ void pp_list_grow(pp_list *l, uint32_t size);
 
 #define C_FUNC_TYPE_ATTRS \
 	(C_ATTR_VARIADIC|C_ATTR_INLINE|C_ATTR_NORETURN|C_ATTR_ALWAYS_INLINE|C_ATTR_NOINLINE|C_ATTR_NOTHROW \
-		|C_ATTR_LEAF|C_ATTR_PURE|C_ATTR_HOT|C_ATTR_COLD|C_ATTR_DEPRECATED)
+		|C_ATTR_LEAF|C_ATTR_PURE|C_ATTR_HOT|C_ATTR_COLD|C_ATTR_DEPRECATED|C_ATTR_CDECL|C_ATTR_FASTCALL)
 
 #define C_POINTER_ATTRS \
 	(C_ATTR_CONST|C_ATTR_RESTRICT)
