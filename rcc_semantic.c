@@ -271,15 +271,8 @@ void c_resolve_sym_name(c_value *res, c_name name, yy_sym sym)
 		c_value_set_const(res, s->value.type, c_type2ir(s->value.type), s->value.u.val);
 	} else if (s->kind == C_SYM_VAR || s->kind == C_SYM_FUNC) {
 		if (c_value_is_ref(&s->value)) {
-			if (s->kind == C_SYM_FUNC) {
-				c_value_set_rval(res, s->value.type, IR_ADDR, s->value.u.ref);
-			} else if (active_ctx->ir_base[s->value.u.ref].op == IR_VAR) {
-				c_value_set_var(res, s->value.type, active_ctx->ir_base[s->value.u.ref].type, s->value.u.ref);
-			} else if (s->value.type->kind != C_TYPE_ARRAY) {
-				c_value_set_lval(res, s->value.type, c_type2ir(s->value.type), s->value.u.ref);
-			} else {
-				c_value_set_rval(res, s->value.type, c_type2ir(s->value.type), s->value.u.ref);
-			}
+			IR_ASSERT(s->kind != C_SYM_FUNC);
+			*res = s->value;
 		} else if (s->linkage == C_LINK_EXTERNAL || s->linkage == C_LINK_INTERNAL) {
 			const char *name_str;
 			size_t name_len;
@@ -743,14 +736,17 @@ c_sym *c_declare(c_name name, c_dcl *d)
 
 			sym->linkage = C_LINK_NONE;
 			sym->is_thread_local = 0;
-			if (d->type->kind == C_TYPE_ARRAY && (d->type->attr & C_ATTR_FLEXIBLE)) {
-				ref = c_do_alloca(-1, (d->flags & C_DCL_DEFINITION) != 0);
-			} else if (d->type->kind == C_TYPE_ARRAY || d->type->kind == C_TYPE_STRUCT || d->type->kind == C_TYPE_UNION) {
+			if (d->type->kind == C_TYPE_ARRAY) {
+				size_t size = (d->type->attr & C_ATTR_FLEXIBLE) ? (size_t)-1 : d->type->size;
+				ref = c_do_alloca(size, (d->flags & C_DCL_DEFINITION) != 0);
+				c_value_set_rval(&sym->value, d->type, c_type2ir(d->type), ref);
+			} else if (d->type->kind == C_TYPE_STRUCT || d->type->kind == C_TYPE_UNION) {
 				ref = c_do_alloca(d->type->size, (d->flags & C_DCL_DEFINITION) != 0);
+				c_value_set_lval(&sym->value, d->type, c_type2ir(d->type), ref);
 			} else {
 				ref = ir_var(active_ctx, c_type2ir(d->type), 1, yy_sym2str(name));
+				c_value_set_var(&sym->value, d->type, c_type2ir(d->type), ref);
 			}
-			c_value_set_rval(&sym->value, d->type, c_type2ir(d->type), ref);
 		}
 	}
 	sym->value.type = d->type;
