@@ -684,19 +684,7 @@ c_sym *c_declare(c_name name, c_dcl *d)
 		}
 		IR_ASSERT((d->flags & (C_DCL_STORAGE_CLASS-(C_DCL_EXTERN|C_DCL_STATIC))) == 0);
 		sym->kind = C_SYM_FUNC;
-		if ((d->flags & (C_DCL_STATIC|C_DCL_EXTERN)) || !scope) {
-			sym->linkage = (d->flags & C_DCL_STATIC) ? C_LINK_INTERNAL : C_LINK_EXTERNAL;
-			if (scope) {
-				const char *name_str;
-				size_t      name_len;
-
-				name_str = yy_sym2strl(name, &name_len);
-				c_value_set_rval(&sym->value, d->type, IR_ADDR,
-					ir_const_func(active_ctx, ir_strl(active_ctx, name_str, name_len), c_type2proto(d->type)));
-			}
-		} else {
-			sym->linkage = C_LINK_INTERNAL;
-		}
+		sym->linkage = (d->flags & C_DCL_STATIC) ? C_LINK_INTERNAL : C_LINK_EXTERNAL;
 		sym->is_thread_local = 0;
 		sym->is_implemented = (d->flags & C_DCL_DEFINITION) != 0;
 	} else {
