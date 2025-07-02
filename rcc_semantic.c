@@ -678,7 +678,10 @@ c_sym *c_declare(c_name name, c_dcl *d)
 		sym->kind = C_SYM_CONST;
 		/* the value will be set in c_declare_enum_val() */
 	} else if (d->type->kind == C_TYPE_FUNC) {
-		if (d->flags & (C_DCL_THREAD_LOCAL|C_DCL_AUTO|C_DCL_REGISTER)) yy_error_fmt("invalid storage class for function \"%s\"", yy_sym2str(name));
+		if ((d->flags & (C_DCL_THREAD_LOCAL|C_DCL_AUTO|C_DCL_REGISTER))
+		 || ((d->flags & C_DCL_STATIC) && active_scope)) {
+			yy_error_fmt("invalid storage class for function \"%s\"", yy_sym2str(name));
+		}
 		IR_ASSERT((d->flags & (C_DCL_STORAGE_CLASS-(C_DCL_EXTERN|C_DCL_STATIC))) == 0);
 		sym->kind = C_SYM_FUNC;
 		if ((d->flags & (C_DCL_STATIC|C_DCL_EXTERN)) || !scope) {
