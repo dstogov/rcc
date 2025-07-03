@@ -52,6 +52,7 @@ static c_scope    *active_func_scope = NULL;
 static c_scope    *active_scope = NULL;
 static c_loop     *active_loop = NULL;
 static c_name      active_func_name = 0;
+static uint32_t    c_static_sym_num = 0;
 
 static bool c_valid_alignment(c_value *val)
 {
@@ -588,6 +589,43 @@ c_sym *c_global_sym(c_sym *sym)
 	return NULL;
 }
 
+static c_name c_create_static_var(c_name name, void *addr)
+{
+	yy_dyn_str  dyn_str;
+	const char *name_str;
+	size_t name_len;
+	uint32_t i, n;
+	char buf[16];
+	c_sym *sym;
+
+	name_str = yy_sym2strl(name, &name_len);
+	yy_dyn_str_init(&dyn_str, name_str, name_len);
+	yy_dyn_str_append(&dyn_str, ".", 1);
+
+	i = sizeof(buf);
+	n = ++c_static_sym_num;
+	buf[--i] = 0;
+	do {
+		buf[--i] = '0' + n % 10;
+		n = n / 10;
+	} while (n != 0);
+	yy_dyn_str_append0(&dyn_str, buf + i, sizeof(buf) - i - 1);
+	name = yy_hash_lookup(dyn_str.str, dyn_str.len);
+
+	/* Create a global symbol in yy_arena */
+	sym = ir_arena_alloc(&yy_arena, sizeof(c_sym));
+	memset(sym, 0, sizeof(c_sym));
+	sym->kind = C_SYM_VAR;
+	sym->linkage = C_LINK_INTERNAL;
+	sym->is_thread_local = 0;
+	sym->is_implemented = 1;
+	sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
+	sym->value.u.val.ptr = addr;
+	yy_hash.data[name].sym = sym;
+
+	return name;
+}
+
 c_sym *c_declare(c_name name, c_dcl *d)
 {
 	c_sym *sym;
@@ -702,25 +740,34 @@ c_sym *c_declare(c_name name, c_dcl *d)
 		if ((d->flags & (C_DCL_STATIC|C_DCL_EXTERN)) || !scope) {
 			sym->linkage = (d->flags & C_DCL_STATIC) ? C_LINK_INTERNAL : C_LINK_EXTERNAL;
 			sym->is_thread_local = (d->flags & C_DCL_THREAD_LOCAL) != 0;
-//???
-//			if (scope) {
-//				const char *name_str;
-//				size_t      name_len;
-//
-//				name_str = yy_sym2strl(name, &name_len);
-//				sym->ref = ir_const_sym(active_ctx, ir_strl(active_ctx, name_str, name_len));
-//			}
+
 			if ((d->flags & C_DCL_EXTERN) && (d->flags & C_DCL_DEFINITION)) {
 				yy_warning_fmt("\%s\" initialized and declared \"extern\"", yy_sym2str(name));
 				d->flags &= ~C_DCL_EXTERN;
 			}
 			if (!(d->flags & C_DCL_EXTERN)) {
-				void *addr;
+				void *addr = c_linker_allocate_data(d->type->size);
 
-				sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
-				sym->value.u.val.ptr = addr = c_linker_allocate_data(d->type->size);
-				ir_disasm_add_symbol(yy_sym2str(name), (uintptr_t)addr, d->type->size); //???
 				sym->is_implemented = (d->flags & C_DCL_DEFINITION) != 0;
+				if (!scope || !(d->flags & C_DCL_STATIC)) {
+					ir_disasm_add_symbol(yy_sym2str(name), (uintptr_t)addr, d->type->size); //???
+					sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
+					sym->value.u.val.ptr = addr;
+				} else {
+					ir_ref sym_name = c_create_static_var(name, addr);
+					size_t len;
+					const char *str = yy_sym2strl(sym_name, &len);
+					ir_ref ref;
+
+					ir_disasm_add_symbol(str, (uintptr_t)addr, d->type->size); //???
+					ref = ir_const_sym(active_ctx, ir_strl(active_ctx, str, len));
+					if (d->type->kind == C_TYPE_ARRAY) {
+						c_value_set_rval(&sym->value, d->type, c_type2ir(d->type), ref);
+					} else {
+						c_value_set_lval(&sym->value, d->type, c_type2ir(d->type), ref);
+					}
+					sym->value.u.val.ptr = addr;
+				}
 			}
 		} else {
 			ir_ref ref;
@@ -4357,6 +4404,18 @@ static void c_do_init_patch_flexible_alloca(ir_ref ref, size_t len)
 	}
 }
 
+static void c_do_grow_flexible(c_sym *obj, size_t size)
+{
+	IR_ASSERT(obj->value.u.type == IR_ADDR);
+	obj->value.u.val.ptr = c_linker_grow_data(obj->value.u.val.ptr, size);
+	if (c_value_is_ref(&obj->value)) {
+		size_t len;
+		const char *str = ir_get_strl(active_ctx, active_ctx->ir_base[obj->value.u.ref].val.name, &len);
+		c_name sym = yy_hash_find(str, len);
+		yy_hash.data[sym].sym->value.u.val.ptr = obj->value.u.val.ptr;
+	}
+}
+
 void c_do_init_obj(c_sym *obj, c_value *val)
 {
 	if (obj->kind != C_SYM_VAR) {
@@ -4382,9 +4441,9 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 				type->array.length = type->size = ++len;
 				type->attr &= ~C_ATTR_FLEXIBLE;
 				obj->value.type = type;
-				if (c_value_is_const(&obj->value)) {
-					IR_ASSERT(obj->value.u.type == IR_ADDR);
-					obj->value.u.val.ptr = c_linker_grow_data(obj->value.u.val.ptr, obj->value.type->size);
+				if (c_value_is_const(&obj->value)
+				 || (c_value_is_ref(&obj->value) && IR_IS_CONST_REF(obj->value.u.ref))) {
+					c_do_grow_flexible(obj, obj->value.type->size);
 				} else {
 					c_do_init_patch_flexible_alloca(obj->value.u.ref, len);
 				}
@@ -4393,7 +4452,8 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 			} else if (len + 1 > (size_t)obj->value.type->array.length) {
 				len++;
 			}
-			if (c_value_is_const(&obj->value)) {
+			if (c_value_is_const(&obj->value)
+			 || (c_value_is_ref(&obj->value) && IR_IS_CONST_REF(obj->value.u.ref))) {
 				if (!c_value_is_const(val) && !c_do_init_fix_reloc(val)) yy_error("initializer element is not constant");
 				IR_ASSERT(obj->value.u.type == IR_ADDR);
 				memcpy((char*)obj->value.u.val.ptr, str, len);
@@ -4410,9 +4470,14 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 		c_do_check_cvt(obj->value.type, val, -2);
 	}
 	if (obj->linkage == C_LINK_EXTERNAL || obj->linkage == C_LINK_INTERNAL) {
-		IR_ASSERT(c_value_is_const(&obj->value)
-			&& obj->value.u.type == IR_ADDR
-			&& obj->value.u.val.ptr);
+		IR_ASSERT((c_value_is_const(&obj->value)
+				&& obj->value.u.type == IR_ADDR
+				&& obj->value.u.val.ptr)
+			|| (c_value_is_ref(&obj->value)
+				&& active_scope
+				&& IR_IS_CONST_REF(obj->value.u.ref)
+				&& active_ctx->ir_base[obj->value.u.ref].op == IR_SYM
+				&& obj->value.u.val.ptr));
 		c_do_init(obj->value.u.val.ptr, val);
 	} else if (C_IS_TYPE_SCALAR_OR_PTR(obj->value.type)) {
 		IR_ASSERT(c_value_is_ref(&obj->value));
@@ -4423,7 +4488,8 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 		}
 	} else {
 		IR_ASSERT(obj->value.type->size == val->type->size);
-		if (c_value_is_const(&obj->value)) {
+		if (c_value_is_const(&obj->value)
+		 || (c_value_is_ref(&obj->value) && IR_IS_CONST_REF(obj->value.u.ref))) {
 			if (!c_value_is_const(val) && !c_do_init_fix_reloc(val)) yy_error("initializer element is not constant");
 			IR_ASSERT(obj->value.u.type == IR_ADDR);
 			IR_ASSERT(val->u.type == IR_ADDR);
@@ -4645,7 +4711,8 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 			if (len + 1 > (size_t)type->array.length && !(type->attr & C_ATTR_FLEXIBLE)) {
 				yy_error("initializer-string for array of \"char\" is too long");
 			}
-			if (c_value_is_const(&obj->value)) {
+			if (c_value_is_const(&obj->value)
+			 || (c_value_is_ref(&obj->value) && IR_IS_CONST_REF(obj->value.u.ref))) {
 				if (!c_value_is_const(val) && !c_do_init_fix_reloc(val)) yy_error("initializer element is not constant");
 				IR_ASSERT(obj->value.u.type == IR_ADDR);
 				if (type->attr & C_ATTR_FLEXIBLE) {
@@ -4656,8 +4723,7 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 						/* last element of struct */
 						*size = offset + len;
 					}
-					IR_ASSERT(obj->value.u.type == IR_ADDR);
-					obj->value.u.val.ptr = c_linker_grow_data(obj->value.u.val.ptr, *size);
+					c_do_grow_flexible(obj, *size);
 				}
 				memcpy((char*)obj->value.u.val.ptr + offset, str, len);
 			} else {
@@ -4689,9 +4755,9 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 				(offset + type->size + obj->value.type->array.type->size - 1) / obj->value.type->array.type->size;
 			if (obj->value.type->array.type->size * len > *size) {
 				*size = obj->value.type->array.type->size * len;
-				if (c_value_is_const(&obj->value)) {
-					IR_ASSERT(obj->value.u.type == IR_ADDR);
-					obj->value.u.val.ptr = c_linker_grow_data(obj->value.u.val.ptr, *size);
+				if (c_value_is_const(&obj->value)
+				 || (c_value_is_ref(&obj->value) && IR_IS_CONST_REF(obj->value.u.ref))) {
+					c_do_grow_flexible(obj, *size);
 				}
 			}
 		}
@@ -4699,17 +4765,17 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 		/* last element of struct */
 		if (last_array_offset + last_array_type->array.type->size > *size) {
 			*size = last_array_offset + last_array_type->array.type->size; 
-			if (c_value_is_const(&obj->value)) {
-				IR_ASSERT(obj->value.u.type == IR_ADDR);
-				obj->value.u.val.ptr = c_linker_grow_data(obj->value.u.val.ptr, *size);
+			if (c_value_is_const(&obj->value)
+			 || (c_value_is_ref(&obj->value) && IR_IS_CONST_REF(obj->value.u.ref))) {
+				c_do_grow_flexible(obj, *size);
 			}
 		}
 	} else {
 		IR_ASSERT(offset + type->size <= obj->value.type->size /*???|| is_bitfield*/);
 	}
-	if (c_value_is_const(&obj->value)) {
+	if (c_value_is_const(&obj->value) || (c_value_is_ref(&obj->value) && IR_IS_CONST_REF(obj->value.u.ref))) {
 		if (!c_value_is_const(val) && !c_do_init_fix_reloc(val)) yy_error("initializer element is not constant");
-		IR_ASSERT(obj->value.u.type == IR_ADDR);
+		IR_ASSERT(obj->value.u.type == IR_ADDR && obj->value.u.val.ptr);
 		if (!is_bitfield) {
 			c_do_init((char*)obj->value.u.val.ptr + offset, val);
 		} else {
@@ -4814,7 +4880,8 @@ void c_do_init_end(c_sym *obj, size_t size)
 			type->attr &= ~C_ATTR_FLEXIBLE;
 			obj->value.type = type;
 		}
-		if (!c_value_is_const(&obj->value)) {
+		if (!c_value_is_const(&obj->value)
+		 && (!c_value_is_ref(&obj->value) || !IR_IS_CONST_REF(obj->value.u.ref))) {
 			c_do_init_patch_flexible_alloca(obj->value.u.ref, size);
 		}
 	}
