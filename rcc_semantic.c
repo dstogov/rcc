@@ -288,6 +288,11 @@ void c_resolve_sym_name(c_value *res, c_name name, yy_sym sym)
 			}
 			if (s->kind == C_SYM_FUNC) {
 				c_value_set_rval(res, s->value.type, IR_ADDR, ref);
+				if (s == active_func) {
+					/* recursive function - disable inlining */
+					c_type *type = (c_type*)s->value.type;
+					type->attr |= C_ATTR_NOINLINE;
+				}
 			} else if (s->value.type->kind != C_TYPE_ARRAY) {
 				c_value_set_lval(res, s->value.type, c_type2ir(s->value.type), ref);
 			} else {
@@ -5045,7 +5050,6 @@ void c_do_func_end(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 
 	rcc_ir_compile(name, ctx, &active_func->value);
 
-	ir_free(ctx);
 	active_func = NULL; // TODO: nested functions ???
 	active_func_name = 0; // TODO: nested functions ???
 	active_func_scope = NULL;

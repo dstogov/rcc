@@ -36,8 +36,12 @@
 #define C_DUMP_TIME              (1<<7)
 #define C_GDB                    (1<<8)
 
+#define C_OPT_LEVEL              0x3
+#define C_OPT_INLINE             (1<<2)
+#define C_OPT_MEM2SSA            (1<<3)
+
 static bool            c_native = 0;
-static uint32_t        c_opt_level = 2;
+static uint32_t        c_opt_flags = 2 | C_OPT_INLINE | C_OPT_MEM2SSA;
 static uint32_t        c_dump_flags = 0;
 static uint32_t        c_save_flags = 0;
 static ir_arena       *c_linker_arena;
@@ -169,11 +173,55 @@ static void rcc_dump_func_proto(c_name name, FILE *f)
 void rcc_ir_init(ir_ctx *ctx, uint32_t flags)
 {
 	flags |= IR_FUNCTION;
-	if (c_opt_level > 0) {
+	if ((c_opt_flags & C_OPT_LEVEL) > 0) {
 		flags |= IR_OPT_FOLDING | IR_OPT_CFG | IR_OPT_CODEGEN;
 	}
 	ir_init(ctx, flags, 256, 1024);
 	ctx->loader = &c_linker;
+}
+
+void rcc_ir_codegen(c_name name, ir_ctx *ctx, c_value *func)
+{
+	size_t size;
+	void *entry;
+
+	ctx->code_buffer = &c_code_buffer;
+	protected = 0;
+	ir_mem_unprotect(c_code_buffer.start, (char*)c_code_buffer.end - (char*)c_code_buffer.start);
+	entry = ir_emit_code(ctx, &size);
+	IR_ASSERT(entry);
+	if (c_value_is_const(func)) {
+		ir_fix_thunk(func->u.val.ptr, entry);
+	}
+#ifndef _WIN32
+	if (c_dump_flags & C_GDB) {
+		ir_gdb_register(yy_sym2str(name), entry, size, sizeof(void*), 0);
+	}
+#endif
+	ir_mem_protect(c_code_buffer.start, (char*)c_code_buffer.end - (char*)c_code_buffer.start);
+	protected = 1;
+
+	if (c_dump_flags & C_DUMP_ASM) {
+//		ir_ref i;
+//		ir_insn *insn;
+//
+		ir_disasm_add_symbol(yy_sym2str(name), (uintptr_t)entry, size);
+//
+//		for (i = IR_UNUSED + 1, insn = ctx->ir_base - i; i < ctx->consts_count; i++, insn--) {
+//			if (insn->op == IR_FUNC) {
+//				const char *name = ir_get_str(ctx, insn->val.name);
+//				void *addr = ir_loader_resolve_sym_name(loader, name, 0);
+//
+//				IR_ASSERT(addr);
+//				ir_disasm_add_symbol(name, (uintptr_t)addr, IR_UNKNOWN_SIZE);
+//TODO:			} else if (insn->op == IR_SYM) {
+//			}
+//		}
+		ir_disasm(yy_sym2str(name), entry, size, 0, ctx, stderr);
+	}
+
+	func->u.opt = IR_OPT(C_VAL_CONST, IR_ADDR);
+	func->u.val.ptr = entry;
 }
 
 void rcc_ir_compile(c_name name, ir_ctx *ctx, c_value *func)
@@ -189,7 +237,7 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_value *func)
 	ir_check(ctx);
 #endif
 
-	if (c_opt_level > 0 && 1) {
+	if ((c_opt_flags & C_OPT_LEVEL) > 0 && (c_opt_flags & C_OPT_MEM2SSA)) {
 		ir_build_cfg(ctx);
 		ir_build_dominators_tree(ctx);
 		ir_mem2ssa(ctx);
@@ -200,7 +248,7 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_value *func)
 		ir_reset_cfg(ctx);
 	}
 
-	if (c_opt_level > 1) {
+	if ((c_opt_flags & C_OPT_LEVEL) > 1) {
 		ir_sccp(ctx);
 		if (c_dump_flags & C_DUMP_IR_AFTER_SCCP) {
 			rcc_dump_func_proto(name, stderr);
@@ -210,7 +258,7 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_value *func)
 
 	ir_build_cfg(ctx);
 
-	if (c_opt_level > 0) {
+	if ((c_opt_flags & C_OPT_LEVEL) > 0) {
 		ir_build_dominators_tree(ctx);
 		ir_find_loops(ctx);
 		ir_gcm(ctx);
@@ -225,11 +273,11 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_value *func)
 		ir_match(ctx);
 	}
 
-	if (c_opt_level > 0 || c_native || 0) {
+	if ((c_opt_flags & C_OPT_LEVEL) > 0 || c_native || 0) {
 		ir_assign_virtual_registers(ctx);
 	}
 
-	if (c_opt_level > 0) {
+	if ((c_opt_flags & C_OPT_LEVEL) > 0) {
 		ir_compute_live_ranges(ctx);
 		ir_coalesce(ctx);
 		if (c_native) {
@@ -250,47 +298,10 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_value *func)
 #endif
 
 	if (c_native) {
-		size_t size;
-		void *entry;
-
-		ctx->code_buffer = &c_code_buffer;
-		protected = 0;
-		ir_mem_unprotect(c_code_buffer.start, (char*)c_code_buffer.end - (char*)c_code_buffer.start);
-		entry = ir_emit_code(ctx, &size);
-		IR_ASSERT(entry);
-		if (c_value_is_const(func)) {
-			ir_fix_thunk(func->u.val.ptr, entry);
-		}
-#ifndef _WIN32
-		if (c_dump_flags & C_GDB) {
-			ir_gdb_register(yy_sym2str(name), entry, size, sizeof(void*), 0);
-		}
-#endif
-		ir_mem_protect(c_code_buffer.start, (char*)c_code_buffer.end - (char*)c_code_buffer.start);
-		protected = 1;
-
-		if (c_dump_flags & C_DUMP_ASM) {
-//			ir_ref i;
-//			ir_insn *insn;
-//
-			ir_disasm_add_symbol(yy_sym2str(name), (uintptr_t)entry, size);
-//
-//			for (i = IR_UNUSED + 1, insn = ctx->ir_base - i; i < ctx->consts_count; i++, insn--) {
-//				if (insn->op == IR_FUNC) {
-//					const char *name = ir_get_str(ctx, insn->val.name);
-//					void *addr = ir_loader_resolve_sym_name(loader, name, 0);
-//
-//					IR_ASSERT(addr);
-//					ir_disasm_add_symbol(name, (uintptr_t)addr, IR_UNKNOWN_SIZE);
-//TODO:				} else if (insn->op == IR_SYM) {
-//				}
-//			}
-			ir_disasm(yy_sym2str(name), entry, size, 0, ctx, stderr);
-		}
-
-		func->u.opt = IR_OPT(C_VAL_CONST, IR_ADDR);
-		func->u.val.ptr = entry;
+		rcc_ir_codegen(name, ctx, func);
 	}
+
+	ir_free(ctx);
 }
 
 static const char *_sym_name = {
@@ -341,7 +352,7 @@ void rcc_init(void)
 
 	pp_start();
 	c_stdinc_init();
-	if (c_opt_level > 0) {
+	if ((c_opt_flags & C_OPT_LEVEL) > 0) {
 		yy_pos = yy_text = yy_linepos = yy_buf = "#define __OPTIMIZE__ 1\n";
 		yy_end = yy_buf + strlen(yy_buf);
 		do {
@@ -532,9 +543,12 @@ static void rcc_help(const char *cmd)
 		"General Options:\n"
 		"  --run ...                  - run the main() function of generated code\n"
 		"                               (the remaining arguments are passed to main)\n"
-		"  -O[012]                    - optimization level (default: 2)\n"
 		"  -g                         - produce debugging information (through JITGDB)\n"
 		"  -S                         - show generated assembler code\n"
+		"Optimization Options:\n"
+		"  -O[012]                    - optimization level (default: 2)\n"
+		"  -fno-inline                - disable function inlining\n"
+		"  -fno-mem2ssa               - disable MEM2SSA pass\n"
 		"Preprocessor Options:\n"
 		"  -E                         - preprocess only\n"
 		"  -P                         - inhibit generation of linemarkers\n"
@@ -591,15 +605,19 @@ int main(int argc, char **argv)
 			return 0;
 		} else if (argv[i][0] == '-' && argv[i][1] == 'O' && strlen(argv[i]) == 3) {
 			if (argv[i][2] == '0') {
-				c_opt_level = 0;
+				c_opt_flags = (c_opt_flags & ~C_OPT_LEVEL) | 0;
 			} else if (argv[i][2] == '1') {
-				c_opt_level = 1;
+				c_opt_flags = (c_opt_flags & ~C_OPT_LEVEL) | 1;
 			} else if (argv[i][2] == '2') {
-				c_opt_level = 2;
+				c_opt_flags = (c_opt_flags & ~C_OPT_LEVEL) | 2;
 			} else {
 				fprintf(stderr, "ERROR: Invalid usage' (use --help)\n");
 				return 1;
 			}
+		} else if (strcmp(argv[i], "-fno-inline") == 0) {
+			c_opt_flags &= ~C_OPT_INLINE;
+		} else if (strcmp(argv[i], "-fno-mem2ssa") == 0) {
+			c_opt_flags &= ~C_OPT_MEM2SSA;
 		} else if (strcmp(argv[i], "-E") == 0) {
 			preprocess_only = 1;
 		} else if (strcmp(argv[i], "-P") == 0) {
