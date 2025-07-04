@@ -71,12 +71,11 @@ static IR_NEVER_INLINE void yy_hash_resize(void)
 	ir_mem_free((char*)old_data - (old_size * sizeof(uint32_t)));
 
 	mask = yy_hash.mask;
-	for (i = YY_FIRST_KEYWORD, p = yy_hash.data + i; i < yy_hash.count; i++) {
+	for (i = YY_FIRST_KEYWORD, p = yy_hash.data + i; i < yy_hash.count; p++, i++) {
 		uint32_t h = p->h | mask;
 		p->next = ((uint32_t*)data)[(int32_t)h];
 		((uint32_t*)data)[(int32_t)h] = i;
-		p++;
-	} while (--i);
+	}
 }
 
 yy_sym yy_hash_find(const char *str, size_t len)
