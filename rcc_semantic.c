@@ -298,8 +298,6 @@ void c_resolve_sym_name(c_value *res, c_name name, yy_sym sym)
 			} else {
 				c_value_set_rval(res, s->value.type, c_type2ir(s->value.type), ref);
 			}
-		} else if (s->linkage == C_LINK_BUILTIN) {
-			c_value_set_builtin(res, s->value.type, name);
 		} else {
 			IR_ASSERT(0);
 		}
@@ -814,27 +812,6 @@ void c_empty_declaration(c_dcl *d)
 	} else if (d->flags & C_TYPE_SPEC_ANY) {
 		yy_warning("useless type specifier in empty declaration");
 	}
-}
-
-c_sym *c_declare_builtin(c_name name, const c_type *type)
-{
-	c_sym *sym;
-
-	IR_ASSERT(name);
-	sym = yy_hash.data[name].sym;
-	IR_ASSERT(!sym);
-	IR_ASSERT(!active_scope);
-
-	sym = ir_arena_alloc(&c_arena, sizeof(c_sym));
-	memset(sym, 0, sizeof(c_sym));
-	sym->kind = C_SYM_FUNC;
-	sym->linkage = C_LINK_BUILTIN;
-	sym->value.type = type;
-	sym->scope = active_scope;
-
-	yy_hash.data[name].sym = sym;
-
-	return sym;
 }
 
 static const char* c_type_kind2str(c_type_kind kind)
@@ -2754,6 +2731,50 @@ void c_do_struct_field_deref(c_value *v, c_name field_name)
 	}
 }
 
+void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
+{
+	if (name == YY___BUILTIN_VA_START) {
+		if (num_args != 1) yy_error("wrong number of arguments in __builtin_va_start() call");
+		// TODO: arg type check ???
+		ir_VA_START(c_value_ref(&args[0]));
+		c_value_set_rval(val, &c_type_void, IR_VOID, IR_UNUSED);
+	} else if (name == YY___BUILTIN_VA_ARG) {
+		const c_type *type;
+		ir_type t;
+		ir_ref ref;
+
+		if (num_args != 2) yy_error("wrong number of arguments in __builtin_va_arg() call");
+		type = args[1].type;
+		if (type->kind != C_TYPE_POINTER) yy_error("wrong type of 2nd argument of __builtin_va_arg() call");
+		type = type->pointer.type;
+		if (type->kind == C_TYPE_STRUCT || type->kind == C_TYPE_UNION) {
+			ir_ref alloca;
+
+			if (type->size > sizeof(void*)) yy_error("long struct arguments not implemented yet"); //???
+			t = (type->size <= 4) ? IR_U32 : IR_U64;
+			ref = ir_VA_ARG(c_value_ref(&args[0]), t);
+			alloca = ir_ALLOCA(ir_const_size_t(active_ctx, type->size));
+			ir_STORE(alloca, ref);
+			c_value_set_lval(val, type, IR_ADDR, alloca);
+		} else {
+			t = c_type2ir(type);
+			ref = ir_VA_ARG(c_value_ref(&args[0]), t);
+			c_value_set_rval(val, type, t, ref);
+		}
+	} else if (name == YY___BUILTIN_VA_END) {
+		if (num_args != 1) yy_error("wrong number of arguments in __builtin_va_end() call");
+		ir_VA_END(c_value_ref(&args[0]));
+		c_value_set_rval(val, &c_type_void, IR_VOID, IR_UNUSED);
+	} else if (name == YY___BUILTIN_VA_COPY) {
+		if (num_args != 2) yy_error("wrong number of arguments in __builtin_va_copy() call");
+		ir_VA_COPY(c_value_ref(&args[0]), c_value_ref(&args[0]));
+		c_value_set_rval(val, &c_type_void, IR_VOID, IR_UNUSED);
+	} else {
+		IR_ASSERT(0);
+	}
+	return;
+}
+
 void c_do_call(c_value *func, int32_t num_args, c_value *args)
 {
 	const c_type *func_type, *ret_type;
@@ -2761,48 +2782,7 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args)
 	ir_ref ref, ret_struct = IR_UNUSED;
 
 	c_value_rval(func);
-	if (c_value_is_builtin(func)) {
-		if (func->u.op2 == YY___BUILTIN_VA_START) {
-			if (num_args != 1) yy_error("wrong number of arguments in __builtin_va_start() call");
-			// TODO: arg type check ???
-			ir_VA_START(c_value_ref(&args[0]));
-			c_value_set_rval(func, &c_type_void, IR_VOID, IR_UNUSED);
-		} else if (func->u.op2 == YY___BUILTIN_VA_ARG) {
-			const c_type *type;
-			ir_type t;
-			ir_ref ref;
-
-			if (num_args != 2) yy_error("wrong number of arguments in __builtin_va_arg() call");
-			type = args[1].type;
-			if (type->kind != C_TYPE_POINTER) yy_error("wrong type of 2nd argument of __builtin_va_arg() call");
-			type = type->pointer.type;
-			if (type->kind == C_TYPE_STRUCT || type->kind == C_TYPE_UNION) {
-				ir_ref alloca;
-
-				if (type->size > sizeof(void*)) yy_error("long struct arguments not implemented yet"); //???
-				t = (type->size <= 4) ? IR_U32 : IR_U64;
-				ref = ir_VA_ARG(c_value_ref(&args[0]), t);
-				alloca = ir_ALLOCA(ir_const_size_t(active_ctx, type->size));
-				ir_STORE(alloca, ref);
-				c_value_set_lval(func, type, IR_ADDR, alloca);
-			} else {
-				t = c_type2ir(type);
-				ref = ir_VA_ARG(c_value_ref(&args[0]), t);
-				c_value_set_rval(func, type, t, ref);
-			}
-		} else if (func->u.op2 == YY___BUILTIN_VA_END) {
-			if (num_args != 1) yy_error("wrong number of arguments in __builtin_va_end() call");
-			ir_VA_END(c_value_ref(&args[0]));
-			c_value_set_rval(func, &c_type_void, IR_VOID, IR_UNUSED);
-		} else if (func->u.op2 == YY___BUILTIN_VA_COPY) {
-			if (num_args != 2) yy_error("wrong number of arguments in __builtin_va_copy() call");
-			ir_VA_COPY(c_value_ref(&args[0]), c_value_ref(&args[0]));
-			c_value_set_rval(func, &c_type_void, IR_VOID, IR_UNUSED);
-		} else {
-			IR_ASSERT(0);
-		}
-		return;
-	} else if (func->type->kind == C_TYPE_FUNC) {
+	if (func->type->kind == C_TYPE_FUNC) {
 		func_type = func->type;
 	} else if (func->type->kind == C_TYPE_POINTER
 	 && func->type->pointer.type->kind == C_TYPE_FUNC) {

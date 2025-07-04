@@ -364,11 +364,6 @@ void rcc_init(void)
 	c_arena = ir_arena_create(4096);
 	c_linker_arena = ir_arena_create(4096);
 
-	c_declare_builtin(YY___BUILTIN_VA_START, NULL);
-	c_declare_builtin(YY___BUILTIN_VA_ARG, NULL);
-	c_declare_builtin(YY___BUILTIN_VA_END, NULL);
-	c_declare_builtin(YY___BUILTIN_VA_COPY, NULL);
-
 	c_type *type;
 	c_type *c_type_ptr_void = ir_arena_alloc(&c_arena, sizeof(c_type));
 	memset(c_type_ptr_void, 0, sizeof(c_type));

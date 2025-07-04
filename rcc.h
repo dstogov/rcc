@@ -163,8 +163,12 @@
 	_("__restrict__",                  YY___RESTRICT__)                \
 	_("__volatile",                    YY___VOLATILE)                  \
 	_("__volatile__",                  YY___VOLATILE__)                \
+	_("__builtin_va_start",            YY___BUILTIN_VA_START)          \
+	_("__builtin_va_arg",              YY___BUILTIN_VA_ARG)            \
+	_("__builtin_va_end",              YY___BUILTIN_VA_END)            \
+	_("__builtin_va_copy",             YY___BUILTIN_VA_COPY)           \
 
-#define YY_LAST_KEYWORD                YY___VOLATILE__
+#define YY_LAST_KEYWORD                YY___BUILTIN_VA_COPY
 
 #define _YY_DIRECTIVES(_) \
 	_("define",                        YY_DEFINE)                      \
@@ -191,10 +195,6 @@
 	_("__TIME__",                      YY___TIME__)                    \
 	_("__VA_ARGS__",                   YY___VA_ARGS__)                 \
 	_("E",                             YY_E)                           \
-	_("__builtin_va_start",            YY___BUILTIN_VA_START)          \
-	_("__builtin_va_arg",              YY___BUILTIN_VA_ARG)            \
-	_("__builtin_va_end",              YY___BUILTIN_VA_END)            \
-	_("__builtin_va_copy",             YY___BUILTIN_VA_COPY)           \
 	_("memcpy",                        YY_MEMCPY)                      \
 	_("memset",                        YY_MEMSET)                      \
 	_("main",                          YY_MAIN)                        \
@@ -598,7 +598,6 @@ struct _c_type {
 #define C_VAL_CONST    (1<<1)
 #define C_VAL_LVAL     (1<<2)
 #define C_VAL_VAR      (1<<3)
-#define C_VAL_BUILTIN  (1<<4)
 
 typedef struct {
 	const c_type  *type;
@@ -622,7 +621,6 @@ typedef enum {
 	C_LINK_NONE,
 	C_LINK_EXTERNAL,
 	C_LINK_INTERNAL,
-	C_LINK_BUILTIN,
 } c_sym_linkage;
 
 struct _c_sym {
@@ -743,7 +741,6 @@ void c_finish_enum_type(c_type *dcl, c_dcl *d, int64_t min, uint64_t max);
 void c_validate_func_params(c_name name, c_dcl *dcl);
 
 c_sym *c_declare(c_name name, c_dcl *dcl);
-c_sym *c_declare_builtin(c_name name, const c_type *type);
 void c_declare_struct_field(c_type *type, c_name name, c_dcl *field, c_value *bits);
 void c_declare_enum_val(const c_type *type, c_name name, c_dcl *attr, c_value *val, int64_t *min, uint64_t *max, c_value *last);
 void c_declare_func_param(c_param **params, int32_t *num_params, c_name name, c_dcl *param);
@@ -783,6 +780,7 @@ void c_do_bool_not(c_value *v);
 void c_do_array_dim(c_value *v, c_value *dim);
 void c_do_struct_field(c_value *v, c_name field);
 void c_do_struct_field_deref(c_value *v, c_name field);
+void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args);
 void c_do_call(c_value *func, int32_t num_args, c_value *args);
 void c_do_binary_op(yy_sym sym, c_value *v, c_value *op2);
 void c_do_assign_op(yy_sym sym, c_value *v, c_value *op2);
@@ -1010,14 +1008,6 @@ IR_ALWAYS_INLINE void c_value_set_var(c_value *res, const c_type *type, ir_type 
 	res->u.ref = ref;
 }
 
-IR_ALWAYS_INLINE void c_value_set_builtin(c_value *res, const c_type *type, ir_ref name)
-{
-	res->type = type;
-	res->u.optx = IR_OPT(C_VAL_REF | C_VAL_BUILTIN, IR_ADDR);
-	res->u.ref = IR_NULL;
-	res->u.op2 = name;
-}
-
 IR_ALWAYS_INLINE void c_value_set_const(c_value *res, const c_type *type, ir_type t, ir_val val)
 {
 	res->type = type;
@@ -1043,11 +1033,6 @@ IR_ALWAYS_INLINE bool c_value_is_lval(c_value *v)
 IR_ALWAYS_INLINE bool c_value_is_var(c_value *v)
 {
 	return (v->u.op & C_VAL_VAR) != 0;
-}
-
-IR_ALWAYS_INLINE bool c_value_is_builtin(c_value *v)
-{
-	return (v->u.op & C_VAL_BUILTIN) != 0;
 }
 
 IR_ALWAYS_INLINE bool c_value_is_set(c_value *v)

@@ -813,6 +813,15 @@ actual_parameters(c_value *func):                          {int32_t num_args = 0
 	)?                                                     {c_do_call(func, num_args, args);}
 ;
 
+builtin_parameters(c_value *val, c_name name):             {int32_t num_args = 0;}
+	                                                       {c_value *args = alloca(sizeof(c_value) * C_ALLOCA_PARAMS);}
+	(   assignment_expression(&args[num_args])             {num_args++;}
+		(	","                                            {IR_ASSERT(num_args < C_ALLOCA_PARAMS);}
+			assignment_expression(&args[num_args])         {num_args++;}
+		)*
+	)?                                                     {c_do_builtin(val, name, num_args, args);}
+;
+
 generic_association:                                       {const c_type *t;}
                                                            {c_value v;}
 	(	type_name(&t) ":" assignment_expression(&v)
@@ -884,6 +893,13 @@ unary_expression(c_value *val):
 		|	unary_expression(&v)                           {c_alignof_expr(val, &v);}
 		)
 	|	"&&" ID(&name)                                     {c_do_label_value(val, name);}
+	|                                                      {name = sym;}
+		(	"__builtin_va_start"
+		|	"__builtin_va_arg"
+		|	"__builtin_va_end"
+		|	"__builtin_va_copy"
+		)
+		"(" builtin_parameters(val, name) ")"
 	)
 	(                                                      {c_value dim = {0};}
 		"[" expression(&dim) "]"                           {c_do_array_dim(val, &dim);}
