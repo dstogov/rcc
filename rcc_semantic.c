@@ -4023,11 +4023,15 @@ static ir_ref ir_repeat_code_block(ir_ctx *ctx, ir_ref start, ir_ref end, ir_ref
 	uint32_t flags;
 	ir_ref n, j, *p, input, ref = start + 1;
 	ir_insn *insn = &ctx->ir_base[start];
+	ir_list bp_list;
 
+	bp_list.len = 0;
 	IR_ASSERT(insn->op == IR_BEGIN);
 	xlat[0] = control;
 	ref = start + 1;
 	while (ref != end) {
+		bool may_fold = 1;
+
 		insn = &ctx->ir_base[ref];
 		flags = ir_op_flags[insn->op];
 		if (UNEXPECTED(IR_OP_HAS_VAR_INPUTS(flags))) {
@@ -4038,11 +4042,20 @@ static ir_ref ir_repeat_code_block(ir_ctx *ctx, ir_ref start, ir_ref end, ir_ref
 		for (j = n, p = insn->ops + 1; j > 0; j--, p++) {
 			input = *p;
 			if (input >= start) {
-				IR_ASSERT(input < ref);
-				*p = xlat[input - start];
+				if (input < ref) {
+					*p = xlat[input - start];
+				} else {
+					IR_ASSERT(insn->op == IR_LOOP_BEGIN || insn->op == IR_MERGE || insn->op == IR_PHI);
+					if (!bp_list.len) {
+						ir_list_init(&bp_list, 32);
+					}
+					ir_list_push(&bp_list, ctx->insns_count);
+					ir_list_push(&bp_list, n + 1 - j);
+					may_fold = 0;
+				}
 			}
 		}
-		if (n <= 3 && IR_IS_FOLDABLE_OP(insn->op)) {
+		if (n <= 3 && IR_IS_FOLDABLE_OP(insn->op) && may_fold) {
 			xlat[ref - start] = ir_fold(ctx, insn->opt, insn->op1, insn->op2, insn->op3);
 			ref++;
 		} else if (n <= 3) {
@@ -4060,6 +4073,19 @@ static ir_ref ir_repeat_code_block(ir_ctx *ctx, ir_ref start, ir_ref end, ir_ref
 			ref += n;
 		}
 	}
+
+	while (ir_list_len(&bp_list)) {
+		j = ir_list_pop(&bp_list);
+		ref = ir_list_pop(&bp_list);
+		p = ctx->ir_base[ref].ops;
+		p += j;
+		input = *p;
+		if (input >= start) {
+			IR_ASSERT(input < end);
+			*p = xlat[input - start];
+		}
+	}
+
 	insn = &ctx->ir_base[end];
 	IR_ASSERT((insn->op == IR_END || insn->op == IR_LOOP_END) && insn->op1 >= start);
 	return xlat[insn->op1 - start];
