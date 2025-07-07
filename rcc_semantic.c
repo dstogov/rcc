@@ -4074,16 +4074,19 @@ static ir_ref ir_repeat_code_block(ir_ctx *ctx, ir_ref start, ir_ref end, ir_ref
 		}
 	}
 
-	while (ir_list_len(&bp_list)) {
-		j = ir_list_pop(&bp_list);
-		ref = ir_list_pop(&bp_list);
-		p = ctx->ir_base[ref].ops;
-		p += j;
-		input = *p;
-		if (input >= start) {
-			IR_ASSERT(input < end);
-			*p = xlat[input - start];
-		}
+	if (ir_list_len(&bp_list)) {
+		do {
+			j = ir_list_pop(&bp_list);
+			ref = ir_list_pop(&bp_list);
+			p = ctx->ir_base[ref].ops;
+			p += j;
+			input = *p;
+			if (input >= start) {
+				IR_ASSERT(input < end);
+				*p = xlat[input - start];
+			}
+		} while (ir_list_len(&bp_list));
+		ir_list_free(&bp_list);
 	}
 
 	insn = &ctx->ir_base[end];
