@@ -618,6 +618,7 @@ struct _c_type {
 #define C_VAL_LVAL     (1<<2)
 #define C_VAL_VAR      (1<<3)
 #define C_VAL_BUILTIN  (1<<4)
+#define C_VAL_INLINE   (1<<5)
 
 typedef struct {
 	const c_type  *type;
@@ -651,6 +652,7 @@ struct _c_sym {
 	bool                   is_implemented: 1;  /* only for C_SYM_VAR and C_SYM_FUNC */
 	c_scope               *scope;
 	c_value                value;              /* type is part of the value */
+	ir_ctx                *ctx;                /* function IR (used for function inlining) */
 };
 
 struct _c_tag {
@@ -868,7 +870,7 @@ void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, uint32_t fl
 
 /* IR compiler */
 void rcc_ir_init(ir_ctx *ctx, uint32_t flags);
-void rcc_ir_compile(c_name name, ir_ctx *ctx, c_value *func);
+void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym);
 
 /* C compiler state */
 extern const char           *yy_pos;            /* pointer to current scanned character          */

@@ -298,6 +298,9 @@ void c_resolve_sym_name(c_value *res, c_name name, yy_sym sym)
 					/* recursive function - disable inlining */
 					c_type *type = (c_type*)s->value.type;
 					type->attr |= C_ATTR_NOINLINE;
+				} else if (s->ctx) {
+					res->u.op |= C_VAL_INLINE;
+					res->u.val.ptr = s->ctx;
 				}
 			} else if (s->value.type->kind != C_TYPE_ARRAY) {
 				c_value_set_lval(res, s->value.type, c_type2ir(s->value.type), ref);
@@ -2813,11 +2816,266 @@ static ir_ref c_do_convert_builtin(c_value *func, int32_t num_args, ir_ref *arg_
 	return 0;
 }
 
+static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, ir_ref *args)
+{
+	ir_ref *buf = alloca(sizeof(ir_ref) * (func_ctx->consts_count + func_ctx->insns_count * 2 - 1));
+	ir_ref *xlat = buf + func_ctx->consts_count - 1;
+	ir_ref *xlat2 = xlat + func_ctx->insns_count;
+	ir_ref ret = IR_UNUSED;
+	ir_ref i, j, op1, op2, op3;
+	ir_ref start = IR_UNUSED, block_begin = IR_UNUSED;
+	bool has_alloca;
+	ir_insn *insn;
+	bool add_phi = 0;
+	ir_list bp_list;
+
+	/* Copy costants */
+	for (i = 1 - func_ctx->consts_count, insn = func_ctx->ir_base + i; i < IR_TRUE; i++, insn++) {
+		ir_val val = insn->val;
+		uint32_t optx = insn->optx;
+		ir_op op = optx & IR_OPT_OP_MASK;
+
+		if (op == IR_FUNC || op == IR_SYM || op == IR_STR) {
+			size_t len;
+			const char *str = ir_get_strl(func_ctx, val.str, &len);
+
+			val.str = ir_strl(ctx, str, len);
+		}
+		if (op == IR_FUNC || op == IR_FUNC_ADDR) {
+			ir_ref proto = insn->proto;
+
+			if (proto) {
+				size_t len;
+				const char *str = ir_get_strl(func_ctx, proto, &len);
+
+				proto = ir_strl(ctx, str, len);
+				optx = IR_OPTX(op, IR_OPT_TYPE(optx), proto);
+			}
+		}
+		xlat[i] = ir_const_ex(ctx, val, IR_OPT_TYPE(optx), optx);
+	}
+	xlat[IR_TRUE] = IR_TRUE;
+	xlat[IR_FALSE] = IR_FALSE;
+	xlat[IR_NULL] = IR_NULL;
+	xlat2[IR_UNUSED] = xlat[IR_UNUSED] = IR_UNUSED;
+
+	/* Link argemnts and parameters */
+	i = 2;
+	insn = func_ctx->ir_base + i;
+	while (insn->op == IR_PARAM) {
+		IR_ASSERT((uint32_t)i < num_args + 2);
+		xlat2[i] = xlat[i] = args[i - 2];
+		insn++;
+		i++;
+	}
+	j = i;
+
+	/* Check if the inlined function expands stack through VAR or ALLOCA */
+	while (i < func_ctx->insns_count) {
+		ir_ref n = insn->inputs_count;
+		if (n <= 3) {
+			if (insn->op == IR_VAR || insn->op == IR_ALLOCA) {
+				has_alloca = 1;
+				break;
+			}
+			insn++;
+			i++;
+		} else {
+			n = ir_insn_inputs_to_len(n);
+			insn += n;
+			i += n;
+		}
+	}
+
+	/* Wrap inlined code with BLOCK_BEGIN/BLOCK_END if necessary */
+	if (has_alloca) {
+		ir_ref end = ir_emit1(ctx, IR_END, ctx->control);
+		start = ir_emit1(ctx, IR_BEGIN, end);
+		block_begin = xlat2[1] = xlat[1] = ctx->control = ir_emit1(ctx, IR_OPT(IR_BLOCK_BEGIN, IR_ADDR), start);
+	} else {
+		start = xlat2[1] = xlat[1] = ctx->control;
+	}
+
+	/* Copy instuctions */
+	bp_list.len = 0;
+	i = j;
+	insn = func_ctx->ir_base + i;
+	while (i < func_ctx->insns_count) {
+		ir_op op = insn->op;
+		uint32_t flags = ir_op_flags[op];
+
+		if (!IR_OP_HAS_VAR_INPUTS(flags)) {
+			op1 = insn->op1;
+			op2 = insn->op2;
+			op3 = insn->op3;
+			if (insn->inputs_count >= 1) {
+				IR_ASSERT(op1 < i);
+				op1 = IR_OPND_KIND(flags, 1) == IR_OPND_DATA ? xlat[op1] : xlat2[op1];
+				if (insn->inputs_count >= 2) {
+					IR_ASSERT(op2 < i);
+					op2 = IR_OPND_KIND(flags, 2) == IR_OPND_DATA ? xlat[op2] : xlat2[op2];
+					if (insn->inputs_count >= 3) {
+						IR_ASSERT(op3 < i);
+						op3 = IR_OPND_KIND(flags, 3) == IR_OPND_DATA ? xlat[op3] : xlat2[op3];
+						IR_ASSERT(insn->inputs_count <= 3);
+					}
+				}
+			}
+			if (IR_IS_FOLDABLE_OP(op)) {
+				IR_ASSERT(op != IR_PROTO);
+				xlat2[i] = xlat[i] = ir_fold(ctx, insn->opt, op1, op2, op3);
+			} else if (op == IR_RETURN) {
+				ctx->control = op1;
+				if (insn->op2) {
+					op2 = insn->op2;
+					IR_ASSERT(op2 < i);
+					op2 = xlat[op2];
+					ir_END_PHI_list(ret, op2);
+					add_phi = 1;
+				} else {
+					ir_END_list(ret);
+				}
+				ctx->control = IR_UNUSED;
+				xlat2[i] = xlat[i] = IR_UNUSED;
+			} else if (op == IR_UNREACHABLE) {
+				ctx->control = IR_UNUSED;
+				_ir_UNREACHABLE(ctx);
+				xlat2[i] = xlat[i] = ctx->control;
+				ctx->control = IR_UNUSED;
+			} else if (op == IR_IJMP) {
+				ctx->control = IR_UNUSED;
+				_ir_IJMP(ctx, op2);
+				xlat2[i] = xlat[i] = ctx->control;
+				ctx->control = IR_UNUSED;
+			} else if (op == IR_BEGIN) {
+				ctx->control = IR_UNUSED;
+				_ir_BEGIN(ctx, op1);
+				xlat2[i] = xlat[i] = ctx->control;
+				ctx->control = IR_UNUSED;
+			} else if (op == IR_IF) {
+				ctx->control = op1;
+				xlat2[i] = xlat[i] = _ir_IF(ctx, op2);
+				ctx->control = IR_UNUSED;
+			} else if (op == IR_GUARD) {
+				ctx->control = op1;
+				_ir_GUARD(ctx, op2, op3);
+				xlat2[i] = xlat[i] = ctx->control;
+				ctx->control = IR_UNUSED;
+			} else if (op == IR_GUARD_NOT) {
+				ctx->control = op1;
+				_ir_GUARD_NOT(ctx, op2, op3);
+				xlat2[i] = xlat[i] = ctx->control;
+				ctx->control = IR_UNUSED;
+			} else if (op == IR_VLOAD) {
+				ctx->control = op1;
+				xlat[i] = _ir_VLOAD(ctx, insn->type, op2);
+				xlat2[i] = ctx->control;
+				ctx->control = IR_UNUSED;
+			} else if (op == IR_VSTORE) {
+				ctx->control = op1;
+				_ir_VSTORE(ctx, op2, op3);
+				xlat2[i] = xlat[i] = ctx->control;
+				ctx->control = IR_UNUSED;
+			} else if (op == IR_LOAD) {
+				ctx->control = op1;
+				xlat[i] = _ir_LOAD(ctx, insn->type, op2);
+				xlat2[i] = ctx->control;
+				ctx->control = IR_UNUSED;
+			} else if (op == IR_STORE) {
+				ctx->control = op1;
+				_ir_STORE(ctx, op2, op3);
+				xlat2[i] = xlat[i] = ctx->control;
+				ctx->control = IR_UNUSED;
+			} else if (op == IR_VAR) {
+				size_t len;
+				const char *str = ir_get_strl(func_ctx, op2, &len);
+
+				op2 = ir_strl(ctx, str, len);
+				if (insn->op1 == 1) op1 = start;
+				xlat2[i] = xlat[i] = ir_emit(ctx, insn->opt, op1, op2, op3);
+			} else {
+				IR_ASSERT(op != IR_PROTO);
+				IR_ASSERT(op != IR_VA_START && op != IR_VA_ARG && op != IR_VA_COPY && op != IR_VA_END);
+				xlat2[i] = xlat[i] = ir_emit(ctx, insn->opt, op1, op2, op3);
+			}
+			insn++;
+			i++;
+		} else if (op == IR_TAILCALL) {
+			IR_ASSERT(op != IR_TAILCALL);
+		} else {
+			ir_ref ref, *p, input, n = insn->inputs_count;
+			ir_insn *new_insn;
+
+			xlat2[i] = xlat[i] = ref = ir_emit_N(ctx, insn->opt, insn->inputs_count);
+			new_insn = &ctx->ir_base[ref];
+			memcpy(new_insn->ops + 1, insn->ops + 1, sizeof(ir_ref) * insn->inputs_count);
+			j = n;
+			p = new_insn->ops + 1;
+			for (j = 1; j <= n; p++, j++) {
+				input = *p;
+				if (input <= i) {
+					*p = IR_OPND_KIND(flags, j) == IR_OPND_DATA ? xlat[input] : xlat2[input];
+				} else {
+					/* backward references are going to be updated trough xlat/xlat2 on the next step */
+					IR_ASSERT(insn->op == IR_LOOP_BEGIN || insn->op == IR_MERGE || insn->op == IR_PHI);
+					if (!bp_list.len) {
+						ir_list_init(&bp_list, 32);
+					}
+					ir_list_push(&bp_list, ref);
+					ir_list_push(&bp_list, j);
+				}
+			}
+			if (n <= 3) {
+				insn++;
+				i++;
+			} else {
+				n = ir_insn_inputs_to_len(n);
+				insn += n;
+				i += n;
+			}
+		}
+	}
+
+	/* Update inputs in LOOP_BEGIN and PHI (they may be backward references) */
+	if (ir_list_len(&bp_list)) {
+		do {
+			ir_ref ref, *p;
+			uint32_t flags;
+
+			j = ir_list_pop(&bp_list);
+			ref = ir_list_pop(&bp_list);
+			insn = &ctx->ir_base[ref];
+			flags = ir_op_flags[insn->op];
+			p = insn->ops + j;
+			*p = IR_OPND_KIND(flags, j) == IR_OPND_DATA ? xlat[*p] : xlat2[*p];
+		} while (ir_list_len(&bp_list));
+		ir_list_free(&bp_list);
+	}
+
+	/* Merge all RETURN values */
+	if (ret) {
+		if (add_phi) {
+			ret = ir_PHI_list(ret);
+		} else  {
+			ir_MERGE_list(ret);
+			ret = IR_UNUSED;
+		}
+	}
+
+	/* Add BLOCK_END if necessary */
+	if (has_alloca) {
+		ctx->control = ir_emit2(ctx, IR_BLOCK_END, ctx->control, block_begin);
+	}
+
+	return ret;
+}
+
 void c_do_call(c_value *func, int32_t num_args, c_value *args)
 {
 	const c_type *func_type, *ret_type;
 	ir_type t;
 	ir_ref ref, ret_struct = IR_UNUSED;
+	ir_ref *arg_refs = NULL;
 
 	c_value_rval(func);
 	if (func->type->kind == C_TYPE_FUNC) {
@@ -2859,9 +3117,9 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args)
 	}
 	t = c_type2ir(ret_type);
 	if (num_args > 0) {
-		ir_ref *arg_refs = alloca(sizeof(ir_ref) * num_args);
 		int i;
 
+		arg_refs = alloca(sizeof(ir_ref) * num_args);
 		for (i = 0; i < num_args; i++) {
 			c_value_rval(&args[i]);
 			if (i < func_type->func.num_params) {
@@ -2894,16 +3152,16 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args)
 				arg_refs[i] = c_value_ref(&args[i]);
 			}
 		}
-		if (!(func->u.op & C_VAL_BUILTIN)) {
-			ref = ir_CALL_N(t, c_value_ref(func), num_args, arg_refs);
-		} else {
-			ref = c_do_convert_builtin(func, num_args, arg_refs);
-			if (!ref) {
-				ref = ir_CALL_N(t, c_value_ref(func), num_args, arg_refs);
-			}
-		}
+	}
+	if (func->u.op & C_VAL_INLINE) {
+		ref = ir_inline_call(active_ctx, (ir_ctx*)func->u.val.ptr, num_args, arg_refs);
+	} else if (!(func->u.op & C_VAL_BUILTIN)) {
+		ref = ir_CALL_N(t, c_value_ref(func), num_args, arg_refs);
 	} else {
-		ref = ir_CALL(t, c_value_ref(func));
+		ref = c_do_convert_builtin(func, num_args, arg_refs);
+		if (!ref) {
+			ref = ir_CALL_N(t, c_value_ref(func), num_args, arg_refs);
+		}
 	}
 	ret_type = func_type->func.ret_type;
 	t = c_type2ir(ret_type);
@@ -5102,7 +5360,7 @@ void c_do_func_end(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 		}
 	}
 
-	rcc_ir_compile(name, ctx, &active_func->value);
+	rcc_ir_compile(name, ctx, active_func);
 
 	active_func = NULL; // TODO: nested functions ???
 	active_func_name = 0; // TODO: nested functions ???

@@ -3,7 +3,6 @@
 - false positive "control reaches end of non-void function"
 - struct layout variations (MS, pack)
 - no-code in sizeof(), _Alignof(), typeof(), ...
-- function inlining
 - volatile
 - struct/union arguments and return value
 - variable length arrays

@@ -47,87 +47,7 @@ static uint32_t        c_save_flags = 0;
 static ir_arena       *c_linker_arena;
 static ir_code_buffer  c_code_buffer;
 static bool            protected = 1;
-
-void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, uint32_t flags)
-{
-	uint32_t len;
-	c_name id;
-	c_sym *sym;
-
-	if (!c_native) return NULL;
-
-	len = (uint32_t)strlen(name);
-	id = yy_hash_lookup(name, len);
-	sym = yy_hash.data[id].sym;
-	if (sym && (sym->linkage != C_LINK_INTERNAL && sym->linkage != C_LINK_EXTERNAL)) {
-		sym = c_global_sym(sym);
-	}
-	if (sym && (sym->linkage == C_LINK_INTERNAL || sym->linkage == C_LINK_EXTERNAL)) {
-		if (c_value_is_const(&sym->value)) {
-			IR_ASSERT(sym->value.u.type == IR_ADDR && sym->value.u.val.ptr);
-			return sym->value.u.val.ptr;
-		}
-		if (sym->linkage == C_LINK_EXTERNAL) {
-			void *addr = ir_resolve_sym_name(name);
-			if (addr) {
-				sym->value.u.opt = IR_OPT(C_VAL_CONST, IR_ADDR);
-				sym->value.u.val.ptr = addr;
-				return addr;
-			}
-		}
-		if (flags & IR_RESOLVE_SYM_ADD_THUNK) {
-			/* Undefined declaration */
-			// TODO: Add thunk or relocation ???
-			size_t size;
-			void *addr;
-			
-			if (protected) {
-				ir_mem_unprotect(c_code_buffer.start, (char*)c_code_buffer.end - (char*)c_code_buffer.start);
-			}
-			addr = ir_emit_thunk(&c_code_buffer, NULL, &size);
-			if (protected) {
-				ir_mem_protect(c_code_buffer.start, (char*)c_code_buffer.end - (char*)c_code_buffer.start);
-			}
-			if (addr) {
-				sym->value.u.opt = IR_OPT(C_VAL_CONST, IR_ADDR);
-				sym->value.u.val.ptr = addr;
-				ir_disasm_add_symbol(name, (uint64_t)(uintptr_t)addr, size); //???
-				return addr;
-			}
-		}
-	}
-	if (!(flags & IR_RESOLVE_SYM_SILENT)) {
-		yy_error_fmt("undefined symbol \"%s\"", name);
-	}
-	return NULL;
-}
-
-void *c_linker_allocate_data(size_t size)
-{
-	void *data = ir_arena_alloc(&c_linker_arena, size);
-	memset(data, 0, size);
-	return data;
-}
-
-void *c_linker_grow_data(void *addr, size_t size)
-{
-	size_t old_size = (char*)c_linker_arena->ptr - (char*)addr;
-
-	IR_ASSERT(size > old_size);
-	if (size - old_size >= (size_t)(c_linker_arena->end - c_linker_arena->ptr)) {
-		void *new_addr = ir_arena_alloc(&c_linker_arena, size);
-		memcpy(new_addr, addr, old_size);
-		memset((char*)new_addr + old_size, 0, size - old_size);
-		return new_addr;
-	}
-	memset((char*)addr + old_size, 0, size - old_size);
-	c_linker_arena->ptr += size - old_size;
-	return addr;
-}
-
-ir_loader c_linker = {
-	.resolve_sym_name = c_linker_resolve_sym_name,
-};
+static ir_list         c_codegen_list;
 
 static void rcc_dump_func_proto(c_name name, FILE *f)
 {
@@ -170,62 +90,98 @@ static void rcc_dump_func_proto(c_name name, FILE *f)
 	fprintf(f, ";\n");
 }
 
-void rcc_ir_init(ir_ctx *ctx, uint32_t flags)
+static bool rcc_may_inline(c_value *func, ir_ctx *ctx)
 {
-	flags |= IR_FUNCTION;
+	if (func->type->attr & (C_ATTR_VARIADIC|C_ATTR_NOINLINE)) {
+		return 0;
+	}
+	if ((func->type->attr & C_ATTR_ALWAYS_INLINE)
+	 || ((func->type->attr & C_ATTR_INLINE) && ctx->insns_count <= 60)
+	 || ctx->insns_count <= 30) {
+		return 1;
+	}
+	return 0;
+}
+
+static void rcc_ir_codegen(c_name name, ir_ctx *ctx, c_value *func)
+{
+	if (c_native) {
+		ir_match(ctx);
+	}
+
+	if ((c_opt_flags & C_OPT_LEVEL) > 0 || c_native || 0) {
+		ir_assign_virtual_registers(ctx);
+	}
+
 	if ((c_opt_flags & C_OPT_LEVEL) > 0) {
-		flags |= IR_OPT_FOLDING | IR_OPT_CFG | IR_OPT_CODEGEN;
+		ir_compute_live_ranges(ctx);
+		ir_coalesce(ctx);
+		if (c_native) {
+			ir_reg_alloc(ctx);
+		}
+		ir_schedule_blocks(ctx);
+	} else if (c_native || 0) {
+		ir_compute_dessa_moves(ctx);
 	}
-	ir_init(ctx, flags, 256, 1024);
-	ctx->loader = &c_linker;
-}
 
-void rcc_ir_codegen(c_name name, ir_ctx *ctx, c_value *func)
-{
-	size_t size;
-	void *entry;
+	if (c_dump_flags & C_DUMP_IR) {
+		rcc_dump_func_proto(name, stderr);
+		ir_save(ctx, c_save_flags | IR_SAVE_CFG | IR_SAVE_RULES, stderr);
+	}
 
-	ctx->code_buffer = &c_code_buffer;
-	protected = 0;
-	ir_mem_unprotect(c_code_buffer.start, (char*)c_code_buffer.end - (char*)c_code_buffer.start);
-	entry = ir_emit_code(ctx, &size);
-	IR_ASSERT(entry);
-	if (c_value_is_const(func)) {
-		ir_fix_thunk(func->u.val.ptr, entry);
-	}
-#ifndef _WIN32
-	if (c_dump_flags & C_GDB) {
-		ir_gdb_register(yy_sym2str(name), entry, size, sizeof(void*), 0);
-	}
+#ifdef IR_DEBUG
+	ir_check(ctx);
 #endif
-	ir_mem_protect(c_code_buffer.start, (char*)c_code_buffer.end - (char*)c_code_buffer.start);
-	protected = 1;
 
-	if (c_dump_flags & C_DUMP_ASM) {
-//		ir_ref i;
-//		ir_insn *insn;
+	if (c_native) {
+		size_t size;
+		void *entry;
+
+		ctx->code_buffer = &c_code_buffer;
+		protected = 0;
+		ir_mem_unprotect(c_code_buffer.start, (char*)c_code_buffer.end - (char*)c_code_buffer.start);
+		entry = ir_emit_code(ctx, &size);
+		IR_ASSERT(entry);
+		if (c_value_is_const(func)) {
+			ir_fix_thunk(func->u.val.ptr, entry);
+		}
+#ifndef _WIN32
+		if (c_dump_flags & C_GDB) {
+			ir_gdb_register(yy_sym2str(name), entry, size, sizeof(void*), 0);
+		}
+#endif
+		ir_mem_protect(c_code_buffer.start, (char*)c_code_buffer.end - (char*)c_code_buffer.start);
+		protected = 1;
+
+		if (c_dump_flags & C_DUMP_ASM) {
+//			ir_ref i;
+//			ir_insn *insn;
 //
-		ir_disasm_add_symbol(yy_sym2str(name), (uintptr_t)entry, size);
+			ir_disasm_add_symbol(yy_sym2str(name), (uintptr_t)entry, size);
 //
-//		for (i = IR_UNUSED + 1, insn = ctx->ir_base - i; i < ctx->consts_count; i++, insn--) {
-//			if (insn->op == IR_FUNC) {
-//				const char *name = ir_get_str(ctx, insn->val.name);
-//				void *addr = ir_loader_resolve_sym_name(loader, name, 0);
+//			for (i = IR_UNUSED + 1, insn = ctx->ir_base - i; i < ctx->consts_count; i++, insn--) {
+//				if (insn->op == IR_FUNC) {
+//					const char *name = ir_get_str(ctx, insn->val.name);
+//					void *addr = ir_loader_resolve_sym_name(loader, name, 0);
 //
-//				IR_ASSERT(addr);
-//				ir_disasm_add_symbol(name, (uintptr_t)addr, IR_UNKNOWN_SIZE);
+//					IR_ASSERT(addr);
+//					ir_disasm_add_symbol(name, (uintptr_t)addr, IR_UNKNOWN_SIZE);
 //TODO:			} else if (insn->op == IR_SYM) {
+//				}
 //			}
-//		}
-		ir_disasm(yy_sym2str(name), entry, size, 0, ctx, stderr);
-	}
+			ir_disasm(yy_sym2str(name), entry, size, 0, ctx, stderr);
+		}
 
-	func->u.opt = IR_OPT(C_VAL_CONST, IR_ADDR);
-	func->u.val.ptr = entry;
+		func->u.op |= C_VAL_CONST;
+		func->u.type = IR_ADDR;
+		func->u.val.ptr = entry;
+	}
 }
 
-void rcc_ir_compile(c_name name, ir_ctx *ctx, c_value *func)
+void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym)
 {
+	c_value *func = &sym->value;
+
 	if (c_dump_flags & C_DUMP_IR_AFTER_LOAD) {
 		rcc_dump_func_proto(name, stderr);
 		ir_save(ctx, c_save_flags, stderr);
@@ -269,39 +225,121 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_value *func)
 		}
 	}
 
-	if (c_native) {
-		ir_match(ctx);
+	if ((c_opt_flags & C_OPT_INLINE)
+	 && name != YY_MAIN
+	 && !c_value_is_const(func)
+	 && rcc_may_inline(func, ctx)) {
+		ir_ctx *copy = ir_mem_malloc(sizeof(ir_ctx));
+		memcpy(copy, ctx, sizeof(ir_ctx));
+		sym->ctx = copy;
+		return;
 	}
 
-	if ((c_opt_flags & C_OPT_LEVEL) > 0 || c_native || 0) {
-		ir_assign_virtual_registers(ctx);
-	}
-
-	if ((c_opt_flags & C_OPT_LEVEL) > 0) {
-		ir_compute_live_ranges(ctx);
-		ir_coalesce(ctx);
-		if (c_native) {
-			ir_reg_alloc(ctx);
-		}
-		ir_schedule_blocks(ctx);
-	} else if (c_native || 0) {
-		ir_compute_dessa_moves(ctx);
-	}
-
-	if (c_dump_flags & C_DUMP_IR) {
-		rcc_dump_func_proto(name, stderr);
-		ir_save(ctx, c_save_flags | IR_SAVE_CFG | IR_SAVE_RULES, stderr);
-	}
-
-#ifdef IR_DEBUG
-	ir_check(ctx);
-#endif
-
-	if (c_native) {
-		rcc_ir_codegen(name, ctx, func);
-	}
-
+	rcc_ir_codegen(name, ctx, func);
 	ir_free(ctx);
+}
+
+void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, uint32_t flags)
+{
+	uint32_t len;
+	c_name id;
+	c_sym *sym;
+
+	if (!c_native) return NULL;
+
+	len = (uint32_t)strlen(name);
+	id = yy_hash_lookup(name, len);
+	sym = yy_hash.data[id].sym;
+	if (sym && (sym->linkage != C_LINK_INTERNAL && sym->linkage != C_LINK_EXTERNAL)) {
+		sym = c_global_sym(sym);
+	}
+	if (sym && (sym->linkage == C_LINK_INTERNAL || sym->linkage == C_LINK_EXTERNAL)) {
+		if (c_value_is_const(&sym->value)) {
+			IR_ASSERT(sym->value.u.type == IR_ADDR && sym->value.u.val.ptr);
+			return sym->value.u.val.ptr;
+		}
+		if (sym->linkage == C_LINK_EXTERNAL) {
+			void *addr = ir_resolve_sym_name(name);
+			if (addr) {
+				sym->value.u.opt = IR_OPT(C_VAL_CONST, IR_ADDR);
+				sym->value.u.val.ptr = addr;
+				return addr;
+			}
+		}
+		if (sym->ctx && protected) {
+			/* Generate code early to avoid linking through thunk */
+			rcc_ir_codegen(id, sym->ctx, &sym->value);
+			if (c_value_is_const(&sym->value)) {
+				return sym->value.u.val.ptr;
+			}
+		} else if (flags & IR_RESOLVE_SYM_ADD_THUNK) {
+			/* Undefined declaration */
+			// TODO: Add thunk or relocation ???
+			size_t size;
+			void *addr;
+
+			if (protected) {
+				ir_mem_unprotect(c_code_buffer.start, (char*)c_code_buffer.end - (char*)c_code_buffer.start);
+			}
+			addr = ir_emit_thunk(&c_code_buffer, NULL, &size);
+			if (protected) {
+				ir_mem_protect(c_code_buffer.start, (char*)c_code_buffer.end - (char*)c_code_buffer.start);
+			}
+			if (!addr) {
+				yy_error_fmt("internal error");
+			}
+			sym->value.u.op |= C_VAL_CONST;
+			sym->value.u.type = IR_ADDR;
+			sym->value.u.val.ptr = addr;
+			ir_disasm_add_symbol(name, (uint64_t)(uintptr_t)addr, size); //???
+			if (sym->ctx) {
+				if (!ir_list_len(&c_codegen_list)) ir_list_init(&c_codegen_list, 32);
+				ir_list_push(&c_codegen_list, id);
+			}
+			return addr;
+		}
+	}
+	if (!(flags & IR_RESOLVE_SYM_SILENT)) {
+		yy_error_fmt("undefined symbol \"%s\"", name);
+	}
+	return NULL;
+}
+
+void *c_linker_allocate_data(size_t size)
+{
+	void *data = ir_arena_alloc(&c_linker_arena, size);
+	memset(data, 0, size);
+	return data;
+}
+
+void *c_linker_grow_data(void *addr, size_t size)
+{
+	size_t old_size = (char*)c_linker_arena->ptr - (char*)addr;
+
+	IR_ASSERT(size > old_size);
+	if (size - old_size >= (size_t)(c_linker_arena->end - c_linker_arena->ptr)) {
+		void *new_addr = ir_arena_alloc(&c_linker_arena, size);
+		memcpy(new_addr, addr, old_size);
+		memset((char*)new_addr + old_size, 0, size - old_size);
+		return new_addr;
+	}
+	memset((char*)addr + old_size, 0, size - old_size);
+	c_linker_arena->ptr += size - old_size;
+	return addr;
+}
+
+ir_loader c_linker = {
+	.resolve_sym_name = c_linker_resolve_sym_name,
+};
+
+void rcc_ir_init(ir_ctx *ctx, uint32_t flags)
+{
+	flags |= IR_FUNCTION;
+	if ((c_opt_flags & C_OPT_LEVEL) > 0) {
+		flags |= IR_OPT_FOLDING | IR_OPT_CFG | IR_OPT_CODEGEN;
+	}
+	ir_init(ctx, flags, 256, 1024);
+	ctx->loader = &c_linker;
 }
 
 static const char *_sym_name = {
@@ -478,6 +516,17 @@ static int rcc_read(const char *file_name)
 
 static void rcc_dtor(void)
 {
+	if (c_opt_flags & C_OPT_INLINE) {
+		uint32_t i;
+		yy_hash_bucket *p;
+
+		for (i = YY_LAST_KEYWORD + 1, p = yy_hash.data + i; i < yy_hash.count; p++, i++) {
+			if (p->sym && p->sym->ctx) {
+				ir_free(p->sym->ctx);
+				ir_mem_free(p->sym->ctx);
+			}
+		}
+	}
 	pp_dtor();
 }
 
@@ -496,7 +545,17 @@ static int rcc_compile(const char *file_name)
 	if (!rcc_read(file_name)) {
 		return 0;
 	}
+	memset(&c_codegen_list, 0, sizeof(ir_list));
 	rcc_parse();
+	if (ir_list_len(&c_codegen_list)) {
+		do {
+			c_name name = ir_list_pop(&c_codegen_list);
+			c_sym *sym = yy_hash.data[name].sym;
+			IR_ASSERT(sym && sym->ctx);
+			rcc_ir_codegen(name, sym->ctx, &sym->value);
+		} while (ir_list_len(&c_codegen_list));
+		ir_list_free(&c_codegen_list);
+	}
 	rcc_dtor();
 	return 1;
 }
