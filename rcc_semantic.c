@@ -116,7 +116,7 @@ repeat:
 	}
 }
 
-static ir_ref c_type2proto(const c_type *t)
+static ir_ref c_type2proto(const c_type *t, uint32_t linkage)
 {
 	uint32_t flags = 0;
 	uint32_t params_count;
@@ -154,6 +154,9 @@ static ir_ref c_type2proto(const c_type *t)
 	}
 	if (t->attr & C_ATTR_VARIADIC) {
 		flags |= IR_VARARG_FUNC;
+	}
+	if (linkage == C_LINK_BUILTIN) {
+		flags |= IR_BUILTIN_FUNC;
 	}
 	return ir_proto(active_ctx, flags, c_type2ir(ret_type), params_count, param_types);
 }
@@ -274,7 +277,7 @@ void c_resolve_sym_name(c_value *res, c_name name, yy_sym sym)
 		if (c_value_is_ref(&s->value)) {
 			IR_ASSERT(s->kind != C_SYM_FUNC);
 			*res = s->value;
-		} else if (s->linkage == C_LINK_EXTERNAL || s->linkage == C_LINK_INTERNAL) {
+		} else if (s->linkage == C_LINK_EXTERNAL || s->linkage == C_LINK_INTERNAL || s->linkage == C_LINK_BUILTIN) {
 			const char *name_str;
 			size_t name_len;
 			ir_ref ref;
@@ -282,12 +285,15 @@ void c_resolve_sym_name(c_value *res, c_name name, yy_sym sym)
 			name_str = yy_sym2strl(name, &name_len);
 			if (s->kind == C_SYM_FUNC) {
 				ref = ir_const_func(active_ctx, ir_strl(active_ctx, name_str, name_len),
-					c_type2proto(s->value.type));
+					c_type2proto(s->value.type, s->linkage));
 			} else {
 				ref = ir_const_sym(active_ctx, ir_strl(active_ctx, name_str, name_len));
 			}
 			if (s->kind == C_SYM_FUNC) {
 				c_value_set_rval(res, s->value.type, IR_ADDR, ref);
+				if (s->linkage == C_LINK_BUILTIN) {
+					res->u.op |= C_VAL_BUILTIN;
+				}
 				if (s == active_func) {
 					/* recursive function - disable inlining */
 					c_type *type = (c_type*)s->value.type;
@@ -629,6 +635,11 @@ static c_name c_create_static_var(c_name name, void *addr)
 	return name;
 }
 
+static bool c_is_builtin_func_name(c_name name)
+{
+	return name >= YY_BUILTIN_FIRST && name <= YY_BUILTIN_LAST;
+}
+
 c_sym *c_declare(c_name name, c_dcl *d)
 {
 	c_sym *sym;
@@ -725,7 +736,13 @@ c_sym *c_declare(c_name name, c_dcl *d)
 		}
 		IR_ASSERT((d->flags & (C_DCL_STORAGE_CLASS-(C_DCL_EXTERN|C_DCL_STATIC))) == 0);
 		sym->kind = C_SYM_FUNC;
-		sym->linkage = (d->flags & C_DCL_STATIC) ? C_LINK_INTERNAL : C_LINK_EXTERNAL;
+		if (!(d->flags & (C_DCL_STATIC|C_DCL_DEFINITION))
+		 && c_is_builtin_func_name(name)) {
+			/* TODO: verify prototype ??? */
+			sym->linkage = C_LINK_BUILTIN;
+		} else {
+			sym->linkage = (d->flags & C_DCL_STATIC) ? C_LINK_INTERNAL : C_LINK_EXTERNAL;
+		}
 		sym->is_thread_local = 0;
 		sym->is_implemented = (d->flags & C_DCL_DEFINITION) != 0;
 	} else {
@@ -2775,6 +2792,27 @@ void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 	return;
 }
 
+static ir_ref c_do_convert_builtin(c_value *func, int32_t num_args, ir_ref *arg_refs)
+{
+	if (c_value_is_ref(func)) {
+		const ir_insn *func_insn = &active_ctx->ir_base[func->u.ref];
+		size_t name_len;
+		const char *name = ir_get_strl(active_ctx, func_insn->val.name, &name_len);
+		c_name sym_name = yy_hash_find(name, name_len);
+		if (sym_name == YY_ABS) {
+			return ir_ABS_I32(arg_refs[0]);
+		} else if (sym_name == YY_LABS) {
+			return ir_ABS_I64(arg_refs[0]); //???
+		} else if (sym_name == YY_FABS) {
+			return ir_ABS_D(arg_refs[0]);
+		} else if (sym_name == YY_FABSF) {
+			return ir_ABS_F(arg_refs[0]);
+		}
+	}
+
+	return 0;
+}
+
 void c_do_call(c_value *func, int32_t num_args, c_value *args)
 {
 	const c_type *func_type, *ret_type;
@@ -2856,7 +2894,14 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args)
 				arg_refs[i] = c_value_ref(&args[i]);
 			}
 		}
-		ref = ir_CALL_N(t, c_value_ref(func), num_args, arg_refs);
+		if (!(func->u.op & C_VAL_BUILTIN)) {
+			ref = ir_CALL_N(t, c_value_ref(func), num_args, arg_refs);
+		} else {
+			ref = c_do_convert_builtin(func, num_args, arg_refs);
+			if (!ref) {
+				ref = ir_CALL_N(t, c_value_ref(func), num_args, arg_refs);
+			}
+		}
 	} else {
 		ref = ir_CALL(t, c_value_ref(func));
 	}

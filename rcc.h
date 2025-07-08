@@ -285,6 +285,23 @@
 	_("__weak__",                      YY___WEAK__)             /*fv */\
 	_("weak_ref",                      YY_WEAK_REF)             /*f  */\
 	_("__weak_ref__",                  YY___WEAK_REF__)         /*f  */\
+	/* builtin functions */                                            \
+	_("abs",                           YY_ABS)                         \
+	_("labs",                          YY_LABS)                        \
+	_("fabs",                          YY_FABS)                        \
+	_("fabsf",                         YY_FABSF)                       \
+	_("ceil",                          YY_CEIL)                        \
+	_("ceilf",                         YY_CEILF)                       \
+	_("floor",                         YY_FLOOR)                       \
+	_("floorf",                        YY_FLOORF)                      \
+	_("nearbyint",                     YY_NEARBYINT)                   \
+	_("nearbyintf",                    YY_NEARBYINTF)                  \
+	_("rint",                          YY_RINT)                        \
+	_("rintf",                         YY_RINTF)                       \
+	_("sqrt",                          YY_SQRT)                        \
+	_("sqrtf",                         YY_SQRTF)                       \
+	_("trunc",                         YY_TRUNC)                       \
+	_("truncf",                        YY_TRUNCF)                      \
 
 typedef enum {
 #define _YY_SYM(str, id) id,
@@ -293,7 +310,9 @@ _YY_KEYWORDS(_YY_SYM)
 _YY_DIRECTIVES(_YY_SYM)
 _YY_NAMES(_YY_SYM)
 YY_LAST_NAME,
-YY_LAST = 0x7fffffff
+YY_BUILTIN_FIRST = YY_ABS,
+YY_BUILTIN_LAST = YY_TRUNCF,
+YY_LAST = 0x7fffffff,
 #undef _YY_SYM
 } yy_sym;
 
@@ -598,6 +617,7 @@ struct _c_type {
 #define C_VAL_CONST    (1<<1)
 #define C_VAL_LVAL     (1<<2)
 #define C_VAL_VAR      (1<<3)
+#define C_VAL_BUILTIN  (1<<4)
 
 typedef struct {
 	const c_type  *type;
@@ -621,6 +641,7 @@ typedef enum {
 	C_LINK_NONE,
 	C_LINK_EXTERNAL,
 	C_LINK_INTERNAL,
+	C_LINK_BUILTIN,
 } c_sym_linkage;
 
 struct _c_sym {
