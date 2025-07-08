@@ -35,6 +35,7 @@
 #define C_DUMP_SIZE              (1<<6)
 #define C_DUMP_TIME              (1<<7)
 #define C_GDB                    (1<<8)
+#define C_PERF                   (1<<9)
 
 #define C_OPT_LEVEL              0x3
 #define C_OPT_INLINE             (1<<2)
@@ -171,6 +172,13 @@ static void rcc_ir_codegen(c_name name, ir_ctx *ctx, c_value *func)
 //			}
 			ir_disasm(yy_sym2str(name), entry, size, 0, ctx, stderr);
 		}
+
+#ifndef _WIN32
+		if (c_dump_flags & C_PERF) {
+			ir_perf_map_register(yy_sym2str(name), entry, size);
+			ir_perf_jitdump_register(yy_sym2str(name), entry, size);
+		}
+#endif
 
 		func->u.op |= C_VAL_CONST;
 		func->u.type = IR_ADDR;
@@ -597,7 +605,10 @@ static void rcc_help(const char *cmd)
 		"General Options:\n"
 		"  --run ...                  - run the main() function of generated code\n"
 		"                               (the remaining arguments are passed to main)\n"
+#ifndef _WIN32
 		"  -g                         - produce debugging information (through JITGDB)\n"
+		"  -p                         - provide information aboit JIT-ed code to Linux Perf\n"
+#endif
 		"  -S                         - show generated assembler code\n"
 		"Optimization Options:\n"
 		"  -O[012]                    - optimization level (default: 2)\n"
@@ -710,6 +721,8 @@ int main(int argc, char **argv)
 			c_dump_flags |= C_DUMP_TIME;
 		} else if (strcmp(argv[i], "-g") == 0) {
 			c_dump_flags |= C_GDB;
+		} else if (strcmp(argv[i], "-p") == 0) {
+			c_dump_flags |= C_PERF;
 		} else if (strcmp(argv[i], "--run") == 0) {
 			run = 1;
 			if (i + 1 < argc) {
@@ -727,6 +740,12 @@ int main(int argc, char **argv)
 			input = argv[i];
 		}
 	}
+
+#ifndef _WIN32
+	if (c_dump_flags & C_PERF) {
+		ir_perf_jitdump_open();
+	}
+#endif
 
 	if (c_dump_flags & C_DUMP_TIME) {
 		start_time = rcc_time();
@@ -804,6 +823,12 @@ int main(int argc, char **argv)
 				}
 
 				ret = func(jit_argc, jit_argv);
+
+				if ((c_dump_flags & C_DUMP_TIME) && rcc_atexit_start) {
+					double t = rcc_time();
+					fprintf(stderr, "\nexecution time = %0.6f\n", t - rcc_atexit_start);
+					rcc_atexit_start = 0.0;
+				}
 			}
 		} else {
 			ret = 1;
@@ -812,6 +837,12 @@ int main(int argc, char **argv)
 	}
 
 	ir_free(&ctx);
+
+#ifndef _WIN32
+	if (c_dump_flags & C_PERF) {
+		ir_perf_jitdump_close();
+	}
+#endif
 
 	return ret;
 }
