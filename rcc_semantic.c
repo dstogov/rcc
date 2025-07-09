@@ -4127,12 +4127,14 @@ void c_do_switch(c_loop *loop, c_value *cond)
 		yy_error("switch quantity not an integer");
 	}
 	loop->is_switch = 1;
+	loop->switch_type = cond->u.type;
 	loop->start = IR_UNUSED;
 	loop->check = ir_SWITCH(c_value_ref(cond));
 	loop->next = IR_UNUSED;
 	loop->break_list = IR_UNUSED;
 	loop->continue_list = IR_UNUSED;
 	loop->prev = active_loop;
+	loop->case_labels = NULL;
 	active_loop = loop;
 	ir_BEGIN(IR_UNUSED);
 }
@@ -4148,6 +4150,208 @@ static c_loop *c_find_switch(void)
 	return NULL;
 }
 
+/* Detect duplicate case labels through Red-Black Tree */
+struct _c_case_labels {
+	ir_val         min;
+	ir_val         max;
+	c_case_labels *parent;
+	c_case_labels *left;
+	c_case_labels *right;
+	uint8_t        color;
+};
+
+static void c_case_labels_rotateleft(c_loop *loop, c_case_labels *p)
+{
+	c_case_labels *r = p->right;
+
+	p->right = r->left;
+	if (r->left) {
+		r->left->parent = p;
+	}
+	r->parent = p->parent;
+	if (p->parent == NULL) {
+		loop->case_labels = r;
+	} else if (p->parent->left == p) {
+		p->parent->left = r;
+	} else {
+		p->parent->right = r;
+	}
+	r->left = p;
+	p->parent = r;
+}
+
+static void c_case_labels_rotateright(c_loop *loop, c_case_labels *p)
+{
+	c_case_labels *l = p->left;
+
+	p->left = l->right;
+	if (l->right) {
+		l->right->parent = p;
+	}
+	l->parent = p->parent;
+	if (p->parent == NULL) {
+		loop->case_labels = l;
+	} else if (p->parent->right == p) {
+		p->parent->right = l;
+	} else {
+		p->parent->left = l;
+	}
+	l->right = p;
+	p->parent = l;
+}
+
+static void c_case_labels_balance(c_loop *loop, c_case_labels *q)
+{
+	c_case_labels *p;
+
+	while (q && q->parent && q->parent->color == 1) {
+		if (q->parent == q->parent->parent->left) {
+			p = q->parent->parent->right;
+			if (p && p->color == 1) {
+				q->parent->color = 0;
+				p->color = 0;
+				q->parent->parent->color = 1;
+				q = q->parent->parent;
+			} else {
+				if (q == q->parent->right) {
+					q = q->parent;
+					c_case_labels_rotateleft(loop, q);
+				}
+				q->parent->color = 0;
+				q->parent->parent->color = 1;
+				c_case_labels_rotateright(loop, q->parent->parent);
+			}
+		} else {
+			p = q->parent->parent->left;
+			if (p && p->color == 1) {
+				q->parent->color = 0;
+				p->color = 0;
+				q->parent->parent->color = 1;
+				q = q->parent->parent;
+			} else {
+				if (q == q->parent->left) {
+					q = q->parent;
+					c_case_labels_rotateright(loop, q);
+				}
+				q->parent->color = 0;
+				q->parent->parent->color = 1;
+				c_case_labels_rotateleft(loop, q->parent->parent);
+			}
+		}
+	}
+	loop->case_labels->color = 0;
+}
+
+static void c_case_labels_add_i(c_loop *loop, ir_val min, ir_val max)
+{
+	c_case_labels *q, *p = loop->case_labels;
+
+	IR_ASSERT(min.i64 <= max.i64);
+	if (p) {
+		while (1) {
+			if (min.i64 > p->min.i64) {
+				if (min.i64 <= p->max.i64) yy_error("duplicate case value");
+				if (p->right) {
+					p = p->right;
+				} else if (min.i64 == p->max.i64 + 1) {
+					p->max.i64 = max.i64;
+					return;
+				} else {
+					q = ir_mem_malloc(sizeof(c_case_labels));
+					p->right = q;
+					break;
+				}
+			} else if (min.i64 < p->min.i64) {
+				if (max.i64 >= p->min.i64) yy_error("duplicate case value");
+				if (p->left) {
+					p = p->left;
+				} else if (max.i64 + 1 == p->min.i64) {
+					p->min.i64 = min.i64;
+					return;
+				} else {
+					q = ir_mem_malloc(sizeof(c_case_labels));
+					p->left = q;
+					break;
+				}
+			} else {
+				yy_error("duplicate case value");
+			}
+		}
+		q->min = min;
+		q->max = max;
+		q->parent = p;
+		q->left = NULL;
+		q->right = NULL;
+		q->color = 1;
+		c_case_labels_balance(loop, q);
+	} else {
+		loop->case_labels = p = ir_mem_malloc(sizeof(c_case_labels));
+		p->min = min;
+		p->max = max;
+		p->parent = NULL;
+		p->left = NULL;
+		p->right = NULL;
+		p->color = 0;
+	}
+}
+
+static void c_case_labels_add_u(c_loop *loop, ir_val min, ir_val max)
+{
+	c_case_labels *q, *p = loop->case_labels;
+
+	IR_ASSERT(min.u64 <= max.u64);
+	if (p) {
+		while (1) {
+			if (min.u64 > p->min.u64) {
+				if (min.u64 <= p->max.u64) yy_error("duplicate case value");
+				if (p->right) {
+					p = p->right;
+				} else if (min.u64 == p->max.u64 + 1) {
+					p->max.u64 = max.u64;
+					return;
+				} else {
+					q = ir_mem_malloc(sizeof(c_case_labels));
+					p->right = q;
+					break;
+				}
+			} else if (min.u64 < p->min.u64) {
+				if (max.u64 >= p->min.u64) yy_error("duplicate case value");
+				if (p->left) {
+					p = p->left;
+				} else {
+					q = ir_mem_malloc(sizeof(c_case_labels));
+					p->left = q;
+					break;
+				}
+			} else {
+				yy_error("duplicate case value");
+			}
+		}
+		q->min = min;
+		q->max = max;
+		q->parent = p;
+		q->left = NULL;
+		q->right = NULL;
+		q->color = 1;
+		c_case_labels_balance(loop, q);
+	} else {
+		loop->case_labels = p = ir_mem_malloc(sizeof(c_case_labels));
+		p->min = min;
+		p->max = max;
+		p->parent = NULL;
+		p->left = NULL;
+		p->right = NULL;
+		p->color = 0;
+	}
+}
+
+static void c_case_labels_free(c_case_labels *p)
+{
+	if (p->left) c_case_labels_free(p->left);
+	if (p->right) c_case_labels_free(p->right);
+	ir_mem_free(p);
+}
+
 void c_do_case(c_value *v)
 {
 	c_loop *loop = c_find_switch();
@@ -4161,6 +4365,11 @@ void c_do_case(c_value *v)
 		prev = ir_END();
 	}
 	// TODO: check for duplicate labels ???
+	if (IR_IS_TYPE_SIGNED(loop->switch_type)) {
+		c_case_labels_add_i(loop, v->u.val, v->u.val);
+	} else {
+		c_case_labels_add_u(loop, v->u.val, v->u.val);
+	}
 	ir_CASE_VAL(loop->check, c_value_ref(v));
 	if (prev) {
 		ir_MERGE_2(prev, ir_END());
@@ -4180,10 +4389,11 @@ void c_do_case_range(c_value *v1, c_value *v2)
 	if (active_ctx->control) {
 		ir_END_list(list);
 	}
-	if (IR_IS_TYPE_SIGNED(active_ctx->ir_base[loop->check].type)) {
+	if (IR_IS_TYPE_SIGNED(loop->switch_type)) {
 		if (v1->u.val.i64 <= v2->u.val.i64) {
 			int64_t i;
 
+			c_case_labels_add_i(loop, v1->u.val, v2->u.val);
 			for (i = v1->u.val.i64; i <= v2->u.val.i64; i++) {
 				v1->u.val.i64 = i;
 				ir_CASE_VAL(loop->check, c_value_ref(v1));
@@ -4196,6 +4406,7 @@ void c_do_case_range(c_value *v1, c_value *v2)
 		if (v1->u.val.u64 <= v2->u.val.u64) {
 			uint64_t i;
 
+			c_case_labels_add_u(loop, v1->u.val, v2->u.val);
 			for (i = v1->u.val.u64; i <= v2->u.val.u64; i++) {
 				v1->u.val.u64 = i;
 				ir_CASE_VAL(loop->check, c_value_ref(v1));
@@ -4227,6 +4438,9 @@ void c_do_case_default(void)
 
 void c_do_switch_end(c_loop *loop)
 {
+	if (loop->case_labels) {
+		c_case_labels_free(loop->case_labels);
+	}
 	if (!loop->next) {
 		if (active_ctx->control) {
 			ir_END_list(loop->break_list);

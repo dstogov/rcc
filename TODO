@@ -1,5 +1,4 @@
 - prohibit storage specifiers in "for"
-- prohibit duplicate "case" labels
 - false positive "control reaches end of non-void function"
 - struct layout variations (MS, pack)
 - no-code in sizeof(), _Alignof(), typeof(), ...

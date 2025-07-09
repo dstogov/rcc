@@ -686,14 +686,18 @@ struct _c_scope {
 	c_scope  *prev;
 };
 
+typedef struct _c_case_labels c_case_labels;
+
 struct _c_loop {
 	bool      is_switch;
+	uint8_t   switch_type; /* ir_type */
 	ir_ref    start;
 	ir_ref    check;
 	ir_ref    next;
 	ir_ref    break_list;
 	ir_ref    continue_list;
 	c_loop   *prev;
+	c_case_labels *case_labels;
 };
 
 struct _c_label {
