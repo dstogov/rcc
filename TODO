@@ -1,5 +1,4 @@
 - struct layout variations (MS, pack)
-- no-code in sizeof(), _Alignof(), typeof(), ...
 - volatile
 - struct/union arguments and return value
 - variable length arrays

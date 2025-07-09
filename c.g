@@ -337,7 +337,8 @@ type_specifier_or_qualifier(c_dcl *d):                     {c_name name;}
 		(	?{!C_IS_ID(sym) || is_typedef_name(sym)}
 			type_name(&d->type)
 		|                                                  {c_value v = {0};}
-			expression(&v)                                 {d->type = c_typeof_expr(&v);/*???*/}
+		                                                   {ir_ref old = c_do_nocode();}
+			expression(&v)                                 {d->type = c_typeof_expr(&v, old);}
 		)
 		")"
 	|                                                      {if (d->flags & C_TYPE_SPEC_ANY) yy_error_sym("unexpected", sym);}
@@ -876,10 +877,12 @@ unary_expression(c_value *val):
 		(	&"(" "("
 			(	?{!C_IS_ID(sym) || is_typedef_name(sym)}
 				type_name(&t)                              {c_sizeof_type(val, t);}
-			|	expression(&v)                             {c_sizeof_expr(val, &v);/*???*/}
+			|                                              {ir_ref old = c_do_nocode();}
+				expression(&v)                             {c_sizeof_expr(val, &v, old);/*???*/}
 			)
 			")"
-		|	unary_expression(&v)                           {c_sizeof_expr(val, &v);}
+		|                                                  {ir_ref old = c_do_nocode();}
+			unary_expression(&v)                           {c_sizeof_expr(val, &v, old);}
 		)
 	|	"_Alignof"
 		"(" type_name(&t) ")"                              {c_alignof_type(val, t);}
@@ -887,10 +890,12 @@ unary_expression(c_value *val):
 		(	&"(" "("
 			(	?{!C_IS_ID(sym) || is_typedef_name(sym)}
 				type_name(&t)                              {c_alignof_type(val, t);}
-			|	expression(&v)                             {c_alignof_expr(val, &v);/*???*/}
+			|                                              {ir_ref old = c_do_nocode();}
+				expression(&v)                             {c_alignof_expr(val, &v, old);/*???*/}
 			)
 			")"
-		|	unary_expression(&v)                           {c_alignof_expr(val, &v);}
+		|	                                               {ir_ref old = c_do_nocode();}
+			unary_expression(&v)                           {c_alignof_expr(val, &v, old);}
 		)
 	|	"&&" ID(&name)                                     {c_do_label_value(val, name);}
 	|                                                      {name = sym;}

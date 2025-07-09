@@ -1677,7 +1677,7 @@ void c_sizeof_type(c_value *res, const c_type *type)
 	c_value_set_const(res, &c_type_size_t, IR_SIZE_T, val);
 }
 
-void c_sizeof_expr(c_value *res, c_value *expr)
+void c_sizeof_expr(c_value *res, c_value *expr, ir_ref old_control)
 {
 	ir_val val;
 
@@ -1689,6 +1689,8 @@ void c_sizeof_expr(c_value *res, c_value *expr)
 		val.u64 = expr->type->size;
 	}
 	c_value_set_const(res, &c_type_size_t, IR_SIZE_T, val);
+	ir_END();
+	active_ctx->control = old_control;
 }
 
 void c_alignof_type(c_value *res, const c_type *type)
@@ -1702,11 +1704,13 @@ void c_alignof_type(c_value *res, const c_type *type)
 	c_value_set_const(res, &c_type_size_t, IR_SIZE_T, val);
 }
 
-void c_alignof_expr(c_value *res, c_value *expr)
+void c_alignof_expr(c_value *res, c_value *expr, ir_ref old_control)
 {
 	ir_val val;
 	val.u64 = 4; // ???
 	c_value_set_const(res, &c_type_size_t, IR_SIZE_T, val);
+	ir_END();
+	active_ctx->control = old_control;
 }
 
 void c_alignas_expr(c_dcl *dcl, c_value *expr)
@@ -1719,8 +1723,10 @@ void c_alignas_expr(c_dcl *dcl, c_value *expr)
 	dcl->attr |= c_align2attr(expr->u.val.u64);
 }
 
-const c_type *c_typeof_expr(c_value *expr)
+const c_type *c_typeof_expr(c_value *expr, ir_ref old_control)
 {
+	ir_END();
+	active_ctx->control = old_control;
 	return expr->type;
 }
 
@@ -1795,6 +1801,14 @@ static void ir_memzero(ir_ctx *ctx, ir_ref dst, ir_ref size)
 			ir_strl(active_ctx, "memset", sizeof("memset")-1),
 			ir_proto_3(active_ctx, 0, IR_ADDR, IR_ADDR, IR_I32, IR_SIZE_T)),
 		dst, ir_const_i32(active_ctx, 0), size);
+}
+
+ir_ref c_do_nocode(void)
+{
+	ir_ref old_control = active_ctx->control;
+	active_ctx->control = IR_UNUSED;
+	ir_BEGIN(IR_UNUSED);
+	return old_control;
 }
 
 ir_ref c_do_alloca(size_t size, bool zero)

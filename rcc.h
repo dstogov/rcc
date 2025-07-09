@@ -780,11 +780,11 @@ void c_empty_declaration(c_dcl *d);
 void c_gcc_attribute(c_dcl *dcl, c_name name, c_value *v);
 
 void c_sizeof_type(c_value *res, const c_type *type);
-void c_sizeof_expr(c_value *res, c_value *expr);
+void c_sizeof_expr(c_value *res, c_value *expr, ir_ref old_control);
 void c_alignof_type(c_value *res, const c_type *type);
-void c_alignof_expr(c_value *res, c_value *expr);
+void c_alignof_expr(c_value *res, c_value *expr, ir_ref old_control);
 void c_alignas_expr(c_dcl *dcl, c_value *expr);
-const c_type *c_typeof_expr(c_value *expr);
+const c_type *c_typeof_expr(c_value *expr, ir_ref old_control);
 
 void c_static_assert(c_value *expr, c_value *msg);
 
@@ -795,6 +795,7 @@ yy_sym c_get_current_func_name(void);
 /* IR Code Generation */
 void c_value_rval(c_value *val);
 
+ir_ref c_do_nocode(void);
 ir_ref c_do_alloca(size_t size, bool zero);
 void c_do_cast(const c_type *t, c_value *v);
 void c_do_post_op(yy_sym sym, c_value *v);

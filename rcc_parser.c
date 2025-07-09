@@ -575,8 +575,9 @@ static yy_sym parse_type_specifier_or_qualifier(yy_sym sym, c_dcl *d) {
 			sym = parse_type_name(sym, &d->type);
 		} else if (sym == YY__LPAREN || C_IS_ID(sym) || sym == YY_DECIMAL_NUMBER || sym == YY_OCTAL_NUMBER || sym == YY_HEXADECIMAL_NUMBER || sym == YY_FLOATING_NUMBER || sym == YY_HEXADECIMAL_FLOATING_NUMBER || sym == YY_CHARACTER || sym == YY_STRING || sym == YY__GENERIC || sym == YY___EXTENSION__ || sym == YY__PLUS_PLUS || sym == YY__MINUS_MINUS || sym == YY__AND || sym == YY__STAR || sym == YY__PLUS || sym == YY__MINUS || sym == YY__TILDE || sym == YY__BANG || sym == YY_SIZEOF || sym == YY__ALIGNOF || sym == YY___ALIGNOF__ || sym == YY___ALIGNOF || sym == YY__AND_AND || sym == YY___BUILTIN_VA_START || sym == YY___BUILTIN_VA_ARG || sym == YY___BUILTIN_VA_END || sym == YY___BUILTIN_VA_COPY) {
 			c_value v = {0};
+			ir_ref old = c_do_nocode();
 			sym = parse_expression(sym, &v);
-			d->type = c_typeof_expr(&v);/*???*/
+			d->type = c_typeof_expr(&v, old);
 		} else {
 			yy_error_sym("unexpected", sym);
 		}
@@ -1897,8 +1898,9 @@ static yy_sym parse_unary_expression(yy_sym sym, c_value *val) {
 				sym = parse_type_name(sym, &t);
 				c_sizeof_type(val, t);
 			} else if (sym == YY__LPAREN || C_IS_ID(sym) || sym == YY_DECIMAL_NUMBER || sym == YY_OCTAL_NUMBER || sym == YY_HEXADECIMAL_NUMBER || sym == YY_FLOATING_NUMBER || sym == YY_HEXADECIMAL_FLOATING_NUMBER || sym == YY_CHARACTER || sym == YY_STRING || sym == YY__GENERIC || sym == YY___EXTENSION__ || sym == YY__PLUS_PLUS || sym == YY__MINUS_MINUS || sym == YY__AND || sym == YY__STAR || sym == YY__PLUS || sym == YY__MINUS || sym == YY__TILDE || sym == YY__BANG || sym == YY_SIZEOF || sym == YY__ALIGNOF || sym == YY___ALIGNOF__ || sym == YY___ALIGNOF || sym == YY__AND_AND || sym == YY___BUILTIN_VA_START || sym == YY___BUILTIN_VA_ARG || sym == YY___BUILTIN_VA_END || sym == YY___BUILTIN_VA_COPY) {
+				ir_ref old = c_do_nocode();
 				sym = parse_expression(sym, &v);
-				c_sizeof_expr(val, &v);/*???*/
+				c_sizeof_expr(val, &v, old);/*???*/
 			} else {
 				yy_error_sym("unexpected", sym);
 			}
@@ -1907,8 +1909,9 @@ static yy_sym parse_unary_expression(yy_sym sym, c_value *val) {
 			}
 			sym = get_sym();
 		} else if (sym == YY__LPAREN || C_IS_ID(sym) || sym == YY_DECIMAL_NUMBER || sym == YY_OCTAL_NUMBER || sym == YY_HEXADECIMAL_NUMBER || sym == YY_FLOATING_NUMBER || sym == YY_HEXADECIMAL_FLOATING_NUMBER || sym == YY_CHARACTER || sym == YY_STRING || sym == YY__GENERIC || sym == YY___EXTENSION__ || sym == YY__PLUS_PLUS || sym == YY__MINUS_MINUS || sym == YY__AND || sym == YY__STAR || sym == YY__PLUS || sym == YY__MINUS || sym == YY__TILDE || sym == YY__BANG || sym == YY_SIZEOF || sym == YY__ALIGNOF || sym == YY___ALIGNOF__ || sym == YY___ALIGNOF || sym == YY__AND_AND || sym == YY___BUILTIN_VA_START || sym == YY___BUILTIN_VA_ARG || sym == YY___BUILTIN_VA_END || sym == YY___BUILTIN_VA_COPY) {
+			ir_ref old = c_do_nocode();
 			sym = parse_unary_expression(sym, &v);
-			c_sizeof_expr(val, &v);
+			c_sizeof_expr(val, &v, old);
 		} else {
 			yy_error_sym("unexpected", sym);
 		}
@@ -1932,8 +1935,9 @@ static yy_sym parse_unary_expression(yy_sym sym, c_value *val) {
 				sym = parse_type_name(sym, &t);
 				c_alignof_type(val, t);
 			} else if (sym == YY__LPAREN || C_IS_ID(sym) || sym == YY_DECIMAL_NUMBER || sym == YY_OCTAL_NUMBER || sym == YY_HEXADECIMAL_NUMBER || sym == YY_FLOATING_NUMBER || sym == YY_HEXADECIMAL_FLOATING_NUMBER || sym == YY_CHARACTER || sym == YY_STRING || sym == YY__GENERIC || sym == YY___EXTENSION__ || sym == YY__PLUS_PLUS || sym == YY__MINUS_MINUS || sym == YY__AND || sym == YY__STAR || sym == YY__PLUS || sym == YY__MINUS || sym == YY__TILDE || sym == YY__BANG || sym == YY_SIZEOF || sym == YY__ALIGNOF || sym == YY___ALIGNOF__ || sym == YY___ALIGNOF || sym == YY__AND_AND || sym == YY___BUILTIN_VA_START || sym == YY___BUILTIN_VA_ARG || sym == YY___BUILTIN_VA_END || sym == YY___BUILTIN_VA_COPY) {
+				ir_ref old = c_do_nocode();
 				sym = parse_expression(sym, &v);
-				c_alignof_expr(val, &v);/*???*/
+				c_alignof_expr(val, &v, old);/*???*/
 			} else {
 				yy_error_sym("unexpected", sym);
 			}
@@ -1942,8 +1946,9 @@ static yy_sym parse_unary_expression(yy_sym sym, c_value *val) {
 			}
 			sym = get_sym();
 		} else if (sym == YY__LPAREN || C_IS_ID(sym) || sym == YY_DECIMAL_NUMBER || sym == YY_OCTAL_NUMBER || sym == YY_HEXADECIMAL_NUMBER || sym == YY_FLOATING_NUMBER || sym == YY_HEXADECIMAL_FLOATING_NUMBER || sym == YY_CHARACTER || sym == YY_STRING || sym == YY__GENERIC || sym == YY___EXTENSION__ || sym == YY__PLUS_PLUS || sym == YY__MINUS_MINUS || sym == YY__AND || sym == YY__STAR || sym == YY__PLUS || sym == YY__MINUS || sym == YY__TILDE || sym == YY__BANG || sym == YY_SIZEOF || sym == YY__ALIGNOF || sym == YY___ALIGNOF__ || sym == YY___ALIGNOF || sym == YY__AND_AND || sym == YY___BUILTIN_VA_START || sym == YY___BUILTIN_VA_ARG || sym == YY___BUILTIN_VA_END || sym == YY___BUILTIN_VA_COPY) {
+			ir_ref old = c_do_nocode();
 			sym = parse_unary_expression(sym, &v);
-			c_alignof_expr(val, &v);
+			c_alignof_expr(val, &v, old);
 		} else {
 			yy_error_sym("unexpected", sym);
 		}
