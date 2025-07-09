@@ -780,9 +780,8 @@ void c_empty_declaration(c_dcl *d);
 void c_gcc_attribute(c_dcl *dcl, c_name name, c_value *v);
 
 void c_sizeof_type(c_value *res, const c_type *type);
-void c_sizeof_expr(c_value *res, c_value *expr, ir_ref old_control);
+void c_sizeof_expr(c_value *res, yy_sym op, c_value *expr, ir_ref old_control);
 void c_alignof_type(c_value *res, const c_type *type);
-void c_alignof_expr(c_value *res, c_value *expr, ir_ref old_control);
 void c_alignas_expr(c_dcl *dcl, c_value *expr);
 const c_type *c_typeof_expr(c_value *expr, ir_ref old_control);
 

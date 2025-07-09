@@ -834,6 +834,8 @@ unary_expression(c_value *val):
                                                            {c_name name;}
                                                            {const c_type *t;}
                                                            {c_value v = {0};}
+                                                           {ir_ref old_control = IR_UNUSED;}
+                                                           {yy_sym op = sym;}
    (
 		"("
 		(	?{!C_IS_ID(sym) || is_typedef_name(sym)}
@@ -864,8 +866,7 @@ unary_expression(c_value *val):
 		("," generic_association)+
 		")"
 	|	"__extension__" unary_expression(val)
-	|                                                      {yy_sym op = sym;}
-		("++"|"--") unary_expression(val)                  {c_do_pre_op(op, val);}
+	|	("++"|"--") unary_expression(val)                  {c_do_pre_op(op, val);}
 	|	(	"&" unary_expression(val)                      {c_do_addr(val);}
 		|	"*" unary_expression(val)                      {c_do_deref(val);}
 		|	"+" unary_expression(val)                      {c_do_unary_plus(val);}
@@ -877,12 +878,12 @@ unary_expression(c_value *val):
 		(	&"(" "("
 			(	?{!C_IS_ID(sym) || is_typedef_name(sym)}
 				type_name(&t)                              {c_sizeof_type(val, t);}
-			|                                              {ir_ref old = c_do_nocode();}
-				expression(&v)                             {c_sizeof_expr(val, &v, old);/*???*/}
+			|                                              {old_control = c_do_nocode();}
+				expression(val)
 			)
 			")"
 		|                                                  {ir_ref old = c_do_nocode();}
-			unary_expression(&v)                           {c_sizeof_expr(val, &v, old);}
+			unary_expression(&v)                           {c_sizeof_expr(val, op, &v, old);}
 		)
 	|	"_Alignof"
 		"(" type_name(&t) ")"                              {c_alignof_type(val, t);}
@@ -890,12 +891,12 @@ unary_expression(c_value *val):
 		(	&"(" "("
 			(	?{!C_IS_ID(sym) || is_typedef_name(sym)}
 				type_name(&t)                              {c_alignof_type(val, t);}
-			|                                              {ir_ref old = c_do_nocode();}
-				expression(&v)                             {c_alignof_expr(val, &v, old);/*???*/}
+			|                                              {old_control = c_do_nocode();}
+				expression(val)
 			)
 			")"
 		|	                                               {ir_ref old = c_do_nocode();}
-			unary_expression(&v)                           {c_alignof_expr(val, &v, old);}
+			unary_expression(&v)                           {c_sizeof_expr(val, op, &v, old);}
 		)
 	|	"&&" ID(&name)                                     {c_do_label_value(val, name);}
 	|                                                      {name = sym;}
@@ -911,9 +912,9 @@ unary_expression(c_value *val):
 	|	"(" actual_parameters(val) ")"
 	|	"." ID(&name)                                      {c_do_struct_field(val, name);}
 	|	"->" ID(&name)                                     {c_do_struct_field_deref(val, name);}
-	|	                                                   {yy_sym op = sym;}
-		("++"|"--")                                        {c_do_post_op(op, val);}
-	)*+
+	|	                                                   {yy_sym post_op = sym;}
+		("++"|"--")                                        {c_do_post_op(post_op, val);}
+	)*+                                                    {if (old_control) c_sizeof_expr(val, op, val, old_control);}
 ;
 
 multiplicative_expression(c_value *val):

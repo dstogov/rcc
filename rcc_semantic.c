@@ -1677,16 +1677,21 @@ void c_sizeof_type(c_value *res, const c_type *type)
 	c_value_set_const(res, &c_type_size_t, IR_SIZE_T, val);
 }
 
-void c_sizeof_expr(c_value *res, c_value *expr, ir_ref old_control)
+void c_sizeof_expr(c_value *res, yy_sym op, c_value *expr, ir_ref old_control)
 {
 	ir_val val;
 
-	if (C_IS_BIT_FIELD(expr->u.proto)) {
-		yy_error("\"sizeof\" applied to a bit-field");
-	} else if (c_value_is_const(expr) && expr->type == &c_type_string) {
-		val.u64 = expr->u.ref + 1; /* ref keeps string lenght */
+	if (op == YY_SIZEOF) {
+		if (C_IS_BIT_FIELD(expr->u.proto)) {
+			yy_error("\"sizeof\" applied to a bit-field");
+		} else if (c_value_is_const(expr) && expr->type == &c_type_string) {
+			val.u64 = expr->u.ref + 1; /* ref keeps string lenght */
+		} else {
+			val.u64 = expr->type->size;
+		}
 	} else {
-		val.u64 = expr->type->size;
+		IR_ASSERT(op == YY___ALIGNOF || op == YY___ALIGNOF__);
+		val.u64 = c_attr2align(expr->type->attr);
 	}
 	c_value_set_const(res, &c_type_size_t, IR_SIZE_T, val);
 	ir_END();
@@ -1702,15 +1707,6 @@ void c_alignof_type(c_value *res, const c_type *type)
 	}
 	val.u64 = c_attr2align(type->attr);
 	c_value_set_const(res, &c_type_size_t, IR_SIZE_T, val);
-}
-
-void c_alignof_expr(c_value *res, c_value *expr, ir_ref old_control)
-{
-	ir_val val;
-	val.u64 = 4; // ???
-	c_value_set_const(res, &c_type_size_t, IR_SIZE_T, val);
-	ir_END();
-	active_ctx->control = old_control;
 }
 
 void c_alignas_expr(c_dcl *dcl, c_value *expr)
