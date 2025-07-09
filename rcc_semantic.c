@@ -4318,6 +4318,9 @@ static void c_case_labels_add_u(c_loop *loop, ir_val min, ir_val max)
 				if (max.u64 >= p->min.u64) yy_error("duplicate case value");
 				if (p->left) {
 					p = p->left;
+				} else if (max.u64 + 1 == p->min.u64) {
+					p->min.u64 = min.u64;
+					return;
 				} else {
 					q = ir_mem_malloc(sizeof(c_case_labels));
 					p->left = q;
