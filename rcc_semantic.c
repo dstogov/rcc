@@ -5550,6 +5550,37 @@ void c_do_func_start(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 	}
 }
 
+static bool c_is_dead_end(ir_insn *insn)
+{
+	while (insn->op == IR_BEGIN) {
+		if (!insn->op1) return 1;
+		insn = &active_ctx->ir_base[insn->op1];
+		if (insn->op != IR_END) {
+			return 0;
+		}
+		insn = &active_ctx->ir_base[insn->op1];
+	}
+	if (insn->op == IR_MERGE) {
+		ir_ref input, *p, n;
+
+		n = insn->inputs_count;
+		for (p = insn->ops + 1; n > 0; p++, n--) {
+			input = *p;
+			insn = &active_ctx->ir_base[input];
+			if (insn->op != IR_END) {
+				return 0;
+			}
+			insn = &active_ctx->ir_base[insn->op1];
+			if (!c_is_dead_end(insn)) {
+				return 0;
+			}
+		}
+	} else {
+		return 0;
+	}
+	return 1;
+}
+
 void c_do_func_end(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 {
 	if (scope->list.syms) {
@@ -5577,9 +5608,11 @@ void c_do_func_end(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 		} else if (ctx->ret_type) {
 			ir_val val;
 
+			if (!c_is_dead_end(&active_ctx->ir_base[ctx->control])) {
+				yy_warning("control reaches end of non-void function");
+			}
 			val.u64 = 0;
 			ir_RETURN(ir_const(ctx, val, ctx->ret_type));
-			yy_warning("control reaches end of non-void function");
 		} else {
 			ir_RETURN(IR_UNUSED);
 		}
