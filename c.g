@@ -184,7 +184,7 @@ static void yy_read_char(c_value *res, const char *p, size_t len);
 
 translation_unit:
 	(	simple_asm_expr ";"
-	|	"__extension__"? declaration
+	|	"__extension__"? declaration(0)
 	)*
 ;
 
@@ -193,14 +193,14 @@ simple_asm_expr:
 ;
 
 /* Declarations */
-declaration:                                               {c_dcl d0 = {0};}
+declaration(uint32_t flags):                               {c_dcl d0 = {0};}
                                                            {c_name name;}
                                                            {c_sym *obj;}
 	(	static_assert_declaration ";"
 	|	/* use "?" to support C89 defaults to int */
 		(   ?{!C_IS_ID(sym) || is_typedef_name(sym)}
 			declaration_specifiers(&d0)
-		)?
+		)?                                                 {d0.flags |= flags;}
 		(	                                               {c_dcl d = d0;}
 		    declarator(&d, &name, 1)
 			(   &(	"__attribute__"
@@ -666,7 +666,7 @@ compound_statement(c_value *val):
 	)?
 	(	?{!C_IS_ID(sym) || !is_typedef_name(sym) || is_label(sym)}
 		statement(val)
-	|	declaration
+	|	declaration(0)
 	)*
 ;
 
@@ -725,7 +725,7 @@ statement(c_value *last_val):                              {c_value val = {0};}
 			statement(NULL)                                {c_do_for_end(&loop);}
 		|		                                           {c_scope scope;}
 		                                                   {c_push_scope(&scope);}
-			declaration                                    {c_do_loop_start(&loop);/*TODO: verify storage spec???*/}
+			declaration(C_DCL_FOR)                         {c_do_loop_start(&loop);}
 			(	expression(&val)                           {c_do_loop_check(&loop, &val);}
 			)?
 			";"

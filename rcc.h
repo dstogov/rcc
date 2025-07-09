@@ -462,6 +462,7 @@ void pp_list_grow(pp_list *l, uint32_t size);
 #define C_DCL_ENUM_CONST         (1<<24) /* used internally */
 #define C_DCL_DEFINITION         (1<<25) /* used internally */
 #define C_DCL_PARAM              (1<<26) /* used internally */
+#define C_DCL_FOR                (1<<27) /* used internally */
 
 #define C_DCL_STORAGE_CLASS      (C_DCL_TYPEDEF|C_DCL_EXTERN|C_DCL_STATIC|C_DCL_AUTO|C_DCL_REGISTER|C_DCL_THREAD_LOCAL)
 

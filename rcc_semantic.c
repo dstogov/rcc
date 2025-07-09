@@ -677,6 +677,14 @@ c_sym *c_declare(c_name name, c_dcl *d)
 		}
 	}
 
+	if (d->flags & C_DCL_FOR) {
+		if ((d->flags & C_DCL_TYPEDEF) || d->type->kind == C_TYPE_FUNC) {
+			yy_error("non-variable declaration in \"for\" loop");
+		} else if (d->flags & (C_DCL_TYPEDEF|C_DCL_EXTERN|C_DCL_STATIC|C_DCL_THREAD_LOCAL)) {
+			yy_error("declaration of non-local variable in \"for\" loop");
+		}
+	}
+
 	sym = yy_hash.data[name].sym;
 	if (sym) {
 		if (d->flags & C_DCL_EXTERN) { // && sym is extern
