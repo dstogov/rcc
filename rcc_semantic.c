@@ -3165,6 +3165,17 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args)
 		ref = ir_inline_call(active_ctx, (ir_ctx*)func->u.val.ptr, num_args, arg_refs);
 	} else if (!(func->u.op & C_VAL_BUILTIN)) {
 		ref = ir_CALL_N(t, c_value_ref(func), num_args, arg_refs);
+		if (func->type->attr & C_ATTR_NORETURN) {
+			ir_val val;
+
+			ir_UNREACHABLE();
+			ir_BEGIN(IR_UNUSED);
+			ret_type = func_type->func.ret_type;
+			t = c_type2ir(ret_type);
+			val.u64 = 0;
+			c_value_set_const(func, ret_type, t, val);
+			return;
+		}
 	} else {
 		ref = c_do_convert_builtin(func, num_args, arg_refs);
 		if (!ref) {

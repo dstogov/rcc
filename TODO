@@ -7,7 +7,6 @@
 - _Generic
 - _Atomic
 - _Thread_local
-- _Noreturn
 - long double
 - _Complex
 - _Imaginary
