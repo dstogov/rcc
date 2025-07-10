@@ -206,7 +206,6 @@ static yy_sym parse_strings(yy_sym sym, c_value *val);
 static yy_sym parse_strings_tail(yy_sym sym, c_value *val, str_list *first, str_list *last);
 static yy_sym parse_actual_parameters(yy_sym sym, c_value *func);
 static yy_sym parse_builtin_parameters(yy_sym sym, c_value *val, c_name name);
-static yy_sym parse_generic_association(yy_sym sym);
 static yy_sym parse_unary_expression(yy_sym sym, c_value *val);
 static yy_sym parse_multiplicative_expression(yy_sym sym, c_value *val);
 static yy_sym parse_additive_expression(yy_sym sym, c_value *val);
@@ -1750,29 +1749,6 @@ static yy_sym parse_builtin_parameters(yy_sym sym, c_value *val, c_name name) {
 	return sym;
 }
 
-static yy_sym parse_generic_association(yy_sym sym) {
-	const c_type *t;
-	c_value v;
-	if (sym == YY_VOID || sym == YY_CHAR || sym == YY_SHORT || sym == YY_INT || sym == YY_LONG || sym == YY_FLOAT || sym == YY_DOUBLE || sym == YY_SIGNED || sym == YY_UNSIGNED || sym == YY__BOOL || sym == YY__COMPLEX || sym == YY___COMPLEX || sym == YY___COMPLEX__ || sym == YY__ATOMIC || sym == YY_TYPEOF || sym == YY_STRUCT || sym == YY_UNION || sym == YY_ENUM || C_IS_ID(sym) || sym == YY_CONST || sym == YY___CONST || sym == YY___CONST__ || sym == YY_RESTRICT || sym == YY___RESTRICT || sym == YY___RESTRICT__ || sym == YY_VOLATILE || sym == YY___VOLATILE || sym == YY___VOLATILE__ || sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__) {
-		sym = parse_type_name(sym, &t);
-		if (sym != YY__COLON) {
-			yy_error_sym("':' expected, got", sym);
-		}
-		sym = get_sym();
-		sym = parse_assignment_expression(sym, &v);
-	} else if (sym == YY_DEFAULT) {
-		sym = get_sym();
-		if (sym != YY__COLON) {
-			yy_error_sym("':' expected, got", sym);
-		}
-		sym = get_sym();
-		sym = parse_assignment_expression(sym, &v);
-	} else {
-		yy_error_sym("unexpected", sym);
-	}
-	return sym;
-}
-
 static yy_sym parse_unary_expression(yy_sym sym, c_value *val) {
 	c_name name;
 	const c_type *t;
@@ -1840,24 +1816,45 @@ static yy_sym parse_unary_expression(yy_sym sym, c_value *val) {
 	} else if (sym == YY_STRING) {
 		sym = parse_strings(sym, val);
 	} else if (sym == YY__GENERIC) {
+		c_generic g;
 		sym = get_sym();
-		/*???*/yy_error("_Generic not implemented yet");
+		c_do_generic_start(&g);
 		if (sym != YY__LPAREN) {
 			yy_error_sym("'(' expected, got", sym);
 		}
 		sym = get_sym();
-		sym = parse_assignment_expression(sym, val);
+		sym = parse_assignment_expression(sym, &v);
+		g.type = v.type;
 		if (sym != YY__COMMA) {
 			yy_error_sym("',' expected, got", sym);
 		}
 		do {
 			sym = get_sym();
-			sym = parse_generic_association(sym);
+			if (sym == YY_VOID || sym == YY_CHAR || sym == YY_SHORT || sym == YY_INT || sym == YY_LONG || sym == YY_FLOAT || sym == YY_DOUBLE || sym == YY_SIGNED || sym == YY_UNSIGNED || sym == YY__BOOL || sym == YY__COMPLEX || sym == YY___COMPLEX || sym == YY___COMPLEX__ || sym == YY__ATOMIC || sym == YY_TYPEOF || sym == YY_STRUCT || sym == YY_UNION || sym == YY_ENUM || C_IS_ID(sym) || sym == YY_CONST || sym == YY___CONST || sym == YY___CONST__ || sym == YY_RESTRICT || sym == YY___RESTRICT || sym == YY___RESTRICT__ || sym == YY_VOLATILE || sym == YY___VOLATILE || sym == YY___VOLATILE__ || sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__) {
+				sym = parse_type_name(sym, &t);
+				if (sym != YY__COLON) {
+					yy_error_sym("':' expected, got", sym);
+				}
+				sym = get_sym();
+				sym = parse_assignment_expression(sym, &v);
+				c_do_generic_case(&g, t, &v);
+			} else if (sym == YY_DEFAULT) {
+				sym = get_sym();
+				if (sym != YY__COLON) {
+					yy_error_sym("':' expected, got", sym);
+				}
+				sym = get_sym();
+				sym = parse_assignment_expression(sym, &v);
+				c_do_generic_default(&g, &v);
+			} else {
+				yy_error_sym("unexpected", sym);
+			}
 		} while (sym == YY__COMMA);
 		if (sym != YY__RPAREN) {
 			yy_error_sym("')' expected, got", sym);
 		}
 		sym = get_sym();
+		c_do_generic_end(val, &g);
 	} else if (sym == YY___EXTENSION__) {
 		sym = get_sym();
 		sym = parse_unary_expression(sym, val);

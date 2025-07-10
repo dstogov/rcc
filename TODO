@@ -3,7 +3,6 @@
 - struct/union arguments and return value
 - variable length arrays
 - computed goto
-- _Generic
 - _Atomic
 - _Thread_local
 - long double

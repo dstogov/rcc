@@ -719,6 +719,18 @@ typedef struct {
 	} stack[C_INIT_STACK_SIZE];
 } c_init;
 
+typedef struct {
+	const c_type      *type;
+	ir_ref             old_control;
+	ir_ref             last_control;
+	c_value            matched_value;
+	ir_ref             matched_control_start;
+	ir_ref             matched_control_end;
+	c_value            default_value;
+	ir_ref             default_control_start;
+	ir_ref             default_control_end;
+} c_generic;
+
 extern const c_type c_type_void;
 extern const c_type c_type_bool;
 extern const c_type c_type_char;
@@ -854,6 +866,11 @@ void c_do_init_end(c_sym *obj, size_t size);
 
 void c_do_init_expr_start(c_sym *obj, const c_type *t);
 void c_do_init_expr_end(c_value *v, c_sym *obj, size_t size);
+
+void c_do_generic_start(c_generic *g);
+void c_do_generic_case(c_generic *g, const c_type *t, c_value *v);
+void c_do_generic_default(c_generic *g, c_value *v);
+void c_do_generic_end(c_value *res, c_generic *g);
 
 void c_do_func_start(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx);
 void c_do_func_end(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx);

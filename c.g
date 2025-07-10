@@ -823,13 +823,6 @@ builtin_parameters(c_value *val, c_name name):             {int32_t num_args = 0
 	)?                                                     {c_do_builtin(val, name, num_args, args);}
 ;
 
-generic_association:                                       {const c_type *t;}
-                                                           {c_value v;}
-	(	type_name(&t) ":" assignment_expression(&v)
-	|	"default" ":" assignment_expression(&v)
-	)
-;
-
 unary_expression(c_value *val):
                                                            {c_name name;}
                                                            {const c_type *t;}
@@ -860,11 +853,21 @@ unary_expression(c_value *val):
 	|	HEXADECIMAL_FLOATING_NUMBER(val)
 	|	CHARACTER(val)
 	|	strings(val)
-	|	"_Generic"                                         {/*???*/yy_error("_Generic not implemented yet");}
+	|                                                      {c_generic g;}
+		"_Generic"                                         {c_do_generic_start(&g);}
 		"("
-		assignment_expression(val)
-		("," generic_association)+
-		")"
+		assignment_expression(&v)                          {g.type = v.type;}
+		(
+			","
+			(	type_name(&t)
+				":"
+				assignment_expression(&v)                  {c_do_generic_case(&g, t, &v);}
+			|	"default"
+				":"
+				assignment_expression(&v)                  {c_do_generic_default(&g, &v);}
+			)
+		)+
+		")"                                                {c_do_generic_end(val, &g);}
 	|	"__extension__" unary_expression(val)
 	|	("++"|"--") unary_expression(val)                  {c_do_pre_op(op, val);}
 	|	(	"&" unary_expression(val)                      {c_do_addr(val);}

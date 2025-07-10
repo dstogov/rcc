@@ -1694,7 +1694,8 @@ void c_sizeof_expr(c_value *res, yy_sym op, c_value *expr, ir_ref old_control)
 		val.u64 = c_attr2align(expr->type->attr);
 	}
 	c_value_set_const(res, &c_type_size_t, IR_SIZE_T, val);
-	ir_END();
+	ir_UNREACHABLE();
+	// TODO: cleanup dead code ???
 	active_ctx->control = old_control;
 }
 
@@ -1721,7 +1722,8 @@ void c_alignas_expr(c_dcl *dcl, c_value *expr)
 
 const c_type *c_typeof_expr(c_value *expr, ir_ref old_control)
 {
-	ir_END();
+	ir_UNREACHABLE();
+	// TODO: cleanup dead code ???
 	active_ctx->control = old_control;
 	return expr->type;
 }
@@ -5481,6 +5483,69 @@ void c_do_init_expr_end(c_value *v, c_sym *obj, size_t size)
 	} else {
 		c_value_set_rval(v, obj->value.type, c_type2ir(obj->value.type), obj->value.u.ref);
 	}
+}
+
+void c_do_generic_start(c_generic *g)
+{
+	memset(g, 0, sizeof(c_generic));
+	g->old_control = c_do_nocode();
+	g->last_control = active_ctx->control;
+}
+
+void c_do_generic_case(c_generic *g, const c_type *type, c_value *v)
+{
+	if (c_compatible_types(g->type, type, 0, 0)) {
+		if (c_value_is_set(&g->matched_value)) yy_error("duplicate matched type case in \"_Generic\"");
+		g->matched_value = *v;
+		g->matched_control_start = g->last_control;
+		g->matched_control_end = active_ctx->control;
+	}
+	g->last_control = active_ctx->control;
+}
+
+void c_do_generic_default(c_generic *g, c_value *v)
+{
+	if (c_value_is_set(&g->default_value)) yy_error("duplicate \"default\" case in \"_Generic\"");
+	g->default_value = *v;
+	g->default_control_start = g->last_control;
+	g->default_control_end = active_ctx->control;
+	g->last_control = active_ctx->control;
+}
+
+void c_do_generic_end(c_value *res, c_generic *g)
+{
+	if (!c_value_is_set(&g->matched_value)) {
+		if (!c_value_is_set(&g->default_value)) yy_error("no matched type case in \"_Generic\"");
+		g->matched_value = g->default_value;
+		g->matched_control_start = g->default_control_start;
+		g->matched_control_end = g->default_control_end;
+	}
+	*res = g->matched_value;
+	if (g->matched_control_start != g->matched_control_end) {
+		ir_ref ref = active_ctx->control;
+
+		if (ref != g->matched_control_end) {
+			while (active_ctx->ir_base[ref].op1 != g->matched_control_end) {
+				ref = active_ctx->ir_base[ref].op1;
+				IR_ASSERT(ref);
+			}
+			/* cut control from unreachable block */
+			active_ctx->ir_base[ref].op1 = g->matched_control_start;
+		} else {
+			/* remove contol tail from unreachable block */
+			active_ctx->control = g->matched_control_start;
+		}
+		ref = g->matched_control_end;
+		while (active_ctx->ir_base[ref].op1 != g->matched_control_start) {
+			ref = active_ctx->ir_base[ref].op1;
+			IR_ASSERT(ref);
+		}
+		active_ctx->ir_base[ref].op1 = g->old_control;
+		g->old_control = g->matched_control_end;
+	}
+	ir_UNREACHABLE();
+	// TODO: cleanup dead code ???
+	active_ctx->control = g->old_control;
 }
 
 void c_do_func_start(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
