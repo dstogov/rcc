@@ -666,16 +666,25 @@ compound_statement(c_value *val):
 			ID(&name)                                      {c_declare_local_label(name);}
 		)* ";"
 	)?
-	(	?{!C_IS_ID(sym) || !is_typedef_name(sym) || is_label(sym)}
-		statement(val)
+	(	?{!C_IS_ID(sym) || is_label(sym)}
+		labels
+	|	?{!C_IS_ID(sym) || !is_typedef_name(sym)}
+		statement2(val)
 	|	declaration(0)
 	)*
 ;
 
-statement(c_value *last_val):                              {c_value val = {0};}
-                                                           {c_name name;}
-                                                           {if (last_val) c_value_clear(last_val);}
+
+statement(c_value *last_val):
+	(	?{!C_IS_ID(sym) || is_label(sym)}
+		labels
+	)?
+	statement2(last_val)
+;
+
+labels:
 	(	?{!C_IS_ID(sym) || is_label(sym)}                  {c_label *label;}
+                                                           {c_name name;}
 		(	ID(&name)                                      {label = c_do_set_label(name);}
 			":"
 			(                                              {c_dcl attrs = {0};}
@@ -689,7 +698,12 @@ statement(c_value *last_val):                              {c_value val = {0};}
 			) ":"
 		|	"default" ":"                                  {c_do_case_default();}
 		)
-	)*
+	)++
+;
+
+statement2(c_value *last_val):                             {c_value val = {0};}
+                                                           {c_name name;}
+                                                           {if (last_val) c_value_clear(last_val);}
 	(	                                                   {c_scope scope;}
 	    "{"                                                {c_push_scope(&scope);}
 		compound_statement(NULL)                           {c_pop_scope(&scope);}
