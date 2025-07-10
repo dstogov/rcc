@@ -533,13 +533,15 @@ typedef enum {
 	C_TYPE_U8,
 	C_TYPE_U16,
 	C_TYPE_U32,
-	C_TYPE_U64,
+	C_TYPE_UL,
+	C_TYPE_ULL,
 //	C_TYPE_ADDR,
 	C_TYPE_CHAR,
 	C_TYPE_I8,
 	C_TYPE_I16,
 	C_TYPE_I32,
-	C_TYPE_I64,
+	C_TYPE_IL,
+	C_TYPE_ILL,
 	C_TYPE_FLOAT,
 	C_TYPE_DOUBLE,
 	C_TYPE_LONG_DOUBLE,
@@ -555,9 +557,9 @@ typedef enum {
 } c_type_kind;
 
 #define C_IS_TYPE_KIND_SCALAR(t)        ((t) >= C_TYPE_BOOL && (t) <= C_TYPE_LONG_DOUBLE)
-#define C_IS_TYPE_KIND_INT(t)           ((t) >= C_TYPE_BOOL && (t) <= C_TYPE_I64)
-#define C_IS_TYPE_KIND_UNSIGNED(t)      ((t) >= C_TYPE_BOOL && (t) <= C_TYPE_U64)
-#define C_IS_TYPE_KIND_SIGNED(t)        ((t) >= C_TYPE_CHAR && (t) <= C_TYPE_I64)
+#define C_IS_TYPE_KIND_INT(t)           ((t) >= C_TYPE_BOOL && (t) <= C_TYPE_ILL)
+#define C_IS_TYPE_KIND_UNSIGNED(t)      ((t) >= C_TYPE_BOOL && (t) <= C_TYPE_ULL)
+#define C_IS_TYPE_KIND_SIGNED(t)        ((t) >= C_TYPE_CHAR && (t) <= C_TYPE_ILL)
 #define C_IS_TYPE_KIND_FP(t)            ((t) >= C_TYPE_FLOAT && (t) <= C_TYPE_LONG_DOUBLE)
 
 #define C_IS_TYPE_SCALAR(t)        C_IS_TYPE_KIND_SCALAR((t)->kind)
@@ -743,8 +745,10 @@ extern const c_type c_type_u16;
 extern const c_type c_type_i16;
 extern const c_type c_type_u32;
 extern const c_type c_type_i32;
-extern const c_type c_type_u64;
-extern const c_type c_type_i64;
+extern const c_type c_type_ul;
+extern const c_type c_type_ull;
+extern const c_type c_type_il;
+extern const c_type c_type_ill;
 extern const c_type c_type_float;
 extern const c_type c_type_double;
 extern const c_type c_type_long_double;
@@ -754,11 +758,27 @@ extern const c_type c_type_long_double_complex;
 extern const c_type c_type_string;
 
 #if __SIZEOF_SIZE_T__ == 8
-# define c_type_size_t  c_type_u64
-# define c_type_ssize_t c_type_i64
+# define C_LONG_SIZE    8
+# define C_LONG_ALIGN   3
+# define c_type_size_t  c_type_ul
+# define c_type_ssize_t c_type_il
+# define c_type_i64     c_type_il
+# define c_type_u64     c_type_ul
+# define C_TYPE_I64     C_TYPE_IL
+# define C_TYPE_U64     C_TYPE_UL
+# define IR_LONG        IR_I64
+# define IR_ULONG       IR_U64
 #else
-# define c_type_size_t  c_type_u32
-# define c_type_ssize_t c_type_i32
+# define C_LONG_SIZE    4
+# define C_LONG_ALIGN   2
+# define c_type_size_t  c_type_ull
+# define c_type_ssize_t c_type_ill
+# define c_type_i64     c_type_ill
+# define c_type_u64     c_type_ull
+# define C_TYPE_I64     C_TYPE_ILL
+# define C_TYPE_U64     C_TYPE_ULL
+# define IR_LONG        IR_I32
+# define IR_ULONG       IR_U32
 #endif
 
 #define C_POP_MASK   0x3

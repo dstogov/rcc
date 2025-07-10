@@ -22,8 +22,10 @@ const c_type c_type_u16                 = {.kind = C_TYPE_U16,                 .
 const c_type c_type_i16                 = {.kind = C_TYPE_I16,                 .size = 2,  .attr = 1};
 const c_type c_type_u32                 = {.kind = C_TYPE_U32,                 .size = 4,  .attr = 2};
 const c_type c_type_i32                 = {.kind = C_TYPE_I32,                 .size = 4,  .attr = 2};
-const c_type c_type_u64                 = {.kind = C_TYPE_U64,                 .size = 8,  .attr = 3};
-const c_type c_type_i64                 = {.kind = C_TYPE_I64,                 .size = 8,  .attr = 3};
+const c_type c_type_ul                  = {.kind = C_TYPE_UL,                  .size = C_LONG_SIZE,  .attr = C_LONG_ALIGN};
+const c_type c_type_ull                 = {.kind = C_TYPE_ULL,                 .size = 8,  .attr = 3};
+const c_type c_type_il                  = {.kind = C_TYPE_IL,                  .size = C_LONG_SIZE,  .attr = C_LONG_ALIGN};
+const c_type c_type_ill                 = {.kind = C_TYPE_ILL,                 .size = 8,  .attr = 3};
 const c_type c_type_float               = {.kind = C_TYPE_FLOAT,               .size = 4,  .attr = 2};
 const c_type c_type_double              = {.kind = C_TYPE_DOUBLE,              .size = 8,  .attr = 3};
 //??? TODO: long double support ???
@@ -92,11 +94,13 @@ repeat:
 		case C_TYPE_I8:      return IR_I8;
 		case C_TYPE_I16:     return IR_I16;
 		case C_TYPE_I32:     return IR_I32;
-		case C_TYPE_I64:     return IR_I64;
+		case C_TYPE_IL:      return IR_LONG;
+		case C_TYPE_ILL:     return IR_I64;
 		case C_TYPE_U8:      return IR_U8;
 		case C_TYPE_U16:     return IR_U16;
 		case C_TYPE_U32:     return IR_U32;
-		case C_TYPE_U64:     return IR_U64;
+		case C_TYPE_UL:      return IR_ULONG;
+		case C_TYPE_ULL:     return IR_U64;
 		case C_TYPE_FLOAT:   return IR_FLOAT;
 		case C_TYPE_DOUBLE:  return IR_DOUBLE;
 		case C_TYPE_POINTER: return IR_ADDR;
@@ -357,29 +361,21 @@ static void c_resolve_type_spec(c_dcl *d)
 		case C_TYPE_SPEC_LONG|C_TYPE_SPEC_SIGNED:
 		case C_TYPE_SPEC_LONG|C_TYPE_SPEC_INT:
 		case C_TYPE_SPEC_LONG|C_TYPE_SPEC_SIGNED|C_TYPE_SPEC_INT:
-			if (sizeof(long) == 4) {
-				d->type = &c_type_i32;
-			} else {
-				d->type = &c_type_i64;
-			}
+			d->type = &c_type_il;
 			break;
 		case C_TYPE_SPEC_LONG|C_TYPE_SPEC_UNSIGNED:
 		case C_TYPE_SPEC_LONG|C_TYPE_SPEC_UNSIGNED|C_TYPE_SPEC_INT:
-			if (sizeof(long) == 4) {
-				d->type = &c_type_u32;
-			} else {
-				d->type = &c_type_u64;
-			}
+			d->type = &c_type_ul;
 			break;
 		case C_TYPE_SPEC_LONG_LONG|C_TYPE_SPEC_LONG:
 		case C_TYPE_SPEC_LONG_LONG|C_TYPE_SPEC_LONG|C_TYPE_SPEC_SIGNED:
 		case C_TYPE_SPEC_LONG_LONG|C_TYPE_SPEC_LONG|C_TYPE_SPEC_INT:
 		case C_TYPE_SPEC_LONG_LONG|C_TYPE_SPEC_LONG|C_TYPE_SPEC_SIGNED|C_TYPE_SPEC_INT:
-			d->type = &c_type_i64;
+			d->type = &c_type_ill;
 			break;
 		case C_TYPE_SPEC_LONG_LONG|C_TYPE_SPEC_LONG|C_TYPE_SPEC_UNSIGNED:
 		case C_TYPE_SPEC_LONG_LONG|C_TYPE_SPEC_LONG|C_TYPE_SPEC_UNSIGNED|C_TYPE_SPEC_INT:
-			d->type = &c_type_u64;
+			d->type = &c_type_ull;
 			break;
 		case C_TYPE_SPEC_FLOAT:
 			d->type = &c_type_float;
@@ -1775,12 +1771,14 @@ static const c_type *c_type_by_kind(c_type_kind kind)
 		case C_TYPE_U8:      return &c_type_u8;
 		case C_TYPE_U16:     return &c_type_u16;
 		case C_TYPE_U32:     return &c_type_u32;
-		case C_TYPE_U64:     return &c_type_u64;
+		case C_TYPE_UL:      return &c_type_ul;
+		case C_TYPE_ULL:     return &c_type_ull;
 		case C_TYPE_CHAR:    return &c_type_char;
 		case C_TYPE_I8:      return &c_type_i8;
 		case C_TYPE_I16:     return &c_type_i16;
 		case C_TYPE_I32:     return &c_type_i32;
-		case C_TYPE_I64:     return &c_type_i64;
+		case C_TYPE_IL:      return &c_type_il;
+		case C_TYPE_ILL:     return &c_type_ill;
 		case C_TYPE_FLOAT:   return &c_type_float;
 		case C_TYPE_DOUBLE:  return &c_type_double;
 		default: IR_ASSERT(0); return NULL;
@@ -3349,12 +3347,12 @@ common_int_type:
 			 || (sym != YY__LESS_LESS && sym != YY__GREATER_GREATER
 			  && op2_type->size > 4 && C_IS_TYPE_KIND_UNSIGNED(t2)
 			  && (!C_IS_BIT_FIELD(op2->u.proto) || C_BIT_FIELD_SIZE(op2->u.proto) >= 32))) {
-				if (op1_type != &c_type_u64) c_do_cvt(&c_type_u64, IR_U64, op1);
-				if (op2_type != &c_type_u64) c_do_cvt(&c_type_u64, IR_U64, op2);
+				if (op1_type->size != 8 || C_IS_TYPE_KIND_SIGNED(t1)) c_do_cvt(&c_type_u64, IR_U64, op1);
+				if (op2_type->size != 8 || C_IS_TYPE_KIND_SIGNED(t2)) c_do_cvt(&c_type_u64, IR_U64, op2);
 				return &c_type_u64;
 			} else {
-				if (op1_type != &c_type_i64) c_do_cvt(&c_type_i64, IR_I64, op1);
-				if (op2_type != &c_type_i64) c_do_cvt(&c_type_i64, IR_I64, op2);
+				if (op1_type->size != 8 || C_IS_TYPE_KIND_UNSIGNED(t1)) c_do_cvt(&c_type_i64, IR_I64, op1);
+				if (op2_type->size != 8 || C_IS_TYPE_KIND_UNSIGNED(t2)) c_do_cvt(&c_type_i64, IR_I64, op2);
 				return &c_type_i64;
 			}
 		} else {
@@ -3363,12 +3361,12 @@ common_int_type:
 			 || (sym != YY__LESS_LESS && sym != YY__GREATER_GREATER
 			  && op2_type->size == 4 && C_IS_TYPE_KIND_UNSIGNED(t2)
 			  && (!C_IS_BIT_FIELD(op2->u.proto) || C_BIT_FIELD_SIZE(op2->u.proto) >= 32))) {
-				if (op1_type != &c_type_u32) c_do_cvt(&c_type_u32, IR_U32, op1);
-				if (op2_type != &c_type_u32) c_do_cvt(&c_type_u32, IR_U32, op2);
+				if (op1_type->size != 4 || C_IS_TYPE_KIND_SIGNED(t1)) c_do_cvt(&c_type_u32, IR_U32, op1);
+				if (op2_type->size != 4 || C_IS_TYPE_KIND_SIGNED(t2)) c_do_cvt(&c_type_u32, IR_U32, op2);
 				return &c_type_u32;
 			} else {
-				if (op1_type != &c_type_i32) c_do_cvt(&c_type_i32, IR_I32, op1);
-				if (op2_type != &c_type_i32) c_do_cvt(&c_type_i32, IR_I32, op2);
+				if (op1_type->size != 4 || C_IS_TYPE_KIND_UNSIGNED(t1)) c_do_cvt(&c_type_i32, IR_I32, op1);
+				if (op2_type->size != 4 || C_IS_TYPE_KIND_UNSIGNED(t2)) c_do_cvt(&c_type_i32, IR_I32, op2);
 				return &c_type_i32;
 			}
 		}
@@ -4944,10 +4942,18 @@ repeat:
 		case C_TYPE_U8:       memcpy(addr, &val->u.val.u8, type->size); break;
 		case C_TYPE_I16:
 		case C_TYPE_U16:      memcpy(addr, &val->u.val.u16, type->size); break;
+#if C_LONG_SIZE == 4
+		case C_TYPE_IL:
+		case C_TYPE_UL:
+#endif
 		case C_TYPE_I32:
 		case C_TYPE_U32:      memcpy(addr, &val->u.val.u32, type->size); break;
-		case C_TYPE_I64:
-		case C_TYPE_U64:      memcpy(addr, &val->u.val.u64, type->size); break;
+#if C_LONG_SIZE == 8
+		case C_TYPE_IL:
+		case C_TYPE_UL:
+#endif
+		case C_TYPE_ILL:
+		case C_TYPE_ULL:      memcpy(addr, &val->u.val.u64, type->size); break;
 		case C_TYPE_FLOAT:    memcpy(addr, &val->u.val.f, type->size); break;
 		case C_TYPE_DOUBLE:   memcpy(addr, &val->u.val.d, type->size); break;
 		case C_TYPE_POINTER:  memcpy(addr, &val->u.val.addr, type->size); break;

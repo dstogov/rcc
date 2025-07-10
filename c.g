@@ -1132,10 +1132,10 @@ static const char *yy_read_int_suffix(const c_type **ctype, ir_type *type, const
 			ch = *(e - 1);
 			if (ch == 'l' || ch == 'L') {
 				e--;
-				*ctype = &c_type_u64;
+				*ctype = &c_type_ull;
 				*type = (ir_type)YY_UNSIGNED_LONG_LONG;
 			} else {
-				*ctype = &c_type_u64;
+				*ctype = &c_type_ul;
 				*type = (ir_type)YY_UNSIGNED_LONG;
 			}
 		} else {
@@ -1147,21 +1147,21 @@ static const char *yy_read_int_suffix(const c_type **ctype, ir_type *type, const
 		ch = *(e - 1);
 		if (ch == 'u' || ch == 'U') {
 			e--;
-			*ctype = &c_type_u64;
+			*ctype = &c_type_ul;
 			*type = (ir_type)YY_UNSIGNED_LONG;
 		} else if (ch == 'l' || ch == 'L') {
 			e--;
 			ch = *(e - 1);
 			if (ch == 'u' || ch == 'U') {
 				e--;
-				*ctype = &c_type_u64;
+				*ctype = &c_type_ull;
 				*type = (ir_type)YY_UNSIGNED_LONG_LONG;
 			} else {
-				*ctype = &c_type_i64;
+				*ctype = &c_type_ill;
 				*type = (ir_type)YY_SIGNED_LONG_LONG;
 			}
 		} else {
-			*ctype = &c_type_i64;
+			*ctype = &c_type_il;
 			*type = (ir_type)YY_SIGNED_LONG;
 		}
 	}
