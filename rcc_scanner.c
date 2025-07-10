@@ -32,7 +32,7 @@ static uint32_t yy_str_hash(const char *str, size_t len)
 	uint32_t h = 5381;
 
     for (i = 0; i < len; i++) {
-        h = ((h << 5) + h) + *str;
+        h = ((h << 5) + h) + *(const unsigned char*)str;
         str++;
     }
     return h | 0x10000000;
