@@ -31,6 +31,7 @@ static const char c_boot[] =
 //"#define __GNUC_MINOR__           2\n"
 //"#define __GNUC_PATCHLEVEL__      0\n"
 #if defined(IR_TARGET_X64)
+"#define __LP64__                 1\n"
 "#define __x86_64__               1\n"
 "#define __SIZEOF_SHORT__         2\n"
 "#define __SIZEOF_INT__           4\n"
@@ -71,6 +72,7 @@ static const char c_boot[] =
 "#define __UINTPTR_TYPE__         unsigned long\n"
 "#define __INTPTR_TYPE__          long\n"
 #elif defined(IR_TARGET_X86)
+"#define __ILP32__                1\n"
 "#define __i386__                 1\n"
 "#define __SIZEOF_SHORT__         2\n"
 "#define __SIZEOF_INT__           4\n"
@@ -111,6 +113,7 @@ static const char c_boot[] =
 "#define __UINTPTR_TYPE__         unsigned long\n"
 "#define __INTPTR_TYPE__          long\n"
 #elif defined(IR_TARGET_AARCH64)
+"#define __LP64__                 1\n"
 "#define __aarch64__              1\n"
 "#define __SIZEOF_SHORT__         2\n"
 "#define __SIZEOF_INT__           4\n"
