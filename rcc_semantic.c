@@ -2049,7 +2049,9 @@ static void c_do_fp2int(const c_type *t, ir_type type, c_value *v)
 	} else {
 		if (v->u.type == IR_FLOAT) {
 			switch (type) {
+				case IR_CHAR:
 				case IR_I8:  val.i64 = (int8_t)v->u.val.f; break;
+				case IR_BOOL:
 				case IR_U8:  val.u64 = (uint8_t)v->u.val.f; break;
 				case IR_I16: val.i64 = (int16_t)v->u.val.f; break;
 				case IR_U16: val.u64 = (uint16_t)v->u.val.f; break;
@@ -2062,7 +2064,9 @@ static void c_do_fp2int(const c_type *t, ir_type type, c_value *v)
 			c_value_set_const(v, t, type, val);
 		} else if (v->u.type == IR_DOUBLE) {
 			switch (type) {
+				case IR_CHAR:
 				case IR_I8:  val.i64 = (int8_t)v->u.val.d; break;
+				case IR_BOOL:
 				case IR_U8:  val.u64 = (uint8_t)v->u.val.d; break;
 				case IR_I16: val.i64 = (int16_t)v->u.val.d; break;
 				case IR_U16: val.u64 = (uint16_t)v->u.val.d; break;
@@ -2090,7 +2094,9 @@ static void c_do_int2fp(const c_type *t, ir_type type, c_value *v)
 	} else {
 		if (type == IR_FLOAT) {
 			switch (v->u.type) {
+				case IR_CHAR:
 				case IR_I8:  val.f = (float)v->u.val.i8; break;
+				case IR_BOOL:
 				case IR_U8:  val.f = (float)v->u.val.u8; break;
 				case IR_I16: val.f = (float)v->u.val.i16; break;
 				case IR_U16: val.f = (float)v->u.val.u16; break;
@@ -2103,7 +2109,9 @@ static void c_do_int2fp(const c_type *t, ir_type type, c_value *v)
 			val.u32_hi = 0;
 		} else {
 			switch (v->u.type) {
+				case IR_CHAR:
 				case IR_I8:  val.d = (double)v->u.val.i8; break;
+				case IR_BOOL:
 				case IR_U8:  val.d = (double)v->u.val.u8; break;
 				case IR_I16: val.d = (double)v->u.val.i16; break;
 				case IR_U16: val.d = (double)v->u.val.u16; break;
