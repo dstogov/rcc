@@ -763,7 +763,7 @@ statement2(c_value *last_val):                             {c_value val = {0};}
 	|	expression(last_val ? last_val : &val)?
 		";"
 //???	|	attributes ";"
-	|	"__asm__"                                          {/*???*/yy_error("asm support not implemented yet");}
+	|	("asm"|"__asm"|"__asm__")                          {/*???*/yy_error("asm support not implemented yet");}
 		("volatile"|"inline"|"goto")*
 		"("
 		asm_argument
