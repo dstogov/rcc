@@ -728,7 +728,11 @@ string:
 			if (pp_include_level != 0) {
 				pp_pop_include();
 				pos = (const unsigned char*)yy_pos;
-				goto restart;
+				if (yy_flags & YY_SKIP_EOL) goto restart;
+				/* insert EOL if EOF wasn't at new line */
+				yy_text = (const char*)pos;
+				ret = YY_EOL;
+				break;
 			}
 			ret = YY_EOF;
 			break;
