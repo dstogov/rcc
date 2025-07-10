@@ -8,6 +8,7 @@
 - long double
 - _Complex
 - _Imaginary
+- #include_next and __has_include_next()
 - trigraphs
 - Unicode
 - full support for "\"

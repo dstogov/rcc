@@ -1028,7 +1028,7 @@ static bool pp_eval_ifdef(bool ifdef, bool start_of_include)
 		pp_skip_until_eol();
 	}
 
-	return !(ifdef ^ pp_macro_is_defined(id));
+	return !(ifdef ^ (pp_macro_is_defined(id) || id == YY___HAS_INCLUDE));
 }
 
 static void pp_push_include(yy_sym file_name, const char *buf, size_t size)
@@ -1441,7 +1441,7 @@ next:
 				yy_error("??");
 			}
 			yy_flags = save_flags;
-			yy_text = (id == YY___HAS_INCLUDE || pp_macro_is_defined(id)) ? "1" : "0";
+			yy_text = (pp_macro_is_defined(id) || id == YY___HAS_INCLUDE) ? "1" : "0";
 			yy_len = 1;
 			pp_list_push(&tokens, YY_DECIMAL_NUMBER);
 			pp_list_push_val(&tokens);
@@ -1449,7 +1449,7 @@ next:
 			uint32_t save_flags = yy_flags;
 			bool ret;
 
-			yy_flags |= YY_NO_MACRO | YY_ACCEPT_PP_NUMBER | YY_ACCEPT_PUNCTUATOR;
+			yy_flags |= YY_ACCEPT_PP_NUMBER | YY_ACCEPT_PUNCTUATOR;
 			ret = pp_eval_has_include();
 			yy_flags = save_flags;
 			yy_text = ret ? "1" : "0";
