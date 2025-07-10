@@ -463,6 +463,15 @@ static bool c_compatible_types(const c_type *t1, const c_type *t2, bool unqualif
 	c_type_kind t2_kind = t2->kind;
 
 	if (t1 == t2) return 1;
+
+	attr1 = t1->attr & ~(C_ATTR_ALIGN_MASK|C_ATTR_FLEXIBLE|0xfffe0000);
+	attr2 = t2->attr & ~(C_ATTR_ALIGN_MASK|C_ATTR_FLEXIBLE|0xfffe0000);
+	if (unqualified) {
+		attr1 &= ~(C_ATTR_CONST|C_ATTR_RESTRICT|C_ATTR_VOLATILE|C_ATTR_ATOMIC);
+		attr2 &= ~(C_ATTR_CONST|C_ATTR_RESTRICT|C_ATTR_VOLATILE|C_ATTR_ATOMIC);
+	}
+	if (attr1 != attr2) return 0;
+
 	if (t1_kind != t2_kind) {
 		if (t1_kind == C_TYPE_ENUM) {
 			t1_kind = t1->enumeration.kind;
@@ -473,17 +482,12 @@ static bool c_compatible_types(const c_type *t1, const c_type *t2, bool unqualif
 		} else if (t2_kind == C_TYPE_ENUM) {
 			t2_kind = t2->enumeration.kind;
 			return t1_kind == t2_kind;
+		} else if ((t1_kind == C_TYPE_POINTER && t2_kind == C_TYPE_ARRAY)
+				|| (t1_kind == C_TYPE_ARRAY && t2_kind == C_TYPE_POINTER)) {
+			return c_compatible_types(t1->pointer.type, t2->pointer.type, 0, 0);
 		}
 		return 0;
 	}
-
-	attr1 = t1->attr & ~(C_ATTR_ALIGN_MASK|C_ATTR_FLEXIBLE|0xfffe0000);
-	attr2 = t2->attr & ~(C_ATTR_ALIGN_MASK|C_ATTR_FLEXIBLE|0xfffe0000);
-	if (unqualified) {
-		attr1 &= ~(C_ATTR_CONST|C_ATTR_RESTRICT|C_ATTR_VOLATILE|C_ATTR_ATOMIC);
-		attr2 &= ~(C_ATTR_CONST|C_ATTR_RESTRICT|C_ATTR_VOLATILE|C_ATTR_ATOMIC);
-	}
-	if (attr1 != attr2) return 0;
 
 	if (t1->kind == C_TYPE_ENUM) {
 		if (t1->enumeration.tag != t2->enumeration.tag) return 0;
