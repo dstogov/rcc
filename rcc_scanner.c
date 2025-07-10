@@ -400,6 +400,14 @@ number_suffix:
 				}
 				ret = YY_HEXADECIMAL_NUMBER;
 				goto number_suffix;
+			} else if (ch == 'B' || ch == 'b') {
+				ch = *++pos;
+				if (ch != '0' && ch != '1') goto error;
+				do {
+					ch = *++pos;
+				} while (ch == '0' || ch == '1');
+				ret = YY_BINARY_NUMBER;
+				goto number_suffix;
 			} else {
 				/* octal number */
 				while (ch >= '0' && ch <= '7') {
@@ -832,6 +840,11 @@ static IR_NEVER_INLINE yy_sym yy_parse_pp_number(const char *str, size_t len)
 					ch = *++p;
 				}
 			}
+		} else if (ch == 'b' || ch == 'B') {
+			do {
+				ch = *++p;
+			} while (ch == '0' || ch == '1');
+			ret = YY_BINARY_NUMBER;
 		} else {
 			while (ch >= '0' && ch <= '7') {
 				ch = *++p;

@@ -177,6 +177,7 @@ static void yy_strings(c_value *res, str_list *first, str_list *last);
 static void yy_read_oct(c_value *res, const char *p, size_t len);
 static void yy_read_dec(c_value *res, const char *p, size_t len);
 static void yy_read_hex(c_value *res, const char *p, size_t len);
+static void yy_read_bin(c_value *res, const char *p, size_t len);
 static void yy_read_fp(c_value *res, const char *p, size_t len);
 static void yy_read_char(c_value *res, const char *p, size_t len);
 
@@ -849,6 +850,7 @@ unary_expression(c_value *val):
 	|	DECIMAL_NUMBER(val)
 	|	OCTAL_NUMBER(val)
 	|	HEXADECIMAL_NUMBER(val)
+	|	BINARY_NUMBER(val)
 	|	FLOATING_NUMBER(val)
 	|	HEXADECIMAL_FLOATING_NUMBER(val)
 	|	CHARACTER(val)
@@ -1054,8 +1056,13 @@ OCTAL_NUMBER(c_value *val):
 ;
 
 HEXADECIMAL_NUMBER(c_value *val):
-	/0[xX][0-9A-Fa-f][0-9A-Fa-f]+([Uu](L|l|LL|ll)?|[Ll][Uu]?|(LL|ll)[Uu])?/
+	/0[xX][0-9A-Fa-f]+([Uu](L|l|LL|ll)?|[Ll][Uu]?|(LL|ll)[Uu])?/
 	{yy_read_hex(val, yy_text + 2, yy_len - 2);}
+;
+
+BINARY_NUMBER(c_value *val):
+	/0[bB][01]+([Uu](L|l|LL|ll)?|[Ll][Uu]?|(LL|ll)[Uu])?/
+	{yy_read_bin(val, yy_text + 2, yy_len - 2);}
 ;
 
 FLOATING_NUMBER(c_value *val):
@@ -1242,6 +1249,30 @@ static void yy_read_hex(c_value *res, const char *p, size_t len)
 			IR_ASSERT(ch >= 'A' && ch <= 'F');
 			ret = (ret << 4) | (ch - 'A' + 10);
 		}
+	}
+	if (ret >= 0x8000000000000000ULL) {
+		ctype = &c_type_u64;
+		type = IR_U64;
+	}
+	val.u64 = ret;
+	yy_check_int_type(&ctype, &type, val);
+	c_value_set_const(res, ctype, type, val);
+}
+
+static void yy_read_bin(c_value *res, const char *p, size_t len)
+{
+	const c_type *ctype = NULL;
+	ir_type type = 0;
+	ir_val val;
+	uint64_t ret = 0;
+	char ch;
+	const char *e = yy_read_int_suffix(&ctype, &type, p + len);
+
+	ch = *p;
+	ret = ch - '0';
+	while (++p < e) {
+		ch = *p;
+		ret = (ret << 1) | (ch - '0');
 	}
 	if (ret >= 0x8000000000000000ULL) {
 		ctype = &c_type_u64;

@@ -26,6 +26,7 @@
 	_("<COMMENT>",                     YY_COMMENT)                     \
 	_("<DECIMAL_NUMBER>",              YY_DECIMAL_NUMBER)              \
 	_("<OCTAL_NUMBER>",                YY_OCTAL_NUMBER)                \
+	_("<HEXADECIMAL_NUMBER>",          YY_BINARY_NUMBER)               \
 	_("<HEXADECIMAL_NUMBER>",          YY_HEXADECIMAL_NUMBER)          \
 	_("<FLOATING_NUMBER>",             YY_FLOATING_NUMBER)             \
 	_("<HEXADECIMAL_FLOATING_NUMBER>", YY_HEXADECIMAL_FLOATING_NUMBER) \
