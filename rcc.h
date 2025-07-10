@@ -145,6 +145,8 @@
 	/* extensions */                                                   \
 	_("asm",                           YY_ASM)                         \
 	_("typeof",                        YY_TYPEOF)                      \
+	_("__typeof",                      YY___TYPEOF)                    \
+	_("__typeof__",                    YY___TYPEOF__)                  \
 	_("__alignof",                     YY___ALIGNOF)                   \
 	_("__alignof__",                   YY___ALIGNOF__)                 \
 	_("__asm",                         YY___ASM)                       \

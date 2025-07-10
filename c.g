@@ -332,7 +332,7 @@ type_specifier_or_qualifier(c_dcl *d):                     {c_name name;}
 		|	/* empty - _Atomic qualifier */                {d->attr |= C_ATTR_ATOMIC;}
 		)
 	|                                                      {if (d->flags & C_TYPE_SPEC_ANY) yy_error_sym("unexpected", sym);}
-		"typeof"                                           {d->flags |= C_TYPE_SPEC_TYPE;}
+		("typeof"|"__typeof"|"__typeof__")                 {d->flags |= C_TYPE_SPEC_TYPE;}
 		"("
 		(	?{!C_IS_ID(sym) || is_typedef_name(sym)}
 			type_name(&d->type)
