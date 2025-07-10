@@ -371,11 +371,13 @@ number_suffix:
 			ch = *++pos;
 			if (ch == 'X' || ch == 'x') {
 				ch = *++pos;
+				if (ch == '.' || ch == 'P' || ch == 'p') goto hex_float;
 				if ((ch < '0' || ch > '9') && (ch < 'A' || ch > 'F') && (ch < 'a' || ch > 'f')) goto error;
 				do {
 					ch = *++pos;
 				} while ((ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'F') || (ch >= 'a' && ch <= 'f'));
 				if (ch == '.' || ch == 'P' || ch == 'p') {
+hex_float:
 					if (ch == '.') {
 						ch = *++pos;
 						while ((ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'F') || (ch >= 'a' && ch <= 'f')) {
