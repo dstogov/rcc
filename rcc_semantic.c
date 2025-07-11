@@ -568,10 +568,15 @@ static void c_validate_redeclaration(c_name name, c_dcl *d, c_sym *sym)
 		 && !c_value_is_const(&sym->value)
 		 && !(d->flags & C_DCL_EXTERN)) {
 			void *addr;
+			size_t size = d->type->size;
 
+			if (d->type->kind == C_TYPE_ARRAY && (d->type->attr & C_ATTR_FLEXIBLE)
+			 && sym->value.type->kind == C_TYPE_ARRAY && !(sym->value.type->attr & C_ATTR_FLEXIBLE)) {
+				size = sym->value.type->size;
+			}
 			sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
-			sym->value.u.val.ptr = addr = c_linker_allocate_data(d->type->size);
-			ir_disasm_add_symbol(yy_sym2str(name), (uintptr_t)addr, d->type->size); //???
+			sym->value.u.val.ptr = addr = c_linker_allocate_data(size);
+			ir_disasm_add_symbol(yy_sym2str(name), (uintptr_t)addr, size); //???
 			sym->is_implemented = (d->flags & C_DCL_DEFINITION) != 0;
 		}
 	}
