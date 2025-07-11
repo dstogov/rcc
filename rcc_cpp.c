@@ -319,7 +319,7 @@ static void pp_debug_print_args(pp_macro *macro, pp_arg *args)
 
 	fprintf(stderr, "%*s  Arguments: (", pp_recursion_level * 2, "");
 	for (i = 0; i < macro->num_args; i++) {
-		if (!first) fprintf(stderr, ", ");
+		if (!first) fprintf(stderr, ",");
 		first = 0;
 		pp_debug_tokens(stderr, args[i].tokens);
 	}
@@ -687,12 +687,13 @@ static void pp_macro_read_args(pp_macro *macro, yy_sym name, pp_arg *args, pp_li
 	uint32_t save_flags = yy_flags;
 
 	yy_flags |= YY_ACCEPT_PP_NUMBER | YY_ACCEPT_PUNCTUATOR | YY_NO_MACRO;
+	yy_flags &= ~YY_SKIP_WS;
 
 	args[0].num_args = 0;
 	while (1) {
 		do {
 			sym = yy_next();
-		} while (skip_ws && (sym == YY_WS || sym == YY_EOL));
+		} while ((skip_ws && (sym == YY_WS || sym == YY_EOL)) || sym == YY_PP_PLACE_MARKER);
 		skip_ws = 0;
 		if (sym == YY_EOL) sym = YY_WS;
 		if (sym == YY_WS && prev == YY_WS) {
