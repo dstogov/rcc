@@ -5696,6 +5696,8 @@ void c_do_func_start(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 			} else {
 				ir_VSTORE(obj->value.u.ref, i + 2);
 			}
+		} else {
+			yy_warning("omitting the parameter name in a function definition");
 		}
 	}
 }
