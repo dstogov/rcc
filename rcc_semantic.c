@@ -3363,7 +3363,8 @@ static const c_type *c_common_type(yy_sym sym, c_value *op1, c_value *op2)
 		goto common_int_type;
 	} else if (C_IS_TYPE_KIND_INT(t1) && C_IS_TYPE_KIND_INT(t2)) {
 common_int_type:
-		if (op1_type->size > 4 || op2_type->size > 4) {
+		if (op1_type->size > 4
+		 || (sym != YY__LESS_LESS && sym != YY__GREATER_GREATER && op2_type->size > 4)) {
 			if ((op1_type->size > 4 && C_IS_TYPE_KIND_UNSIGNED(t1)
 			  && (!C_IS_BIT_FIELD(op1->u.proto) || C_BIT_FIELD_SIZE(op1->u.proto) >= 32))
 			 || (sym != YY__LESS_LESS && sym != YY__GREATER_GREATER
@@ -3656,7 +3657,7 @@ static void c_do_shl(const c_type *type, c_value *op1, c_value *op2)
 		ir_val val;
 
 		switch (op1->u.type) {
-			case IR_I32:
+			case IR_I32: val.i64 = (int32_t)(op1->u.val.u32 << op2->u.val.u32); break;
 			case IR_U32: val.u64 = op1->u.val.u32 << op2->u.val.u32; break;
 			case IR_I64:
 			case IR_U64: val.u64 = op1->u.val.u64 << op2->u.val.u64; break;
