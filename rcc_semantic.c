@@ -2750,9 +2750,6 @@ void c_do_struct_field(c_value *v, c_name field_name)
 				yy_sym2str(field_name));
 		}
 	}
-	if (!c_value_is_lval(v)) {
-		yy_error("lvalue expected");
-	}
 	ir_ref ref = ir_ADD_A(v->u.ref, ir_const_size_t(active_ctx, offset));
 	if (field->type->kind != C_TYPE_ARRAY) {
 		c_value_set_lval(v, field->type, c_type2ir(field->type), ref);
@@ -3269,9 +3266,11 @@ static const c_type *c_common_type(yy_sym sym, c_value *op1, c_value *op2)
 		} else if (sym == YY__LESS || sym == YY__LESS_EQUAL || sym == YY__GREATER || sym == YY__GREATER_EQUAL
 			|| sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL || sym == YY__COLON) {
 			if (t2 == C_TYPE_POINTER || t2 == C_TYPE_ARRAY) {
-				if (op1_type->pointer.type->kind != C_TYPE_VOID
-				 && op2_type->pointer.type->kind != C_TYPE_VOID
-				 && !c_compatible_types(op1_type->pointer.type, op2_type->pointer.type, 1, 0)) {
+				if (op1_type->pointer.type->kind == C_TYPE_VOID) {
+					return op2_type;
+				} else if (op2_type->pointer.type->kind == C_TYPE_VOID) {
+					return op1_type;
+				} else if (!c_compatible_types(op1_type->pointer.type, op2_type->pointer.type, 1, 0)) {
 					if (sym == YY__COLON) return NULL;
 					yy_warning("comparison of distinct pointer types lacks a cast");
 				}
@@ -3398,6 +3397,12 @@ common_int_type:
 				if (op2_type->size != 4 || C_IS_TYPE_KIND_UNSIGNED(t2)) c_do_cvt(&c_type_i32, IR_I32, op2);
 				return &c_type_i32;
 			}
+		}
+	} else if (sym == YY__COLON) {
+		if (t1 == C_TYPE_VOID || t2 == C_TYPE_VOID) {
+			return &c_type_void;
+		} else if (c_compatible_types(op1_type, op2_type, 1, 0)) {
+			return op1_type;
 		}
 	}
 	return NULL;
@@ -4121,13 +4126,15 @@ void c_do_cond_op(c_value *cond, c_value *op1, c_value *op2)
 		} else {
 			*cond = *op2;
 		}
-	} else {
+	} else if (type != &c_type_void) {
 		ir_type t = c_type2ir(type);
 #if 1
 		c_value_set_rval(cond, type, t, ir_PHI_2(t, c_value_ref(op1), c_value_ref(op2)));
 #else
 		c_value_set_rval(cond, type, t, ir_COND(t, c_value_ref(cond), c_value_ref(op1), c_value_ref(op2)));
 #endif
+	} else {
+		c_value_set_rval(cond, type, IR_VOID, IR_UNUSED);
 	}
 }
 
