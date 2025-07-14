@@ -4440,12 +4440,17 @@ void c_do_case_range(c_value *v1, c_value *v2)
 	}
 	if (IR_IS_TYPE_SIGNED(loop->switch_type)) {
 		if (v1->u.val.i64 <= v2->u.val.i64) {
-			int64_t i;
-
 			c_case_labels_add_i(loop, v1->u.val, v2->u.val);
-			for (i = v1->u.val.i64; i <= v2->u.val.i64; i++) {
-				v1->u.val.i64 = i;
-				ir_CASE_VAL(loop->check, c_value_ref(v1));
+			if (v2->u.val.i64 - v1->u.val.i64 < 64) {
+				int64_t i;
+
+				for (i = v1->u.val.i64; i <= v2->u.val.i64; i++) {
+					v1->u.val.i64 = i;
+					ir_CASE_VAL(loop->check, c_value_ref(v1));
+					ir_END_list(list);
+				}
+			} else {
+				ir_CASE_RANGE(loop->check, c_value_ref(v1), c_value_ref(v2));
 				ir_END_list(list);
 			}
 		} else {
@@ -4453,12 +4458,17 @@ void c_do_case_range(c_value *v1, c_value *v2)
 		}
 	} else {
 		if (v1->u.val.u64 <= v2->u.val.u64) {
-			uint64_t i;
-
 			c_case_labels_add_u(loop, v1->u.val, v2->u.val);
-			for (i = v1->u.val.u64; i <= v2->u.val.u64; i++) {
-				v1->u.val.u64 = i;
-				ir_CASE_VAL(loop->check, c_value_ref(v1));
+			if (v2->u.val.u64 - v1->u.val.u64 < 64) {
+				uint64_t i;
+
+				for (i = v1->u.val.u64; i <= v2->u.val.u64; i++) {
+					v1->u.val.u64 = i;
+					ir_CASE_VAL(loop->check, c_value_ref(v1));
+					ir_END_list(list);
+				}
+			} else {
+				ir_CASE_RANGE(loop->check, c_value_ref(v1), c_value_ref(v2));
 				ir_END_list(list);
 			}
 		} else {
