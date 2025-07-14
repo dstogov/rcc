@@ -1073,22 +1073,22 @@ void c_finish_enum_type(c_type *type, c_dcl *d, int64_t min, uint64_t max)
 		type->enumeration.kind = C_TYPE_U16;
 		type->size = sizeof(uint16_t);
 		type->attr |= c_align2attr(_Alignof(uint16_t));
-	} else if (min >= -0x7FFFFFFFLL-1 && max <= 0x7FFFFFFFULL) {
-		type->enumeration.kind = C_TYPE_I32;
-		type->size = sizeof(int32_t);
-		type->attr |= c_align2attr(_Alignof(int32_t));
 	} else if (min >= 0 && max <= 0xFFFFFFFFULL) {
 		type->enumeration.kind = C_TYPE_U32;
 		type->size = sizeof(uint32_t);
 		type->attr |= c_align2attr(_Alignof(uint32_t));
-	} else if (max <= 0x7FFFFFFFFFFFFFFFULL) {
-		type->enumeration.kind = C_TYPE_I64;
-		type->size = sizeof(int64_t);
-		type->attr |= c_align2attr(_Alignof(int64_t));
 	} else if (min >= 0) {
 		type->enumeration.kind = C_TYPE_U64;
 		type->size = sizeof(uint64_t);
 		type->attr |= c_align2attr(_Alignof(uint64_t));
+	} else if (min >= -0x7FFFFFFFLL-1 && max <= 0x7FFFFFFFULL) {
+		type->enumeration.kind = C_TYPE_I32;
+		type->size = sizeof(int32_t);
+		type->attr |= c_align2attr(_Alignof(int32_t));
+	} else if (max <= 0x7FFFFFFFFFFFFFFFULL) {
+		type->enumeration.kind = C_TYPE_I64;
+		type->size = sizeof(int64_t);
+		type->attr |= c_align2attr(_Alignof(int64_t));
 	} else {
 		yy_warning("enumeration values exceed range of largest integer");
 		type->enumeration.kind = C_TYPE_I64;
