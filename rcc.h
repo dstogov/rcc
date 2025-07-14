@@ -696,7 +696,7 @@ typedef struct _c_case_labels c_case_labels;
 
 struct _c_loop {
 	bool      is_switch;
-	uint8_t   switch_type; /* ir_type */
+	const c_type *switch_type;
 	ir_ref    start;
 	ir_ref    check;
 	ir_ref    next;

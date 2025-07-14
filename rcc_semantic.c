@@ -4173,7 +4173,7 @@ void c_do_switch(c_loop *loop, c_value *cond)
 		yy_error("switch quantity not an integer");
 	}
 	loop->is_switch = 1;
-	loop->switch_type = cond->u.type;
+	loop->switch_type = cond->type;
 	loop->start = IR_UNUSED;
 	loop->check = ir_SWITCH(c_value_ref(cond));
 	loop->next = IR_UNUSED;
@@ -4413,8 +4413,10 @@ void c_do_case(c_value *v)
 	if (active_ctx->control) {
 		prev = ir_END();
 	}
-	// TODO: check for duplicate labels ???
-	if (IR_IS_TYPE_SIGNED(loop->switch_type)) {
+	if (loop->switch_type != v->type) {
+		c_do_cvt(loop->switch_type, c_type2ir(loop->switch_type), v);
+	}
+	if (C_IS_TYPE_SIGNED(loop->switch_type)) {
 		c_case_labels_add_i(loop, v->u.val, v->u.val);
 	} else {
 		c_case_labels_add_u(loop, v->u.val, v->u.val);
@@ -4438,7 +4440,13 @@ void c_do_case_range(c_value *v1, c_value *v2)
 	if (active_ctx->control) {
 		ir_END_list(list);
 	}
-	if (IR_IS_TYPE_SIGNED(loop->switch_type)) {
+	if (loop->switch_type != v1->type) {
+		c_do_cvt(loop->switch_type, c_type2ir(loop->switch_type), v1);
+	}
+	if (loop->switch_type != v2->type) {
+		c_do_cvt(loop->switch_type, c_type2ir(loop->switch_type), v2);
+	}
+	if (C_IS_TYPE_SIGNED(loop->switch_type)) {
 		if (v1->u.val.i64 <= v2->u.val.i64) {
 			c_case_labels_add_i(loop, v1->u.val, v2->u.val);
 			if (v2->u.val.i64 - v1->u.val.i64 < 64) {
