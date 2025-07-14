@@ -1736,10 +1736,16 @@ void c_alignas_expr(c_dcl *dcl, c_value *expr)
 
 const c_type *c_typeof_expr(c_value *expr, ir_ref old_control)
 {
+	const c_type *type;
+
 	ir_UNREACHABLE();
 	// TODO: cleanup dead code ???
 	active_ctx->control = old_control;
-	return expr->type;
+	type = expr->type;
+	if (type->kind == C_TYPE_FUNC) {
+		type = c_create_pointer_type(type);
+	}
+	return type;
 }
 
 static c_label *c_new_label(c_name name, c_scope *scope, c_label *label, bool local)
