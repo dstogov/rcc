@@ -1022,6 +1022,7 @@ c_type *c_make_enum_type(c_dcl *d, c_name tag)
 void c_declare_enum_val(const c_type *type, c_name name, c_dcl *attr, c_value *val, int64_t *min, uint64_t *max, c_value *last)
 {
 	c_sym *obj;
+	const c_type *const_type;
 
 	if (val && c_value_is_set(val)) {
 		if (!c_value_is_const(val) || (!C_IS_TYPE_INT(val->type) && val->type->kind != C_TYPE_ENUM)) {
@@ -1029,6 +1030,7 @@ void c_declare_enum_val(const c_type *type, c_name name, c_dcl *attr, c_value *v
 		}
 		last->u.type = IR_IS_TYPE_SIGNED(val->u.type) ? IR_I64 : IR_U64;
 		last->u.val.i64 = val->u.val.i64;
+		const_type = val->type;
 	} else {
 		if (last->u.type == IR_I64) {
 			if (last->u.val.i64 == 0x7fffffffffffffffLL) {
@@ -1041,16 +1043,23 @@ void c_declare_enum_val(const c_type *type, c_name name, c_dcl *attr, c_value *v
 			}
 		}
 		last->u.val.i64++;
+		if (last->u.val.i64 <= 0x7fffffffLL) {
+			const_type = &c_type_i32;
+		} else if (last->u.val.i64 <= 0x7fffffffffffffffLL) {
+			const_type = &c_type_i64;
+		} else {
+			const_type = &c_type_u64;
+		}
 	}
 
 	if (last->u.type == IR_I64 && last->u.val.i64 < *min) *min = last->u.val.i64;
 	if ((last->u.type == IR_U64 || last->u.val.i64 > 0) && last->u.val.u64 > *max) *max = last->u.val.u64;
 
-	attr->type = &c_type_i64;
+	attr->type = const_type;
 	attr->flags |= C_DCL_ENUM_CONST;
 	obj = c_declare(name, attr);
 	IR_ASSERT(obj && obj->kind == C_SYM_CONST);
-	c_value_set_const(&obj->value, type, last->u.type, last->u.val);
+	c_value_set_const(&obj->value, const_type, last->u.type, last->u.val);
 }
 
 void c_finish_enum_type(c_type *type, c_dcl *d, int64_t min, uint64_t max)
