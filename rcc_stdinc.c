@@ -217,7 +217,54 @@ static const char c_stdbool_h[] =
 "\n"
 "#endif\n";
 
-#define STDINC_COUNT 3
+static const char c_float_h[] =
+"#ifndef __FLOAT_H\n"
+"#define __FLOAT_H\n"
+"\n"
+"#define FLT_RADIX 2\n"
+"\n"
+"#define FLT_MANT_DIG 24\n"
+"#define FLT_DIG 6\n"
+"#define FLT_DECIMAL_DIG 9\n"
+"#define FLT_EPSILON 0x1p-23\n"
+"#define FLT_MIN_EXP (-125)\n"
+"#define FLT_MAX_EXP 128\n"
+"#define FLT_MIN_10_EXP (-37)\n"
+"#define FLT_MAX_10_EXP 38\n"
+"#define FLT_MIN 0x1p-126\n"
+"#define FLT_MAX 0x1.fffffep+127\n"
+"#define FLT_TRUE_MIN 0x1p-149\n"
+"\n"
+"#define DBL_MANT_DIG 53\n"
+"#define DBL_DIG 15\n"
+"#define DBL_DECIMAL_DIG 17\n"
+"#define DBL_EPSILON 0x1p-52\n"
+"#define DBL_MIN_EXP (-1021)\n"
+"#define DBL_MAX_EXP 1024\n"
+"#define DBL_MIN_10_EXP (-307)\n"
+"#define DBL_MAX_10_EXP 308\n"
+"#define DBL_MIN 0x1p-1022\n"
+"#define DBL_MAX 0x1.fffffffffffffp+1023\n"
+"#define DBL_TRUE_MIN 0x0.0000000000001p-1022\n"
+"\n"
+"#define LDBL_MANT_DIG DBL_MANT_DIG\n"
+"#define LDBL_DIG DBL_DIG\n"
+"#define LDBL_DECIMAL_DIG DBL_DECIMAL_DIG\n"
+"#define LDBL_EPSILON DBL_EPSILON\n"
+"#define LDBL_MIN_EXP DBL_MIN_EXP\n"
+"#define LDBL_MAX_EXP DBL_MAX_EXP\n"
+"#define LDBL_MIN_10_EXP DBL_MIN_10_EXP\n"
+"#define LDBL_MAX_10_EXP DBL_MAX_10_EXP\n"
+"#define LDBL_MIN DBL_MIN\n"
+"#define LDBL_MAX DBL_MAX\n"
+"#define LDBL_TRUE_MIN DBL_TRUE_MIN\n"
+"\n"
+"#define FLT_EVAL_METHOD 0\n"
+"#define FLT_ROUNDS 1 /* round to the nearest */\n"
+"\n"
+"#endif /* #ifndef __FLOAT_H */\n";
+
+#define STDINC_COUNT 4
 
 static struct {
 	yy_sym      name;
@@ -240,6 +287,10 @@ void c_stdinc_init(void)
 	c_stdinc[2].name = yy_hash_lookup("stdbool.h", sizeof("stdbool.h") - 1);
 	c_stdinc[2].content = c_stdbool_h;
 	c_stdinc[2].content_len = sizeof(c_stdbool_h) - 1;
+
+	c_stdinc[3].name = yy_hash_lookup("float.h", sizeof("float.h") - 1);
+	c_stdinc[3].content = c_float_h;
+	c_stdinc[3].content_len = sizeof(c_float_h) - 1;
 
 	yy_file_name = yy_hash_lookup("builtin", sizeof("builtin") - 1);
 	yy_pos = yy_text = yy_linepos = yy_buf = c_boot;
