@@ -10,7 +10,7 @@
 - _Imaginary
 - #include_next and __has_include_next()
 - trigraphs
-- Unicode
+- Unicode characters in identifiers (\uXXXX \UXXXXXXXX)
 - full support for "\"
 - pragmas
 - calling conventions

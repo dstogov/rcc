@@ -382,6 +382,7 @@ typedef struct {
 
 void yy_dyn_str_init(yy_dyn_str *dyn_str, const char *str, size_t len);
 void yy_dyn_str_init0(yy_dyn_str *dyn_str, const char *str, size_t len);
+char *yy_dyn_str_grow(yy_dyn_str *dyn_str, size_t len);
 void yy_dyn_str_append(yy_dyn_str *dyn_str, const char *str, size_t len);
 void yy_dyn_str_append0(yy_dyn_str *dyn_str, const char *str, size_t len);
 
@@ -756,6 +757,9 @@ extern const c_type c_type_float_complex;
 extern const c_type c_type_double_complex;
 extern const c_type c_type_long_double_complex;
 extern const c_type c_type_string;
+extern const c_type c_type_lstring;
+extern const c_type c_type_string_u16;
+extern const c_type c_type_string_u32;
 
 #if __SIZEOF_SIZE_T__ == 8
 # define C_LONG_SIZE    8

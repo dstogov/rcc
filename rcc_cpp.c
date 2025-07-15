@@ -164,7 +164,7 @@ void yy_dyn_str_init0(yy_dyn_str *dyn_str, const char *str, size_t len)
 	dyn_str->str[len] = 0;
 }
 
-void yy_dyn_str_append(yy_dyn_str *dyn_str, const char *str, size_t len)
+char *yy_dyn_str_grow(yy_dyn_str *dyn_str, size_t len)
 {
 	IR_ASSERT(yy_arena && dyn_str->str + dyn_str->len == yy_arena->ptr);
 	if (len >= (size_t)(yy_arena->end - yy_arena->ptr)) {
@@ -183,8 +183,16 @@ void yy_dyn_str_append(yy_dyn_str *dyn_str, const char *str, size_t len)
 			dyn_str->str = new_str;
 		}
 	}
-	memcpy(yy_arena->ptr, str, len);
+
+	char *tail = yy_arena->ptr;
 	yy_arena->ptr += len;
+	return tail;
+}
+
+void yy_dyn_str_append(yy_dyn_str *dyn_str, const char *str, size_t len)
+{
+	char *tail = yy_dyn_str_grow(dyn_str, len);
+	memcpy(tail, str, len);
 	dyn_str->len += len;
 }
 

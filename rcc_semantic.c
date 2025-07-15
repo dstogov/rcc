@@ -38,8 +38,32 @@ const c_type c_type_long_double_complex = {.kind = C_TYPE_LONG_DOUBLE_COMPLEX, .
 const c_type c_type_string = {
 	.kind = C_TYPE_ARRAY,
 	.size = sizeof(void*),
-	.attr = 3 | /*C_ATTR_CONST | ???*/ C_ATTR_FLEXIBLE,
+	.attr = 0 | /*C_ATTR_CONST | ???*/ C_ATTR_FLEXIBLE,
 	.array.type = &c_type_char,
+	.array.length = 0
+};
+
+const c_type c_type_lstring = {
+	.kind = C_TYPE_ARRAY,
+	.size = sizeof(void*),
+	.attr = 2 | /*C_ATTR_CONST | ???*/ C_ATTR_FLEXIBLE,
+	.array.type = &c_type_i32,
+	.array.length = 0
+};
+
+const c_type c_type_string_u16 = {
+	.kind = C_TYPE_ARRAY,
+	.size = sizeof(void*),
+	.attr = 1 | /*C_ATTR_CONST | ???*/ C_ATTR_FLEXIBLE,
+	.array.type = &c_type_u16,
+	.array.length = 0
+};
+
+const c_type c_type_string_u32 = {
+	.kind = C_TYPE_ARRAY,
+	.size = sizeof(void*),
+	.attr = 2 | /*C_ATTR_CONST | ???*/ C_ATTR_FLEXIBLE,
+	.array.type = &c_type_u32,
 	.array.length = 0
 };
 
@@ -1727,8 +1751,13 @@ void c_sizeof_expr(c_value *res, yy_sym op, c_value *expr, ir_ref old_control)
 	if (op == YY_SIZEOF) {
 		if (C_IS_BIT_FIELD(expr->u.proto)) {
 			yy_error("\"sizeof\" applied to a bit-field");
-		} else if (c_value_is_const(expr) && expr->type == &c_type_string) {
-			val.u64 = expr->u.ref + 1; /* ref keeps string lenght */
+		} else if (c_value_is_const(expr)
+		 && expr->type->kind == C_TYPE_ARRAY
+		 && (expr->type == &c_type_string
+		  || expr->type == &c_type_lstring
+		  || expr->type == &c_type_string_u16
+		  || expr->type == &c_type_string_u32)) {
+			val.u64 = expr->u.ref + expr->type->array.type->size; /* ref keeps string lenght */
 		} else {
 			val.u64 = expr->type->size;
 		}
@@ -5095,12 +5124,19 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 	}
 	c_value_rval(val);
 	if (obj->value.type != val->type) {
-		if (val->type == &c_type_string
+		if (obj->value.type->kind == C_TYPE_ARRAY
 		 && c_value_is_const(val)
-		 && obj->value.type->kind == C_TYPE_ARRAY
-		 && (obj->value.type->array.type->kind == C_TYPE_CHAR
-		  || obj->value.type->array.type->kind == C_TYPE_U8
-		  || obj->value.type->array.type->kind == C_TYPE_I8)) {
+		 && val->type->kind == C_TYPE_ARRAY
+		 && ((val->type == &c_type_string
+		   && (obj->value.type->array.type->kind == C_TYPE_CHAR
+		    || obj->value.type->array.type->kind == C_TYPE_U8
+		    || obj->value.type->array.type->kind == C_TYPE_I8))
+		  || (val->type == &c_type_lstring
+		   && obj->value.type->array.type == val->type->array.type)
+		  || (val->type == &c_type_string_u16
+		   && obj->value.type->array.type == val->type->array.type)
+		  || (val->type == &c_type_string_u32
+		   && obj->value.type->array.type == val->type->array.type))) {
 			const char *str = val->u.val.ptr;
 			size_t len = val->u.ref; /* ref keeps string lenght */
 			if (obj->value.type->attr & C_ATTR_FLEXIBLE) {
@@ -5108,7 +5144,8 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 				c_type *type = ir_arena_alloc(&c_arena, sizeof(c_type));
 
 				*type = *obj->value.type;
-				type->array.length = type->size = ++len;
+				len += val->type->array.type->size;
+				type->array.length = type->size = len;
 				type->attr &= ~C_ATTR_FLEXIBLE;
 				obj->value.type = type;
 				if (c_value_is_const(&obj->value)
@@ -5118,9 +5155,13 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 					c_do_init_patch_flexible_alloca(obj->value.u.ref, len);
 				}
 			} else if (len > (size_t)obj->value.type->array.length) {
-				yy_error("initializer-string for array of \"char\" is too long");
-			} else if (len + 1 > (size_t)obj->value.type->array.length) {
-				len++;
+				if (val->type->array.type->size == 1) {
+					yy_error("initializer-string for array of \"char\" is too long");
+				} else {
+					yy_error("initializer-string for array is too long");
+				}
+			} else if (len + val->type->array.type->size > (size_t)obj->value.type->array.length) {
+				len += val->type->array.type->size;
 			}
 			if (c_value_is_const(&obj->value)
 			 || (c_value_is_ref(&obj->value) && IR_IS_CONST_REF(obj->value.u.ref))) {
