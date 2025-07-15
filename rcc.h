@@ -852,6 +852,7 @@ void c_do_bool_and_end(c_value *v, c_value *op2, ir_ref if_ref);
 ir_ref c_do_bool_or_start(c_value *v);
 void c_do_bool_or_end(c_value *v, c_value *op2, ir_ref if_ref);
 void c_do_cond_op(c_value *v, c_value *op2, c_value *op3);
+void c_do_statement_expression(c_scope *scope);
 
 ir_ref c_do_if(c_value *cond);
 void c_do_if_else(ir_ref _if, bool orig_dead_code);

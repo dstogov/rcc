@@ -856,7 +856,7 @@ unary_expression(c_value *val):
 			)
 		|   expression(val) ")"
 		|                                                  {c_scope scope;}
-		    "{"                                            {c_push_scope(&scope);}
+			"{"                                            {c_do_statement_expression(&scope);}
 			compound_statement(val)                        {c_pop_scope(&scope);}
 			"}" ")"
 		)
@@ -899,6 +899,10 @@ unary_expression(c_value *val):
 				type_name(&t)                              {c_sizeof_type(val, t);}
 			|                                              {old_control = c_do_nocode();}
 				expression(val)
+			|                                              {c_scope scope;}
+				"{"                                        {c_do_statement_expression(&scope);}
+				compound_statement(val)                    {c_pop_scope(&scope);}
+				"}"
 			)
 			")"
 		|                                                  {ir_ref old = c_do_nocode();}
@@ -912,6 +916,10 @@ unary_expression(c_value *val):
 				type_name(&t)                              {c_alignof_type(val, t);}
 			|                                              {old_control = c_do_nocode();}
 				expression(val)
+			|                                              {c_scope scope;}
+				"{"                                        {c_do_statement_expression(&scope);}
+				compound_statement(val)                    {c_pop_scope(&scope);}
+				"}"
 			)
 			")"
 		|	                                               {ir_ref old = c_do_nocode();}

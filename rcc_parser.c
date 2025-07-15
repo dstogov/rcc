@@ -1805,7 +1805,7 @@ static yy_sym parse_unary_expression(yy_sym sym, c_value *val) {
 		} else if (sym == YY__LBRACE) {
 			c_scope scope;
 			sym = get_sym();
-			c_push_scope(&scope);
+			c_do_statement_expression(&scope);
 			sym = parse_compound_statement(sym, val);
 			c_pop_scope(&scope);
 			if (sym != YY__RBRACE) {
@@ -1921,6 +1921,16 @@ static yy_sym parse_unary_expression(yy_sym sym, c_value *val) {
 			} else if (sym == YY__LPAREN || C_IS_ID(sym) || sym == YY_DECIMAL_NUMBER || sym == YY_OCTAL_NUMBER || sym == YY_HEXADECIMAL_NUMBER || sym == YY_BINARY_NUMBER || sym == YY_FLOATING_NUMBER || sym == YY_HEXADECIMAL_FLOATING_NUMBER || sym == YY_CHARACTER || sym == YY_STRING || sym == YY__GENERIC || sym == YY___EXTENSION__ || sym == YY__PLUS_PLUS || sym == YY__MINUS_MINUS || sym == YY__AND || sym == YY__STAR || sym == YY__PLUS || sym == YY__MINUS || sym == YY__TILDE || sym == YY__BANG || sym == YY_SIZEOF || sym == YY__ALIGNOF || sym == YY___ALIGNOF__ || sym == YY___ALIGNOF || sym == YY__AND_AND || sym == YY___BUILTIN_VA_START || sym == YY___BUILTIN_VA_ARG || sym == YY___BUILTIN_VA_END || sym == YY___BUILTIN_VA_COPY) {
 				old_control = c_do_nocode();
 				sym = parse_expression(sym, val);
+			} else if (sym == YY__LBRACE) {
+				c_scope scope;
+				sym = get_sym();
+				c_do_statement_expression(&scope);
+				sym = parse_compound_statement(sym, val);
+				c_pop_scope(&scope);
+				if (sym != YY__RBRACE) {
+					yy_error_sym("'}' expected, got", sym);
+				}
+				sym = get_sym();
 			} else {
 				yy_error_sym("unexpected", sym);
 			}
@@ -1957,6 +1967,16 @@ static yy_sym parse_unary_expression(yy_sym sym, c_value *val) {
 			} else if (sym == YY__LPAREN || C_IS_ID(sym) || sym == YY_DECIMAL_NUMBER || sym == YY_OCTAL_NUMBER || sym == YY_HEXADECIMAL_NUMBER || sym == YY_BINARY_NUMBER || sym == YY_FLOATING_NUMBER || sym == YY_HEXADECIMAL_FLOATING_NUMBER || sym == YY_CHARACTER || sym == YY_STRING || sym == YY__GENERIC || sym == YY___EXTENSION__ || sym == YY__PLUS_PLUS || sym == YY__MINUS_MINUS || sym == YY__AND || sym == YY__STAR || sym == YY__PLUS || sym == YY__MINUS || sym == YY__TILDE || sym == YY__BANG || sym == YY_SIZEOF || sym == YY__ALIGNOF || sym == YY___ALIGNOF__ || sym == YY___ALIGNOF || sym == YY__AND_AND || sym == YY___BUILTIN_VA_START || sym == YY___BUILTIN_VA_ARG || sym == YY___BUILTIN_VA_END || sym == YY___BUILTIN_VA_COPY) {
 				old_control = c_do_nocode();
 				sym = parse_expression(sym, val);
+			} else if (sym == YY__LBRACE) {
+				c_scope scope;
+				sym = get_sym();
+				c_do_statement_expression(&scope);
+				sym = parse_compound_statement(sym, val);
+				c_pop_scope(&scope);
+				if (sym != YY__RBRACE) {
+					yy_error_sym("'}' expected, got", sym);
+				}
+				sym = get_sym();
 			} else {
 				yy_error_sym("unexpected", sym);
 			}

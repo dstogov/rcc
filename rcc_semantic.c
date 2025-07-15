@@ -2361,11 +2361,11 @@ incompatible:
 					}
 				} else {
 					if (arg < 0) {
-						yy_error("assignment from incompatible pointer type");
+						yy_warning("assignment from incompatible pointer type");
 					} else if (arg > 0) {
-						yy_error_fmt("passing argument %d from incompatible pointer type", arg);
+						yy_warning_fmt("passing argument %d from incompatible pointer type", arg);
 					} else {
-						yy_error("return from incompatible pointer type");
+						yy_warning("return from incompatible pointer type");
 					}
 				}
 			} else {
@@ -2374,27 +2374,27 @@ incompatible:
 				if (attr) {
 					if (attr & C_ATTR_CONST) {
 						if (arg < 0) {
-							yy_error_fmt("assignment discards \"%s\" qualifier from pointer target type", "const");
+							yy_warning_fmt("assignment discards \"%s\" qualifier from pointer target type", "const");
 						} else if (arg > 0) {
-							yy_error_fmt("passing argument %d discards \"%s\" qualifier from pointer target type", arg, "const");
+							yy_warning_fmt("passing argument %d discards \"%s\" qualifier from pointer target type", arg, "const");
 						} else {
-							yy_error_fmt("return discards \"%s\" qualifier from pointer target type", "const");
+							yy_warning_fmt("return discards \"%s\" qualifier from pointer target type", "const");
 						}
 					} else if (attr & C_ATTR_VOLATILE) {
 						if (arg < 0) {
-							yy_error_fmt("assignment discards \"%s\" qualifier from pointer target type", "volatile");
+							yy_warning_fmt("assignment discards \"%s\" qualifier from pointer target type", "volatile");
 						} else if (arg > 0) {
-							yy_error_fmt("passing argument %d discards \"%s\" qualifier from pointer target type", arg, "volatile");
+							yy_warning_fmt("passing argument %d discards \"%s\" qualifier from pointer target type", arg, "volatile");
 						} else {
-							yy_error_fmt("return discards \"%s\" qualifier from pointer target type", "volatile");
+							yy_warning_fmt("return discards \"%s\" qualifier from pointer target type", "volatile");
 						}
 					} else if (attr & C_ATTR_ATOMIC) {
 						if (arg < 0) {
-							yy_error_fmt("assignment discards \"%s\" qualifier from pointer target type", "atomic");
+							yy_warning_fmt("assignment discards \"%s\" qualifier from pointer target type", "atomic");
 						} else if (arg > 0) {
-							yy_error_fmt("passing argument %d discards \"%s\" qualifier from pointer target type", arg, "atomic");
+							yy_warning_fmt("passing argument %d discards \"%s\" qualifier from pointer target type", arg, "atomic");
 						} else {
-							yy_error_fmt("return discards \"%s\" qualifier from pointer target type", "atomic");
+							yy_warning_fmt("return discards \"%s\" qualifier from pointer target type", "atomic");
 						}
 					}
 				}
@@ -3619,6 +3619,9 @@ static void c_do_div(const c_type *type, c_value *op1, c_value *op2)
 	if (c_value_is_const(op1) && c_value_is_const(op2) && (op2->u.val.u64 != 0 || !active_scope)) {
 		ir_val val;
 
+		if (IR_IS_TYPE_INT(op1->u.type) && c_value_is_const(op2) && op2->u.val.u64 == 0) {
+			yy_error("division by zero");
+		}
 		switch (op1->u.type) {
 			case IR_I32:    val.i64 = op1->u.val.i32 / op2->u.val.i32; break;
 			case IR_U32:    val.u64 = op1->u.val.u32 / op2->u.val.u32; break;
@@ -3644,6 +3647,9 @@ static void c_do_mod(const c_type *type, c_value *op1, c_value *op2)
 	if (c_value_is_const(op1) && c_value_is_const(op2) && (op2->u.val.u64 != 0 || !active_scope)) {
 		ir_val val;
 
+		if (c_value_is_const(op2) && op2->u.val.u64 == 0) {
+			yy_error("division by zero");
+		}
 		switch (op1->u.type) {
 			case IR_I32: val.i64 = op1->u.val.i32 % op2->u.val.i32; break;
 			case IR_U32: val.u64 = op1->u.val.u32 % op2->u.val.u32; break;
@@ -4136,6 +4142,12 @@ void c_do_cond_op(c_value *cond, c_value *op1, c_value *op2)
 	} else {
 		c_value_set_rval(cond, type, IR_VOID, IR_UNUSED);
 	}
+}
+
+void c_do_statement_expression(c_scope *scope)
+{
+	if (!active_func_scope) yy_error("statement expression allowed only inside a function");
+	c_push_scope(scope);
 }
 
 ir_ref c_do_if(c_value *cond)
