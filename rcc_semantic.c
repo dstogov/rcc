@@ -1231,6 +1231,26 @@ void c_declare_struct_field(c_type *type, c_name name, c_dcl *field, c_value *bi
 	}
 }
 
+static void c_do_check_nested_redeclarations(const c_type *type, const c_type *nested_type)
+{
+	int32_t i;
+
+	for (i = 0; i < nested_type->record.num_fields; i++) {
+		c_field *field = &nested_type->record.fields[i];
+
+		if (field->name) {
+			size_t offset;
+			c_field *field2 = c_find_struct_field(type, field->name, &offset);
+
+			if (field2 && field2 != field) {
+				yy_error_fmt("duplicate member \"%s\"", yy_sym2str(field->name));
+			}
+		} else if (field->type->kind == C_TYPE_UNION || field->type->kind == C_TYPE_STRUCT) {
+			c_do_check_nested_redeclarations(type, field->type);
+		}
+	}
+}
+
 void c_finish_struct_type(c_type *type, c_dcl *d)
 {
 	IR_ASSERT(type && (type->kind == C_TYPE_STRUCT || type->kind == C_TYPE_UNION));
@@ -1252,6 +1272,10 @@ void c_finish_struct_type(c_type *type, c_dcl *d)
 		if (type->kind == C_TYPE_UNION) {
 			for (i = 0; i < type->record.num_fields; i++) {
 				c_field *field = &type->record.fields[i];
+				if (!field->name
+				 && (field->type->kind == C_TYPE_UNION || field->type->kind == C_TYPE_STRUCT)) {
+					c_do_check_nested_redeclarations(type, field->type);
+				}
 				if (!C_IS_BIT_FIELD(field->bit_field)) {
 					field->offset = 0;
 					field_align = c_attr2align(field->type->attr);
@@ -1281,11 +1305,16 @@ void c_finish_struct_type(c_type *type, c_dcl *d)
 
 			for (i = 0; i < type->record.num_fields; i++) {
 				c_field *field = &type->record.fields[i];
+
+				if (!field->name
+				 && (field->type->kind == C_TYPE_UNION || field->type->kind == C_TYPE_STRUCT)) {
+					c_do_check_nested_redeclarations(type, field->type);
+				}
 				if (/*field->type->kind == C_TYPE_ARRAY
 				 && */(field->type->attr & C_ATTR_FLEXIBLE)) {
 					if (type->kind == C_TYPE_UNION) yy_error("flexible array member in union");
 					if (i != type->record.num_fields - 1) yy_error("flexible array member not at the end of struct");
-					if (type->record.num_fields == 1) yy_error("flexible array member in a struct with no named members");
+//					if (type->record.num_fields == 1) yy_error("flexible array member in a struct with no named members");
 					type->attr |= C_ATTR_FLEXIBLE;
 				}
 				field_align = c_attr2align(field->type->attr);
@@ -5360,9 +5389,12 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 					len++;
 					if (obj->value.type == type) {
 						*size = len;
-					} else {
+					} else if (obj->value.type->kind == C_TYPE_STRUCT
+					 && obj->value.type->record.fields[obj->value.type->record.num_fields-1].type == type) {
 						/* last element of struct */
 						*size = offset + len;
+					} else {
+						yy_error("initialization of flexible array member in a nested context");
 					}
 					c_do_grow_flexible(obj, *size);
 				}
@@ -5374,9 +5406,12 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 					len++;
 					if (obj->value.type == type) {
 						*size = len;
-					} else {
+					} else if (obj->value.type->kind == C_TYPE_STRUCT
+					 && obj->value.type->record.fields[obj->value.type->record.num_fields-1].type == type) {
 						/* last element of struct */
 						*size = offset + len;
+					} else {
+						yy_error("initialization of flexible array member in a nested context");
 					}
 				}
 				ir_memcpy(active_ctx,
@@ -5403,6 +5438,10 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 			}
 		}
 	} else if (last_array_type && (last_array_type->attr & C_ATTR_FLEXIBLE)) {
+		if (obj->value.type->kind != C_TYPE_STRUCT
+		 || obj->value.type->record.fields[obj->value.type->record.num_fields-1].type != last_array_type) {
+			yy_error("initialization of flexible array member in a nested context");
+		}
 		/* last element of struct */
 		if (last_array_offset + last_array_type->array.type->size > *size) {
 			*size = last_array_offset + last_array_type->array.type->size; 
