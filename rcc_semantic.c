@@ -5607,6 +5607,14 @@ void c_do_generic_start(c_generic *g)
 	g->last_control = active_ctx->control;
 }
 
+void c_do_generic_type(c_generic *g, const c_type *type)
+{
+	if (type->kind == C_TYPE_FUNC) {
+		type = c_create_pointer_type(type);
+	}
+	g->type = type;
+}
+
 void c_do_generic_case(c_generic *g, const c_type *type, c_value *v)
 {
 	if (c_compatible_types(g->type, type, 0, 0)) {

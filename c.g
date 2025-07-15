@@ -872,7 +872,7 @@ unary_expression(c_value *val):
 	|                                                      {c_generic g;}
 		"_Generic"                                         {c_do_generic_start(&g);}
 		"("
-		assignment_expression(&v)                          {g.type = v.type;}
+		assignment_expression(&v)                          {c_do_generic_type(&g, v.type);}
 		(
 			","
 			(	type_name(&t)

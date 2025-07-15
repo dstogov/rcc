@@ -1847,7 +1847,7 @@ static yy_sym parse_unary_expression(yy_sym sym, c_value *val) {
 		}
 		sym = get_sym();
 		sym = parse_assignment_expression(sym, &v);
-		g.type = v.type;
+		c_do_generic_type(&g, v.type);
 		if (sym != YY__COMMA) {
 			yy_error_sym("',' expected, got", sym);
 		}
