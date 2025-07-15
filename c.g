@@ -931,6 +931,7 @@ unary_expression(c_value *val):
 		|	"__builtin_va_arg"
 		|	"__builtin_va_end"
 		|	"__builtin_va_copy"
+		|	"__builtin_expect"
 		)
 		"(" builtin_parameters(val, name) ")"
 	)

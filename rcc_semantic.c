@@ -2894,6 +2894,10 @@ void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 		if (num_args != 2) yy_error("wrong number of arguments in __builtin_va_copy() call");
 		ir_VA_COPY(c_value_ref(&args[0]), c_value_ref(&args[0]));
 		c_value_set_rval(val, &c_type_void, IR_VOID, IR_UNUSED);
+	} else if (name == YY___BUILTIN_EXPECT) {
+		if (num_args != 2) yy_error("wrong number of arguments in __builtin_expect() call");
+		// TODO: set IF propability ???
+		c_value_set_rval(val, args[0].type, args[0].u.type, c_value_ref(&args[0]));
 	} else {
 		IR_ASSERT(0);
 	}
