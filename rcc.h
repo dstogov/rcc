@@ -199,6 +199,9 @@
 	_("__TIME__",                      YY___TIME__)                    \
 	_("__VA_ARGS__",                   YY___VA_ARGS__)                 \
 	_("E",                             YY_E)                           \
+	_("once",                          YY_ONCE)                        \
+	_("push_macro",                    YY_PUSH_MACRO)                  \
+	_("pop_macro",                     YY_POP_MACRO)                   \
 	_("memcpy",                        YY_MEMCPY)                      \
 	_("memset",                        YY_MEMSET)                      \
 	_("main",                          YY_MAIN)                        \
