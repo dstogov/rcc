@@ -1687,9 +1687,9 @@ static char yy_strings_append(yy_dyn_str *dyn_str, char prefix, const char *str,
 					c = (unsigned char)*p++;
 					if (c < 0x80 || c > 0xbf) goto bad_utf8;
 					uc |= (c & 0x3f);
-					if (uc < 0x10000 || uc > 0x10ffff) {
-bad_utf8:				yy_error("bad UTF-8 sequence");
-					}
+					if (uc < 0x10000 || uc > 0x10ffff) goto bad_utf8;
+				} else {
+bad_utf8:			yy_error("bad UTF-8 sequence");
 				}
 				yy_append_unicode_char(dyn_str, prefix, uc);
 				s = p;
