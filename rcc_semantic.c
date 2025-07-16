@@ -4836,7 +4836,7 @@ void c_do_break(void)
 void c_do_return(c_value *val)
 {
 	IR_ASSERT(active_func);
-	if (val && c_value_is_set(val)) {
+	if (val && c_value_is_set(val) && val->type->kind != C_TYPE_VOID) {
 		if (!active_ctx->ret_type) {
 			yy_error("\"return\" with a value, in function returning void");
 		} else if (active_func->value.type->func.ret_type != val->type) {
