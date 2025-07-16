@@ -1798,11 +1798,27 @@ void c_sizeof_expr(c_value *res, yy_sym op, c_value *expr, ir_ref old_control)
 		  || expr->type == &c_type_string_u32)) {
 			val.u64 = expr->u.ref + expr->type->array.type->size; /* ref keeps string lenght */
 		} else {
-			val.u64 = expr->type->size;
+			if (expr->type->kind == C_TYPE_BOOL
+			 && c_value_is_ref(expr)
+			 && active_ctx->ir_base[expr->u.ref].op != IR_LOAD
+			 && active_ctx->ir_base[expr->u.ref].op != IR_VLOAD) {
+				/* IR uses 1-byte "bool" for computation, but C assumes 4-byte "int" */
+				val.u64 = 4;
+			} else {
+				val.u64 = expr->type->size;
+			}
 		}
 	} else {
 		IR_ASSERT(op == YY___ALIGNOF || op == YY___ALIGNOF__);
-		val.u64 = c_attr2align(expr->type->attr);
+		if (expr->type->kind == C_TYPE_BOOL
+		 && c_value_is_ref(expr)
+		 && active_ctx->ir_base[expr->u.ref].op != IR_LOAD
+		 && active_ctx->ir_base[expr->u.ref].op != IR_VLOAD) {
+			/* IR uses 1-byte "bool" for computation, but C assumes 4-byte "int" */
+			val.u64 = 4;
+		} else {
+			val.u64 = c_attr2align(expr->type->attr);
+		}
 	}
 	c_value_set_const(res, &c_type_size_t, IR_SIZE_T, val);
 	ir_UNREACHABLE();
