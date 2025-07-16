@@ -669,6 +669,7 @@ struct _c_sym {
 	c_sym_linkage          linkage: 2;         /* only for C_SYM_VAR and C_SYM_FUNC */
 	bool                   is_thread_local: 1; /* only for C_SYM_VAR */
 	bool                   is_implemented: 1;  /* only for C_SYM_VAR and C_SYM_FUNC */
+	bool                   has_thunk: 1;       /* TODO: replace thunks with relocs ??? */
 	c_scope               *scope;
 	c_value                value;              /* type is part of the value */
 	ir_ctx                *ctx;                /* function IR (used for function inlining) */

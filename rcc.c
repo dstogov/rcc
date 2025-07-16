@@ -104,8 +104,10 @@ static bool rcc_may_inline(c_value *func, ir_ctx *ctx)
 	return 0;
 }
 
-static void rcc_ir_codegen(c_name name, ir_ctx *ctx, c_value *func)
+static void rcc_ir_codegen(c_name name, ir_ctx *ctx, c_sym *sym)
 {
+	c_value *func = &sym->value;
+
 	if (c_native) {
 		ir_match(ctx);
 	}
@@ -144,6 +146,7 @@ static void rcc_ir_codegen(c_name name, ir_ctx *ctx, c_value *func)
 		entry = ir_emit_code(ctx, &size);
 		IR_ASSERT(entry);
 		if (c_value_is_const(func)) {
+			if (!sym->has_thunk) yy_error_fmt("external symbol \"%s\" used before the local one", yy_sym2str(name));
 			ir_fix_thunk(func->u.val.ptr, entry);
 		}
 #ifndef _WIN32
@@ -243,7 +246,7 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym)
 		return;
 	}
 
-	rcc_ir_codegen(name, ctx, func);
+	rcc_ir_codegen(name, ctx, sym);
 	ir_free(ctx);
 }
 
@@ -276,7 +279,7 @@ void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, uint32_t fl
 		}
 		if (sym->ctx && protected) {
 			/* Generate code early to avoid linking through thunk */
-			rcc_ir_codegen(id, sym->ctx, &sym->value);
+			rcc_ir_codegen(id, sym->ctx, sym);
 			if (c_value_is_const(&sym->value)) {
 				return sym->value.u.val.ptr;
 			}
@@ -296,6 +299,7 @@ void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, uint32_t fl
 			if (!addr) {
 				yy_error_fmt("internal error");
 			}
+			sym->has_thunk = 1;
 			sym->value.u.op |= C_VAL_CONST;
 			sym->value.u.type = IR_ADDR;
 			sym->value.u.val.ptr = addr;
@@ -560,7 +564,7 @@ static int rcc_compile(const char *file_name)
 			c_name name = ir_list_pop(&c_codegen_list);
 			c_sym *sym = yy_hash.data[name].sym;
 			IR_ASSERT(sym && sym->ctx);
-			rcc_ir_codegen(name, sym->ctx, &sym->value);
+			rcc_ir_codegen(name, sym->ctx, sym);
 		} while (ir_list_len(&c_codegen_list));
 		ir_list_free(&c_codegen_list);
 	}
