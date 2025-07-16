@@ -1833,16 +1833,10 @@ void c_alignas_expr(c_dcl *dcl, c_value *expr)
 
 const c_type *c_typeof_expr(c_value *expr, ir_ref old_control)
 {
-	const c_type *type;
-
 	ir_UNREACHABLE();
 	// TODO: cleanup dead code ???
 	active_ctx->control = old_control;
-	type = expr->type;
-	if (type->kind == C_TYPE_FUNC) {
-		type = c_create_pointer_type(type);
-	}
-	return type;
+	return expr->type;
 }
 
 static c_label *c_new_label(c_name name, c_scope *scope, c_label *label, bool local)
@@ -3422,6 +3416,7 @@ static const c_type *c_common_type(yy_sym sym, c_value *op1, c_value *op2)
 		return NULL;
 	} else if (t1 == C_TYPE_FUNC) {
 		if (t2 == C_TYPE_FUNC && c_compatible_types(op1_type, op2_type, 1, 0)) {
+			if (sym == YY__COLON) return c_create_pointer_type(op1_type);
 			return op1_type;
 		}
 		return NULL;
