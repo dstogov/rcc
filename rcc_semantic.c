@@ -2515,6 +2515,13 @@ void c_do_cast(const c_type *t, c_value *v)
 		}
 	}
 	c_value_rval(v);
+	if (t->attr & (C_ATTR_CONST|C_ATTR_VOLATILE)) {
+		/* remove top-level qualifiers */
+		c_type *type = ir_arena_alloc(&c_arena, sizeof(c_type));
+		*type = *t;
+		type->attr &= ~(C_ATTR_CONST|C_ATTR_VOLATILE);
+		t = type;
+	}
 	c_do_cvt(t, c_type2ir(t), v);
 	v->u.proto = 0; /*reset bit-field */
 }
@@ -4192,6 +4199,49 @@ void c_do_cond_op(c_value *cond, c_value *op1, c_value *op2)
 	type = c_common_type(YY__COLON, op1, op2);
 	if (!type) yy_error("type mismatch in conditional expression");
 
+	if (type != &c_type_void && (op1->type != type || op2->type != type)) {
+		if (op1->type->kind == C_TYPE_POINTER && op2->type->kind == C_TYPE_POINTER) {
+			const c_type *t1 = op1->type->pointer.type;
+			const c_type *t2 = op2->type->pointer.type;
+
+			/* Prefer pointer non-NULL */
+			if (c_value_is_const(op1)
+			 && op1->u.val.u64 == 0
+			 && t1->kind == C_TYPE_VOID
+			 && (t1->attr & (C_ATTR_CONST|C_ATTR_VOLATILE)) == 0) {
+				type = op2->type;
+			} else if (c_value_is_const(op2)
+			 && op2->u.val.u64 == 0
+			 && t2->kind == C_TYPE_VOID
+			 && (t2->attr & (C_ATTR_CONST|C_ATTR_VOLATILE)) == 0) {
+				type = op1->type;
+			/* Prefer pointer to void */
+			} else if (t1->kind == C_TYPE_VOID) {
+				type = op1->type;
+			} else if (t2->kind == C_TYPE_VOID) {
+				type = op2->type;
+			/* Prefer pointer to a non-flexible array */
+			} else if (t1->kind == C_TYPE_ARRAY && t2->kind == C_TYPE_ARRAY) {
+				if ((t1->attr & C_ATTR_FLEXIBLE) && !(t2->attr & C_ATTR_FLEXIBLE)) {
+					type = op2->type;
+				} else if (!(t1->attr & C_ATTR_FLEXIBLE) && (t2->attr & C_ATTR_FLEXIBLE)) {
+					type = op1->type;
+				}
+			}
+			/* Merge qualifiers */
+			if ((t1->attr & (C_ATTR_CONST|C_ATTR_VOLATILE))
+			 != (t2->attr & (C_ATTR_CONST|C_ATTR_VOLATILE))) {
+				c_type *t = ir_arena_alloc(&c_arena, sizeof(c_type));
+				*t = *type;
+				t->pointer.type = ir_arena_alloc(&c_arena, sizeof(c_type));
+				*((c_type*)(t->pointer.type)) = *type->pointer.type;
+				((c_type*)(t->pointer.type))->attr |= (t1->attr | t2->attr) & (C_ATTR_CONST|C_ATTR_VOLATILE);
+				type = t;
+		    }
+		}
+		if (op1->type != type) c_do_cvt(type, c_type2ir(type), op1);
+		if (op2->type != type) c_do_cvt(type, c_type2ir(type), op2);
+	}
 	if (c_value_is_const(cond)) {
 		if (c_value_is_true(cond)) {
 			if (c_value_is_set(op1)) {
