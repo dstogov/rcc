@@ -1922,21 +1922,36 @@ static void pp_parse_pragma(void)
 		pp_include_ifndef_state = 0;
 		pp_include_ifndef_macro = 0;
 	} else if (sym == YY_PUSH_MACRO) {
+		pp_macro_list *p;
+
 		sym = yy_next();
 		if (sym != YY__LPAREN) goto error;
 		sym = yy_next();
 		if (sym != YY_STRING) goto error;
-		name = sym;
+		name = yy_hash_lookup(yy_text + 1, yy_len - 2);
 		sym = yy_next();
 		if (sym != YY__RPAREN) goto error;
+		p = ir_arena_alloc(&yy_arena, sizeof(pp_macro_list));
+		p->macro = yy_hash.data[name].macro;
+		p->next = yy_hash.data[name].macro_stack;
+		yy_hash.data[name].macro_stack = p;
 	} else if (sym == YY_POP_MACRO) {
+		pp_macro_list *p;
+
 		sym = yy_next();
 		if (sym != YY__LPAREN) goto error;
 		sym = yy_next();
 		if (sym != YY_STRING) goto error;
-		name = sym;
+		name = yy_hash_lookup(yy_text + 1, yy_len - 2);
 		sym = yy_next();
 		if (sym != YY__RPAREN) goto error;
+		p = yy_hash.data[name].macro_stack;
+		if (p) {
+			yy_hash.data[name].macro = p->macro;
+			yy_hash.data[name].macro_stack = p->next;
+		} else {
+			yy_warning_fmt("pragma pop_macro could not pop \"%s\"", yy_sym2str(name));
+		}
 	} else if (sym == YY_EOL || sym == YY_EOF) {
 		yy_warning("ignoring \"#pragma\"");
 		return;

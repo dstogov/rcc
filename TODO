@@ -12,7 +12,6 @@
 - trigraphs
 - Unicode characters in identifiers (\uXXXX \UXXXXXXXX)
 - full support for "\"
-- pragmas
 - calling conventions
 - nested functions
 - local register variables

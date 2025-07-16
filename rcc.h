@@ -351,6 +351,7 @@ yy_sym yy_next(void);
 
 /* C symbol table */
 typedef struct _pp_macro pp_macro;
+typedef struct _pp_macro_list pp_macro_list;
 typedef struct _c_sym c_sym;
 typedef struct _c_tag c_tag;
 typedef struct _c_label c_label;
@@ -361,6 +362,7 @@ typedef struct _yy_hash_bucket {
 	size_t                   len;    /* string length */
 	const char              *str;
 	pp_macro                *macro;
+	pp_macro_list           *macro_stack;
 	c_sym                   *sym;
 	c_tag                   *tag;
 	c_label                 *label;
@@ -414,6 +416,11 @@ struct _pp_macro {
 	int32_t                  num_args;
 	uint32_t                 size;
 	yy_sym                  *tokens;
+};
+
+struct _pp_macro_list {
+	pp_macro                *macro;
+	pp_macro_list           *next;
 };
 
 typedef struct {
