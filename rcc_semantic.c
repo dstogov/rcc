@@ -473,7 +473,34 @@ static void c_finalize_type(c_dcl *d)
 		d->flags &= ~C_TYPE_SPEC_ANY;
 		d->flags |= C_TYPE_SPEC_TYPE;
 	}
+
 	c_validate_dcl(d);
+
+	if ((d->flags & C_TYPE_SPEC_NAME)
+	 && (d->attr & C_TYPE_ATTRS)
+	 && (d->type->kind == C_TYPE_ARRAY)) {
+		const c_type *t = d->type;
+
+		do {
+			t = t->array.type;
+		} while (t->kind == C_TYPE_ARRAY);
+		if ((t->attr & C_TYPE_ATTRS) != (d->attr & C_TYPE_ATTRS)) {
+			c_type *tmp = ir_arena_alloc(&c_arena, sizeof(c_type));
+
+			*tmp = *d->type;
+			d->type = tmp;
+			t = d->type;
+			do {
+				tmp = ir_arena_alloc(&c_arena, sizeof(c_type));
+				*tmp = *t->array.type;
+				((c_type*)(t))->array.type = tmp;
+				t = tmp;
+			} while (t->kind == C_TYPE_ARRAY);
+			tmp->attr |= (d->attr & C_TYPE_ATTRS);
+		}
+		d->attr &= ~C_TYPE_ATTRS;
+	}
+
 	if ((d->attr & (C_TYPE_ATTRS|C_ATTR_ALIGN_MASK))
 	 && (d->attr & (C_TYPE_ATTRS|C_ATTR_ALIGN_MASK))
 	 != (d->type->attr & (C_TYPE_ATTRS|C_ATTR_ALIGN_MASK))) {
