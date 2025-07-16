@@ -445,6 +445,11 @@ static void c_validate_dcl(c_dcl *d)
 			if (d->type->kind == C_TYPE_ARRAY) yy_error("\"_Atomic\"-qualified array type");
 			if (d->type->kind == C_TYPE_FUNC) yy_error("\"_Atomic\"-qualified function type");
 		}
+		if (d->attr & C_ATTR_ALIGN_MASK) {
+			if (d->type->kind == C_TYPE_FUNC) yy_error("invalid use of \"_Alignas\" for a function");
+			if (d->flags & C_DCL_TYPEDEF) yy_error("invalid use of \"_Alignas\" with \"typedef\"");
+			if (d->flags & C_DCL_REGISTER) yy_error("invalid use of \"_Alignas\" with \"register\"");
+		}
 	}
 }
 
@@ -453,6 +458,10 @@ static void c_merge_type_attr(c_dcl *d)
 	c_type *type = ir_arena_alloc(&c_arena, sizeof(c_type));
 	*type = *d->type;
 	type->attr |= (d->attr & C_TYPE_ATTRS);
+	if ((d->attr & C_ATTR_ALIGN_MASK)
+	 && (d->attr & C_ATTR_ALIGN_MASK) != (d->type->attr & C_ATTR_ALIGN_MASK)) {
+		type->attr = (type->attr & ~C_ATTR_ALIGN_MASK) | (d->attr & C_ATTR_ALIGN_MASK);
+	}
 	d->type = type;
 }
 
@@ -465,8 +474,11 @@ static void c_finalize_type(c_dcl *d)
 		d->flags |= C_TYPE_SPEC_TYPE;
 	}
 	c_validate_dcl(d);
-	if ((d->attr & C_TYPE_ATTRS)
-	 && (d->attr & C_TYPE_ATTRS) != (d->type->attr & C_TYPE_ATTRS)) c_merge_type_attr(d);
+	if ((d->attr & (C_TYPE_ATTRS|C_ATTR_ALIGN_MASK))
+	 && (d->attr & (C_TYPE_ATTRS|C_ATTR_ALIGN_MASK))
+	 != (d->type->attr & (C_TYPE_ATTRS|C_ATTR_ALIGN_MASK))) {
+		c_merge_type_attr(d);
+	}
 	d->attr &= ~C_TYPE_ATTRS;
 }
 
@@ -684,11 +696,6 @@ c_sym *c_declare(c_name name, c_dcl *d)
 		}
 		if (d->attr & C_ATTR_NORETURN) {
 			if (d->type->kind != C_TYPE_FUNC) yy_error("invalid use of \"_Noreturn\"");
-		}
-		if (d->attr & C_ATTR_ALIGN_MASK) {
-			if (d->type->kind == C_TYPE_FUNC) yy_error("invalid use of \"_Alignas\" for a function");
-			if (d->flags & C_DCL_TYPEDEF) yy_error("invalid use of \"_Alignas\" with \"typedef\"");
-			if (d->flags & C_DCL_REGISTER) yy_error("invalid use of \"_Alignas\" with \"register\"");
 		}
 	}
 	IR_ASSERT(name);
