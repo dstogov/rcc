@@ -3,6 +3,7 @@
 - struct/union arguments and return value
 - variable length arrays
 - computed goto
+- initializers with ranges ([1 ... 2] = X)
 - _Atomic
 - _Thread_local
 - long double
