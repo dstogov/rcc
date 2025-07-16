@@ -5492,23 +5492,36 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 	}
 
 	if (val->type != type) {
-		if (val->type == &c_type_string
+		if (type->kind == C_TYPE_ARRAY
 		 && c_value_is_const(val)
-		 && type->kind == C_TYPE_ARRAY
-		 && (type->array.type->kind == C_TYPE_CHAR
-		  || type->array.type->kind == C_TYPE_I8
-		  || type->array.type->kind == C_TYPE_U8)) {
+		 && val->type->kind == C_TYPE_ARRAY
+		 && ((val->type == &c_type_string
+		   && (type->array.type->kind == C_TYPE_CHAR
+		    || type->array.type->kind == C_TYPE_U8
+		    || type->array.type->kind == C_TYPE_I8))
+		  || (val->type == &c_type_lstring
+		   && type->array.type == val->type->array.type)
+		  || (val->type == &c_type_string_u16
+		   && type->array.type == val->type->array.type)
+		  || (val->type == &c_type_string_u32
+		   && type->array.type == val->type->array.type))) {
 			const char *str = val->u.val.ptr;
 			size_t len = val->u.ref; /* ref keeps string lenght */
-			if (len + 1 > (size_t)type->array.length && !(type->attr & C_ATTR_FLEXIBLE)) {
-				yy_error("initializer-string for array of \"char\" is too long");
+
+			if (len > (size_t)type->array.length && !(type->attr & C_ATTR_FLEXIBLE)) {
+				if (val->type->array.type->size == 1) {
+					yy_error("initializer-string for array of \"char\" is too long");
+				} else {
+					yy_error("initializer-string for array is too long");
+				}
 			}
+
 			if (c_value_is_const(&obj->value)
 			 || (c_value_is_ref(&obj->value) && IR_IS_CONST_REF(obj->value.u.ref))) {
 				if (!c_value_is_const(val) && !c_do_init_fix_reloc(val)) yy_error("initializer element is not constant");
 				IR_ASSERT(obj->value.u.type == IR_ADDR);
 				if (type->attr & C_ATTR_FLEXIBLE) {
-					len++;
+					len += type->array.type->size;
 					if (obj->value.type == type) {
 						*size = len;
 					} else if (obj->value.type->kind == C_TYPE_STRUCT
@@ -5525,7 +5538,7 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 				IR_ASSERT(obj->value.u.ref > 0);
 				IR_ASSERT(active_ctx->ir_base[obj->value.u.ref].op == IR_ALLOCA);
 				if (type->attr & C_ATTR_FLEXIBLE) {
-					len++;
+					len += type->array.type->size;
 					if (obj->value.type == type) {
 						*size = len;
 					} else if (obj->value.type->kind == C_TYPE_STRUCT
