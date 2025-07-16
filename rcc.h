@@ -514,11 +514,12 @@ void pp_list_grow(pp_list *l, uint32_t size);
 #define C_ATTR_DEPRECATED        (1<<26)
 #define C_ATTR_CDECL             (1<<27)
 #define C_ATTR_FASTCALL          (1<<28)
+#define C_ATTR_UNUSED            (1<<29)
 
 /* statement attributes */
-#define C_ATTR_FALLTHROUGH       (1<<29)
-#define C_ATTR_MUSTTAIL          (1<<30)
-//#define C_ATTR_ASSUME            (1<<31)
+#define C_ATTR_FALLTHROUGH       (1<<30)
+#define C_ATTR_MUSTTAIL          (1<<31)
+//#define C_ATTR_ASSUME            (1<<32)
 
 #define C_TYPE_ATTRS \
 	(C_ATTR_CONST|C_ATTR_RESTRICT|C_ATTR_VOLATILE|C_ATTR_ATOMIC)
@@ -720,6 +721,7 @@ struct _c_loop {
 
 struct _c_label {
 	bool      is_local;
+	bool      is_unused;
 	ir_ref    dst;
 	ir_ref    src_list;
 	c_scope  *scope;

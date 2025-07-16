@@ -1728,6 +1728,11 @@ void c_gcc_attribute(c_dcl *d, c_name attr, c_value *val)
 			if (val) yy_warning_fmt("attribute \"%s\" with unused value", yy_sym2str(attr));
 			d->attr |= C_ATTR_FASTCALL;
 			break;
+		case YY_UNUSED:
+		case YY___UNUSED__:
+			if (val) yy_warning_fmt("attribute \"%s\" with unused value", yy_sym2str(attr));
+			d->attr |= C_ATTR_UNUSED;
+			break;
 		default:
 			yy_warning_fmt("unsupported attribure \"%s\"", yy_sym2str(attr));
 	}
@@ -1820,6 +1825,7 @@ static c_label *c_new_label(c_name name, c_scope *scope, c_label *label, bool lo
 		label = ir_mem_malloc(sizeof(c_label)); // TODO: cache allocatons
 		label->is_local = 0;
 	}
+	label->is_unused = 0;
 	label->dst = IR_UNUSED;
 	label->src_list = IR_UNUSED;
 	label->scope = scope;
@@ -4931,7 +4937,9 @@ c_label *c_do_set_label(c_name name)
 
 void c_do_set_label_attrs(c_label *label, c_dcl *attrs)
 {
-	//???
+	if (attrs->attr & C_ATTR_UNUSED) {
+		label->is_unused = 1;
+	}
 }
 
  void c_do_finish_label(c_name name, c_label *label)
@@ -4943,7 +4951,9 @@ void c_do_set_label_attrs(c_label *label, c_dcl *attrs)
 		IR_ASSERT(insn->op == IR_MERGE);
 		if (!label->src_list) {
 			if (insn->inputs_count == 2) {
-				yy_warning_fmt("label \"%s\" defined but not used", yy_sym2str(name));
+				if (!label->is_unused) {
+					yy_warning_fmt("label \"%s\" defined but not used", yy_sym2str(name));
+				}
 				insn->op = IR_BEGIN;
 				insn->inputs_count = 1;
 			} else {
