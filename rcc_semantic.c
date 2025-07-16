@@ -2496,7 +2496,8 @@ incompatible:
 
 void c_do_cast(const c_type *t, c_value *v)
 {
-	if (t->kind == C_TYPE_VOID) {
+	if (t == v->type) {
+	} else if (t->kind == C_TYPE_VOID) {
 		c_value_set_rval(v, &c_type_void, IR_VOID, IR_NULL);
 	} else if (!C_IS_TYPE_SCALAR_OR_PTR(t)) {
 		yy_error("conversion to non-scalar type requested");
@@ -5442,7 +5443,7 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 			break;
 		}
 
-		if (type == val->type) {
+		if (type == val->type || c_compatible_types(type, val->type, 1, 0)) {
 			break;
 		}
 
@@ -5466,8 +5467,11 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 	for (i = 0; i <= init->level; i++) {
 		const c_type *t = init->stack[i].type;
 		if (t->kind == C_TYPE_ARRAY) {
-			last_array_type = t;
-			last_array_offset = offset += t->array.type->size * init->stack[i].pos;
+			offset += t->array.type->size * init->stack[i].pos;
+			if (t->attr & C_ATTR_FLEXIBLE) {
+				last_array_type = t;
+				last_array_offset = offset;
+			}
 		} else if (t->kind == C_TYPE_STRUCT || t->kind == C_TYPE_UNION) {
 			if (init->stack[i].pos < t->record.num_fields) {
 //				offset += t->record.fields[init->stack[i].pos].offset;
@@ -5555,7 +5559,7 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 				}
 			}
 		}
-	} else if (last_array_type && (last_array_type->attr & C_ATTR_FLEXIBLE)) {
+	} else if (last_array_type) {
 		if (obj->value.type->kind != C_TYPE_STRUCT
 		 || obj->value.type->record.fields[obj->value.type->record.num_fields-1].type != last_array_type) {
 			yy_error("initialization of flexible array member in a nested context");
