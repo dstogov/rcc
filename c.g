@@ -283,7 +283,7 @@ specifier_qualifier_list(c_dcl *d):
 type_qualifier_list(c_dcl *d):
 	(	type_qualifier(d)
 	|	attributes(d)
-	)+
+	)++
 ;
 
 storage_class_specifier(c_dcl *d):
@@ -495,7 +495,7 @@ enumerator(const c_type *t, int64_t *min, uint64_t *max, c_value *last):
 
 declarator(c_dcl *d, c_name *name, bool allow_old_func):   {c_dcl d2 = {0};}
 	(	"*"                                                {c_make_pointer_type(d);}
-		type_qualifier(d)*
+		type_qualifier_list(d)?
 	)*
 	(	ID(name)
 		arrays_and_params(d, allow_old_func, 0)?
@@ -509,7 +509,7 @@ declarator(c_dcl *d, c_name *name, bool allow_old_func):   {c_dcl d2 = {0};}
 
 abstract_declarator(c_dcl *d):                             {c_dcl d2 = {0};}
 	(	"*"                                                {c_make_pointer_type(d);}
-		type_qualifier(d)*
+		type_qualifier_list(d)?
 	)*
 	(	?{is_nested_declarator(sym)}                       {d2.flags = C_TYPE_SPEC_CHAR;}
 	    "("
@@ -523,7 +523,7 @@ abstract_declarator(c_dcl *d):                             {c_dcl d2 = {0};}
 
 parameter_declarator(c_dcl *d, c_name *name):              {c_dcl d2 = {0};}
 	(	"*"                                                {c_make_pointer_type(d);}
-		type_qualifier(d)*
+		type_qualifier_list(d)?+
 	)*
 	(	ID(name)
 		arrays_and_params(d, 0, 1)?

@@ -944,8 +944,8 @@ static yy_sym parse_declarator(yy_sym sym, c_dcl *d, c_name *name, bool allow_ol
 	while (sym == YY__STAR) {
 		sym = get_sym();
 		c_make_pointer_type(d);
-		while (sym == YY_CONST || sym == YY___CONST || sym == YY___CONST__ || sym == YY_RESTRICT || sym == YY___RESTRICT || sym == YY___RESTRICT__ || sym == YY_VOLATILE || sym == YY___VOLATILE || sym == YY___VOLATILE__ || sym == YY__ATOMIC) {
-			sym = parse_type_qualifier(sym, d);
+		if (sym == YY_CONST || sym == YY___CONST || sym == YY___CONST__ || sym == YY_RESTRICT || sym == YY___RESTRICT || sym == YY___RESTRICT__ || sym == YY_VOLATILE || sym == YY___VOLATILE || sym == YY___VOLATILE__ || sym == YY__ATOMIC || sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__) {
+			sym = parse_type_qualifier_list(sym, d);
 		}
 	}
 	if (C_IS_ID(sym)) {
@@ -979,8 +979,8 @@ static yy_sym parse_abstract_declarator(yy_sym sym, c_dcl *d) {
 	while (sym == YY__STAR) {
 		sym = get_sym();
 		c_make_pointer_type(d);
-		while (sym == YY_CONST || sym == YY___CONST || sym == YY___CONST__ || sym == YY_RESTRICT || sym == YY___RESTRICT || sym == YY___RESTRICT__ || sym == YY_VOLATILE || sym == YY___VOLATILE || sym == YY___VOLATILE__ || sym == YY__ATOMIC) {
-			sym = parse_type_qualifier(sym, d);
+		if (sym == YY_CONST || sym == YY___CONST || sym == YY___CONST__ || sym == YY_RESTRICT || sym == YY___RESTRICT || sym == YY___RESTRICT__ || sym == YY_VOLATILE || sym == YY___VOLATILE || sym == YY___VOLATILE__ || sym == YY__ATOMIC || sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__) {
+			sym = parse_type_qualifier_list(sym, d);
 		}
 	}
 	if ((sym == YY__LPAREN) && (is_nested_declarator(sym))) {
@@ -1013,8 +1013,8 @@ static yy_sym parse_parameter_declarator(yy_sym sym, c_dcl *d, c_name *name) {
 	while (sym == YY__STAR) {
 		sym = get_sym();
 		c_make_pointer_type(d);
-		while (sym == YY_CONST || sym == YY___CONST || sym == YY___CONST__ || sym == YY_RESTRICT || sym == YY___RESTRICT || sym == YY___RESTRICT__ || sym == YY_VOLATILE || sym == YY___VOLATILE || sym == YY___VOLATILE__ || sym == YY__ATOMIC) {
-			sym = parse_type_qualifier(sym, d);
+		if (sym == YY_CONST || sym == YY___CONST || sym == YY___CONST__ || sym == YY_RESTRICT || sym == YY___RESTRICT || sym == YY___RESTRICT__ || sym == YY_VOLATILE || sym == YY___VOLATILE || sym == YY___VOLATILE__ || sym == YY__ATOMIC || sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__) {
+			sym = parse_type_qualifier_list(sym, d);
 		}
 	}
 	if ((sym == YY__LPAREN) && (is_nested_declarator(sym))) {
