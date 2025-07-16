@@ -4132,7 +4132,10 @@ void c_do_bool_and_end(c_value *op1, c_value *op2, ir_ref if_ref)
 		yy_error("scalar is required");
 	}
 	if (if_ref) {
+		ir_ref ref;
+
 		c_do_bool(op2, op2);
+		ref = c_value_ref(op2);
 		ir_MERGE_WITH_EMPTY_FALSE(if_ref);
 		if (c_value_is_const(op1) && c_value_is_const(op2)) {
 			if (c_value_is_true(op1) && c_value_is_true(op2)) {
@@ -4143,7 +4146,7 @@ void c_do_bool_and_end(c_value *op1, c_value *op2, ir_ref if_ref)
 				c_value_set_const(op1, &c_type_bool, IR_BOOL, val);
 			}
 		} else {
-			c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_PHI_2(IR_BOOL, c_value_ref(op2), IR_FALSE));
+			c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_PHI_2(IR_BOOL, ref, IR_FALSE));
 		}
 	} else {
 		c_do_bool(op1, op2);
@@ -4173,7 +4176,10 @@ void c_do_bool_or_end(c_value *op1, c_value *op2, ir_ref if_ref)
 		yy_error("scalar is required");
 	}
 	if (if_ref) {
+		ir_ref ref;
+
 		c_do_bool(op2, op2);
+		ref = c_value_ref(op2);
 		ir_MERGE_WITH_EMPTY_TRUE(if_ref);
 		if ((c_value_is_const(op1) && c_value_is_true(op1))
 		 || (c_value_is_const(op2) && c_value_is_true(op2))) {
@@ -4184,7 +4190,7 @@ void c_do_bool_or_end(c_value *op1, c_value *op2, ir_ref if_ref)
 			val.u64 = 0;
 			c_value_set_const(op1, &c_type_bool, IR_BOOL, val);
 		} else {
-			c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_PHI_2(IR_BOOL, c_value_ref(op2), IR_TRUE));
+			c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_PHI_2(IR_BOOL, ref, IR_TRUE));
 		}
 	} else {
 		c_do_bool(op1, op2);
