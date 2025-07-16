@@ -5714,6 +5714,13 @@ void c_do_generic_start(c_generic *g)
 
 void c_do_generic_type(c_generic *g, const c_type *type)
 {
+	if (type->attr & (C_ATTR_CONST|C_ATTR_VOLATILE)) {
+		/* remove top-level qualifiers */
+		c_type *t = ir_arena_alloc(&c_arena, sizeof(c_type));
+		*t = *type;
+		t->attr &= ~(C_ATTR_CONST|C_ATTR_VOLATILE);
+		type = t;
+	}
 	if (type->kind == C_TYPE_FUNC) {
 		type = c_create_pointer_type(type);
 	}
