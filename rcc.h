@@ -780,7 +780,7 @@ extern const c_type c_type_string_u32;
 
 #if __SIZEOF_SIZE_T__ == 8
 # define C_LONG_SIZE    8
-# define C_LONG_ALIGN   3
+# define C_LONG_ALIGN   4
 # define c_type_size_t  c_type_ul
 # define c_type_ssize_t c_type_il
 # define c_type_i64     c_type_il
@@ -791,7 +791,7 @@ extern const c_type c_type_string_u32;
 # define IR_ULONG       IR_U64
 #else
 # define C_LONG_SIZE    4
-# define C_LONG_ALIGN   2
+# define C_LONG_ALIGN   3
 # define c_type_size_t  c_type_ull
 # define c_type_ssize_t c_type_ill
 # define c_type_i64     c_type_ill

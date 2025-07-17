@@ -13,32 +13,32 @@
 #undef _ir_CTX
 #define _ir_CTX active_ctx
 
-const c_type c_type_void                = {.kind = C_TYPE_VOID,                .size = 0,  .attr = 0};
-const c_type c_type_bool                = {.kind = C_TYPE_BOOL,                .size = 1,  .attr = 0};
-const c_type c_type_char                = {.kind = C_TYPE_CHAR,                .size = 1,  .attr = 0};
-const c_type c_type_u8                  = {.kind = C_TYPE_U8,                  .size = 1,  .attr = 0};
-const c_type c_type_i8                  = {.kind = C_TYPE_I8,                  .size = 1,  .attr = 0};
-const c_type c_type_u16                 = {.kind = C_TYPE_U16,                 .size = 2,  .attr = 1};
-const c_type c_type_i16                 = {.kind = C_TYPE_I16,                 .size = 2,  .attr = 1};
-const c_type c_type_u32                 = {.kind = C_TYPE_U32,                 .size = 4,  .attr = 2};
-const c_type c_type_i32                 = {.kind = C_TYPE_I32,                 .size = 4,  .attr = 2};
+const c_type c_type_void                = {.kind = C_TYPE_VOID,                .size = 0,  .attr = 1};
+const c_type c_type_bool                = {.kind = C_TYPE_BOOL,                .size = 1,  .attr = 1};
+const c_type c_type_char                = {.kind = C_TYPE_CHAR,                .size = 1,  .attr = 1};
+const c_type c_type_u8                  = {.kind = C_TYPE_U8,                  .size = 1,  .attr = 1};
+const c_type c_type_i8                  = {.kind = C_TYPE_I8,                  .size = 1,  .attr = 1};
+const c_type c_type_u16                 = {.kind = C_TYPE_U16,                 .size = 2,  .attr = 2};
+const c_type c_type_i16                 = {.kind = C_TYPE_I16,                 .size = 2,  .attr = 2};
+const c_type c_type_u32                 = {.kind = C_TYPE_U32,                 .size = 4,  .attr = 3};
+const c_type c_type_i32                 = {.kind = C_TYPE_I32,                 .size = 4,  .attr = 3};
 const c_type c_type_ul                  = {.kind = C_TYPE_UL,                  .size = C_LONG_SIZE,  .attr = C_LONG_ALIGN};
-const c_type c_type_ull                 = {.kind = C_TYPE_ULL,                 .size = 8,  .attr = 3};
+const c_type c_type_ull                 = {.kind = C_TYPE_ULL,                 .size = 8,  .attr = 4};
 const c_type c_type_il                  = {.kind = C_TYPE_IL,                  .size = C_LONG_SIZE,  .attr = C_LONG_ALIGN};
-const c_type c_type_ill                 = {.kind = C_TYPE_ILL,                 .size = 8,  .attr = 3};
-const c_type c_type_float               = {.kind = C_TYPE_FLOAT,               .size = 4,  .attr = 2};
-const c_type c_type_double              = {.kind = C_TYPE_DOUBLE,              .size = 8,  .attr = 3};
+const c_type c_type_ill                 = {.kind = C_TYPE_ILL,                 .size = 8,  .attr = 4};
+const c_type c_type_float               = {.kind = C_TYPE_FLOAT,               .size = 4,  .attr = 3};
+const c_type c_type_double              = {.kind = C_TYPE_DOUBLE,              .size = 8,  .attr = 4};
 //??? TODO: long double support ???
 //???const c_type c_type_long_double         = {.kind = C_TYPE_LONG_DOUBLE,         .size = 16, .attr = 4};
-const c_type c_type_long_double         = {.kind = C_TYPE_DOUBLE,              .size = 8,  .attr = 3};
-const c_type c_type_float_complex       = {.kind = C_TYPE_FLOAT_COMPLEX,       .size = 8,  .attr = 2};
-const c_type c_type_double_complex      = {.kind = C_TYPE_DOUBLE_COMPLEX,      .size = 16, .attr = 3};
-const c_type c_type_long_double_complex = {.kind = C_TYPE_LONG_DOUBLE_COMPLEX, .size = 32, .attr = 4};
+const c_type c_type_long_double         = {.kind = C_TYPE_DOUBLE,              .size = 8,  .attr = 4};
+const c_type c_type_float_complex       = {.kind = C_TYPE_FLOAT_COMPLEX,       .size = 8,  .attr = 3};
+const c_type c_type_double_complex      = {.kind = C_TYPE_DOUBLE_COMPLEX,      .size = 16, .attr = 5};
+const c_type c_type_long_double_complex = {.kind = C_TYPE_LONG_DOUBLE_COMPLEX, .size = 32, .attr = 5};
 
 const c_type c_type_string = {
 	.kind = C_TYPE_ARRAY,
 	.size = sizeof(void*),
-	.attr = 0 | /*C_ATTR_CONST | ???*/ C_ATTR_FLEXIBLE,
+	.attr = 1 | /*C_ATTR_CONST | ???*/ C_ATTR_FLEXIBLE,
 	.array.type = &c_type_char,
 	.array.length = 0
 };
@@ -46,7 +46,7 @@ const c_type c_type_string = {
 const c_type c_type_lstring = {
 	.kind = C_TYPE_ARRAY,
 	.size = sizeof(void*),
-	.attr = 2 | /*C_ATTR_CONST | ???*/ C_ATTR_FLEXIBLE,
+	.attr = 3 | /*C_ATTR_CONST | ???*/ C_ATTR_FLEXIBLE,
 	.array.type = &c_type_i32,
 	.array.length = 0
 };
@@ -54,7 +54,7 @@ const c_type c_type_lstring = {
 const c_type c_type_string_u16 = {
 	.kind = C_TYPE_ARRAY,
 	.size = sizeof(void*),
-	.attr = 1 | /*C_ATTR_CONST | ???*/ C_ATTR_FLEXIBLE,
+	.attr = 2 | /*C_ATTR_CONST | ???*/ C_ATTR_FLEXIBLE,
 	.array.type = &c_type_u16,
 	.array.length = 0
 };
@@ -62,7 +62,7 @@ const c_type c_type_string_u16 = {
 const c_type c_type_string_u32 = {
 	.kind = C_TYPE_ARRAY,
 	.size = sizeof(void*),
-	.attr = 2 | /*C_ATTR_CONST | ???*/ C_ATTR_FLEXIBLE,
+	.attr = 3 | /*C_ATTR_CONST | ???*/ C_ATTR_FLEXIBLE,
 	.array.type = &c_type_u32,
 	.array.length = 0
 };
@@ -90,13 +90,13 @@ static bool c_valid_alignment(c_value *val)
 static uint32_t c_align2attr(size_t align)
 {
 	if (align == 0) return 0;
-	return ir_ntzl(align);
+	return ir_ntzl(align) + 1;
 }
 
 static size_t c_attr2align(uint32_t attr)
 {
 	if ((attr & C_ATTR_ALIGN_MASK) == 0) return 0;
-	return 1ULL << (attr & C_ATTR_ALIGN_MASK);
+	return 1ULL << ((attr & C_ATTR_ALIGN_MASK) - 1);
 }
 
 static size_t c_aligned_type_size(const c_type *t)
