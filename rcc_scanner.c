@@ -723,12 +723,12 @@ string:
 			if (ch == '#') {
 				pos++;
 				ret = YY__HASH_HASH;
-			} else if ((yy_flags & YY_PREPROCESS) && (yy_text == yy_linepos || yy_at_start_of_line())) {
+			} else if (!(yy_flags & YY_NO_DIRECTIVE) && (yy_text == yy_linepos || yy_at_start_of_line())) {
 				yy_pos = (const char*)pos;
 				yy_len = yy_pos - yy_text;
 				pp_parse_directive();
 				pos = (const unsigned char*)yy_pos;
-				goto restart;
+				if (EXPECTED(!pp_subst_level)) goto restart; else goto restart_stream;
 			} else {
 				ret = YY__HASH;
 			}

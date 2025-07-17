@@ -327,13 +327,13 @@ YY_LAST = 0x7fffffff,
 } yy_sym;
 
 /* yy_flags bits */
-#define YY_PREPROCESS        (1<<0)
-#define YY_SKIP_WS           (1<<1)
-#define YY_SKIP_EOL          (1<<2)
-#define YY_SKIP_COMMENTS     (1<<3)
-#define YY_ACCEPT_PP_NUMBER  (1<<4)
-#define YY_ACCEPT_PUNCTUATOR (1<<5)
-#define YY_NO_MACRO          (1<<6)
+#define YY_SKIP_WS           (1<<0)
+#define YY_SKIP_EOL          (1<<1)
+#define YY_SKIP_COMMENTS     (1<<2)
+#define YY_ACCEPT_PP_NUMBER  (1<<3)
+#define YY_ACCEPT_PUNCTUATOR (1<<4)
+#define YY_NO_MACRO          (1<<5)
+#define YY_NO_DIRECTIVE      (1<<6)
 #define YY_ACCEPT_NOSUBST    (1<<7)
 
 #define PP_NO_LINEMARKERS    (1<<8)
@@ -342,12 +342,13 @@ YY_LAST = 0x7fffffff,
 #define PP_DUMP_MACRO_NAMES  (1<<11)
 #define PP_DUMP_INCLUDES     (1<<12)
 #define PP_EVAL_EXPRESSION   (1<<13)
+#define PP_PREPROCESS        (1<<14)
 
 #define YY_NO_WARNINGS       (1<<16)
 #define YY_LANG_GNU          (1<<17)
 
-#define YY_FLAGS_DEFAULT     (YY_PREPROCESS|YY_SKIP_WS|YY_SKIP_EOL|YY_SKIP_COMMENTS)
-#define YY_FLAGS_PP_DEFAULT  (YY_PREPROCESS|YY_SKIP_COMMENTS|YY_ACCEPT_PP_NUMBER|YY_ACCEPT_PUNCTUATOR)
+#define YY_FLAGS_DEFAULT     (YY_SKIP_WS|YY_SKIP_EOL|YY_SKIP_COMMENTS)
+#define YY_FLAGS_PP_DEFAULT  (PP_PREPROCESS|YY_SKIP_COMMENTS|YY_ACCEPT_PP_NUMBER|YY_ACCEPT_PUNCTUATOR)
 
 /* C scanner */
 yy_sym yy_next(void);

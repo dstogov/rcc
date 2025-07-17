@@ -1959,6 +1959,25 @@ static void pp_parse_pragma(void)
 		} else {
 			yy_warning_fmt("pragma pop_macro could not pop \"%s\"", yy_sym2str(name));
 		}
+	} else if (yy_flags & PP_PREPROCESS) {
+		pp_list tokens;
+
+		pp_list_init(&tokens);
+		pp_list_push(&tokens, YY_EOL);
+		pp_list_push(&tokens, YY__HASH);
+		pp_list_push(&tokens, YY_PRAGMA);
+		pp_list_push(&tokens, sym);
+		if (PP_HAS_VAL(sym)) pp_list_push_val(&tokens);
+		pp_list_push(&tokens, YY_EOF);
+
+		if (pp_subst_level >= PP_SUBST_STACK_SIZE) yy_error("too deep macro substitution level");
+		pp_subst_stack[pp_subst_level].macro = NULL;
+		pp_subst_stack[pp_subst_level].size = tokens.size;
+		pp_subst_stack[pp_subst_level].start = tokens.syms;
+		pp_subst_stack[pp_subst_level].tokens = tokens.syms;
+		pp_subst_stack[pp_subst_level].skip_eof = 1;
+		pp_subst_level++;
+		return;
 	} else if (sym == YY_PACK) {
 		sym = yy_next();
 		if (sym != YY__LPAREN) goto error;
@@ -2256,7 +2275,7 @@ void pp_parse_directive(void)
 	uint32_t save_flags = yy_flags;
 	bool start_of_include = pp_include_ifndef_state & YY_INCLUDE_START;
 
-	yy_flags &= ~(YY_PREPROCESS|YY_SKIP_EOL);
+	yy_flags &= ~YY_SKIP_EOL;
 	yy_flags |= YY_SKIP_WS | YY_NO_MACRO | YY_ACCEPT_PUNCTUATOR;
 	sym = yy_next();
 	while (1) {

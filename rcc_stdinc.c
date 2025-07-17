@@ -10,7 +10,7 @@
 #include "rcc.h"
 
 static const char c_boot[] =
-"#define __IRCC__                 1\n"
+"#define __RCC__                  1\n"
 "#define __STDC__                 1\n"
 "#define __STDC_HOSTED__          1\n"
 "#define __STDC_VERSION__         201112L\n"
