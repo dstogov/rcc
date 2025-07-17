@@ -30,6 +30,7 @@
 
 #define INCLUDE_STACK_SIZE   32
 #define IFDEF_STACK_SIZE     256
+#define PACK_STACK_SIZE      16
 
 /* pp_ifdef_stack bits */
 #define IFDEF_HAD_TRUE       (1<<0)
@@ -77,6 +78,10 @@ static ir_hashtab           *pp_include_hash = NULL;  /* map include file-name -
        pp_list               pp_list_cache[PP_LIST_CACHE_SIZE];
        uint32_t              pp_list_cache_idx = 0;
 
+       uint8_t               pp_pack = 0;
+static uint8_t               pp_pack_stack_pos = 0;
+static uint8_t               pp_pack_stack[PACK_STACK_SIZE];
+
 void pp_start(void)
 {
 	pp_recursion_level = 0;
@@ -88,6 +93,8 @@ void pp_start(void)
 	pp_include_ifndef_macro = 0;
 	pp_include_hash = NULL;
 	pp_subst_level = 0;
+	pp_pack = 0;
+	pp_pack_stack_pos = 0;
 }
 
 void pp_dtor(void)
@@ -1952,6 +1959,47 @@ static void pp_parse_pragma(void)
 		} else {
 			yy_warning_fmt("pragma pop_macro could not pop \"%s\"", yy_sym2str(name));
 		}
+	} else if (sym == YY_PACK) {
+		sym = yy_next();
+		if (sym != YY__LPAREN) goto error;
+		sym = yy_next();
+		if (sym == YY_OCTAL_NUMBER || sym == YY_DECIMAL_NUMBER || sym == YY_PP_NUMBER) {
+pack_set:
+			const char *s = yy_text;
+			const char *e = s + yy_len;
+			uint32_t n = 0;
+
+			while (s != e && *s >= '0' && *s <= '9') {
+				n = n * 10 + (*s - '0');
+				s++;
+			}
+            if (n < 1 || n > 16 || (n & (n - 1)) != 0) yy_error_fmt("invalid \"pragma pack(%d)\" value", n);
+            pp_pack = n;
+			sym = yy_next();
+		} else if (sym == YY_PUSH) {
+			if (pp_pack_stack_pos < PACK_STACK_SIZE) {
+				pp_pack_stack[pp_pack_stack_pos++] = pp_pack;
+			} else {
+				yy_error("too deep \"#pragma pack (push)\" level");
+			}
+			sym = yy_next();
+			if (sym == YY__COMMA) {
+				sym = yy_next();
+				if (sym != YY_OCTAL_NUMBER && sym != YY_DECIMAL_NUMBER && sym != YY_PP_NUMBER) goto error;
+				goto pack_set;
+			}
+		} else if (sym == YY_POP) {
+			if (pp_pack_stack_pos) {
+				pp_pack = pp_pack_stack[--pp_pack_stack_pos];
+			} else {
+				yy_warning("\"#pragma pack (pop)\" encountered without matching \"#pragma pack (push)\"");
+			}
+			sym = yy_next();
+		} else {
+			// default
+			pp_pack = 0;
+		}
+		if (sym != YY__RPAREN) goto error;
 	} else if (sym == YY_EOL || sym == YY_EOF) {
 		yy_warning("ignoring \"#pragma\"");
 		return;

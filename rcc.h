@@ -202,6 +202,9 @@
 	_("once",                          YY_ONCE)                        \
 	_("push_macro",                    YY_PUSH_MACRO)                  \
 	_("pop_macro",                     YY_POP_MACRO)                   \
+	_("pack",                          YY_PACK)                        \
+	_("push",                          YY_PUSH)                        \
+	_("pop",                           YY_POP)                         \
 	_("memcpy",                        YY_MEMCPY)                      \
 	_("memset",                        YY_MEMSET)                      \
 	_("main",                          YY_MAIN)                        \
@@ -959,6 +962,8 @@ extern uint32_t              pp_subst_level;
 
 extern uint32_t              pp_include_level;        /* include nesting level */
 extern uint32_t              pp_include_ifndef_state; /* state to catch includes protected by #ifndef macro */
+
+extern uint8_t               pp_pack;
 
 extern ir_arena             *c_arena;
 extern bool                  c_dead_code;
