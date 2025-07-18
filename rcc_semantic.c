@@ -1261,6 +1261,9 @@ void c_declare_struct_field(c_type *type, c_name name, c_dcl *field, c_value *bi
 	type->record.fields[i].name = name;
 	type->record.fields[i].type = field->type;
 	type->record.fields[i].offset = 0;
+	if (field->attr & C_ATTR_ALIGN_MASK) {
+		type->record.fields[i].offset = c_attr2align(field->attr);
+	}
 	if (!bits || !c_value_is_set(bits)) {
 		type->record.fields[i].bit_field = 0;
 	} else {
@@ -1272,16 +1275,8 @@ void c_declare_struct_field(c_type *type, c_name name, c_dcl *field, c_value *bi
 			yy_error_fmt("bit-field \"%s\" has invalid type", yy_sym2str(name));
 		}
 		if (bits->u.val.u64 > field->type->size * 8) yy_error_fmt("width of \"%s\" exceeds its type", yy_sym2str(name));
-		if (field->attr & C_ATTR_ALIGN_MASK) yy_error("invalid use of \"_Alignas\" for a bit-field");
 		if (bits->u.val.u64 < field->type->size * 8) {
 			IR_ASSERT(bits->u.val.u64 < 64);
-			if (field->type->size == 8 && bits->u.val.u32 <= 32) {
-				if (C_IS_TYPE_SIGNED(field->type)) {
-					type->record.fields[i].type = &c_type_i32;
-				} else {
-					type->record.fields[i].type = &c_type_u32;
-				}
-			}
 			type->record.fields[i].bit_field = C_BIT_FIELD(0, bits->u.val.u64);
 		} else {
 			type->record.fields[i].bit_field = 0;
@@ -1309,6 +1304,51 @@ static void c_do_check_nested_redeclarations(const c_type *type, const c_type *n
 	}
 }
 
+#ifdef _WIN32
+# define IS_GCC_STRUCT(attr) (((attr) & C_ATTR_GCC_STRUCT) == 1)
+#else
+# define IS_GCC_STRUCT(attr) (((attr) & C_ATTR_MS_STRUCT) == 0)
+#endif
+
+static size_t c_gcc_field_alignment(c_type *type, c_field *field, bool *packed)
+{
+	size_t align = c_attr2align(field->type->attr);
+	size_t a = field->offset;
+
+	if (!align) align = 1;
+	if (!C_IS_BIT_FIELD(field->bit_field)
+	 || C_BIT_FIELD_SIZE(field->bit_field) != 0) {
+		if ((type->attr & C_ATTR_PACKED) || (field->type->attr & C_ATTR_PACKED)) {
+			align = 1;
+			*packed = 1;
+		}
+		if (pp_pack) {
+			*packed = 1;
+			if (pp_pack < align) align = pp_pack;
+			if (pp_pack < a) a = 0;
+		}
+	}
+	if (a) align = a;
+	return align;
+}
+
+static size_t c_ms_field_alignment(c_type *type, c_field *field)
+{
+	size_t align = c_attr2align(field->type->attr);
+	size_t a = field->offset;
+
+	if (!align) align = 1;
+	if ((type->attr & C_ATTR_PACKED) || (field->type->attr & C_ATTR_PACKED)) {
+		align = 1;
+	}
+	if (pp_pack) {
+		if (pp_pack < align) align = pp_pack;
+		if (pp_pack < a) a = 0;
+	}
+	if (a) align = a;
+	return align;
+}
+
 void c_finish_struct_type(c_type *type, c_dcl *d)
 {
 	IR_ASSERT(type && (type->kind == C_TYPE_STRUCT || type->kind == C_TYPE_UNION));
@@ -1317,7 +1357,7 @@ void c_finish_struct_type(c_type *type, c_dcl *d)
 		type->attr &= ~C_ATTR_ALIGN_MASK;
 		type->attr |= (d->attr & C_ATTR_ALIGN_MASK);
 	}
-//TODO: check layout (packed, bit-field, gcc vs ms, :0) ???
+
 	if (type->record.num_fields) {
 		c_field *fields = ir_arena_alloc(&c_arena, sizeof(c_field) * type->record.num_fields);
 		int32_t i;
@@ -1328,27 +1368,37 @@ void c_finish_struct_type(c_type *type, c_dcl *d)
 		if (type->record.num_fields > C_ALLOCA_FIELDS) ir_mem_free(type->record.fields);
 		type->record.fields = fields;
 		if (type->kind == C_TYPE_UNION) {
-			for (i = 0; i < type->record.num_fields; i++) {
-				c_field *field = &type->record.fields[i];
-				if (!field->name
-				 && (field->type->kind == C_TYPE_UNION || field->type->kind == C_TYPE_STRUCT)) {
-					c_do_check_nested_redeclarations(type, field->type);
-				}
-				if (!C_IS_BIT_FIELD(field->bit_field)) {
+			if (IS_GCC_STRUCT(type->attr)) {
+				for (i = 0; i < type->record.num_fields; i++) {
+					c_field *field = &type->record.fields[i];
+					size_t field_size;
+					bool packed = 0;
+
+					if (!field->name
+					 && (field->type->kind == C_TYPE_UNION || field->type->kind == C_TYPE_STRUCT)) {
+						c_do_check_nested_redeclarations(type, field->type);
+					}
+
+					field_align = c_gcc_field_alignment(type, field, &packed);
+					field_size = C_IS_BIT_FIELD(field->bit_field) ?
+						(size_t)(C_BIT_FIELD_SIZE(field->bit_field) + 7) / 8 : field->type->size;
 					field->offset = 0;
-					field_align = c_attr2align(field->type->attr);
+					if (field_align > struct_align) struct_align = field_align;
+					if (field_size > size) size = field_size;
+				}
+			} else {
+				for (i = 0; i < type->record.num_fields; i++) {
+					c_field *field = &type->record.fields[i];
+
+					if (!field->name
+					 && (field->type->kind == C_TYPE_UNION || field->type->kind == C_TYPE_STRUCT)) {
+						c_do_check_nested_redeclarations(type, field->type);
+					}
+
+					field_align = c_ms_field_alignment(type, field);
+					field->offset = 0;
 					if (field_align > struct_align) struct_align = field_align;
 					if (field->type->size > size) size = field->type->size;
-				} else {
-					size_t field_size = C_BIT_FIELD_SIZE(field->bit_field);
-					field->offset = 0;
-					if (type->attr & C_ATTR_PACKED) {
-						field_size = (field_size + 7) / 8;
-						if (field_size > size) size = field_size;
-					} else {
-						field_size = ((field_size + 31) / 32) * 4;
-						if (field_size > size) size = field_size;
-					}
 				}
 			}
 			if (struct_align) {
@@ -1359,66 +1409,117 @@ void c_finish_struct_type(c_type *type, c_dcl *d)
 		} else {
 			uint32_t last_offset = 0;
 			uint32_t last_bit = 0;
-//			c_field *prev_bit_field = NULL;
 
-			for (i = 0; i < type->record.num_fields; i++) {
-				c_field *field = &type->record.fields[i];
+			if (IS_GCC_STRUCT(type->attr)) {
+				for (i = 0; i < type->record.num_fields; i++) {
+					c_field *field = &type->record.fields[i];
+					bool packed = 0;
 
-				if (!field->name
-				 && (field->type->kind == C_TYPE_UNION || field->type->kind == C_TYPE_STRUCT)) {
-					c_do_check_nested_redeclarations(type, field->type);
-				}
-				if (/*field->type->kind == C_TYPE_ARRAY
-				 && */(field->type->attr & C_ATTR_FLEXIBLE)) {
-					if (type->kind == C_TYPE_UNION) yy_error("flexible array member in union");
-					if (i != type->record.num_fields - 1) yy_error("flexible array member not at the end of struct");
-//					if (type->record.num_fields == 1) yy_error("flexible array member in a struct with no named members");
-					type->attr |= C_ATTR_FLEXIBLE;
-				}
-				field_align = c_attr2align(field->type->attr);
-				if (!field_align) field_align = 1;
-				if (!C_IS_BIT_FIELD(field->bit_field)) {
-					field->offset = field_align ? IR_ALIGNED_SIZE(size, field_align) : size;
-					size = field->offset + field->type->size;
-					last_bit = 0;
-				} else if (C_BIT_FIELD_SIZE(field->bit_field) == 0) {
-					size = IR_ALIGNED_SIZE(size, field_align);
-					last_bit = 0;
-				} else {
-					uint32_t bit_field_align = field_align * 8;
-					uint32_t bits = C_BIT_FIELD_SIZE(field->bit_field);
-					uint32_t first_bit;
+					if (!field->name
+					 && (field->type->kind == C_TYPE_UNION || field->type->kind == C_TYPE_STRUCT)) {
+						c_do_check_nested_redeclarations(type, field->type);
+					}
+					if (/*field->type->kind == C_TYPE_ARRAY
+					 && */(field->type->attr & C_ATTR_FLEXIBLE)) {
+						if (type->kind == C_TYPE_UNION) yy_error("flexible array member in union");
+						if (i != type->record.num_fields - 1) yy_error("flexible array member not at the end of struct");
+//						if (type->record.num_fields == 1) yy_error("flexible array member in a struct with no named members");
+						type->attr |= C_ATTR_FLEXIBLE;
+					}
 
-					if (last_bit) {
-						first_bit = last_bit;
-						while (first_bit > bit_field_align) {
-							first_bit -= bit_field_align;
-							last_offset += field_align;
-						}
-						if (first_bit + bits <= bit_field_align) {
-							field->bit_field = C_BIT_FIELD(first_bit, bits);
-						} else {
-							last_offset = IR_ALIGNED_SIZE(size, field_align);
-							first_bit = 0;
-						}
+					field_align = c_gcc_field_alignment(type, field, &packed);
+					if (!C_IS_BIT_FIELD(field->bit_field)) {
+						field->offset = IR_ALIGNED_SIZE(size, field_align);
+						last_offset = size = field->offset + field->type->size;
+						last_bit = 0;
 					} else {
-						uint32_t rem = size & (field_align - 1);
+						uint32_t bits = C_BIT_FIELD_SIZE(field->bit_field);
+						uint32_t first_bit = 0;
 
-						if (rem * 8 + bits <= bit_field_align) {
-							last_offset = size - rem;
-							first_bit = rem * 8;
-							field->bit_field = C_BIT_FIELD(first_bit, bits);
-						} else {
+						if (field->type->size == 8 && bits <= 32) {
+							field->type = (C_IS_TYPE_SIGNED(field->type)) ? &c_type_i32 : &c_type_u32;
+						}
+						if (bits == 0 || field->offset) {
 							last_offset = IR_ALIGNED_SIZE(size, field_align);
-							first_bit = 0;
+							last_bit = bits;
+							if (bits == 0
+							 && ((type->attr & C_ATTR_PACKED) || pp_pack)) {
+								/* prevent modification of the struct alignment */
+								field_align = 1;
+							}
+						} else {
+							if (!packed
+							 && (last_offset * 8 + last_bit) / (field_align * 8)
+							  != (last_offset * 8 + last_bit + bits - 1) / (field_align * 8)) {
+								last_offset = IR_ALIGNED_SIZE(size, field_align);
+								last_bit = bits;
+							} else {
+								first_bit = last_bit;
+								while (first_bit > field_align * 8) {
+									first_bit -= field_align * 8;
+									last_offset += field_align;
+								}
+								field->bit_field = C_BIT_FIELD(first_bit, bits);
+								last_bit = first_bit + bits;
+							}
+						}
+						field->offset = last_offset;
+						size = last_offset + ((last_bit) + 7) / 8;
+						if (bits
+						 && (field->offset * 8 + first_bit) / (field->type->size * 8)
+						  != (field->offset * 8 + last_bit - 1) / (field->type->size * 8)) {
+							// TODO: try to use a bigger aligned type ???
+							C_SET_BIT_FIELD_PACKED(field->bit_field);
 						}
 					}
-					field->offset = last_offset;
-					last_bit = first_bit + bits;
-					size = last_offset + ((last_bit) + 7) / 8;
+					if (field_align > struct_align) struct_align = field_align;
 				}
-				if (field_align > struct_align) struct_align = field_align;
+			} else {
+				size_t prev_size = (size_t)-1;
+
+				for (i = 0; i < type->record.num_fields; i++) {
+					c_field *field = &type->record.fields[i];
+
+					if (!field->name
+					 && (field->type->kind == C_TYPE_UNION || field->type->kind == C_TYPE_STRUCT)) {
+						c_do_check_nested_redeclarations(type, field->type);
+					}
+					if (/*field->type->kind == C_TYPE_ARRAY
+					 && */(field->type->attr & C_ATTR_FLEXIBLE)) {
+						if (type->kind == C_TYPE_UNION) yy_error("flexible array member in union");
+						if (i != type->record.num_fields - 1) yy_error("flexible array member not at the end of struct");
+//						if (type->record.num_fields == 1) yy_error("flexible array member in a struct with no named members");
+						type->attr |= C_ATTR_FLEXIBLE;
+					}
+
+					field_align = c_ms_field_alignment(type, field);
+					if (!C_IS_BIT_FIELD(field->bit_field)) {
+						field->offset = IR_ALIGNED_SIZE(size, field_align);
+						last_offset = size = field->offset + field->type->size;
+						last_bit = 0;
+					} else {
+						uint32_t bits = C_BIT_FIELD_SIZE(field->bit_field);
+
+						if (last_bit + bits > field->type->size * 8
+						 || (bits && (field->type->size != prev_size))) {
+							last_offset = IR_ALIGNED_SIZE(size, field_align);
+							size = last_offset + field->type->size;
+							last_bit = bits;
+						} else {
+							field->bit_field = C_BIT_FIELD(last_bit, bits);
+							last_bit += bits;
+						}
+						if (!bits) field_align = 1;
+						field->offset = last_offset;
+						prev_size = bits ? field->type->size : (size_t)-1;
+						if (field->type->size == 8 && bits <= 32) {
+							field->type = (C_IS_TYPE_SIGNED(field->type)) ? &c_type_i32 : &c_type_u32;
+						}
+					}
+					if (field_align > struct_align) struct_align = field_align;
+				}
 			}
+
 			if (struct_align) {
 				type->attr &= ~C_ATTR_ALIGN_MASK;
 				type->attr |= c_align2attr(struct_align);
@@ -1965,7 +2066,6 @@ static void c_do_load_bit_field(c_value *val, uint32_t first_bit, uint32_t bits)
 		IR_ASSERT(first_bit + bits <= 64);
 		type = IR_IS_TYPE_SIGNED(val->u.type) ? IR_I64 : IR_U64;
 	}
-	IR_ASSERT(ir_type_size[val->u.type] >= ir_type_size[type]);
 
 	ref = ir_LOAD(type, val->u.ref);
 	if (IR_IS_TYPE_SIGNED(val->u.type) && val->type->kind != C_TYPE_ENUM) {
@@ -2005,8 +2105,11 @@ static void c_do_load_bit_field(c_value *val, uint32_t first_bit, uint32_t bits)
 	}
 
 	if (val->u.type != type) {
-		IR_ASSERT(ir_type_size[val->u.type] == ir_type_size[type]);
-		ref = ir_BITCAST(val->u.type, ref);
+		if (ir_type_size[val->u.type] == ir_type_size[type]) {
+			ref = ir_BITCAST(val->u.type, ref);
+		} else {
+			ref = ir_TRUNC(val->u.type, ref);
+		}
 	}
 
 	val->u.ref = ref;
@@ -2029,6 +2132,68 @@ static void c_do_load_bit_field(c_value *val, uint32_t first_bit, uint32_t bits)
 #endif
 }
 
+static void c_do_load_bit_field_packed(c_value *val, uint32_t first_bit, uint32_t bits)
+{
+	ir_type type = val->u.type;
+	ir_ref addr = val->u.ref;
+	ir_val shift;
+	ir_ref ret, ref;
+	uint8_t mask;
+	uint32_t orig_bits = bits;
+
+	if (ir_type_size[type] > 1) {
+		ret = ir_ZEXT(type, ir_LOAD_U8(addr));
+	} else {
+		ret = ir_LOAD(type, addr);
+	}
+	shift.u64 = first_bit;
+	if (first_bit) {
+		ret = ir_SHR(type, ret, ir_const(active_ctx, shift, type));
+		bits -= 8 - first_bit;
+		shift.u64 = -(int)first_bit;
+	} else {
+		bits -= 8;
+	}
+
+	while (bits >= 8) {
+		addr = ir_ADD_A(addr, ir_const_size_t(active_ctx, 1));
+		if (ir_type_size[type] > 1) {
+			ref = ir_ZEXT(type, ir_LOAD_U8(addr));
+		} else {
+			ref = ir_LOAD(type, addr);
+		}
+		shift.u64 += 8;
+		ret = ir_OR(type, ret, ir_SHL(type, ref, ir_const(active_ctx, shift, type)));
+		bits -= 8;
+	}
+
+	if (bits) {
+		addr = ir_ADD_A(addr, ir_const_size_t(active_ctx, 1));
+		mask = ((1UL<<bits)-1);
+		if (ir_type_size[type] > 1) {
+			ref = ir_ZEXT(type, ir_AND_U8(ir_LOAD_U8(addr), ir_const_u8(active_ctx, mask)));
+		} else {
+			ir_val v;
+			v.u64 = mask;
+			ref = ir_AND(type, ir_LOAD(type, addr), ir_const(active_ctx, v, type));
+		}
+		shift.u64 += 8;
+		ret = ir_OR(type, ret, ir_SHL(type, ref, ir_const(active_ctx, shift, type)));
+	}
+
+	if (IR_IS_TYPE_SIGNED(val->u.type) && val->type->kind != C_TYPE_ENUM) {
+		/* sign extend */
+		shift.u64 = ir_type_size[val->u.type] * 8 - orig_bits;
+		if (shift.u64) {
+			ir_ref c = ir_const(active_ctx, shift, val->u.type);
+			ret = ir_SHL(val->u.type, ret, c);
+			ret = ir_SAR(val->u.type, ret, c);
+		}
+	}
+
+	val->u.ref = ret;
+}
+
 void c_value_rval(c_value *val)
 {
 	if (c_value_is_lval(val)) {
@@ -2038,8 +2203,10 @@ void c_value_rval(c_value *val)
 		} else if (val->type->kind != C_TYPE_STRUCT && val->type->kind != C_TYPE_UNION) {
 			if (!C_IS_BIT_FIELD(val->u.proto)) {
 				val->u.ref = ir_LOAD(val->u.type, val->u.ref);
-			} else {
+			} else if (!C_IS_BIT_FIELD_PACKED(val->u.proto)) {
 				c_do_load_bit_field(val, C_BIT_FIELD_START(val->u.proto), C_BIT_FIELD_SIZE(val->u.proto));
+			} else {
+				c_do_load_bit_field_packed(val, C_BIT_FIELD_START(val->u.proto), C_BIT_FIELD_SIZE(val->u.proto));
 			}
 		}
 		val->u.op &= ~(C_VAL_LVAL|C_VAL_VAR);
@@ -2356,19 +2523,22 @@ static ir_ref c_do_store_bit_field(ir_ref addr, uint32_t first_bit, uint32_t bit
 		IR_ASSERT(first_bit + bits <= 64);
 		type = IR_IS_TYPE_SIGNED(val->u.type) ? IR_I64 : IR_U64;
 	}
-	IR_ASSERT(ir_type_size[type] <= ir_type_size[val->u.type]);
 
 	ret = ref = c_value_ref(val);
 	if (val->u.type != type) {
 		if (ir_type_size[type] < ir_type_size[val->u.type]) {
 			ref = ir_TRUNC(type, ref);
-		} else {
+		} else if (ir_type_size[type] == ir_type_size[val->u.type]) {
 			ref = ir_BITCAST(type, ref);
+		} else {
+			ref = ir_ZEXT(type, ref);
 		}
 	}
+
 	v.u64 = (1UL<<bits)-1;
 	ref = ir_AND(type, ref, ir_const(active_ctx, v, type));
 	if (val->u.type == type) ret = ref;
+
 	if (first_bit) {
 		v.u64 = first_bit;
 		ref = ir_SHL(type, ref, ir_const(active_ctx, v, type));
@@ -2397,6 +2567,70 @@ static ir_ref c_do_store_bit_field(ir_ref addr, uint32_t first_bit, uint32_t bit
 	return ret;
 }
 
+static ir_ref c_do_store_bit_field_packed(ir_ref addr, uint32_t first_bit, uint32_t bits, c_value *val)
+{
+	ir_type type = (ir_type_size[val->u.type] != 1) ? IR_U8 : val->u.type;
+	ir_val shift, mask;
+	ir_ref ret, ref;
+
+	ret = ref = c_value_ref(val);
+	shift.u64 = first_bit;
+	if (first_bit) {
+		mask.u64 = ~(((1UL<<(8-first_bit))-1)<<first_bit);
+		ref = ir_SHL(val->u.type, ret, ir_const(active_ctx, shift, val->u.type));
+		if (ir_type_size[val->u.type] != 1) {
+			ref = ir_TRUNC_U8(ref);
+		}
+		ir_STORE(
+			addr,
+			ir_OR(type,
+				ir_AND(type, ir_LOAD(type, addr), ir_const(active_ctx, mask, type)),
+				ref));
+		shift.i64 = -(int)first_bit;
+		bits -= 8 - first_bit;
+	} else {
+		if (ir_type_size[val->u.type] != 1) {
+			ref = ir_TRUNC_U8(ret);
+		}
+		ir_STORE(addr, ref);
+		bits -= 8;
+	}
+
+	while (bits >= 8) {
+		addr = ir_ADD_A(addr, ir_const_size_t(active_ctx, 1));
+		shift.i64 += 8;
+		ref = ir_SHR(val->u.type, ret, ir_const(active_ctx, shift, val->u.type));
+		if (ir_type_size[val->u.type] != 1) {
+			ref = ir_TRUNC_U8(ref);
+		}
+		ir_STORE(addr, ref);
+		bits -= 8;
+	}
+
+	if (bits) {
+		addr = ir_ADD_A(addr, ir_const_size_t(active_ctx, 1));
+		shift.i64 += 8;
+		ref = ir_SHR(val->u.type, ret, ir_const(active_ctx, shift, val->u.type));
+		if (ir_type_size[val->u.type] != 1) {
+			ref = ir_TRUNC_U8(ref);
+		}
+
+		mask.u64 = (1UL<<bits)-1;
+		ref = ir_AND(type, ref, ir_const(active_ctx, mask, type));
+
+		mask.u64 = ~((1UL<<bits)-1);
+		ir_STORE(
+			addr,
+				ir_OR(type,
+				ir_AND(type,
+					ir_LOAD(type, addr),
+					ir_const(active_ctx, mask, type)),
+				ref));
+	}
+
+	return ret;
+}
+
 static ir_ref c_do_store(c_value *addr, c_value *val)
 {
 	ir_ref ref;
@@ -2409,8 +2643,11 @@ static ir_ref c_do_store(c_value *addr, c_value *val)
 			ir_STORE(addr->u.ref, ref);
 		}
 		return ref;
-	} else {
+	} else if (!C_IS_BIT_FIELD_PACKED(addr->u.proto)) {
 		return c_do_store_bit_field(addr->u.ref,
+			C_BIT_FIELD_START(addr->u.proto), C_BIT_FIELD_SIZE(addr->u.proto), val);
+	} else {
+		return c_do_store_bit_field_packed(addr->u.ref,
 			C_BIT_FIELD_START(addr->u.proto), C_BIT_FIELD_SIZE(addr->u.proto), val);
 	}
 }
@@ -5437,8 +5674,7 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 	size_t last_array_offset = 0;
 	size_t offset;
 	uint32_t i;
-	bool is_bitfield = 0;
-	uint32_t first_bit = 0, bits = 0;
+	uint16_t bit_field = 0;
 
 	while (1) {
 		if (type == val->type) {
@@ -5515,12 +5751,7 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 //				offset += t->record.fields[init->stack[i].pos].offset;
 				c_field *f = &t->record.fields[init->stack[i].pos];
 				offset += f->offset;
-				if (C_IS_BIT_FIELD(f->bit_field)) {
-					IR_ASSERT(i == init->level);
-					is_bitfield = 1;
-					first_bit = C_BIT_FIELD_START(f->bit_field);
-					bits = C_BIT_FIELD_SIZE(f->bit_field);
-				}
+				bit_field = f->bit_field;
 			} else {
 				IR_ASSERT(i == init->level);
 			}
@@ -5624,31 +5855,43 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 			}
 		}
 	} else {
-		IR_ASSERT(offset + type->size <= obj->value.type->size /*???|| is_bitfield*/);
+		IR_ASSERT(offset + type->size <= obj->value.type->size || C_IS_BIT_FIELD(bit_field));
 	}
 	if (c_value_is_const(&obj->value) || (c_value_is_ref(&obj->value) && IR_IS_CONST_REF(obj->value.u.ref))) {
 		if (!c_value_is_const(val) && !c_do_init_fix_reloc(val)) yy_error("initializer element is not constant");
 		IR_ASSERT(obj->value.u.type == IR_ADDR && obj->value.u.val.ptr);
-		if (!is_bitfield) {
+		if (!C_IS_BIT_FIELD(bit_field)) {
 			c_do_init((char*)obj->value.u.val.ptr + offset, val);
 		} else {
-			uint64_t mask = (((1UL<<bits)-1)<<first_bit);
-			uint64_t data;
+			uint32_t first_bit = C_BIT_FIELD_START(bit_field);
+			uint32_t bits = C_BIT_FIELD_SIZE(bit_field);
+			uint64_t mask;
+			uint64_t data[2];
 			uint64_t bits_val = val->u.val.u64;
 
-			if (first_bit) {
-				bits_val <<= first_bit;
-			}
-			memcpy(&data, (char*)obj->value.u.val.ptr + offset, (first_bit + bits + 7) / 8);
+			memcpy(data, (char*)obj->value.u.val.ptr + offset, (first_bit + bits + 7) / 8);
 			// TODO: support for big endian byte order ???
-			data &= ~mask;
-			data |= bits_val;
-			memcpy((char*)obj->value.u.val.ptr + offset, &data, (first_bit + bits + 7) / 8);
+			if (first_bit + bits <= 64) {
+				if (first_bit) {
+					bits_val <<= first_bit;
+				}
+				mask = (((1UL<<bits)-1)<<first_bit);
+				data[0] &= ~mask;
+				data[0] |= bits_val & mask;
+			} else {
+				mask = (((1UL<<(64-first_bit))-1)<<first_bit);
+				data[0] &= ~mask;
+				data[0] |= (bits_val << first_bit) & mask; ((1UL<<(64-first_bit))-1);
+				mask = (1UL<<(bits-64+first_bit))-1;
+				data[1] &= ~mask;
+				data[1] |= (bits_val >> (64 - first_bit)) & mask;
+			}
+			memcpy((char*)obj->value.u.val.ptr + offset, data, (first_bit + bits + 7) / 8);
 		}
 	} else {
 		IR_ASSERT(obj->value.u.ref > 0);
 		if (type->kind == C_TYPE_STRUCT || type->kind == C_TYPE_UNION) {
-			IR_ASSERT(!is_bitfield);
+			IR_ASSERT(!C_IS_BIT_FIELD(bit_field));
 			IR_ASSERT(active_ctx->ir_base[obj->value.u.ref].op == IR_ALLOCA);
 			if (type->size) {
 				ir_memcpy(active_ctx,
@@ -5657,18 +5900,22 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 					ir_const_size_t(active_ctx, type->size));
 			}
 		} else if (active_ctx->ir_base[obj->value.u.ref].op == IR_VAR) {
-			IR_ASSERT(!is_bitfield);
+			IR_ASSERT(!C_IS_BIT_FIELD(bit_field));
 			ir_VSTORE(obj->value.u.ref, c_value_ref(val));
 		} else {
 			IR_ASSERT(active_ctx->ir_base[obj->value.u.ref].op == IR_ALLOCA);
-			if (!is_bitfield) {
+			if (!C_IS_BIT_FIELD(bit_field)) {
 				ir_STORE(
 					ir_ADD_A(obj->value.u.ref, ir_const_size_t(active_ctx, offset)),
 					c_value_ref(val));
-			} else {
+			} else if (!C_IS_BIT_FIELD_PACKED(bit_field)) {
 				c_do_store_bit_field(
 					ir_ADD_A(obj->value.u.ref, ir_const_size_t(active_ctx, offset)),
-					first_bit, bits, val);
+					C_BIT_FIELD_START(bit_field), C_BIT_FIELD_SIZE(bit_field), val);
+			} else {
+				c_do_store_bit_field_packed(
+					ir_ADD_A(obj->value.u.ref, ir_const_size_t(active_ctx, offset)),
+					C_BIT_FIELD_START(bit_field), C_BIT_FIELD_SIZE(bit_field), val);
 			}
 		}
 	}

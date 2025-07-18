@@ -1,4 +1,3 @@
-- struct layout variations (MS, pack)
 - volatile
 - struct/union arguments and return value
 - variable length arrays

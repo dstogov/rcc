@@ -689,6 +689,9 @@ struct _c_tag {
 #define C_BIT_FIELD_START(bit_field)  (((bit_field) >> 6) & 0x3f)
 #define C_BIT_FIELD_SIZE(bit_field)   ((bit_field) & 0x3f)
 
+#define C_IS_BIT_FIELD_PACKED(bit_field)  ((bit_field) & (1 << 13))
+#define C_SET_BIT_FIELD_PACKED(bit_field) do {(bit_field) |= (1 << 13);} while (0)
+
 struct _c_field {
 	c_name                 name;
 	uint16_t               bit_field; /* 1-bit - is bit-field, 6-bits - first bit, 6-bits - bit lenght */
