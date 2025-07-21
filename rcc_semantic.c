@@ -5881,7 +5881,7 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 			} else {
 				mask = (((1UL<<(64-first_bit))-1)<<first_bit);
 				data[0] &= ~mask;
-				data[0] |= (bits_val << first_bit) & mask; ((1UL<<(64-first_bit))-1);
+				data[0] |= (bits_val << first_bit) & mask;
 				mask = (1UL<<(bits-64+first_bit))-1;
 				data[1] &= ~mask;
 				data[1] |= (bits_val >> (64 - first_bit)) & mask;
