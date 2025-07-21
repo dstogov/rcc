@@ -663,6 +663,10 @@ static void pp_macro_subst_args(pp_macro *macro, pp_arg *args, pp_list *replacem
 					}
 				}
 
+				if (*tokens == YY_EOF) {
+					/* empty arg - insert placemarker */
+					pp_list_push(replacement, YY_PP_PLACE_MARKER);
+				} else
 				while (1) {
 					sym = *tokens++;
 					if (sym == YY_EOF) break;
@@ -727,10 +731,6 @@ static void pp_macro_read_args(pp_macro *macro, yy_sym name, pp_arg *args, pp_li
 		} else if (sym == YY__COMMA && level == 0) {
 			num_args++;
 			if (num_args < macro->num_args) {
-				if (list->len == (uint32_t)(num_args ? args[num_args - 1].num_args : 0)) {
-					/* empty arg - insert placemarker */
-					pp_list_push(list, YY_PP_PLACE_MARKER);
-				}
 				pp_list_push(list, YY_EOF);
 				skip_ws = 1;
 				args[num_args].num_args = list->len;
@@ -770,10 +770,6 @@ static void pp_macro_read_args(pp_macro *macro, yy_sym name, pp_arg *args, pp_li
 		}
 	}
 
-	if (num_args < macro->num_args && list->len == (uint32_t)(num_args ? args[num_args - 1].num_args : 0)) {
-		/* empty arg - insert placemarker */
-		pp_list_push(list, YY_PP_PLACE_MARKER);
-	}
 	pp_list_push(list, YY_EOF);
 
 	for (num_args = 0; num_args <  macro->num_args; num_args++) {

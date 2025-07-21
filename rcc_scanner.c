@@ -162,10 +162,10 @@ restart_stream:
 		pp_subst_stream *stream = &pp_subst_stack[pp_subst_level - 1];
 
 		ret = *stream->tokens++;
-		if ((ret == YY_WS || ret == YY_PP_PLACE_MARKER) && (yy_flags & YY_SKIP_WS)) {
+		if ((ret == YY_WS && (yy_flags & YY_SKIP_WS)) || ret == YY_PP_PLACE_MARKER) {
 			do {
 				ret = *stream->tokens++;
-			} while (ret == YY_WS || ret == YY_PP_PLACE_MARKER);
+			} while ((ret == YY_WS && (yy_flags & YY_SKIP_WS)) || ret == YY_PP_PLACE_MARKER);
 		}
 		if (ret == YY_EOF) {
 			if (!stream->skip_eof) {
