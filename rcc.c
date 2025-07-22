@@ -22,6 +22,8 @@
 
 #include "rcc.h"
 
+#define RCC_DELAY_CODE_GEN 1
+
 #undef _ir_CTX
 #define _ir_CTX active_ctx
 
@@ -240,14 +242,26 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym)
 	 && name != YY_MAIN
 	 && !c_value_is_const(func)
 	 && rcc_may_inline(func, ctx)) {
+		sym->value.u.op |= C_VAL_INLINE;
+		if (!RCC_DELAY_CODE_GEN) {
+			goto delay_codegen;
+		}
+	}
+
+
+	if (!RCC_DELAY_CODE_GEN) {
+		rcc_ir_codegen(name, ctx, sym);
+		ir_free(ctx);
+	} else {
+		if (name == YY_MAIN) {
+			if (!ir_list_capasity(&c_codegen_list)) ir_list_init(&c_codegen_list, 32);
+			ir_list_push(&c_codegen_list, name);
+		}
+delay_codegen:
 		ir_ctx *copy = ir_mem_malloc(sizeof(ir_ctx));
 		memcpy(copy, ctx, sizeof(ir_ctx));
 		sym->ctx = copy;
-		return;
 	}
-
-	rcc_ir_codegen(name, ctx, sym);
-	ir_free(ctx);
 }
 
 void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, uint32_t flags)
@@ -269,6 +283,19 @@ void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, uint32_t fl
 			IR_ASSERT(sym->value.u.type == IR_ADDR && sym->value.u.val.ptr);
 			return sym->value.u.val.ptr;
 		}
+
+		if (!sym->ctx) {
+			/* pass */
+		} else if (protected) {
+			/* Generate code early to avoid linking through thunk */
+			rcc_ir_codegen(id, sym->ctx, sym);
+			if (c_value_is_const(&sym->value)) {
+				return sym->value.u.val.ptr;
+			}
+		} else if (flags & IR_RESOLVE_SYM_ADD_THUNK) {
+			goto add_thunk;
+		}
+
 		if (sym->linkage == C_LINK_EXTERNAL) {
 			void *addr = ir_resolve_sym_name(name);
 			if (addr) {
@@ -277,18 +304,14 @@ void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, uint32_t fl
 				return addr;
 			}
 		}
-		if (sym->ctx && protected) {
-			/* Generate code early to avoid linking through thunk */
-			rcc_ir_codegen(id, sym->ctx, sym);
-			if (c_value_is_const(&sym->value)) {
-				return sym->value.u.val.ptr;
-			}
-		} else if (flags & IR_RESOLVE_SYM_ADD_THUNK) {
+
+		if (flags & IR_RESOLVE_SYM_ADD_THUNK) {
 			/* Undefined declaration */
 			// TODO: Add thunk or relocation ???
 			size_t size;
 			void *addr;
 
+add_thunk:
 			if (protected) {
 				ir_mem_unprotect(c_code_buffer.start, (char*)c_code_buffer.end - (char*)c_code_buffer.start);
 			}
@@ -304,8 +327,8 @@ void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, uint32_t fl
 			sym->value.u.type = IR_ADDR;
 			sym->value.u.val.ptr = addr;
 			ir_disasm_add_symbol(name, (uint64_t)(uintptr_t)addr, size); //???
-			if (sym->ctx) {
-				if (!ir_list_len(&c_codegen_list)) ir_list_init(&c_codegen_list, 32);
+			if (RCC_DELAY_CODE_GEN || sym->ctx) {
+				if (!ir_list_capasity(&c_codegen_list)) ir_list_init(&c_codegen_list, 32);
 				ir_list_push(&c_codegen_list, id);
 			}
 			return addr;
@@ -528,18 +551,47 @@ static int rcc_read(const char *file_name)
 
 static void rcc_dtor(void)
 {
-	if (c_opt_flags & C_OPT_INLINE) {
-		uint32_t i;
-		yy_hash_bucket *p;
+	uint32_t i;
+	yy_hash_bucket *p;
 
-		for (i = YY_LAST_KEYWORD + 1, p = yy_hash.data + i; i < yy_hash.count; p++, i++) {
-			if (p->sym && p->sym->ctx) {
-				ir_free(p->sym->ctx);
-				ir_mem_free(p->sym->ctx);
-			}
+	for (i = YY_LAST_KEYWORD + 1, p = yy_hash.data + i; i < yy_hash.count; p++, i++) {
+		if (p->sym && p->sym->ctx) {
+			ir_free(p->sym->ctx);
+			ir_mem_free(p->sym->ctx);
 		}
 	}
 	pp_dtor();
+}
+
+static void rcc_fix_flexible_data(void)
+{
+	uint32_t i;
+	yy_hash_bucket *p;
+
+	for (i = YY_LAST_KEYWORD + 1, p = yy_hash.data + i; i < yy_hash.count; p++, i++) {
+		if (p->sym
+		 && p->sym->kind == C_SYM_VAR
+		 && p->sym->value.type
+		 && (p->sym->value.type->attr & C_ATTR_FLEXIBLE)) {
+			c_type *type;
+
+			/* Convert "flexible" array to regular */
+			IR_ASSERT(p->sym->value.type->kind == C_TYPE_ARRAY);
+			type = ir_arena_alloc(&c_arena, sizeof(c_type));
+            *type = *p->sym->value.type;
+			type->size = type->array.type->size;
+			type->array.length = 1;
+			type->attr &= ~C_ATTR_FLEXIBLE;
+			p->sym->value.type = type;
+
+			p->sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
+			p->sym->value.u.val.ptr = c_linker_allocate_data(type->size);
+			ir_disasm_add_symbol(p->str, (uintptr_t)p->sym->value.u.val.ptr, type->size); //???
+			p->sym->is_implemented = 1;
+
+			//yy_warning_fmt("array \"%s\" assumed to have one element", p->str); // error position ???
+		}
+	}
 }
 
 static int rcc_preprocess(const char *file_name, FILE *f)
@@ -559,12 +611,14 @@ static int rcc_compile(const char *file_name)
 	}
 	memset(&c_codegen_list, 0, sizeof(ir_list));
 	rcc_parse();
-	if (ir_list_len(&c_codegen_list)) {
+	rcc_fix_flexible_data();
+	if (ir_list_capasity(&c_codegen_list)) {
 		do {
 			c_name name = ir_list_pop(&c_codegen_list);
 			c_sym *sym = yy_hash.data[name].sym;
-			IR_ASSERT(sym && sym->ctx);
-			rcc_ir_codegen(name, sym->ctx, sym);
+			if (sym && sym->ctx) {
+				rcc_ir_codegen(name, sym->ctx, sym);
+			}
 		} while (ir_list_len(&c_codegen_list));
 		ir_list_free(&c_codegen_list);
 	}

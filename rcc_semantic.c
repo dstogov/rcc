@@ -326,7 +326,7 @@ void c_resolve_sym_name(c_value *res, c_name name, yy_sym sym)
 					/* recursive function - disable inlining */
 					c_type *type = (c_type*)s->value.type;
 					type->attr |= C_ATTR_NOINLINE;
-				} else if (s->ctx) {
+				} else if (s->value.u.op & C_VAL_INLINE) {
 					res->u.op |= C_VAL_INLINE;
 					res->u.val.ptr = s->ctx;
 				}
@@ -629,7 +629,8 @@ static void c_validate_redeclaration(c_name name, c_dcl *d, c_sym *sym)
 		}
 		if (sym->linkage == C_LINK_EXTERNAL
 		 && !c_value_is_const(&sym->value)
-		 && !(d->flags & C_DCL_EXTERN)) {
+		 && !(d->flags & C_DCL_EXTERN)
+		 && ((d->flags & C_DCL_DEFINITION) || !(d->type->attr & C_ATTR_FLEXIBLE))) {
 			void *addr;
 			size_t size = d->type->size;
 
@@ -843,7 +844,8 @@ c_sym *c_declare(c_name name, c_dcl *d)
 				yy_warning_fmt("\%s\" initialized and declared \"extern\"", yy_sym2str(name));
 				d->flags &= ~C_DCL_EXTERN;
 			}
-			if (!(d->flags & C_DCL_EXTERN)) {
+			if (!(d->flags & C_DCL_EXTERN)
+			 && ((d->flags & C_DCL_DEFINITION) || !(d->type->attr & C_ATTR_FLEXIBLE))) {
 				void *addr = c_linker_allocate_data(d->type->size);
 
 				sym->is_implemented = (d->flags & C_DCL_DEFINITION) != 0;

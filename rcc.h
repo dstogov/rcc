@@ -676,7 +676,7 @@ struct _c_sym {
 	bool                   has_thunk: 1;       /* TODO: replace thunks with relocs ??? */
 	c_scope               *scope;
 	c_value                value;              /* type is part of the value */
-	ir_ctx                *ctx;                /* function IR (used for function inlining) */
+	ir_ctx                *ctx;                /* function IR (used for delayed code-gen or function inlining) */
 };
 
 struct _c_tag {
