@@ -787,11 +787,16 @@ c_sym *c_declare(c_name name, c_dcl *d)
 		pp_list_push_ptr(&scope->list, (void*)(((uintptr_t)sym) | C_POP_SYM));
 	}
 
-	if (d->type->flags & C_TYPE_INCOMPLETE) { /* || C_ATTR_FLEXIBLE??? initialized*/
-		if (!(d->flags & (C_DCL_TYPEDEF|C_DCL_EXTERN)) && !c_fix_incomplete_type(d->type)) {
-			yy_error_fmt("storage size of \"%s\" isn't known", yy_sym2str(name));
-			return NULL;
-		}
+	if (((d->type->flags & C_TYPE_INCOMPLETE)
+	  && !(d->flags & (C_DCL_TYPEDEF|C_DCL_EXTERN))
+	  && !c_fix_incomplete_type(d->type))
+	 || ((d->type->attr & C_ATTR_FLEXIBLE)
+	  && !(d->flags & (C_DCL_TYPEDEF|C_DCL_EXTERN|C_DCL_DEFINITION))
+	  && scope)
+	 || ((d->type->kind == C_TYPE_VOID)
+	  && !(d->flags & C_DCL_TYPEDEF))) {
+		yy_error_fmt("storage size of \"%s\" isn't known", yy_sym2str(name));
+		return NULL;
 	}
 
 	sym = ir_arena_alloc(&c_arena, sizeof(c_sym));
@@ -828,7 +833,6 @@ c_sym *c_declare(c_name name, c_dcl *d)
 				yy_error_fmt("function-scope \"%s\" declared \"_Thread_local\"", yy_sym2str(name));
 			}
 		}
-		if (d->type->kind == C_TYPE_VOID) yy_error_fmt("storage size of \"%s\" isn't known", yy_sym2str(name));
 		IR_ASSERT((d->flags & (C_DCL_STORAGE_CLASS-(C_DCL_EXTERN|C_DCL_STATIC|C_DCL_THREAD_LOCAL|C_DCL_AUTO|C_DCL_REGISTER))) == 0);
 		sym->kind = C_SYM_VAR;
 		if ((d->flags & (C_DCL_STATIC|C_DCL_EXTERN)) || !scope) {
@@ -1424,7 +1428,6 @@ void c_finish_struct_type(c_type *type, c_dcl *d)
 						if (type->kind == C_TYPE_UNION) yy_error("flexible array member in union");
 						if (i != type->record.num_fields - 1) yy_error("flexible array member not at the end of struct");
 //						if (type->record.num_fields == 1) yy_error("flexible array member in a struct with no named members");
-						type->attr |= C_ATTR_FLEXIBLE;
 					}
 
 					field_align = c_gcc_field_alignment(type, field, &packed);
@@ -1489,7 +1492,6 @@ void c_finish_struct_type(c_type *type, c_dcl *d)
 						if (type->kind == C_TYPE_UNION) yy_error("flexible array member in union");
 						if (i != type->record.num_fields - 1) yy_error("flexible array member not at the end of struct");
 //						if (type->record.num_fields == 1) yy_error("flexible array member in a struct with no named members");
-						type->attr |= C_ATTR_FLEXIBLE;
 					}
 
 					field_align = c_ms_field_alignment(type, field);
@@ -1898,6 +1900,8 @@ void c_sizeof_expr(c_value *res, yy_sym op, c_value *expr, ir_ref old_control)
 		  || expr->type == &c_type_string_u16
 		  || expr->type == &c_type_string_u32)) {
 			val.u64 = expr->u.ref + expr->type->array.type->size; /* ref keeps string lenght */
+		} else if (expr->type->attr & C_ATTR_FLEXIBLE) {
+			yy_error_fmt("invalid application of \"%s\" to incomplete type", "sizeof");
 		} else {
 			if (expr->type->kind == C_TYPE_BOOL
 			 && c_value_is_ref(expr)
