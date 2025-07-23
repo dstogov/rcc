@@ -5519,7 +5519,7 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 				} else {
 					yy_error("initializer-string for array is too long");
 				}
-			} else if (len + val->type->array.type->size > (size_t)obj->value.type->array.length) {
+			} else if (len + val->type->array.type->size < (size_t)obj->value.type->array.length) {
 				len += val->type->array.type->size;
 			}
 			if (c_value_is_const(&obj->value)
