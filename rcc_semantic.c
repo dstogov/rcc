@@ -5796,7 +5796,7 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 				if (!c_value_is_const(val) && !c_do_init_fix_reloc(val)) yy_error("initializer element is not constant");
 				IR_ASSERT(obj->value.u.type == IR_ADDR);
 				if (type->attr & C_ATTR_FLEXIBLE) {
-					len += type->array.type->size;
+					len += type->array.type->size; /* for terminating zero */
 					if (obj->value.type == type) {
 						*size = len;
 					} else if (obj->value.type->kind == C_TYPE_STRUCT
@@ -5806,6 +5806,10 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 					} else {
 						yy_error("initialization of flexible array member in a nested context");
 					}
+					c_do_grow_flexible(obj, *size);
+				} else if (obj->value.type->attr & C_ATTR_FLEXIBLE) {
+					/* element of flexible array */
+					*size = offset + obj->value.type->array.type->size;
 					c_do_grow_flexible(obj, *size);
 				}
 				memcpy((char*)obj->value.u.val.ptr + offset, str, len);
