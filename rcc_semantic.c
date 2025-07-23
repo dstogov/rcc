@@ -5678,7 +5678,7 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 	const c_type *type = init->stack[init->level].type;
 	const c_type *last_array_type = NULL;
 	size_t last_array_offset = 0;
-	size_t offset;
+	size_t offset, new_size;
 	uint32_t i;
 	uint16_t bit_field = 0;
 
@@ -5791,43 +5791,33 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 				}
 			}
 
+			new_size = *size;
+			if (type->attr & C_ATTR_FLEXIBLE) {
+				len += type->array.type->size; /* for terminating zero */
+				if (obj->value.type == type) {
+					new_size = len;
+				} else if (obj->value.type->kind == C_TYPE_STRUCT
+				 && obj->value.type->record.fields[obj->value.type->record.num_fields-1].type == type) {
+					/* last element of struct */
+					new_size = offset + len;
+				} else {
+					yy_error("initialization of flexible array member in a nested context");
+				}
+			} else if (obj->value.type->attr & C_ATTR_FLEXIBLE) {
+				/* element of flexible array */
+				new_size = offset + obj->value.type->array.type->size;
+			}
 			if (c_value_is_const(&obj->value)
 			 || (c_value_is_ref(&obj->value) && IR_IS_CONST_REF(obj->value.u.ref))) {
-				if (!c_value_is_const(val) && !c_do_init_fix_reloc(val)) yy_error("initializer element is not constant");
-				IR_ASSERT(obj->value.u.type == IR_ADDR);
-				if (type->attr & C_ATTR_FLEXIBLE) {
-					len += type->array.type->size; /* for terminating zero */
-					if (obj->value.type == type) {
-						*size = len;
-					} else if (obj->value.type->kind == C_TYPE_STRUCT
-					 && obj->value.type->record.fields[obj->value.type->record.num_fields-1].type == type) {
-						/* last element of struct */
-						*size = offset + len;
-					} else {
-						yy_error("initialization of flexible array member in a nested context");
-					}
-					c_do_grow_flexible(obj, *size);
-				} else if (obj->value.type->attr & C_ATTR_FLEXIBLE) {
-					/* element of flexible array */
-					*size = offset + obj->value.type->array.type->size;
+				if (new_size > *size) {
+					*size = new_size;
 					c_do_grow_flexible(obj, *size);
 				}
 				memcpy((char*)obj->value.u.val.ptr + offset, str, len);
 			} else {
 				IR_ASSERT(obj->value.u.ref > 0);
 				IR_ASSERT(active_ctx->ir_base[obj->value.u.ref].op == IR_ALLOCA);
-				if (type->attr & C_ATTR_FLEXIBLE) {
-					len += type->array.type->size;
-					if (obj->value.type == type) {
-						*size = len;
-					} else if (obj->value.type->kind == C_TYPE_STRUCT
-					 && obj->value.type->record.fields[obj->value.type->record.num_fields-1].type == type) {
-						/* last element of struct */
-						*size = offset + len;
-					} else {
-						yy_error("initialization of flexible array member in a nested context");
-					}
-				}
+				if (new_size > *size) *size = new_size;
 				ir_memcpy(active_ctx,
 					ir_ADD_A(obj->value.u.ref, ir_const_size_t(active_ctx, offset)),
 					ir_const_addr(active_ctx, (uintptr_t)str),
@@ -5838,17 +5828,14 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 		c_do_check_cvt(type, val, -1);
 	}
 
+	new_size = *size;
 	if (obj->value.type->kind == C_TYPE_ARRAY && (obj->value.type->attr & C_ATTR_FLEXIBLE)) {
 		if (offset + type->size > obj->value.type->size) {
 			// TODO: alignment support ???
 			size_t len =
 				(offset + type->size + obj->value.type->array.type->size - 1) / obj->value.type->array.type->size;
 			if (obj->value.type->array.type->size * len > *size) {
-				*size = obj->value.type->array.type->size * len;
-				if (c_value_is_const(&obj->value)
-				 || (c_value_is_ref(&obj->value) && IR_IS_CONST_REF(obj->value.u.ref))) {
-					c_do_grow_flexible(obj, *size);
-				}
+				new_size = obj->value.type->array.type->size * len;
 			}
 		}
 	} else if (last_array_type) {
@@ -5858,11 +5845,7 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 		}
 		/* last element of struct */
 		if (last_array_offset + last_array_type->array.type->size > *size) {
-			*size = last_array_offset + last_array_type->array.type->size; 
-			if (c_value_is_const(&obj->value)
-			 || (c_value_is_ref(&obj->value) && IR_IS_CONST_REF(obj->value.u.ref))) {
-				c_do_grow_flexible(obj, *size);
-			}
+			new_size = last_array_offset + last_array_type->array.type->size;
 		}
 	} else {
 		IR_ASSERT(offset + type->size <= obj->value.type->size || C_IS_BIT_FIELD(bit_field));
@@ -5870,6 +5853,10 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 	if (c_value_is_const(&obj->value) || (c_value_is_ref(&obj->value) && IR_IS_CONST_REF(obj->value.u.ref))) {
 		if (!c_value_is_const(val) && !c_do_init_fix_reloc(val)) yy_error("initializer element is not constant");
 		IR_ASSERT(obj->value.u.type == IR_ADDR && obj->value.u.val.ptr);
+		if (new_size > *size) {
+			*size = new_size;
+			c_do_grow_flexible(obj, *size);
+		}
 		if (!C_IS_BIT_FIELD(bit_field)) {
 			c_do_init((char*)obj->value.u.val.ptr + offset, val);
 		} else {
@@ -5900,6 +5887,7 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 		}
 	} else {
 		IR_ASSERT(obj->value.u.ref > 0);
+		if (new_size > *size) *size = new_size;
 		if (type->kind == C_TYPE_STRUCT || type->kind == C_TYPE_UNION) {
 			IR_ASSERT(!C_IS_BIT_FIELD(bit_field));
 			IR_ASSERT(active_ctx->ir_base[obj->value.u.ref].op == IR_ALLOCA);
