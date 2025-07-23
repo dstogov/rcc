@@ -579,6 +579,59 @@ static bool c_compatible_types(const c_type *t1, const c_type *t2, bool unqualif
 	return 1;
 }
 
+static bool c_is_flexible(const c_type *type)
+{
+	if (type->attr & C_ATTR_FLEXIBLE) {
+		return 1;
+	} else if (type->kind == C_TYPE_STRUCT
+	 && type->record.num_fields > 0
+	 && c_is_flexible(type->record.fields[type->record.num_fields-1].type)) {
+		return 1;
+	}
+	return 0;
+}
+
+static void c_do_grow_flexible(c_sym *obj, size_t old_size, size_t size)
+{
+	IR_ASSERT(obj->tmp_data);
+	IR_ASSERT(obj->value.u.type == IR_ADDR);
+	IR_ASSERT(size > old_size);
+	obj->value.u.val.ptr = ir_mem_realloc(obj->value.u.val.ptr, size);
+	memset((char*)obj->value.u.val.ptr + old_size, 0, size - old_size);
+	if (c_value_is_ref(&obj->value)) {
+		size_t len;
+		const char *str = ir_get_strl(active_ctx, active_ctx->ir_base[obj->value.u.ref].val.name, &len);
+		c_name sym = yy_hash_find(str, len);
+		yy_hash.data[sym].sym->value.u.val.ptr = obj->value.u.val.ptr;
+	}
+}
+
+static void c_do_end_flexible(c_sym *obj, size_t size)
+{
+	void *addr;
+
+	IR_ASSERT(obj->tmp_data);
+	if (c_value_is_ref(&obj->value)) {
+		size_t len;
+		const char *str = ir_get_strl(active_ctx, active_ctx->ir_base[obj->value.u.ref].val.name, &len);
+
+		addr = c_linker_allocate_data(str, size);
+		memcpy(addr, obj->value.u.val.ptr, size);
+		ir_mem_free(obj->value.u.val.ptr);
+		obj->value.u.val.ptr = addr;
+		obj->tmp_data = 0;
+
+		c_name sym = yy_hash_find(str, len);
+		yy_hash.data[sym].sym->value.u.val.ptr = obj->value.u.val.ptr;
+	} else {
+		addr = c_linker_allocate_data(obj->value.u.ref ? yy_sym2str(obj->value.u.ref) : NULL, size);
+		memcpy(addr, obj->value.u.val.ptr, size);
+		ir_mem_free(obj->value.u.val.ptr);
+		obj->value.u.val.ptr = addr;
+		obj->tmp_data = 0;
+	}
+}
+
 static void c_validate_redeclaration(c_name name, c_dcl *d, c_sym *sym)
 {
 	if (d->flags & C_DCL_TYPEDEF) {
@@ -631,13 +684,14 @@ static void c_validate_redeclaration(c_name name, c_dcl *d, c_sym *sym)
 		 && !c_value_is_const(&sym->value)
 		 && !(d->flags & C_DCL_EXTERN)
 		 && ((d->flags & C_DCL_DEFINITION) || !(d->type->attr & C_ATTR_FLEXIBLE))) {
-			void *addr;
-			size_t size = sym->value.type->size;
-
 			sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
-			sym->value.u.val.ptr = addr = c_linker_allocate_data(size);
-			ir_disasm_add_symbol(yy_sym2str(name), (uintptr_t)addr, size); //???
 			sym->is_implemented = (d->flags & C_DCL_DEFINITION) != 0;
+			if (c_is_flexible(sym->value.type)) {
+				sym->tmp_data = 1;
+				sym->value.u.val.ptr = ir_mem_calloc(1, sym->value.type->size);
+			} else {
+				sym->value.u.val.ptr = c_linker_allocate_data(yy_sym2str(name), sym->value.type->size);
+			}
 		}
 	}
 }
@@ -666,7 +720,7 @@ c_sym *c_global_sym(c_sym *sym)
 	return NULL;
 }
 
-static c_name c_create_static_var(c_name name, void *addr)
+static c_name c_create_static_var(c_name name)
 {
 	yy_dyn_str  dyn_str;
 	const char *name_str;
@@ -696,8 +750,6 @@ static c_name c_create_static_var(c_name name, void *addr)
 	sym->linkage = C_LINK_INTERNAL;
 	sym->is_thread_local = 0;
 	sym->is_implemented = 1;
-	sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
-	sym->value.u.val.ptr = addr;
 	yy_hash.data[name].sym = sym;
 
 	return name;
@@ -842,27 +894,40 @@ c_sym *c_declare(c_name name, c_dcl *d)
 			}
 			if (!(d->flags & C_DCL_EXTERN)
 			 && ((d->flags & C_DCL_DEFINITION) || !(d->type->attr & C_ATTR_FLEXIBLE))) {
-				void *addr = c_linker_allocate_data(d->type->size);
+				void *addr;
 
 				sym->is_implemented = (d->flags & C_DCL_DEFINITION) != 0;
 				if (!scope || !(d->flags & C_DCL_STATIC)) {
-					ir_disasm_add_symbol(yy_sym2str(name), (uintptr_t)addr, d->type->size); //???
+					if (c_is_flexible(d->type)) {
+						sym->tmp_data = 1;
+						addr = ir_mem_calloc(1, d->type->size);
+					} else {
+						addr = c_linker_allocate_data(yy_sym2str(name), d->type->size);
+					}
 					sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
 					sym->value.u.val.ptr = addr;
+					sym->value.u.ref = name; /* keep name in addition to address */
 				} else {
-					ir_ref sym_name = c_create_static_var(name, addr);
+					c_name sym_name = c_create_static_var(name);
 					size_t len;
 					const char *str = yy_sym2strl(sym_name, &len);
 					ir_ref ref;
 
-					ir_disasm_add_symbol(str, (uintptr_t)addr, d->type->size); //???
+					if (c_is_flexible(d->type)) {
+						sym->tmp_data = 1;
+						addr = ir_mem_calloc(1, d->type->size);
+					} else {
+						addr = c_linker_allocate_data(str, d->type->size);
+					}
+					yy_hash.data[sym_name].sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
+					yy_hash.data[sym_name].sym->value.u.val.ptr = addr;
 					ref = ir_const_sym(active_ctx, ir_strl(active_ctx, str, len));
 					if (d->type->kind == C_TYPE_ARRAY) {
 						c_value_set_rval(&sym->value, d->type, c_type2ir(d->type), ref);
 					} else {
 						c_value_set_lval(&sym->value, d->type, c_type2ir(d->type), ref);
 					}
-					sym->value.u.val.ptr = addr;
+					sym->value.u.val.ptr = addr; /* keep address in addition to ref */
 				}
 			}
 		} else {
@@ -5458,18 +5523,6 @@ static void c_do_init_patch_flexible_alloca(ir_ref ref, size_t len)
 	}
 }
 
-static void c_do_grow_flexible(c_sym *obj, size_t size)
-{
-	IR_ASSERT(obj->value.u.type == IR_ADDR);
-	obj->value.u.val.ptr = c_linker_grow_data(obj->value.u.val.ptr, size);
-	if (c_value_is_ref(&obj->value)) {
-		size_t len;
-		const char *str = ir_get_strl(active_ctx, active_ctx->ir_base[obj->value.u.ref].val.name, &len);
-		c_name sym = yy_hash_find(str, len);
-		yy_hash.data[sym].sym->value.u.val.ptr = obj->value.u.val.ptr;
-	}
-}
-
 void c_do_init_obj(c_sym *obj, c_value *val)
 {
 	if (obj->kind != C_SYM_VAR) {
@@ -5505,7 +5558,7 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 				obj->value.type = type;
 				if (c_value_is_const(&obj->value)
 				 || (c_value_is_ref(&obj->value) && IR_IS_CONST_REF(obj->value.u.ref))) {
-					c_do_grow_flexible(obj, obj->value.type->size);
+					c_do_grow_flexible(obj, 0, obj->value.type->size);
 				} else {
 					c_do_init_patch_flexible_alloca(obj->value.u.ref, len);
 				}
@@ -5523,6 +5576,9 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 				if (!c_value_is_const(val) && !c_do_init_fix_reloc(val)) yy_error("initializer element is not constant");
 				IR_ASSERT(obj->value.u.type == IR_ADDR);
 				memcpy((char*)obj->value.u.val.ptr, str, len);
+				if (obj->tmp_data) {
+					c_do_end_flexible(obj, obj->value.type->size);
+				}
 			} else {
 				IR_ASSERT(obj->value.u.ref > 0);
 				IR_ASSERT(active_ctx->ir_base[obj->value.u.ref].op == IR_ALLOCA);
@@ -5568,6 +5624,9 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 				c_value_ref(val),
 				ir_const_size_t(active_ctx, val->type->size));
 		}
+	}
+	if (obj->tmp_data) {
+		c_do_end_flexible(obj, obj->value.type->size);
 	}
 }
 
@@ -5806,8 +5865,8 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 			if (c_value_is_const(&obj->value)
 			 || (c_value_is_ref(&obj->value) && IR_IS_CONST_REF(obj->value.u.ref))) {
 				if (new_size > *size) {
+					c_do_grow_flexible(obj, *size, new_size);
 					*size = new_size;
-					c_do_grow_flexible(obj, *size);
 				}
 				memcpy((char*)obj->value.u.val.ptr + offset, str, len);
 			} else {
@@ -5850,8 +5909,8 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 		if (!c_value_is_const(val) && !c_do_init_fix_reloc(val)) yy_error("initializer element is not constant");
 		IR_ASSERT(obj->value.u.type == IR_ADDR && obj->value.u.val.ptr);
 		if (new_size > *size) {
+			c_do_grow_flexible(obj, *size, new_size);
 			*size = new_size;
-			c_do_grow_flexible(obj, *size);
 		}
 		if (!C_IS_BIT_FIELD(bit_field)) {
 			c_do_init((char*)obj->value.u.val.ptr + offset, val);
@@ -5963,6 +6022,9 @@ const c_type *c_do_init_nested(c_sym *obj, c_init *init, bool b, size_t *offset_
 
 void c_do_init_end(c_sym *obj, size_t size)
 {
+	if (obj->tmp_data) {
+		c_do_end_flexible(obj, size);
+	}
 	if (obj->value.type->attr & C_ATTR_FLEXIBLE) {
 		if (obj->value.type->kind == C_TYPE_ARRAY) {
 			/* Convert "flexible" array to regular */
@@ -5994,10 +6056,16 @@ void c_do_init_expr_start(c_sym *obj, const c_type *type)
 		ir_ref addr = ir_ALLOCA(size);
 		ir_memzero(active_ctx, addr, size);
 		c_value_set_rval(&obj->value, type, IR_ADDR, addr);
+	} else if (c_is_flexible(type)) {
+		ir_val val;
+
+		obj->tmp_data = 1;
+		val.ptr = ir_mem_calloc(1, type->size);
+		c_value_set_const(&obj->value, type, IR_ADDR, val);
 	} else {
 		ir_val val;
 
-		val.ptr = c_linker_allocate_data(type->size); // TODO: use temporary area ???
+		val.ptr = c_linker_allocate_data(NULL, type->size);
 		c_value_set_const(&obj->value, type, IR_ADDR, val);
 	}
 }

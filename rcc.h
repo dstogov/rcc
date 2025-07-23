@@ -674,6 +674,7 @@ struct _c_sym {
 	bool                   is_thread_local: 1; /* only for C_SYM_VAR */
 	bool                   is_implemented: 1;  /* only for C_SYM_VAR and C_SYM_FUNC */
 	bool                   has_thunk: 1;       /* TODO: replace thunks with relocs ??? */
+	bool                   tmp_data: 1;        /* temporary growable data area */
 	c_scope               *scope;
 	c_value                value;              /* type is part of the value */
 	ir_ctx                *ctx;                /* function IR (used for delayed code-gen or function inlining) */
@@ -936,8 +937,7 @@ void yy_warning(const char *msg);
 void yy_warning_fmt(const char *fmt, ...);
 
 /* Linker */
-void *c_linker_allocate_data(size_t size);
-void *c_linker_grow_data(void *addr, size_t size);
+void *c_linker_allocate_data(const char *name, size_t size);
 void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, uint32_t flags);
 
 /* IR compiler */

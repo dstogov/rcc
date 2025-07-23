@@ -339,27 +339,14 @@ add_thunk:
 	return NULL;
 }
 
-void *c_linker_allocate_data(size_t size)
+void *c_linker_allocate_data(const char *name, size_t size)
 {
 	void *data = ir_arena_alloc(&c_linker_arena, size);
+	if (name) {
+		ir_disasm_add_symbol(name, (uintptr_t)data, size); //???
+	}
 	memset(data, 0, size);
 	return data;
-}
-
-void *c_linker_grow_data(void *addr, size_t size)
-{
-	size_t old_size = (char*)c_linker_arena->ptr - (char*)addr;
-
-	IR_ASSERT(size > old_size);
-	if (size - old_size >= (size_t)(c_linker_arena->end - c_linker_arena->ptr)) {
-		void *new_addr = ir_arena_alloc(&c_linker_arena, size);
-		memcpy(new_addr, addr, old_size);
-		memset((char*)new_addr + old_size, 0, size - old_size);
-		return new_addr;
-	}
-	memset((char*)addr + old_size, 0, size - old_size);
-	c_linker_arena->ptr += size - old_size;
-	return addr;
 }
 
 ir_loader c_linker = {
@@ -584,8 +571,7 @@ static void rcc_fix_flexible_data(void)
 			p->sym->value.type = type;
 
 			p->sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
-			p->sym->value.u.val.ptr = c_linker_allocate_data(type->size);
-			ir_disasm_add_symbol(p->str, (uintptr_t)p->sym->value.u.val.ptr, type->size); //???
+			p->sym->value.u.val.ptr = c_linker_allocate_data(p->str, type->size);
 			p->sym->is_implemented = 1;
 
 			//yy_warning_fmt("array \"%s\" assumed to have one element", p->str); // error position ???
