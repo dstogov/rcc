@@ -703,55 +703,54 @@ labels:
 
 statement2(c_value *last_val):                             {c_value val = {0};}
                                                            {c_name name;}
+                                                           {c_scope scope;}
                                                            {if (last_val) c_value_clear(last_val);}
-	(	                                                   {c_scope scope;}
-	    "{"                                                {c_push_scope(&scope);}
+	(	"{"                                                {c_push_scope(&scope);}
 		compound_statement(NULL)                           {c_pop_scope(&scope);}
         "}"
 	|                                                      {ir_ref check;}
 	                                                       {bool orig_dead_code = c_dead_code;}
+														   {c_push_scope(&scope);}
 		"if" "("expression(&val) ")"                       {check = c_do_if(&val);}
 		statement(NULL)
 		(   "else"                                         {c_do_if_else(check, orig_dead_code);}
 			statement(NULL)
 		)?+                                                {c_do_if_end(check, orig_dead_code);}
+		                                                   {c_pop_scope(&scope);}
 	|                                                      {c_loop loop;}
+														   {c_push_scope(&scope);}
 		"switch" "(" expression(&val) ")"                  {c_do_switch(&loop, &val);}
 		statement(NULL)                                    {c_do_switch_end(&loop);}
+		                                                   {c_pop_scope(&scope);}
 	|                                                      {c_loop loop;}
+	                                                       {c_push_scope(&scope);}
 		"while"                                            {c_do_loop_start(&loop);}
 		"(" expression(&val) ")"                           {c_do_loop_check(&loop, &val);}
 		statement(NULL)                                    {c_do_loop_end(&loop);}
+		                                                   {c_pop_scope(&scope);}
 	|                                                      {c_loop loop;}
+	                                                       {c_push_scope(&scope);}
 		"do"                                               {c_do_loop_start(&loop);}
 		statement(NULL)                                    {c_do_loop_continue_label(&loop);}
 		"while" "(" expression(&val) ")"                   {c_do_loop_check(&loop, &val);}
 		";"                                                {c_do_loop_end(&loop);}
+														   {c_pop_scope(&scope);}
 	|                                                      {c_loop loop;}
+	                                                       {c_push_scope(&scope);}
 		"for" "("
 		(	?{!C_IS_ID(sym) || !is_typedef_name(sym)}
-			expression(&val)? ";"                          {c_do_loop_start(&loop);}
-			(	expression(&val)                           {c_do_loop_check(&loop, &val);}
-			)?
-			";"
-			(                                              {c_do_for_next_start(&loop);}
-				expression(&val)                           {c_do_for_next_end(&loop);}
-			)?
-			")"
-			statement(NULL)                                {c_do_for_end(&loop);}
-		|		                                           {c_scope scope;}
-		                                                   {c_push_scope(&scope);}
-			declaration(C_DCL_FOR)                         {c_do_loop_start(&loop);}
-			(	expression(&val)                           {c_do_loop_check(&loop, &val);}
-			)?
-			";"
-			(                                              {c_do_for_next_start(&loop);}
-				expression(&val)                           {c_do_for_next_end(&loop);}
-			)?
-			")"
-			statement(NULL)                                {c_do_for_end(&loop);}
+			expression(&val)? ";"
+		|   declaration(C_DCL_FOR)
+		)                                                  {c_do_loop_start(&loop);}
+		(	expression(&val)                               {c_do_loop_check(&loop, &val);}
+		)?
+		";"
+		(                                                  {c_do_for_next_start(&loop);}
+			expression(&val)                               {c_do_for_next_end(&loop);}
+		)?
+		")"
+		statement(NULL)                                    {c_do_for_end(&loop);}
 			                                               {c_pop_scope(&scope);}
-		)
 	|	"goto"
 		(	ID(&name)                                      {c_do_goto(name);}
 		|	"*" expression(&val)                           {c_do_computed_goto(&val);}

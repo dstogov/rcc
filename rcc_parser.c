@@ -1391,9 +1391,9 @@ static yy_sym parse_labels(yy_sym sym) {
 static yy_sym parse_statement2(yy_sym sym, c_value *last_val) {
 	c_value val = {0};
 	c_name name;
+	c_scope scope;
 	if (last_val) c_value_clear(last_val);
 	if (sym == YY__LBRACE) {
-		c_scope scope;
 		sym = get_sym();
 		c_push_scope(&scope);
 		sym = parse_compound_statement(sym, NULL);
@@ -1405,6 +1405,7 @@ static yy_sym parse_statement2(yy_sym sym, c_value *last_val) {
 	} else if (sym == YY_IF) {
 		ir_ref check;
 		bool orig_dead_code = c_dead_code;
+		c_push_scope(&scope);
 		sym = get_sym();
 		if (sym != YY__LPAREN) {
 			yy_error_sym("'(' expected, got", sym);
@@ -1423,8 +1424,10 @@ static yy_sym parse_statement2(yy_sym sym, c_value *last_val) {
 			sym = parse_statement(sym, NULL);
 		}
 		c_do_if_end(check, orig_dead_code);
+		c_pop_scope(&scope);
 	} else if (sym == YY_SWITCH) {
 		c_loop loop;
+		c_push_scope(&scope);
 		sym = get_sym();
 		if (sym != YY__LPAREN) {
 			yy_error_sym("'(' expected, got", sym);
@@ -1438,8 +1441,10 @@ static yy_sym parse_statement2(yy_sym sym, c_value *last_val) {
 		c_do_switch(&loop, &val);
 		sym = parse_statement(sym, NULL);
 		c_do_switch_end(&loop);
+		c_pop_scope(&scope);
 	} else if (sym == YY_WHILE) {
 		c_loop loop;
+		c_push_scope(&scope);
 		sym = get_sym();
 		c_do_loop_start(&loop);
 		if (sym != YY__LPAREN) {
@@ -1454,8 +1459,10 @@ static yy_sym parse_statement2(yy_sym sym, c_value *last_val) {
 		c_do_loop_check(&loop, &val);
 		sym = parse_statement(sym, NULL);
 		c_do_loop_end(&loop);
+		c_pop_scope(&scope);
 	} else if (sym == YY_DO) {
 		c_loop loop;
+		c_push_scope(&scope);
 		sym = get_sym();
 		c_do_loop_start(&loop);
 		sym = parse_statement(sym, NULL);
@@ -1479,8 +1486,10 @@ static yy_sym parse_statement2(yy_sym sym, c_value *last_val) {
 		}
 		sym = get_sym();
 		c_do_loop_end(&loop);
+		c_pop_scope(&scope);
 	} else if (sym == YY_FOR) {
 		c_loop loop;
+		c_push_scope(&scope);
 		sym = get_sym();
 		if (sym != YY__LPAREN) {
 			yy_error_sym("'(' expected, got", sym);
@@ -1494,54 +1503,32 @@ static yy_sym parse_statement2(yy_sym sym, c_value *last_val) {
 				yy_error_sym("';' expected, got", sym);
 			}
 			sym = get_sym();
-			c_do_loop_start(&loop);
-			if (sym == YY__LPAREN || C_IS_ID(sym) || sym == YY_DECIMAL_NUMBER || sym == YY_OCTAL_NUMBER || sym == YY_HEXADECIMAL_NUMBER || sym == YY_BINARY_NUMBER || sym == YY_FLOATING_NUMBER || sym == YY_HEXADECIMAL_FLOATING_NUMBER || sym == YY_CHARACTER || sym == YY_STRING || sym == YY__GENERIC || sym == YY___EXTENSION__ || sym == YY__PLUS_PLUS || sym == YY__MINUS_MINUS || sym == YY__AND || sym == YY__STAR || sym == YY__PLUS || sym == YY__MINUS || sym == YY__TILDE || sym == YY__BANG || sym == YY_SIZEOF || sym == YY__ALIGNOF || sym == YY___ALIGNOF__ || sym == YY___ALIGNOF || sym == YY__AND_AND || sym == YY___BUILTIN_VA_START || sym == YY___BUILTIN_VA_ARG || sym == YY___BUILTIN_VA_END || sym == YY___BUILTIN_VA_COPY || sym == YY___BUILTIN_EXPECT) {
-				sym = parse_expression(sym, &val);
-				c_do_loop_check(&loop, &val);
-			}
-			if (sym != YY__SEMICOLON) {
-				yy_error_sym("';' expected, got", sym);
-			}
-			sym = get_sym();
-			if (sym == YY__LPAREN || C_IS_ID(sym) || sym == YY_DECIMAL_NUMBER || sym == YY_OCTAL_NUMBER || sym == YY_HEXADECIMAL_NUMBER || sym == YY_BINARY_NUMBER || sym == YY_FLOATING_NUMBER || sym == YY_HEXADECIMAL_FLOATING_NUMBER || sym == YY_CHARACTER || sym == YY_STRING || sym == YY__GENERIC || sym == YY___EXTENSION__ || sym == YY__PLUS_PLUS || sym == YY__MINUS_MINUS || sym == YY__AND || sym == YY__STAR || sym == YY__PLUS || sym == YY__MINUS || sym == YY__TILDE || sym == YY__BANG || sym == YY_SIZEOF || sym == YY__ALIGNOF || sym == YY___ALIGNOF__ || sym == YY___ALIGNOF || sym == YY__AND_AND || sym == YY___BUILTIN_VA_START || sym == YY___BUILTIN_VA_ARG || sym == YY___BUILTIN_VA_END || sym == YY___BUILTIN_VA_COPY || sym == YY___BUILTIN_EXPECT) {
-				c_do_for_next_start(&loop);
-				sym = parse_expression(sym, &val);
-				c_do_for_next_end(&loop);
-			}
-			if (sym != YY__RPAREN) {
-				yy_error_sym("')' expected, got", sym);
-			}
-			sym = get_sym();
-			sym = parse_statement(sym, NULL);
-			c_do_for_end(&loop);
 		} else if (sym == YY__STATIC_ASSERT || sym == YY_TYPEDEF || sym == YY_EXTERN || sym == YY_STATIC || sym == YY_AUTO || sym == YY_REGISTER || sym == YY__THREAD_LOCAL || sym == YY_VOID || sym == YY_CHAR || sym == YY_SHORT || sym == YY_INT || sym == YY_LONG || sym == YY_FLOAT || sym == YY_DOUBLE || sym == YY_SIGNED || sym == YY_UNSIGNED || sym == YY__BOOL || sym == YY__COMPLEX || sym == YY___COMPLEX || sym == YY___COMPLEX__ || sym == YY__ATOMIC || sym == YY_TYPEOF || sym == YY___TYPEOF || sym == YY___TYPEOF__ || sym == YY_STRUCT || sym == YY_UNION || sym == YY_ENUM || C_IS_ID(sym) || sym == YY_CONST || sym == YY___CONST || sym == YY___CONST__ || sym == YY_RESTRICT || sym == YY___RESTRICT || sym == YY___RESTRICT__ || sym == YY_VOLATILE || sym == YY___VOLATILE || sym == YY___VOLATILE__ || sym == YY_INLINE || sym == YY___INLINE || sym == YY___INLINE__ || sym == YY__NORETURN || sym == YY__ALIGNAS || sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__ || sym == YY__STAR || sym == YY__LPAREN || sym == YY__SEMICOLON) {
-			c_scope scope;
-			c_push_scope(&scope);
 			sym = parse_declaration(sym, C_DCL_FOR);
-			c_do_loop_start(&loop);
-			if (sym == YY__LPAREN || C_IS_ID(sym) || sym == YY_DECIMAL_NUMBER || sym == YY_OCTAL_NUMBER || sym == YY_HEXADECIMAL_NUMBER || sym == YY_BINARY_NUMBER || sym == YY_FLOATING_NUMBER || sym == YY_HEXADECIMAL_FLOATING_NUMBER || sym == YY_CHARACTER || sym == YY_STRING || sym == YY__GENERIC || sym == YY___EXTENSION__ || sym == YY__PLUS_PLUS || sym == YY__MINUS_MINUS || sym == YY__AND || sym == YY__STAR || sym == YY__PLUS || sym == YY__MINUS || sym == YY__TILDE || sym == YY__BANG || sym == YY_SIZEOF || sym == YY__ALIGNOF || sym == YY___ALIGNOF__ || sym == YY___ALIGNOF || sym == YY__AND_AND || sym == YY___BUILTIN_VA_START || sym == YY___BUILTIN_VA_ARG || sym == YY___BUILTIN_VA_END || sym == YY___BUILTIN_VA_COPY || sym == YY___BUILTIN_EXPECT) {
-				sym = parse_expression(sym, &val);
-				c_do_loop_check(&loop, &val);
-			}
-			if (sym != YY__SEMICOLON) {
-				yy_error_sym("';' expected, got", sym);
-			}
-			sym = get_sym();
-			if (sym == YY__LPAREN || C_IS_ID(sym) || sym == YY_DECIMAL_NUMBER || sym == YY_OCTAL_NUMBER || sym == YY_HEXADECIMAL_NUMBER || sym == YY_BINARY_NUMBER || sym == YY_FLOATING_NUMBER || sym == YY_HEXADECIMAL_FLOATING_NUMBER || sym == YY_CHARACTER || sym == YY_STRING || sym == YY__GENERIC || sym == YY___EXTENSION__ || sym == YY__PLUS_PLUS || sym == YY__MINUS_MINUS || sym == YY__AND || sym == YY__STAR || sym == YY__PLUS || sym == YY__MINUS || sym == YY__TILDE || sym == YY__BANG || sym == YY_SIZEOF || sym == YY__ALIGNOF || sym == YY___ALIGNOF__ || sym == YY___ALIGNOF || sym == YY__AND_AND || sym == YY___BUILTIN_VA_START || sym == YY___BUILTIN_VA_ARG || sym == YY___BUILTIN_VA_END || sym == YY___BUILTIN_VA_COPY || sym == YY___BUILTIN_EXPECT) {
-				c_do_for_next_start(&loop);
-				sym = parse_expression(sym, &val);
-				c_do_for_next_end(&loop);
-			}
-			if (sym != YY__RPAREN) {
-				yy_error_sym("')' expected, got", sym);
-			}
-			sym = get_sym();
-			sym = parse_statement(sym, NULL);
-			c_do_for_end(&loop);
-			c_pop_scope(&scope);
 		} else {
 			yy_error_sym("unexpected", sym);
 		}
+		c_do_loop_start(&loop);
+		if (sym == YY__LPAREN || C_IS_ID(sym) || sym == YY_DECIMAL_NUMBER || sym == YY_OCTAL_NUMBER || sym == YY_HEXADECIMAL_NUMBER || sym == YY_BINARY_NUMBER || sym == YY_FLOATING_NUMBER || sym == YY_HEXADECIMAL_FLOATING_NUMBER || sym == YY_CHARACTER || sym == YY_STRING || sym == YY__GENERIC || sym == YY___EXTENSION__ || sym == YY__PLUS_PLUS || sym == YY__MINUS_MINUS || sym == YY__AND || sym == YY__STAR || sym == YY__PLUS || sym == YY__MINUS || sym == YY__TILDE || sym == YY__BANG || sym == YY_SIZEOF || sym == YY__ALIGNOF || sym == YY___ALIGNOF__ || sym == YY___ALIGNOF || sym == YY__AND_AND || sym == YY___BUILTIN_VA_START || sym == YY___BUILTIN_VA_ARG || sym == YY___BUILTIN_VA_END || sym == YY___BUILTIN_VA_COPY || sym == YY___BUILTIN_EXPECT) {
+			sym = parse_expression(sym, &val);
+			c_do_loop_check(&loop, &val);
+		}
+		if (sym != YY__SEMICOLON) {
+			yy_error_sym("';' expected, got", sym);
+		}
+		sym = get_sym();
+		if (sym == YY__LPAREN || C_IS_ID(sym) || sym == YY_DECIMAL_NUMBER || sym == YY_OCTAL_NUMBER || sym == YY_HEXADECIMAL_NUMBER || sym == YY_BINARY_NUMBER || sym == YY_FLOATING_NUMBER || sym == YY_HEXADECIMAL_FLOATING_NUMBER || sym == YY_CHARACTER || sym == YY_STRING || sym == YY__GENERIC || sym == YY___EXTENSION__ || sym == YY__PLUS_PLUS || sym == YY__MINUS_MINUS || sym == YY__AND || sym == YY__STAR || sym == YY__PLUS || sym == YY__MINUS || sym == YY__TILDE || sym == YY__BANG || sym == YY_SIZEOF || sym == YY__ALIGNOF || sym == YY___ALIGNOF__ || sym == YY___ALIGNOF || sym == YY__AND_AND || sym == YY___BUILTIN_VA_START || sym == YY___BUILTIN_VA_ARG || sym == YY___BUILTIN_VA_END || sym == YY___BUILTIN_VA_COPY || sym == YY___BUILTIN_EXPECT) {
+			c_do_for_next_start(&loop);
+			sym = parse_expression(sym, &val);
+			c_do_for_next_end(&loop);
+		}
+		if (sym != YY__RPAREN) {
+			yy_error_sym("')' expected, got", sym);
+		}
+		sym = get_sym();
+		sym = parse_statement(sym, NULL);
+		c_do_for_end(&loop);
+		c_pop_scope(&scope);
 	} else if (sym == YY_GOTO) {
 		sym = get_sym();
 		if (C_IS_ID(sym)) {
