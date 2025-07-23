@@ -307,7 +307,6 @@ void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, uint32_t fl
 
 		if (flags & IR_RESOLVE_SYM_ADD_THUNK) {
 			/* Undefined declaration */
-			// TODO: Add thunk or relocation ???
 			size_t size;
 			void *addr;
 

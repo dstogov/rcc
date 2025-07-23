@@ -195,14 +195,11 @@ restart_stream:
 try_expand_macro:
 							if (pp_macro_expand(macro, ret)) goto restart_stream;
 						} else {
-//???							if (pp_debug) {pp_debug_fprintf(stderr, "\"%s\" is disabled!\n", yy_sym2str(ret));}
 							if (yy_flags & YY_ACCEPT_NOSUBST) ret |= PP_NOSUBST;
 						}
 					}
 				}
 			}
-			//TODO: this is necessary only for preprocessor (-E)
-			//yy_text = yy_sym2strl(ret & ~PP_NOSUBST, &yy_len);
 		}
 		return ret;
 	}

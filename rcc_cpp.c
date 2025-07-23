@@ -902,7 +902,7 @@ bool pp_macro_expand(pp_macro *macro, yy_sym name)
 			size_t len;
 			const char *name = yy_sym2strl(yy_file_name, &len);
 
-			// TODO: intern the quoted string
+			// TODO: intern the quoted string ???
 			yy_dyn_str_init(&dyn_str, "\"", 1);
 			yy_dyn_str_append(&dyn_str, name, len);
 			yy_dyn_str_append0(&dyn_str, "\"", 1);

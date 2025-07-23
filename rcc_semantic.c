@@ -1973,7 +1973,7 @@ static c_label *c_new_label(c_name name, c_scope *scope, c_label *label, bool lo
 		label = ir_arena_alloc(&c_arena, sizeof(c_label));
 		label->is_local = 1;
 	} else {
-		label = ir_mem_malloc(sizeof(c_label)); // TODO: cache allocatons
+		label = ir_mem_malloc(sizeof(c_label)); // TODO: cache allocatons ???
 		label->is_local = 0;
 	}
 	label->is_unused = 0;
@@ -5716,7 +5716,7 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 			}
 			type = f->type;
 		} else if (type->kind == C_TYPE_UNION) {
-			// TODO: select best type
+			// TODO: select best type ???
 			type = type->record.fields[0].type;
 			if (type->kind != C_TYPE_ARRAY && type->kind != C_TYPE_STRUCT && type->kind != C_TYPE_UNION) break;
 		} else {
@@ -5932,7 +5932,7 @@ const c_type *c_do_init_nested(c_sym *obj, c_init *init, bool b, size_t *offset_
 			c_field *field = &type->record.fields[init->stack[init->level].pos];
 			type = field->type;
 		} else if (type->kind == C_TYPE_UNION) {
-			// TODO: select best type
+			// TODO: select best type ???
 			c_field *field = &type->record.fields[0];
 			type = field->type;
 		}
