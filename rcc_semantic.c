@@ -632,12 +632,8 @@ static void c_validate_redeclaration(c_name name, c_dcl *d, c_sym *sym)
 		 && !(d->flags & C_DCL_EXTERN)
 		 && ((d->flags & C_DCL_DEFINITION) || !(d->type->attr & C_ATTR_FLEXIBLE))) {
 			void *addr;
-			size_t size = d->type->size;
+			size_t size = sym->value.type->size;
 
-			if (d->type->kind == C_TYPE_ARRAY && (d->type->attr & C_ATTR_FLEXIBLE)
-			 && sym->value.type->kind == C_TYPE_ARRAY && !(sym->value.type->attr & C_ATTR_FLEXIBLE)) {
-				size = sym->value.type->size;
-			}
 			sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
 			sym->value.u.val.ptr = addr = c_linker_allocate_data(size);
 			ir_disasm_add_symbol(yy_sym2str(name), (uintptr_t)addr, size); //???
