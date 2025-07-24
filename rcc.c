@@ -32,12 +32,13 @@
 #define C_DUMP_IR_AFTER_MEM2SSA  (1<<1)
 #define C_DUMP_IR_AFTER_SCCP     (1<<2)
 #define C_DUMP_IR_AFTER_SCHEDULE (1<<3)
-#define C_DUMP_IR                (1<<4)
-#define C_DUMP_ASM               (1<<5)
-#define C_DUMP_SIZE              (1<<6)
-#define C_DUMP_TIME              (1<<7)
-#define C_GDB                    (1<<8)
-#define C_PERF                   (1<<9)
+#define C_DUMP_IR_CODEGEN        (1<<4)
+#define C_DUMP_IR                (1<<5)
+#define C_DUMP_ASM               (1<<6)
+#define C_DUMP_SIZE              (1<<7)
+#define C_DUMP_TIME              (1<<8)
+#define C_GDB                    (1<<9)
+#define C_PERF                   (1<<10)
 
 #define C_OPT_LEVEL              0x3
 #define C_OPT_INLINE             (1<<2)
@@ -129,9 +130,9 @@ static void rcc_ir_codegen(c_name name, ir_ctx *ctx, c_sym *sym)
 		ir_compute_dessa_moves(ctx);
 	}
 
-	if (c_dump_flags & C_DUMP_IR) {
+	if (c_dump_flags & C_DUMP_IR_CODEGEN) {
 		rcc_dump_func_proto(name, stderr);
-		ir_save(ctx, c_save_flags | IR_SAVE_CFG | IR_SAVE_RULES, stderr);
+		ir_dump_codegen(ctx, stderr);
 	}
 
 #ifdef IR_DEBUG
@@ -236,6 +237,11 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym)
 			rcc_dump_func_proto(name, stderr);
 			ir_save(ctx, c_save_flags | IR_SAVE_CFG, stderr);
 		}
+	}
+
+	if (c_dump_flags & C_DUMP_IR) {
+		rcc_dump_func_proto(name, stderr);
+		ir_save(ctx, c_save_flags | IR_SAVE_CFG, stderr);
 	}
 
 	if ((c_opt_flags & C_OPT_INLINE)
@@ -674,6 +680,7 @@ static void rcc_help(const char *cmd)
 		"  --save-ir-after-mem2ssa    - print IR after SSA construction pass\n"
 		"  --save-ir-after-sccp       - print IR after SCCP optimization pass\n"
 		"  --save-ir-after-schedule   - print IR after scheduling\n"
+		"  --save-ir-codegen          - print IR with selcted code rules and registers"
 		"  --emit-ir                  - print final IR\n"
 		"Utility Options\n"
 		"  --dump-size                - print size of generated code\n"
@@ -807,6 +814,8 @@ int main(int argc, const char **argv)
 			c_dump_flags |= C_DUMP_IR_AFTER_SCCP;
 		} else if (strcmp(argv[i], "--save-ir-after-schedule") == 0) {
 			c_dump_flags |= C_DUMP_IR_AFTER_SCHEDULE;
+		} else if (strcmp(argv[i], "--save-ir-codegen") == 0) {
+			c_dump_flags |= C_DUMP_IR_CODEGEN;
 		} else if (strcmp(argv[i], "--emit-ir") == 0) {
 			c_dump_flags |= C_DUMP_IR;
 		} else if (strcmp(argv[i], "-S") == 0) {
