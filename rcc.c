@@ -91,7 +91,7 @@ static void rcc_dump_func_proto(c_name name, FILE *f)
 //	} else if (flags & IR_BUILTIN_FUNC) {
 //		fprintf(f, " __builtin");
 //	}
-	fprintf(f, ";\n");
+	fprintf(f, "\n");
 }
 
 static bool rcc_may_inline(c_value *func, ir_ctx *ctx)
