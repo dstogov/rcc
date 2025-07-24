@@ -325,7 +325,10 @@ add_thunk:
 			sym->value.u.op |= C_VAL_CONST;
 			sym->value.u.type = IR_ADDR;
 			sym->value.u.val.ptr = addr;
-			ir_disasm_add_symbol(name, (uint64_t)(uintptr_t)addr, size); //???
+			if (c_dump_flags & C_DUMP_ASM) {
+				/* thunk and real symbol use the same name */
+				ir_disasm_add_symbol(name, (uint64_t)(uintptr_t)addr, size);
+			}
 			if (RCC_DELAY_CODE_GEN || sym->ctx) {
 				if (!ir_list_capasity(&c_codegen_list)) ir_list_init(&c_codegen_list, 32);
 				ir_list_push(&c_codegen_list, id);
@@ -342,8 +345,8 @@ add_thunk:
 void *c_linker_allocate_data(const char *name, size_t size)
 {
 	void *data = ir_arena_alloc(&c_linker_arena, size);
-	if (name) {
-		ir_disasm_add_symbol(name, (uintptr_t)data, size); //???
+	if ((c_dump_flags & C_DUMP_ASM) && name) {
+		ir_disasm_add_symbol(name, (uintptr_t)data, size);
 	}
 	memset(data, 0, size);
 	return data;
