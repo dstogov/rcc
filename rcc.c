@@ -53,7 +53,7 @@ static ir_code_buffer  c_code_buffer;
 static bool            protected = 1;
 static ir_list         c_codegen_list;
 
-static void rcc_dump_func_proto(c_name name, FILE *f)
+static void rcc_dump_func_proto(c_name name, bool prototype, FILE *f)
 {
 	c_sym *sym = yy_hash.data[name].sym;
 	const c_type *t;
@@ -61,7 +61,7 @@ static void rcc_dump_func_proto(c_name name, FILE *f)
 	IR_ASSERT(sym && sym->kind == C_SYM_FUNC);
 	if (sym->linkage == C_LINK_INTERNAL) {
 		fprintf(f, "static ");
-	} else if (sym->linkage == C_LINK_EXTERNAL && 0/*???*/) {
+	} else if (sym->is_external || (prototype && !sym->ctx)) {
 		fprintf(f, "extern ");
 	}
 	fprintf(f, "func %s(", yy_sym2str(name));
@@ -91,7 +91,11 @@ static void rcc_dump_func_proto(c_name name, FILE *f)
 //	} else if (flags & IR_BUILTIN_FUNC) {
 //		fprintf(f, " __builtin");
 //	}
-	fprintf(f, "\n");
+	if (prototype) {
+		fprintf(f, ";\n");
+	} else {
+		fprintf(f, "\n");
+	}
 }
 
 static bool rcc_may_inline(c_value *func, ir_ctx *ctx)
@@ -131,7 +135,7 @@ static void rcc_ir_codegen(c_name name, ir_ctx *ctx, c_sym *sym)
 	}
 
 	if (c_dump_flags & C_DUMP_IR_CODEGEN) {
-		rcc_dump_func_proto(name, stderr);
+		rcc_dump_func_proto(name, 0, stderr);
 		ir_dump_codegen(ctx, stderr);
 	}
 
@@ -197,7 +201,7 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym)
 	c_value *func = &sym->value;
 
 	if (c_dump_flags & C_DUMP_IR_AFTER_LOAD) {
-		rcc_dump_func_proto(name, stderr);
+		rcc_dump_func_proto(name, 0, stderr);
 		ir_save(ctx, c_save_flags, stderr);
 	}
 
@@ -212,7 +216,7 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym)
 		ir_build_dominators_tree(ctx);
 		ir_mem2ssa(ctx);
 		if (c_dump_flags & C_DUMP_IR_AFTER_MEM2SSA) {
-			rcc_dump_func_proto(name, stderr);
+			rcc_dump_func_proto(name, 0, stderr);
 			ir_save(ctx, c_save_flags, stderr);
 		}
 		ir_reset_cfg(ctx);
@@ -221,7 +225,7 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym)
 	if ((c_opt_flags & C_OPT_LEVEL) > 1) {
 		ir_sccp(ctx);
 		if (c_dump_flags & C_DUMP_IR_AFTER_SCCP) {
-			rcc_dump_func_proto(name, stderr);
+			rcc_dump_func_proto(name, 0, stderr);
 			ir_save(ctx, c_save_flags, stderr);
 		}
 	}
@@ -234,14 +238,9 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym)
 		ir_gcm(ctx);
 		ir_schedule(ctx);
 		if (c_dump_flags & C_DUMP_IR_AFTER_SCHEDULE) {
-			rcc_dump_func_proto(name, stderr);
+			rcc_dump_func_proto(name, 0, stderr);
 			ir_save(ctx, c_save_flags | IR_SAVE_CFG, stderr);
 		}
-	}
-
-	if (c_dump_flags & C_DUMP_IR) {
-		rcc_dump_func_proto(name, stderr);
-		ir_save(ctx, c_save_flags | IR_SAVE_CFG, stderr);
 	}
 
 	if ((c_opt_flags & C_OPT_INLINE)
@@ -305,6 +304,7 @@ void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, uint32_t fl
 		if (sym->linkage == C_LINK_EXTERNAL) {
 			void *addr = ir_resolve_sym_name(name);
 			if (addr) {
+				sym->is_external = 1;
 				sym->value.u.opt = IR_OPT(C_VAL_CONST, IR_ADDR);
 				sym->value.u.val.ptr = addr;
 				return addr;
@@ -588,6 +588,138 @@ static void rcc_fix_flexible_data(void)
 	}
 }
 
+static bool c_is_type_const(const c_type *type)
+{
+	if (type->attr & C_ATTR_CONST) {
+		return 1;
+	} else if (type->kind == C_TYPE_ARRAY) {
+		return c_is_type_const(type->array.type);
+	}
+	return 0;
+}
+
+static void rcc_emit_ir_data(FILE *f, const c_type *type, const void *addr)
+{
+	if (C_IS_TYPE_KIND_SCALAR(type->kind) || type->kind == C_TYPE_ENUM) {
+		ir_type t = c_type2ir(type);
+		size_t size = ir_type_size[t];
+
+		switch (size) {
+			case 1:
+				fprintf(f, "\t%s 0x%02x,\n", ir_type_cname[t], (uint32_t)*(uint8_t*)addr);
+				break;
+			case 2:
+				fprintf(f, "\t%s 0x%04x,\n", ir_type_cname[t], (uint32_t)*(uint16_t*)addr);
+				break;
+			case 4:
+				fprintf(f, "\t%s 0x%08x,\n", ir_type_cname[t], *(uint32_t*)addr);
+				break;
+			case 8:
+				fprintf(f, "\t%s 0x%016" PRIx64 ",\n", ir_type_cname[t], *(uint64_t*)addr);
+				break;
+			default:
+				IR_ASSERT(0);
+		}
+	} else if (type->kind == C_TYPE_POINTER) {
+		if (!*(uintptr_t*)addr) {
+			fprintf(f, "\tuintptr_t 0,\n");
+		} else {
+			// TODO: symbolic constants ???
+			fprintf(f, "\tuintptr_t 0x%" PRIxPTR ",\n", *(uintptr_t*)addr);
+		}
+	} else if (type->kind == C_TYPE_FUNC) {
+		if (!*(uintptr_t*)addr) {
+			fprintf(f, "\tuintptr_t 0,\n");
+		} else {
+			// TODO: symbolic constants ???
+			fprintf(f, "\tuintptr_t 0x%" PRIxPTR ",\n", *(uintptr_t*)addr);
+		}
+	} else if (type->kind == C_TYPE_ARRAY) {
+		const char *p = addr;
+		int i;
+
+		for (i = 0; i < type->array.length; i++) {
+			rcc_emit_ir_data(f, type->array.type, p);
+			p += type->array.type->size;
+		}
+	} else if (type->kind == C_TYPE_STRUCT) {
+		const char *p = addr;
+		const c_field *field = type->record.fields;
+		int i;
+
+		for (i = 0; i < type->record.num_fields; field++, i++) {
+			if (C_IS_BIT_FIELD(field->bit_field)) {
+				IR_ASSERT(0); //???
+			}
+			rcc_emit_ir_data(f, field->type, p + field->offset);
+		}
+	} else if (type->kind == C_TYPE_UNION) {
+		const c_field *field = type->record.fields;
+		const c_field *best_field = NULL;
+		size_t best_size = 0;
+		int i;
+
+		for (i = 0; i < type->record.num_fields; field++, i++) {
+			if (field->type->size > best_size) {
+				best_field = field;
+				best_size = field->type->size;
+			}
+		}
+		if (best_field) {
+			rcc_emit_ir_data(f, best_field->type, addr);
+		}
+	} else {
+		IR_ASSERT(0); //???
+	}
+}
+
+static void rcc_emit_ir(FILE *f)
+{
+	uint32_t i;
+	yy_hash_bucket *p;
+
+	for (i = YY_LAST_KEYWORD + 1, p = yy_hash.data + i; i < yy_hash.count; p++, i++) {
+		if (p->sym && p->sym->kind == C_SYM_FUNC) {
+			rcc_dump_func_proto(i, 1, f);
+		}
+	}
+
+	for (i = YY_LAST_KEYWORD + 1, p = yy_hash.data + i; i < yy_hash.count; p++, i++) {
+		if (p->sym && p->sym->kind == C_SYM_VAR) {
+			if (p->sym->linkage == C_LINK_INTERNAL) {
+				fprintf(f, "static ");
+			} else if (p->sym->is_external || !c_value_is_set(&p->sym->value)) {
+				fprintf(f, "extern %s %s;\n",
+					c_is_type_const(p->sym->value.type) ? "const" : "var",
+					yy_sym2str(i));
+				continue;
+			}
+			if (!p->sym->value.type) {
+				// TODO: fix this ???
+				fprintf(f, "%s %s ???\n", "var", yy_sym2str(i));
+				continue;
+			}
+			fprintf(f, "%s %s [%" PRIuPTR "]%s",
+				c_is_type_const(p->sym->value.type) ? "const" : "var",
+				yy_sym2str(i),
+				p->sym->value.type->size,
+				p->sym->is_implemented ? (/*(flags & IR_CONST_STRING) ? " = " :*/ " = {\n") : ";\n");
+			if (p->sym->is_implemented) {
+				// TODO: support for constant strings ???
+				rcc_emit_ir_data(f, p->sym->value.type, p->sym->value.u.val.ptr);
+				fprintf(f, "};\n");
+			}
+		}
+	}
+
+	for (i = YY_LAST_KEYWORD + 1, p = yy_hash.data + i; i < yy_hash.count; p++, i++) {
+		if (p->sym && p->sym->kind == C_SYM_FUNC && p->sym->ctx) {
+			rcc_dump_func_proto(i, 0, f);
+			ir_save(p->sym->ctx, c_save_flags | IR_SAVE_CFG, f);
+		}
+	}
+}
+
 static int rcc_preprocess(const char *file_name, FILE *f)
 {
 	if (!rcc_read(file_name)) {
@@ -606,6 +738,9 @@ static int rcc_compile(const char *file_name)
 	memset(&c_codegen_list, 0, sizeof(ir_list));
 	rcc_parse();
 	rcc_fix_flexible_data();
+	if (c_dump_flags & C_DUMP_IR) {
+		rcc_emit_ir(stderr);
+	}
 	if (ir_list_capasity(&c_codegen_list)) {
 		do {
 			c_name name = ir_list_pop(&c_codegen_list);

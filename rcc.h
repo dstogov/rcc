@@ -592,6 +592,7 @@ typedef enum {
 typedef enum {
 	C_TYPE_INCOMPLETE = (1<<0), /* incomplete (not defined) enum, struct, union */
 	C_TYPE_INPROGRESS = (1<<1), /* incomplete (not completely defined) struct, union */
+	C_TYPE_GLOBAL     = (1<<2),
 } c_type_flag;
 
 typedef yy_sym c_name;
@@ -671,6 +672,7 @@ typedef enum {
 struct _c_sym {
 	c_sym_kind             kind: 2;
 	c_sym_linkage          linkage: 2;         /* only for C_SYM_VAR and C_SYM_FUNC */
+	bool                   is_external: 1;     /* only for C_SYM_VAR and C_SYM_FUNC */
 	bool                   is_thread_local: 1; /* only for C_SYM_VAR */
 	bool                   is_implemented: 1;  /* only for C_SYM_VAR and C_SYM_FUNC */
 	bool                   has_thunk: 1;       /* TODO: replace thunks with relocs ??? */

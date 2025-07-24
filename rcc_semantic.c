@@ -13,30 +13,31 @@
 #undef _ir_CTX
 #define _ir_CTX active_ctx
 
-const c_type c_type_void                = {.kind = C_TYPE_VOID,                .size = 0,  .attr = 1};
-const c_type c_type_bool                = {.kind = C_TYPE_BOOL,                .size = 1,  .attr = 1};
-const c_type c_type_char                = {.kind = C_TYPE_CHAR,                .size = 1,  .attr = 1};
-const c_type c_type_u8                  = {.kind = C_TYPE_U8,                  .size = 1,  .attr = 1};
-const c_type c_type_i8                  = {.kind = C_TYPE_I8,                  .size = 1,  .attr = 1};
-const c_type c_type_u16                 = {.kind = C_TYPE_U16,                 .size = 2,  .attr = 2};
-const c_type c_type_i16                 = {.kind = C_TYPE_I16,                 .size = 2,  .attr = 2};
-const c_type c_type_u32                 = {.kind = C_TYPE_U32,                 .size = 4,  .attr = 3};
-const c_type c_type_i32                 = {.kind = C_TYPE_I32,                 .size = 4,  .attr = 3};
-const c_type c_type_ul                  = {.kind = C_TYPE_UL,                  .size = C_LONG_SIZE,  .attr = C_LONG_ALIGN};
-const c_type c_type_ull                 = {.kind = C_TYPE_ULL,                 .size = 8,  .attr = 4};
-const c_type c_type_il                  = {.kind = C_TYPE_IL,                  .size = C_LONG_SIZE,  .attr = C_LONG_ALIGN};
-const c_type c_type_ill                 = {.kind = C_TYPE_ILL,                 .size = 8,  .attr = 4};
-const c_type c_type_float               = {.kind = C_TYPE_FLOAT,               .size = 4,  .attr = 3};
-const c_type c_type_double              = {.kind = C_TYPE_DOUBLE,              .size = 8,  .attr = 4};
+const c_type c_type_void                = {.kind = C_TYPE_VOID,   .flags = C_TYPE_GLOBAL, .size = 0,  .attr = 1};
+const c_type c_type_bool                = {.kind = C_TYPE_BOOL,   .flags = C_TYPE_GLOBAL, .size = 1,  .attr = 1};
+const c_type c_type_char                = {.kind = C_TYPE_CHAR,   .flags = C_TYPE_GLOBAL, .size = 1,  .attr = 1};
+const c_type c_type_u8                  = {.kind = C_TYPE_U8,     .flags = C_TYPE_GLOBAL, .size = 1,  .attr = 1};
+const c_type c_type_i8                  = {.kind = C_TYPE_I8,     .flags = C_TYPE_GLOBAL, .size = 1,  .attr = 1};
+const c_type c_type_u16                 = {.kind = C_TYPE_U16,    .flags = C_TYPE_GLOBAL, .size = 2,  .attr = 2};
+const c_type c_type_i16                 = {.kind = C_TYPE_I16,    .flags = C_TYPE_GLOBAL, .size = 2,  .attr = 2};
+const c_type c_type_u32                 = {.kind = C_TYPE_U32,    .flags = C_TYPE_GLOBAL, .size = 4,  .attr = 3};
+const c_type c_type_i32                 = {.kind = C_TYPE_I32,    .flags = C_TYPE_GLOBAL, .size = 4,  .attr = 3};
+const c_type c_type_ul                  = {.kind = C_TYPE_UL,     .flags = C_TYPE_GLOBAL, .size = C_LONG_SIZE,  .attr = C_LONG_ALIGN};
+const c_type c_type_ull                 = {.kind = C_TYPE_ULL,    .flags = C_TYPE_GLOBAL, .size = 8,  .attr = 4};
+const c_type c_type_il                  = {.kind = C_TYPE_IL,     .flags = C_TYPE_GLOBAL, .size = C_LONG_SIZE,  .attr = C_LONG_ALIGN};
+const c_type c_type_ill                 = {.kind = C_TYPE_ILL,    .flags = C_TYPE_GLOBAL, .size = 8,  .attr = 4};
+const c_type c_type_float               = {.kind = C_TYPE_FLOAT,  .flags = C_TYPE_GLOBAL, .size = 4,  .attr = 3};
+const c_type c_type_double              = {.kind = C_TYPE_DOUBLE, .flags = C_TYPE_GLOBAL, .size = 8,  .attr = 4};
 //??? TODO: long double support ???
 //???const c_type c_type_long_double         = {.kind = C_TYPE_LONG_DOUBLE,         .size = 16, .attr = 4};
-const c_type c_type_long_double         = {.kind = C_TYPE_DOUBLE,              .size = 8,  .attr = 4};
-const c_type c_type_float_complex       = {.kind = C_TYPE_FLOAT_COMPLEX,       .size = 8,  .attr = 3};
-const c_type c_type_double_complex      = {.kind = C_TYPE_DOUBLE_COMPLEX,      .size = 16, .attr = 5};
-const c_type c_type_long_double_complex = {.kind = C_TYPE_LONG_DOUBLE_COMPLEX, .size = 32, .attr = 5};
+const c_type c_type_long_double         = {.kind = C_TYPE_DOUBLE,              .flags = C_TYPE_GLOBAL, .size = 8,  .attr = 4};
+const c_type c_type_float_complex       = {.kind = C_TYPE_FLOAT_COMPLEX,       .flags = C_TYPE_GLOBAL, .size = 8,  .attr = 3};
+const c_type c_type_double_complex      = {.kind = C_TYPE_DOUBLE_COMPLEX,      .flags = C_TYPE_GLOBAL, .size = 16, .attr = 5};
+const c_type c_type_long_double_complex = {.kind = C_TYPE_LONG_DOUBLE_COMPLEX, .flags = C_TYPE_GLOBAL, .size = 32, .attr = 5};
 
 const c_type c_type_string = {
 	.kind = C_TYPE_ARRAY,
+	.flags = C_TYPE_GLOBAL,
 	.size = sizeof(void*),
 	.attr = 1 | /*C_ATTR_CONST | ???*/ C_ATTR_FLEXIBLE,
 	.array.type = &c_type_char,
@@ -45,6 +46,7 @@ const c_type c_type_string = {
 
 const c_type c_type_lstring = {
 	.kind = C_TYPE_ARRAY,
+	.flags = C_TYPE_GLOBAL,
 	.size = sizeof(void*),
 	.attr = 3 | /*C_ATTR_CONST | ???*/ C_ATTR_FLEXIBLE,
 	.array.type = &c_type_i32,
@@ -53,6 +55,7 @@ const c_type c_type_lstring = {
 
 const c_type c_type_string_u16 = {
 	.kind = C_TYPE_ARRAY,
+	.flags = C_TYPE_GLOBAL,
 	.size = sizeof(void*),
 	.attr = 2 | /*C_ATTR_CONST | ???*/ C_ATTR_FLEXIBLE,
 	.array.type = &c_type_u16,
@@ -61,6 +64,7 @@ const c_type c_type_string_u16 = {
 
 const c_type c_type_string_u32 = {
 	.kind = C_TYPE_ARRAY,
+	.flags = C_TYPE_GLOBAL,
 	.size = sizeof(void*),
 	.attr = 3 | /*C_ATTR_CONST | ???*/ C_ATTR_FLEXIBLE,
 	.array.type = &c_type_u32,
@@ -457,6 +461,7 @@ static void c_merge_type_attr(c_dcl *d)
 {
 	c_type *type = ir_arena_alloc(&c_arena, sizeof(c_type));
 	*type = *d->type;
+	if (active_scope) type->flags &= ~C_TYPE_GLOBAL;
 	type->attr |= (d->attr & C_TYPE_ATTRS);
 	if ((d->attr & C_ATTR_ALIGN_MASK)
 	 && (d->attr & C_ATTR_ALIGN_MASK) != (d->type->attr & C_ATTR_ALIGN_MASK)) {
@@ -488,11 +493,13 @@ static void c_finalize_type(c_dcl *d)
 			c_type *tmp = ir_arena_alloc(&c_arena, sizeof(c_type));
 
 			*tmp = *d->type;
+			if (active_scope) tmp->flags &= ~C_TYPE_GLOBAL;
 			d->type = tmp;
 			t = d->type;
 			do {
 				tmp = ir_arena_alloc(&c_arena, sizeof(c_type));
 				*tmp = *t->array.type;
+				if (active_scope) tmp->flags &= ~C_TYPE_GLOBAL;
 				((c_type*)(t))->array.type = tmp;
 				t = tmp;
 			} while (t->kind == C_TYPE_ARRAY);
@@ -680,6 +687,9 @@ static void c_validate_redeclaration(c_name name, c_dcl *d, c_sym *sym)
 			t->array.length = d->type->array.length;
 			t->size = d->type->size;
 		}
+		if (d->flags & C_DCL_DEFINITION) {
+			sym->is_implemented = 1;
+		}
 		if (sym->linkage == C_LINK_EXTERNAL
 		 && !c_value_is_const(&sym->value)
 		 && !(d->flags & C_DCL_EXTERN)
@@ -720,7 +730,39 @@ c_sym *c_global_sym(c_sym *sym)
 	return NULL;
 }
 
-static c_name c_create_static_var(c_name name)
+static const c_type *c_create_global_type(const c_type *type)
+{
+	c_type *t;
+	int i;
+
+	if (type->flags & C_TYPE_GLOBAL) return type;
+	t = ir_arena_alloc(&yy_arena, sizeof(c_type));
+	*t = *type;
+	t->flags |= C_TYPE_GLOBAL;
+	if (t->kind == C_TYPE_POINTER) {
+		t->pointer.type = c_create_global_type(t->pointer.type);
+	} else if (t->kind == C_TYPE_ARRAY) {
+		t->array.type = c_create_global_type(t->array.type);
+	} else if (t->kind == C_TYPE_STRUCT || t->kind == C_TYPE_UNION) {
+		t->record.fields = ir_arena_alloc(&yy_arena, sizeof(c_field) * t->record.num_fields);
+		memcpy(t->record.fields, type->record.fields, sizeof(c_field) * t->record.num_fields);
+		for (i = 0; i < t->record.num_fields; i++) {
+			t->record.fields[i].type = c_create_global_type(t->record.fields[i].type);
+		}
+	} else if (t->kind == C_TYPE_FUNC) {
+		t->func.ret_type = c_create_global_type(t->func.ret_type);
+		t->func.params = ir_arena_alloc(&yy_arena, sizeof(c_param) * t->func.num_params);
+		memcpy(t->func.params, type->func.params, sizeof(c_param) * t->func.num_params);
+		for (i = 0; i < t->func.num_params; i++) {
+			t->func.params[i].type = c_create_global_type(t->func.params[i].type);
+		}
+	} else if (t->kind == C_TYPE_ENUM) {
+		t->enumeration.values = NULL;
+	}
+	return t;
+}
+
+static c_name c_create_static_var(c_name name, c_dcl *d)
 {
 	yy_dyn_str  dyn_str;
 	const char *name_str;
@@ -749,7 +791,8 @@ static c_name c_create_static_var(c_name name)
 	sym->kind = C_SYM_VAR;
 	sym->linkage = C_LINK_INTERNAL;
 	sym->is_thread_local = 0;
-	sym->is_implemented = 1;
+	sym->is_implemented = (d->flags & C_DCL_DEFINITION) != 0;
+	sym->value.type = c_create_global_type(d->type);
 	yy_hash.data[name].sym = sym;
 
 	return name;
@@ -908,7 +951,7 @@ c_sym *c_declare(c_name name, c_dcl *d)
 					sym->value.u.val.ptr = addr;
 					sym->value.u.ref = name; /* keep name in addition to address */
 				} else {
-					c_name sym_name = c_create_static_var(name);
+					c_name sym_name = c_create_static_var(name, d);
 					size_t len;
 					const char *str = yy_sym2strl(sym_name, &len);
 					ir_ref ref;
@@ -1047,7 +1090,7 @@ static c_type *c_create_pointer_type(const c_type *element_type)
 {
 	c_type *type = ir_arena_alloc(&c_arena, sizeof(c_type));
 	type->kind = C_TYPE_POINTER;
-	type->flags = 0;
+	type->flags = active_scope ? 0 : C_TYPE_GLOBAL;
 	type->attr = c_align2attr(_Alignof(void*));
 	type->size = sizeof(void*);
 	type->pointer.type = element_type;
@@ -1108,7 +1151,7 @@ void c_make_array_type(c_dcl *d, c_dcl *dim, c_value *len, uint64_t attr)
 
 	type = ir_arena_alloc(&c_arena, sizeof(c_type));
 	type->kind = C_TYPE_ARRAY;
-	type->flags = 0;
+	type->flags = active_scope ? 0 : C_TYPE_GLOBAL;
 	type->size = c_aligned_type_size(d->type) * length;
 	type->attr = attr | (d->attr & C_ARRAY_ATTRS);
 	if ((d->type->attr & C_ATTR_ALIGN_MASK) > (type->attr & C_ATTR_ALIGN_MASK)) {
@@ -1129,7 +1172,7 @@ c_type *c_make_enum_type(c_dcl *d, c_name tag)
 	c_type *type;
 	type = ir_arena_alloc(&c_arena, sizeof(c_type));
 	type->kind = C_TYPE_ENUM;
-	type->flags = C_TYPE_INCOMPLETE;
+	type->flags = C_TYPE_INCOMPLETE | (active_scope ? 0 : C_TYPE_GLOBAL);
 	type->attr = (d->attr & C_ENUM_ATTRS);
 	type->size = 0;
 	type->enumeration.tag = tag;
@@ -1244,7 +1287,7 @@ c_type *c_make_struct_type(c_dcl *d, c_name tag)
 	c_type *type;
 	type = ir_arena_alloc(&c_arena, sizeof(c_type));
 	type->kind = (d->flags & C_TYPE_SPEC_UNION) ? C_TYPE_UNION : C_TYPE_STRUCT;
-	type->flags = C_TYPE_INCOMPLETE;
+	type->flags = C_TYPE_INCOMPLETE | (active_scope ? 0 : C_TYPE_GLOBAL);
 	type->attr = d->attr & C_STRUCT_ATTRS;
 	type->size = 0;
 	type->record.tag = tag;
@@ -1642,7 +1685,7 @@ void c_declare_func_param(c_param **params, int32_t *num_params, c_name name, c_
 	} else if (param->type->kind == C_TYPE_FUNC) {
 		c_type *type = ir_arena_alloc(&c_arena, sizeof(c_type));
 		type->kind = C_TYPE_POINTER;
-		type->flags = 0;
+		type->flags = active_scope ? 0 : C_TYPE_GLOBAL;
 		type->attr = c_align2attr(_Alignof(void*));
 		type->size = sizeof(void*);
 		type->pointer.type = param->type;
@@ -1718,7 +1761,7 @@ void c_make_func_type(c_dcl *d, c_param *params, int32_t num_params, bool is_var
 
 	type = ir_arena_alloc(&c_arena, sizeof(c_type));
 	type->kind = C_TYPE_FUNC;
-	type->flags = 0;
+	type->flags = active_scope ? 0 : C_TYPE_GLOBAL;
 	type->size = sizeof(void*);
 	type->attr = d->attr & C_FUNC_TYPE_ATTRS;
 	if (is_variadic) type->attr |= C_ATTR_VARIADIC;
@@ -1748,7 +1791,7 @@ void c_declare_func_param_type(const c_type *type, c_name name, c_dcl *param)
 	} else if (param->type->kind == C_TYPE_FUNC) {
 		c_type *type = ir_arena_alloc(&c_arena, sizeof(c_type));
 		type->kind = C_TYPE_POINTER;
-		type->flags = 0;
+		type->flags = active_scope ? 0 : C_TYPE_GLOBAL;
 		type->attr = c_align2attr(_Alignof(void*));
 		type->size = sizeof(void*);
 		type->pointer.type = param->type;
@@ -2868,6 +2911,7 @@ void c_do_cast(const c_type *t, c_value *v)
 		/* remove top-level qualifiers */
 		c_type *type = ir_arena_alloc(&c_arena, sizeof(c_type));
 		*type = *t;
+		if (active_scope) type->flags &= ~C_TYPE_GLOBAL;
 		type->attr &= ~(C_ATTR_CONST|C_ATTR_VOLATILE);
 		t = type;
 	}
@@ -4592,6 +4636,10 @@ void c_do_cond_op(c_value *cond, c_value *op1, c_value *op2)
 				t->pointer.type = ir_arena_alloc(&c_arena, sizeof(c_type));
 				*((c_type*)(t->pointer.type)) = *type->pointer.type;
 				((c_type*)(t->pointer.type))->attr |= (t1->attr | t2->attr) & (C_ATTR_CONST|C_ATTR_VOLATILE);
+				if (active_scope) {
+					t->flags &= ~C_TYPE_GLOBAL;
+					((c_type*)(t->pointer.type))->flags &= ~C_TYPE_GLOBAL;
+				}
 				type = t;
 		    }
 		}
@@ -5552,6 +5600,7 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 				c_type *type = ir_arena_alloc(&c_arena, sizeof(c_type));
 
 				*type = *obj->value.type;
+				if (active_scope) type->flags &= ~C_TYPE_GLOBAL;
 				len += val->type->array.type->size;
 				type->array.length = type->size = len;
 				type->attr &= ~C_ATTR_FLEXIBLE;
@@ -6031,6 +6080,7 @@ void c_do_init_end(c_sym *obj, size_t size)
 			c_type *type = ir_arena_alloc(&c_arena, sizeof(c_type));
 
 			*type = *obj->value.type;
+			if (active_scope) type->flags |= C_TYPE_GLOBAL;
 			type->array.length = size / type->array.type->size;
 			type->size = size;
 			type->attr &= ~C_ATTR_FLEXIBLE;
@@ -6095,6 +6145,7 @@ void c_do_generic_type(c_generic *g, const c_type *type)
 		/* remove top-level qualifiers */
 		c_type *t = ir_arena_alloc(&c_arena, sizeof(c_type));
 		*t = *type;
+		if (active_scope) t->flags &= ~C_TYPE_GLOBAL;
 		t->attr &= ~(C_ATTR_CONST|C_ATTR_VOLATILE);
 		type = t;
 	}
