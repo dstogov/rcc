@@ -684,17 +684,54 @@ static void rcc_help(const char *cmd)
 		cmd);
 }
 
-int main(int argc, char **argv)
+static void rcc_process_defines(ir_list *def, const char **argv)
+{
+	char buf[256];
+
+	pp_start();
+	for (uint32_t j = 0; j < ir_list_len(def); j++) {
+		int i = ir_list_at(def, j);
+		const char *str = argv[i];
+		const char *val;
+		yy_sym sym;
+
+		IR_ASSERT(str[0] == '-');
+		if (str[1] == 'D') {
+			str = (str[2] == 0) ? argv[i + 1] : str + 2;
+			val = strchr(str, '=');
+			if (val) {
+			    snprintf(buf, sizeof(buf), "#define %.*s %s\n", (int)(val-str), str, val + 1);
+			} else {
+			    snprintf(buf, sizeof(buf), "#define %s\n", str);
+			}
+		} else {
+			IR_ASSERT(str[1] == 'U');
+			str = (str[2] == 0) ? argv[i + 1] : str + 2;
+		    snprintf(buf, sizeof(buf), "#undef %s\n", str);
+		}
+
+		yy_pos = yy_text = yy_linepos = yy_buf = buf;
+		yy_end = yy_buf + strlen(yy_buf);
+
+		do {
+			sym = yy_next();
+		} while (sym != YY_EOF);
+	}
+	pp_dtor();
+}
+
+int main(int argc, const char **argv)
 {
 	bool preprocess_only = 0;
 	uint32_t preprocess_flags = 0, compiler_flags = 0;
 	bool run = 0;
 	int run_args = 0;
 	const char *input = NULL;
+	ir_list def;
 	int i;
 	ir_ctx ctx;
 	double start_time = 0.0;
-	int ret = 0;
+	int ret = 1;
 
 	ir_consistency_check();
 
@@ -703,17 +740,21 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+	ir_list_init(&def, 16);
 	for (i = 1; i < argc; i++) {
 		if (strcmp(argv[i], "-h") == 0
 		 || strcmp(argv[i], "--help") == 0) {
 			rcc_help(argv[0]);
-			return 0;
+			ret = 0;
+			goto exit;
 		} else if (strcmp(argv[i], "--version") == 0) {
 			printf("IR %s\n", IR_VERSION);
-			return 0;
+			ret = 0;
+			goto exit;
 		} else if (strcmp(argv[i], "--target") == 0) {
 			printf("%s\n", IR_TARGET);
-			return 0;
+			ret = 0;
+			goto exit;
 		} else if (argv[i][0] == '-' && argv[i][1] == 'O' && strlen(argv[i]) == 3) {
 			if (argv[i][2] == '0') {
 				c_opt_flags = (c_opt_flags & ~C_OPT_LEVEL) | 0;
@@ -723,7 +764,18 @@ int main(int argc, char **argv)
 				c_opt_flags = (c_opt_flags & ~C_OPT_LEVEL) | 2;
 			} else {
 				fprintf(stderr, "ERROR: Invalid usage' (use --help)\n");
-				return 1;
+				goto exit;
+			}
+		} else if (argv[i][0] == '-' && (argv[i][1] == 'D' || argv[i][1] == 'U')) {
+			if (argv[i][2] == 0) {
+				if (i + 1 == argc || argv[i+1][0] == '-') {
+					fprintf(stderr, "ERROR: macro name missing after \"-%c\"\n", argv[i][1]);
+					goto exit;
+				}
+				ir_list_push(&def, i);
+				i++;
+			} else {
+				ir_list_push(&def, i);
 			}
 		} else if (strcmp(argv[i], "-fno-inline") == 0) {
 			c_opt_flags &= ~C_OPT_INLINE;
@@ -743,8 +795,6 @@ int main(int argc, char **argv)
 			preprocess_flags |= PP_DUMP_INCLUDES;
 		} else if (strcmp(argv[i], "-w") == 0) {
 			compiler_flags |= YY_NO_WARNINGS;
-//TODO: -D ???
-//TODO: -U ???
 //TODO: -I ???
 //TODO: -include file
 //TODO: -isystem dir
@@ -777,11 +827,11 @@ int main(int argc, char **argv)
 			}
 		} else if (argv[i][0] == '-') {
 			fprintf(stderr, "ERROR: Unknown option '%s' (use --help)\n", argv[i]);
-			return 1;
+			goto exit;
 		} else {
 			if (input) {
 				fprintf(stderr, "ERROR: Invalid usage' (use --help)\n");
-				return 1;
+				goto exit;
 			}
 			input = argv[i];
 		}
@@ -804,6 +854,7 @@ int main(int argc, char **argv)
 	if (preprocess_only) {
 		yy_flags = YY_FLAGS_PP_DEFAULT | preprocess_flags;
 		rcc_init();
+		if (ir_list_len(&def)) rcc_process_defines(&def, argv);
 		rcc_preprocess(input, stdout);
 		rcc_free();
 
@@ -811,6 +862,8 @@ int main(int argc, char **argv)
 			double t = rcc_time();
 			fprintf(stderr, "\npreprocessing time = %0.6f\n", t - start_time);
 		}
+
+		ret = 0;
 	} else {
 		c_native = run || (c_dump_flags & (C_DUMP_SIZE|C_DUMP_ASM));
 
@@ -819,7 +872,7 @@ int main(int argc, char **argv)
 			c_code_buffer.start = ir_mem_mmap(size);
 			if (!c_code_buffer.start) {
 				fprintf(stderr, "ERROR: Cannot allocate JIT code buffer\n");
-				return 1;
+				goto exit;
 			}
 			c_code_buffer.pos = c_code_buffer.start;
 			c_code_buffer.end = (char*)c_code_buffer.start + size;
@@ -827,6 +880,7 @@ int main(int argc, char **argv)
 
 		yy_flags = YY_FLAGS_DEFAULT | compiler_flags;
 		rcc_init();
+		if (ir_list_len(&def)) rcc_process_defines(&def, argv);
 		if (rcc_compile(input)) {
 			if (c_dump_flags & C_DUMP_SIZE) {
 				fprintf(stderr, "\ncode size = %lld\n",
@@ -841,15 +895,15 @@ int main(int argc, char **argv)
 
 			if (run) {
 				int jit_argc = 1;
-				char **jit_argv;
+				const char **jit_argv;
 				c_sym *sym = yy_hash.data[YY_MAIN].sym;
-				int (*func)(int, char**) = NULL;
+				int (*func)(int, const char**) = NULL;
 
 				if (!sym || sym->kind != C_SYM_FUNC || !c_value_is_const(&sym->value)) {
 					rcc_free();
 					ir_free(&ctx);
 					fprintf(stderr, "undefined reference to function \"main\"\n");
-					return 1;
+					goto exit;
 				}
 				IR_ASSERT(sym->value.u.type == IR_ADDR && sym->value.u.val.ptr);
 				func = sym->value.u.val.ptr;
@@ -875,9 +929,9 @@ int main(int argc, char **argv)
 					fprintf(stderr, "\nexecution time = %0.6f\n", t - rcc_atexit_start);
 					rcc_atexit_start = 0.0;
 				}
+			} else {
+				ret = 0;
 			}
-		} else {
-			ret = 1;
 		}
 		rcc_free();
 	}
@@ -890,5 +944,7 @@ int main(int argc, char **argv)
 	}
 #endif
 
+exit:
+	ir_list_free(&def);
 	return ret;
 }
