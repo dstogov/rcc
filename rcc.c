@@ -598,7 +598,7 @@ static bool c_is_type_const(const c_type *type)
 	return 0;
 }
 
-static void rcc_emit_ir_data(FILE *f, const c_type *type, const void *addr)
+static size_t rcc_emit_ir_data(FILE *f, const c_type *type, const void *addr)
 {
 	if (C_IS_TYPE_KIND_SCALAR(type->kind) || type->kind == C_TYPE_ENUM) {
 		ir_type t = c_type2ir(type);
@@ -607,16 +607,16 @@ static void rcc_emit_ir_data(FILE *f, const c_type *type, const void *addr)
 		switch (size) {
 			case 1:
 				fprintf(f, "\t%s 0x%02x,\n", ir_type_cname[t], (uint32_t)*(uint8_t*)addr);
-				break;
+				return 1;
 			case 2:
 				fprintf(f, "\t%s 0x%04x,\n", ir_type_cname[t], (uint32_t)*(uint16_t*)addr);
-				break;
+				return 2;
 			case 4:
 				fprintf(f, "\t%s 0x%08x,\n", ir_type_cname[t], *(uint32_t*)addr);
-				break;
+				return 4;
 			case 8:
 				fprintf(f, "\t%s 0x%016" PRIx64 ",\n", ir_type_cname[t], *(uint64_t*)addr);
-				break;
+				return 8;
 			default:
 				IR_ASSERT(0);
 		}
@@ -627,6 +627,7 @@ static void rcc_emit_ir_data(FILE *f, const c_type *type, const void *addr)
 			// TODO: symbolic constants ???
 			fprintf(f, "\tuintptr_t 0x%" PRIxPTR ",\n", *(uintptr_t*)addr);
 		}
+		return sizeof(void*);
 	} else if (type->kind == C_TYPE_FUNC) {
 		if (!*(uintptr_t*)addr) {
 			fprintf(f, "\tuintptr_t 0,\n");
@@ -634,16 +635,22 @@ static void rcc_emit_ir_data(FILE *f, const c_type *type, const void *addr)
 			// TODO: symbolic constants ???
 			fprintf(f, "\tuintptr_t 0x%" PRIxPTR ",\n", *(uintptr_t*)addr);
 		}
+		return sizeof(void*);
 	} else if (type->kind == C_TYPE_ARRAY) {
-		const char *p = addr;
+		size_t offset = 0, el_offset = 0;
 		int i;
 
-		for (i = 0; i < type->array.length; i++) {
-			rcc_emit_ir_data(f, type->array.type, p);
-			p += type->array.type->size;
+		for (i = 0; i < type->array.length; el_offset += type->array.type->size, i++) {
+			while (offset < el_offset) {
+				/* padding */
+				fprintf(f, "\tuint8_t 0x00,\n");
+				offset++;
+			}
+			offset += rcc_emit_ir_data(f, type->array.type, (const char*)addr + el_offset);
 		}
+			return offset;
 	} else if (type->kind == C_TYPE_STRUCT) {
-		const char *p = addr;
+		size_t offset = 0;
 		const c_field *field = type->record.fields;
 		int i;
 
@@ -651,12 +658,19 @@ static void rcc_emit_ir_data(FILE *f, const c_type *type, const void *addr)
 			if (C_IS_BIT_FIELD(field->bit_field)) {
 				IR_ASSERT(0); //???
 			}
-			rcc_emit_ir_data(f, field->type, p + field->offset);
+			while (offset < field->offset) {
+				fprintf(f, "\tuint8_t 0x00,\n");
+				/* padding */
+				offset++;
+			}
+			offset += rcc_emit_ir_data(f, field->type, (const char*)addr + field->offset);
 		}
+		return offset;
 	} else if (type->kind == C_TYPE_UNION) {
 		const c_field *field = type->record.fields;
 		const c_field *best_field = NULL;
 		size_t best_size = 0;
+		size_t offset = 0;
 		int i;
 
 		for (i = 0; i < type->record.num_fields; field++, i++) {
@@ -666,11 +680,14 @@ static void rcc_emit_ir_data(FILE *f, const c_type *type, const void *addr)
 			}
 		}
 		if (best_field) {
-			rcc_emit_ir_data(f, best_field->type, addr);
+			offset += rcc_emit_ir_data(f, best_field->type, addr);
 		}
+		return offset;
 	} else {
-		IR_ASSERT(0); //???
+		IR_ASSERT(0);
 	}
+
+	return 0;
 }
 
 static void rcc_emit_ir(FILE *f)
