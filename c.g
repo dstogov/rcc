@@ -607,7 +607,7 @@ type_name(const c_type **t):                               {c_dcl d = {0};}
 
 initializer(c_sym *obj):                                   {c_value v = {0};}
 		assignment_expression(&v)                          {c_do_init_obj(obj, &v);}
-	|	                                                   {size_t size = 0;}
+	|	                                                   {size_t size = obj->value.type->size;}
 		initializer_contents(obj, obj->value.type, 0, &size)
 		                                                   {c_do_init_end(obj, size);}
 ;
@@ -848,7 +848,7 @@ unary_expression(c_value *val):
 		(	?{!C_IS_ID(sym) || is_typedef_name(sym)}
 			type_name(&t) ")"
 			(                                              {c_sym obj;}
-                                                           {size_t size = 0;}
+                                                           {size_t size = t->size;}
                                                            {c_do_init_expr_start(&obj, t);}
 				initializer_contents(&obj, t, 0, &size)    {c_do_init_expr_end(val, &obj, size);}
 			|	unary_expression(val)                      {c_do_cast(t, val);}

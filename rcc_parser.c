@@ -1193,7 +1193,7 @@ static yy_sym parse_initializer(yy_sym sym, c_sym *obj) {
 		sym = parse_assignment_expression(sym, &v);
 		c_do_init_obj(obj, &v);
 	} else if (sym == YY__LBRACE) {
-		size_t size = 0;
+		size_t size = obj->value.type->size;
 		sym = parse_initializer_contents(sym, obj, obj->value.type, 0, &size);
 		c_do_init_end(obj, size);
 	} else {
@@ -1773,7 +1773,7 @@ static yy_sym parse_unary_expression(yy_sym sym, c_value *val) {
 			sym = get_sym();
 			if (sym == YY__LBRACE) {
 				c_sym obj;
-				size_t size = 0;
+				size_t size = t->size;
 				c_do_init_expr_start(&obj, t);
 				sym = parse_initializer_contents(sym, &obj, t, 0, &size);
 				c_do_init_expr_end(val, &obj, size);
