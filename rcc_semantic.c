@@ -630,6 +630,12 @@ static void c_do_end_flexible(c_sym *obj, size_t size)
 
 		c_name sym = yy_hash_find(str, len);
 		yy_hash.data[sym].sym->value.u.val.ptr = obj->value.u.val.ptr;
+		if (yy_hash.data[sym].sym->value.type->attr & C_ATTR_FLEXIBLE) {
+			c_type *type = (c_type*)yy_hash.data[sym].sym->value.type;
+			type->array.length = obj->value.type->array.length;
+			type->size = obj->value.type->size;
+			type->attr &= ~C_ATTR_FLEXIBLE;
+		}
 	} else {
 		addr = c_linker_allocate_data(obj->value.u.ref ? yy_sym2str(obj->value.u.ref) : NULL, size);
 		memcpy(addr, obj->value.u.val.ptr, size);
@@ -6071,9 +6077,6 @@ const c_type *c_do_init_nested(c_sym *obj, c_init *init, bool b, size_t *offset_
 
 void c_do_init_end(c_sym *obj, size_t size)
 {
-	if (obj->tmp_data) {
-		c_do_end_flexible(obj, size);
-	}
 	if (obj->value.type->attr & C_ATTR_FLEXIBLE) {
 		if (obj->value.type->kind == C_TYPE_ARRAY) {
 			/* Convert "flexible" array to regular */
@@ -6090,6 +6093,9 @@ void c_do_init_end(c_sym *obj, size_t size)
 		 && (!c_value_is_ref(&obj->value) || !IR_IS_CONST_REF(obj->value.u.ref))) {
 			c_do_init_patch_flexible_alloca(obj->value.u.ref, size);
 		}
+	}
+	if (obj->tmp_data) {
+		c_do_end_flexible(obj, size);
 	}
 }
 
