@@ -103,15 +103,6 @@ static size_t c_attr2align(uint32_t attr)
 	return 1ULL << ((attr & C_ATTR_ALIGN_MASK) - 1);
 }
 
-static size_t c_aligned_type_size(const c_type *t)
-{
-	if (t->attr & C_ATTR_ALIGN_MASK) {
-		return IR_ALIGNED_SIZE(t->size, c_attr2align(t->attr));
-	} else {
-		return t->size;
-	}
-}
-
 ir_type c_type2ir(const c_type *t)
 {
 	c_type_kind kind = t->kind;
@@ -1158,7 +1149,10 @@ void c_make_array_type(c_dcl *d, c_dcl *dim, c_value *len, uint64_t attr)
 	type = ir_arena_alloc(&c_arena, sizeof(c_type));
 	type->kind = C_TYPE_ARRAY;
 	type->flags = active_scope ? 0 : C_TYPE_GLOBAL;
-	type->size = c_aligned_type_size(d->type) * length;
+	if ((d->type->attr & C_ATTR_ALIGN_MASK) && c_attr2align(d->type->attr) > d->type->size) {
+		yy_error("alignment of array elements is greater than element size");
+	}
+	type->size = d->type->size * length;
 	type->attr = attr | (d->attr & C_ARRAY_ATTRS);
 	if ((d->type->attr & C_ATTR_ALIGN_MASK) > (type->attr & C_ATTR_ALIGN_MASK)) {
 		type->attr &= ~C_ATTR_ALIGN_MASK;
