@@ -1496,8 +1496,9 @@ void c_finish_struct_type(c_type *type, c_dcl *d)
 					}
 
 					field_align = c_gcc_field_alignment(type, field, &packed);
-					field_size = C_IS_BIT_FIELD(field->bit_field) ?
-						(size_t)(C_BIT_FIELD_SIZE(field->bit_field) + 7) / 8 : field->type->size;
+					field_size = field->type->size;
+//???					field_size = C_IS_BIT_FIELD(field->bit_field) ?
+//						(size_t)(C_BIT_FIELD_SIZE(field->bit_field) + 7) / 8 : field->type->size;
 					field->offset = 0;
 					if (field_align > struct_align) struct_align = field_align;
 					if (field_size > size) size = field_size;
