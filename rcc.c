@@ -52,6 +52,7 @@ static ir_arena       *c_linker_arena;
 static ir_code_buffer  c_code_buffer;
 static bool            protected = 1;
 static ir_list         c_codegen_list;
+static FILE           *c_out = NULL;
 
 static void rcc_dump_func_proto(c_name name, bool prototype, FILE *f)
 {
@@ -180,7 +181,7 @@ static void rcc_ir_codegen(c_name name, ir_ctx *ctx, c_sym *sym)
 //TODO:			} else if (insn->op == IR_SYM) {
 //				}
 //			}
-			ir_disasm(yy_sym2str(name), entry, size, 0, ctx, stderr);
+			ir_disasm(yy_sym2str(name), entry, size, 0, ctx, c_out);
 		}
 
 #ifndef _WIN32
@@ -756,7 +757,7 @@ static int rcc_compile(const char *file_name)
 	rcc_parse();
 	rcc_fix_flexible_data();
 	if (c_dump_flags & C_DUMP_IR) {
-		rcc_emit_ir(stderr);
+		rcc_emit_ir(c_out);
 	}
 	if (ir_list_capasity(&c_codegen_list)) {
 		do {
@@ -814,6 +815,7 @@ static void rcc_help(const char *cmd)
 		"  -p                         - provide information aboit JIT-ed code to Linux Perf\n"
 #endif
 		"  -S                         - show generated assembler code\n"
+		"  -o <file-name>             - put primary output into the specified file\n"
 		"Optimization Options:\n"
 		"  -O[012]                    - optimization level (default: 2)\n"
 		"  -fno-inline                - disable function inlining\n"
@@ -886,6 +888,7 @@ int main(int argc, const char **argv)
 	bool run = 0;
 	int run_args = 0;
 	const char *input = NULL;
+	const char *output = NULL;
 	ir_list def;
 	int i;
 	ir_ctx ctx;
@@ -936,6 +939,17 @@ int main(int argc, const char **argv)
 			} else {
 				ir_list_push(&def, i);
 			}
+		} else if (argv[i][0] == '-' && argv[i][1] == 'o') {
+			if (argv[i][2] == 0) {
+				if (i + 1 == argc || (argv[i+1][0] == '-' && argv[i+1][1] != 0)) {
+					fprintf(stderr, "ERROR: missing filename after \"-%c\"\n", argv[i][1]);
+					goto exit;
+				}
+				output = argv[i+1];
+				i++;
+			} else {
+				output = argv[i+1] + 2;
+			}
 		} else if (strcmp(argv[i], "-fno-inline") == 0) {
 			c_opt_flags &= ~C_OPT_INLINE;
 		} else if (strcmp(argv[i], "-fno-mem2ssa") == 0) {
@@ -957,7 +971,6 @@ int main(int argc, const char **argv)
 //TODO: -I ???
 //TODO: -include file
 //TODO: -isystem dir
-//TODO: -o ???
 		} else if (strcmp(argv[i], "--save-ir-after-load") == 0) {
 			c_dump_flags |= C_DUMP_IR_AFTER_LOAD;
 		} else if (strcmp(argv[i], "--save-ir-after-mem2ssa") == 0) {
@@ -998,6 +1011,16 @@ int main(int argc, const char **argv)
 		}
 	}
 
+	if (output && output[0] != '-' && output[1] != 0) {
+		c_out = fopen(output, "w");
+		if (!c_out) {
+			fprintf(stderr, "ERROR: cannot open output file \"%s\"\n", output);
+			goto exit;
+		}
+	} else {
+		c_out = stdout;
+	}
+
 #ifndef _WIN32
 	if (c_dump_flags & C_PERF) {
 		ir_perf_jitdump_open();
@@ -1016,7 +1039,7 @@ int main(int argc, const char **argv)
 		yy_flags = YY_FLAGS_PP_DEFAULT | preprocess_flags;
 		rcc_init();
 		if (ir_list_len(&def)) rcc_process_defines(&def, argv);
-		rcc_preprocess(input, stdout);
+		rcc_preprocess(input, c_out);
 		rcc_free();
 
 		if (c_dump_flags & C_DUMP_TIME) {
