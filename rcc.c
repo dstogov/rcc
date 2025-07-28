@@ -948,7 +948,7 @@ int main(int argc, const char **argv)
 				output = argv[i+1];
 				i++;
 			} else {
-				output = argv[i+1] + 2;
+				output = argv[i] + 2;
 			}
 		} else if (strcmp(argv[i], "-fno-inline") == 0) {
 			c_opt_flags &= ~C_OPT_INLINE;
