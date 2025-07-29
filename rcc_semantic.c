@@ -3743,6 +3743,9 @@ static const c_type *c_common_type(yy_sym sym, c_value *op1, c_value *op2)
 					if (sym == YY__COLON) return NULL;
 					yy_warning("comparison of distinct pointer types lacks a cast");
 				}
+				if (sym == YY__COLON && op1_type->kind == C_TYPE_ARRAY) {
+					return c_create_pointer_type(op1_type->array.type);
+				}
 				// TODO: select best type ???
 				return op1_type;
 			} else if (C_IS_TYPE_INT(op2_type)) {
@@ -4652,9 +4655,11 @@ void c_do_cond_op(c_value *cond, c_value *op1, c_value *op2)
 		if (c_value_is_true(cond)) {
 			if (c_value_is_set(op1)) {
 				*cond = *op1;
+				cond->type = type;
 			}
 		} else {
 			*cond = *op2;
+			cond->type = type;
 		}
 	} else if (type != &c_type_void) {
 		ir_type t = c_type2ir(type);
