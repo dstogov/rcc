@@ -1786,8 +1786,9 @@ bad_utf8:			yy_error("bad UTF-8 sequence");
 static void yy_strings(c_value *res, str_list *first, str_list *last)
 {
 	yy_dyn_str dyn_str;
-	ir_val val;
 	char prefix = 0;
+	const c_type *type;
+	ir_val val;
 
 	yy_dyn_str_init(&dyn_str, "", 0);
 	do {
@@ -1795,26 +1796,24 @@ static void yy_strings(c_value *res, str_list *first, str_list *last)
 		first = first->next;
 	} while(first);
 
-	res->u.ref = dyn_str.len; // find a better place for str len ???
-
 	if (!prefix) {
-		yy_dyn_str_append0(&dyn_str, "", 0);
-		val.ptr = dyn_str.str;
-		c_value_set_const(res, &c_type_string, IR_ADDR, val);
+		yy_dyn_str_append(&dyn_str, "\0", 1);
+		type = &c_type_string;
 	} else if (prefix == 'L') {
 		yy_dyn_str_append(&dyn_str, "\0\0\0\0", 4);
-		val.ptr = dyn_str.str;
-		c_value_set_const(res, &c_type_lstring, IR_ADDR, val);
+		type = &c_type_lstring;
 	} else if (prefix == 'u') {
 		yy_dyn_str_append(&dyn_str, "\0\0", 2);
-		val.ptr = dyn_str.str;
-		c_value_set_const(res, &c_type_string_u16, IR_ADDR, val);
+		type = &c_type_string_u16;
 	} else {
 		IR_ASSERT(prefix == 'U');
 		yy_dyn_str_append(&dyn_str, "\0\0\0\0", 4);
-		val.ptr = dyn_str.str;
-		c_value_set_const(res, &c_type_string_u32, IR_ADDR, val);
+		type = &c_type_string_u32;
 	}
+
+	val.ptr = (void*)dyn_str.str;
+	c_value_set_const(res, type, IR_ADDR, val);
+	res->u.ref = dyn_str.len; // find a better place for str len ???
 }
 
 /* CPP helper */

@@ -83,6 +83,8 @@ static c_scope    *active_scope = NULL;
 static c_loop     *active_loop = NULL;
 static c_name      active_func_name = 0;
 static uint32_t    c_static_sym_num = 0;
+static uint32_t    c_static_str_num = 0;
+static ir_strtab   c_strtab;
 
 static bool c_valid_alignment(c_value *val)
 {
@@ -793,6 +795,69 @@ static c_name c_create_static_var(c_name name, c_dcl *d)
 	yy_hash.data[name].sym = sym;
 
 	return name;
+}
+
+static ir_ref c_create_str_sym(c_value *res)
+{
+	const c_type *type = res->type;
+	const void *str = res->u.val.ptr;
+	size_t size = res->u.ref; /* string lenght (with terminating zero) */
+	void *addr;
+	char buf[32];
+	uint32_t i, n;
+	c_name name;
+	c_sym *sym;
+	ir_ref ref;
+
+	name = ir_strtab_find(&c_strtab, str, size);
+	if (name) {
+		ref = ir_const_sym(active_ctx, ir_strl(active_ctx, yy_hash.data[name].str, yy_hash.data[name].len));
+
+		c_value_set_rval(res, type, IR_ADDR, ref);
+		res->u.val.ptr = yy_hash.data[name].sym->value.u.val.ptr;
+
+		return ref;
+	}
+
+	i = sizeof(buf);
+	n = ++c_static_str_num;
+	buf[--i] = 0;
+	do {
+		buf[--i] = '0' + n % 10;
+		n = n / 10;
+	} while (n != 0);
+	buf[--i] = '.';
+	buf[--i] = 'r';
+	buf[--i] = 't';
+	buf[--i] = 's';
+
+	name = yy_hash_lookup(buf + i, sizeof(buf) - 1 - i);
+	addr = c_linker_allocate_data(buf + i, size);
+	memcpy(addr, str, size);
+
+	/* Create a global symbol in yy_arena */
+	sym = ir_arena_alloc(&yy_arena, sizeof(c_sym));
+	memset(sym, 0, sizeof(c_sym));
+	sym->kind = C_SYM_VAR;
+	sym->linkage = C_LINK_INTERNAL;
+	sym->is_thread_local = 0;
+	sym->is_implemented = 1;
+	sym->is_string = 1;
+	yy_hash.data[name].sym = sym;
+
+	sym->value.type = type;
+	sym->value.u.optx = IR_OPT(C_SYM_CONST, IR_ADDR);
+	sym->value.u.val.ptr = addr;
+	sym->value.u.ref = size;
+
+	ir_strtab_lookup(&c_strtab, str, size, name);
+
+	ref = ir_const_sym(active_ctx, ir_strl(active_ctx, buf + i, sizeof(buf) - 1 - i));
+
+	c_value_set_rval(res, type, IR_ADDR, ref);
+	res->u.val.ptr = addr;
+
+	return ref;
 }
 
 static bool c_is_builtin_func_name(c_name name)
@@ -2006,7 +2071,7 @@ void c_sizeof_expr(c_value *res, yy_sym op, c_value *expr, ir_ref old_control)
 		  || expr->type == &c_type_lstring
 		  || expr->type == &c_type_string_u16
 		  || expr->type == &c_type_string_u32)) {
-			val.u64 = expr->u.ref + expr->type->array.type->size; /* ref keeps string lenght */
+			val.u64 = expr->u.ref; /* ref keeps string lenght (with terminating zero) */
 		} else if (expr->type->attr & C_ATTR_FLEXIBLE) {
 			yy_error_fmt("invalid application of \"%s\" to incomplete type", "sizeof");
 		} else {
@@ -2327,6 +2392,13 @@ void c_value_rval(c_value *val)
 static ir_ref c_value_ref(c_value *val)
 {
 	if (c_value_is_const(val)) {
+		if (val->type->kind == C_TYPE_ARRAY
+		 && (val->type == &c_type_string
+		  || val->type == &c_type_lstring
+		  || val->type == &c_type_string_u16
+		  || val->type == &c_type_string_u32)) {
+			return c_create_str_sym(val);
+		}
 		ir_type t = (val->type->kind == C_TYPE_ENUM) ? c_type2ir(val->type) : val->u.type;
 		return ir_const(active_ctx, val->u.val, t);
 	} else {
@@ -2582,6 +2654,13 @@ static void c_do_cvt(const c_type *t, ir_type type, c_value *v)
 			IR_ASSERT(0);
 		}
 	} else if (t != v->type) {
+		if (v->type->kind == C_TYPE_ARRAY
+		 && (v->type == &c_type_string
+		  || v->type == &c_type_lstring
+		  || v->type == &c_type_string_u16
+		  || v->type == &c_type_string_u32)) {
+			c_create_str_sym(v);
+		}
 		v->type = t;
 	}
 }
@@ -5601,14 +5680,13 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 		  || (val->type == &c_type_string_u32
 		   && obj->value.type->array.type == val->type->array.type))) {
 			const char *str = val->u.val.ptr;
-			size_t len = val->u.ref; /* ref keeps string lenght */
+			size_t len = val->u.ref; /* ref keeps string lenght (with terminating zero) */
 			if (obj->value.type->attr & C_ATTR_FLEXIBLE) {
 				/* Convert "flexible" array to regular */
 				c_type *type = ir_arena_alloc(&c_arena, sizeof(c_type));
 
 				*type = *obj->value.type;
 				if (active_scope) type->flags &= ~C_TYPE_GLOBAL;
-				len += val->type->array.type->size;
 				type->array.length = type->size = len;
 				type->attr &= ~C_ATTR_FLEXIBLE;
 				obj->value.type = type;
@@ -5619,13 +5697,13 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 					c_do_init_patch_flexible_alloca(obj->value.u.ref, len);
 				}
 			} else if (len > (size_t)obj->value.type->array.length) {
-				if (val->type->array.type->size == 1) {
+				if (len - val->type->array.type->size == (size_t)obj->value.type->array.length) {
+					len -= val->type->array.type->size;
+				} else if (val->type->array.type->size == 1) {
 					yy_error("initializer-string for array of \"char\" is too long");
 				} else {
 					yy_error("initializer-string for array is too long");
 				}
-			} else if (len + val->type->array.type->size < (size_t)obj->value.type->array.length) {
-				len += val->type->array.type->size;
 			}
 			if (c_value_is_const(&obj->value)
 			 || (c_value_is_ref(&obj->value) && IR_IS_CONST_REF(obj->value.u.ref))) {
@@ -5640,7 +5718,7 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 				IR_ASSERT(active_ctx->ir_base[obj->value.u.ref].op == IR_ALLOCA);
 				ir_memcpy(active_ctx,
 					obj->value.u.ref,
-					ir_const_addr(active_ctx, (uintptr_t)str),
+					c_create_str_sym(val), //ir_const_addr(active_ctx, (uintptr_t)str),???
 					ir_const_size_t(active_ctx, len));
 			}
 			return;
@@ -5797,12 +5875,14 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 		if (type == val->type) {
 			break;
 		} else if (type->kind == C_TYPE_ARRAY) {
-			if (val->type == &c_type_string
-			 && c_value_is_const(val)
-			 && type->kind == C_TYPE_ARRAY
-			 && (type->array.type->kind == C_TYPE_CHAR
-			  || type->array.type->kind == C_TYPE_I8
-			  || type->array.type->kind == C_TYPE_U8)) {
+			if (type->kind == C_TYPE_ARRAY
+			 && ((val->type == &c_type_string
+			   && (type->array.type->kind == C_TYPE_CHAR
+			    || type->array.type->kind == C_TYPE_I8
+			    || type->array.type->kind == C_TYPE_U8))
+			  || (val->type == &c_type_lstring && type->array.type == val->type->array.type)
+			  || (val->type == &c_type_string_u16 && type->array.type == val->type->array.type)
+			  || (val->type == &c_type_string_u32 && type->array.type == val->type->array.type))) {
 				break;
 			}
 			type = type->array.type;
@@ -5838,12 +5918,14 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 			break;
 		}
 
-		if (val->type == &c_type_string
-		 && c_value_is_const(val)
-		 && type->kind == C_TYPE_ARRAY
-		 && (type->array.type->kind == C_TYPE_CHAR
-		  || type->array.type->kind == C_TYPE_I8
-		  || type->array.type->kind == C_TYPE_U8)) {
+		if (type->kind == C_TYPE_ARRAY
+		 && ((val->type == &c_type_string
+		   && (type->array.type->kind == C_TYPE_CHAR
+		    || type->array.type->kind == C_TYPE_I8
+		    || type->array.type->kind == C_TYPE_U8))
+		  || (val->type == &c_type_lstring && type->array.type == val->type->array.type)
+		  || (val->type == &c_type_string_u16 && type->array.type == val->type->array.type)
+		  || (val->type == &c_type_string_u32 && type->array.type == val->type->array.type))) {
 			break;
 		}
 
@@ -5892,10 +5974,12 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 		  || (val->type == &c_type_string_u32
 		   && type->array.type == val->type->array.type))) {
 			const char *str = val->u.val.ptr;
-			size_t len = val->u.ref; /* ref keeps string lenght */
+			size_t len = val->u.ref; /* ref keeps string lenght (with terminating zero) */
 
 			if (len > (size_t)type->array.length && !(type->attr & C_ATTR_FLEXIBLE)) {
-				if (val->type->array.type->size == 1) {
+				if (len - type->array.type->size == (size_t)type->array.length) {
+					len -=  - type->array.type->size;
+				} else if (val->type->array.type->size == 1) {
 					yy_error("initializer-string for array of \"char\" is too long");
 				} else {
 					yy_error("initializer-string for array is too long");
@@ -5904,7 +5988,6 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 
 			new_size = *size;
 			if (type->attr & C_ATTR_FLEXIBLE) {
-				len += type->array.type->size; /* for terminating zero */
 				if (obj->value.type == type) {
 					new_size = len;
 				} else if (obj->value.type->kind == C_TYPE_STRUCT
@@ -5931,7 +6014,7 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 				if (new_size > *size) *size = new_size;
 				ir_memcpy(active_ctx,
 					ir_ADD_A(obj->value.u.ref, ir_const_size_t(active_ctx, offset)),
-					ir_const_addr(active_ctx, (uintptr_t)str),
+					c_create_str_sym(val), //ir_const_addr(active_ctx, (uintptr_t)str),???
 					ir_const_size_t(active_ctx, len));
 			}
 			return;
@@ -6423,4 +6506,24 @@ void c_do_func_end(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 yy_sym c_get_current_func_name(void)
 {
 	return active_func_name;
+}
+
+void c_do_compile_start(void)
+{
+	c_dead_code = 0;
+
+	active_func = NULL;
+	active_func_scope = NULL;
+	active_scope = NULL;
+	active_loop = NULL;
+	active_func_name = 0;
+	c_static_sym_num = 0;
+	c_static_str_num = 0;
+
+	ir_strtab_init(&c_strtab, 256, 0);
+}
+
+void c_do_compile_end(void)
+{
+	ir_strtab_free(&c_strtab);
 }

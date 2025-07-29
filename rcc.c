@@ -567,6 +567,7 @@ static void rcc_fix_flexible_data(void)
 	for (i = YY_LAST_KEYWORD + 1, p = yy_hash.data + i; i < yy_hash.count; p++, i++) {
 		if (p->sym
 		 && p->sym->kind == C_SYM_VAR
+		 && !p->sym->is_string
 		 && p->sym->value.type
 		 && (p->sym->value.type->attr & C_ATTR_FLEXIBLE)) {
 			c_type *type;
@@ -711,6 +712,31 @@ static size_t rcc_emit_ir_data(FILE *f, const c_type *type, const void *addr)
 	return 0;
 }
 
+static void rcc_emit_ir_mbstring(FILE *f, const c_type *type, const void *addr, int len)
+{
+	ir_type t = c_type2ir(type);
+	size_t size = ir_type_size[t];
+
+	switch (size) {
+		case 2:
+			while (len > 0) {
+				fprintf(f, "\t%s 0x%04x,\n", ir_type_cname[t], (uint32_t)*(uint16_t*)addr);
+				addr = (const char*)addr + 2;
+				len -= 2;
+			}
+			break;
+		case 4:
+			while (len > 0) {
+				fprintf(f, "\t%s 0x%08x,\n", ir_type_cname[t], *(uint32_t*)addr);
+				addr = (const char*)addr + 4;
+				len -= 4;
+			}
+			break;
+		default:
+			IR_ASSERT(0);
+	}
+}
+
 static void rcc_emit_ir(FILE *f)
 {
 	uint32_t i;
@@ -724,6 +750,8 @@ static void rcc_emit_ir(FILE *f)
 
 	for (i = YY_LAST_KEYWORD + 1, p = yy_hash.data + i; i < yy_hash.count; p++, i++) {
 		if (p->sym && p->sym->kind == C_SYM_VAR) {
+			size_t size;
+
 			if (p->sym->linkage == C_LINK_INTERNAL) {
 				fprintf(f, "static ");
 			} else if (p->sym->is_external || !c_value_is_set(&p->sym->value)) {
@@ -732,15 +760,24 @@ static void rcc_emit_ir(FILE *f)
 					yy_sym2str(i));
 				continue;
 			}
+			size = p->sym->is_string ? (size_t)p->sym->value.u.ref : p->sym->value.type->size;
 			fprintf(f, "%s %s[%" PRIuPTR "]%s",
 				c_is_type_const(p->sym->value.type) ? "const" : "var",
 				yy_sym2str(i),
-				p->sym->value.type->size,
-				p->sym->is_implemented ? (/*(flags & IR_CONST_STRING) ? " = " :*/ " = {\n") : ";\n");
+				size,
+				p->sym->is_implemented ?
+					((p->sym->is_string && p->sym->value.type->array.type->size == 1) ? " = \"" : " = {\n") : ";\n");
 			if (p->sym->is_implemented) {
-				// TODO: support for constant strings ???
-				rcc_emit_ir_data(f, p->sym->value.type, p->sym->value.u.val.ptr);
-				fprintf(f, "};\n");
+				if (!p->sym->is_string) {
+					rcc_emit_ir_data(f, p->sym->value.type, p->sym->value.u.val.ptr);
+					fprintf(f, "};\n");
+				} else if (p->sym->value.type->array.type->size > 1) {
+					rcc_emit_ir_mbstring(f, p->sym->value.type->array.type, p->sym->value.u.val.ptr, size);
+					fprintf(f, "};\n");
+				} else {
+					ir_print_escaped_str(p->sym->value.u.val.ptr, size, f);
+					fprintf(f, "\";\n");
+				}
 			}
 		}
 	}
@@ -769,6 +806,7 @@ static int rcc_compile(const char *file_name)
 		return 0;
 	}
 	memset(&c_codegen_list, 0, sizeof(ir_list));
+	c_do_compile_start();
 	rcc_parse();
 	rcc_fix_flexible_data();
 	if (c_dump_flags & C_DUMP_IR) {
@@ -784,6 +822,7 @@ static int rcc_compile(const char *file_name)
 		} while (ir_list_len(&c_codegen_list));
 		ir_list_free(&c_codegen_list);
 	}
+	c_do_compile_end();
 	rcc_dtor();
 	return 1;
 }

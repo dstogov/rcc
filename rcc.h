@@ -675,6 +675,7 @@ struct _c_sym {
 	bool                   is_external: 1;     /* only for C_SYM_VAR and C_SYM_FUNC */
 	bool                   is_thread_local: 1; /* only for C_SYM_VAR */
 	bool                   is_implemented: 1;  /* only for C_SYM_VAR and C_SYM_FUNC */
+	bool                   is_string: 1;
 	bool                   has_thunk: 1;       /* TODO: replace thunks with relocs ??? */
 	bool                   tmp_data: 1;        /* temporary growable data area */
 	c_scope               *scope;
@@ -927,6 +928,9 @@ void c_do_generic_end(c_value *res, c_generic *g);
 
 void c_do_func_start(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx);
 void c_do_func_end(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx);
+
+void c_do_compile_start(void);
+void c_do_compile_end(void);
 
 /* C Parser */
 bool parse_pp_expr(void);
