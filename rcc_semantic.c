@@ -3717,7 +3717,7 @@ static const c_type *c_common_type(yy_sym sym, c_value *op1, c_value *op2)
 				if (op2_type->size != op1_type->size) {
 					c_do_cvt(&c_type_size_t, IR_SIZE_T, op2);
 				}
-				// array -> pointer ???
+				if (op1_type->kind == C_TYPE_ARRAY) return c_create_pointer_type(op1_type->array.type);
 				return op1_type;
 			}
 		} else if (sym == YY__MINUS) {
@@ -3725,11 +3725,11 @@ static const c_type *c_common_type(yy_sym sym, c_value *op1, c_value *op2)
 				if (op2_type->size != op1_type->size) {
 					c_do_cvt(&c_type_size_t, IR_SIZE_T, op2);
 				}
-				// array -> pointer ???
+				if (op1_type->kind == C_TYPE_ARRAY) return c_create_pointer_type(op1_type->array.type);
 				return op1_type;
 			} else if ((t2 == C_TYPE_POINTER || t2 == C_TYPE_ARRAY)
 			 && c_compatible_types(op1_type->pointer.type, op2_type->pointer.type, 1, 0)) {
-				// array -> pointer ???
+				if (op1_type->kind == C_TYPE_ARRAY) return c_create_pointer_type(op1_type->array.type);
 				return op1_type;
 			}
 		} else if (sym == YY__LESS || sym == YY__LESS_EQUAL || sym == YY__GREATER || sym == YY__GREATER_EQUAL
@@ -3763,6 +3763,7 @@ static const c_type *c_common_type(yy_sym sym, c_value *op1, c_value *op2)
 				if (op1_type->size != op2_type->size) {
 					c_do_cvt(&c_type_size_t, IR_SIZE_T, op1);
 				}
+				if (op2_type->kind == C_TYPE_ARRAY) return c_create_pointer_type(op2_type->array.type);
 				return op2_type;
 			}
 		} else if (sym == YY__LESS || sym == YY__LESS_EQUAL || sym == YY__GREATER || sym == YY__GREATER_EQUAL
@@ -3897,7 +3898,7 @@ static void c_do_add(const c_type *type, c_value *op1, c_value *op2)
 		IR_ASSERT(C_IS_TYPE_INT(op2->type) || op2->type->kind == C_TYPE_ENUM);
 		if (c_value_is_const(op1) && c_value_is_const(op2)) {
 			val.addr = op1->u.val.addr + op2->u.val.u64 * element_size;
-			c_value_set_const(op1, op1->type, IR_ADDR, val);
+			c_value_set_const(op1, type, IR_ADDR, val);
 		} else {
 			if (C_IS_TYPE_SIGNED(op2->type)) {
 				if (op2->type->kind != c_type_ssize_t.kind) {
@@ -3936,7 +3937,7 @@ static void c_do_add(const c_type *type, c_value *op1, c_value *op2)
 		IR_ASSERT(C_IS_TYPE_INT(op1->type) || op1->type->kind == C_TYPE_ENUM);
 		if (c_value_is_const(op1) && c_value_is_const(op2)) {
 			val.addr = op2->u.val.addr + op1->u.val.u64 * element_size;
-			c_value_set_const(op1, op2->type, IR_ADDR, val);
+			c_value_set_const(op1, type, IR_ADDR, val);
 		} else {
 			if (C_IS_TYPE_SIGNED(op1->type)) {
 				if (op1->type->kind != c_type_ssize_t.kind) {
@@ -4015,7 +4016,7 @@ static void c_do_sub(const c_type *type, c_value *op1, c_value *op2)
 			IR_ASSERT(C_IS_TYPE_INT(op2->type) || op2->type->kind == C_TYPE_ENUM);
 			if (c_value_is_const(op1) && c_value_is_const(op2)) {
 				val.addr = op1->u.val.addr - op2->u.val.u64 * element_size;
-				c_value_set_const(op1, op1->type, IR_ADDR, val);
+				c_value_set_const(op1, type, IR_ADDR, val);
 			} else {
 				if (C_IS_TYPE_SIGNED(op2->type)) {
 					if (op2->type->kind != c_type_ssize_t.kind) {
