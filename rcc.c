@@ -732,7 +732,7 @@ static void rcc_emit_ir(FILE *f)
 					yy_sym2str(i));
 				continue;
 			}
-			fprintf(f, "%s %s [%" PRIuPTR "]%s",
+			fprintf(f, "%s %s[%" PRIuPTR "]%s",
 				c_is_type_const(p->sym->value.type) ? "const" : "var",
 				yy_sym2str(i),
 				p->sym->value.type->size,
