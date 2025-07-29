@@ -54,6 +54,30 @@ static bool            protected = 1;
 static ir_list         c_codegen_list;
 static FILE           *c_out = NULL;
 
+static ir_type c_type2ir_arg(const c_type *type)
+{
+	if (type->kind == C_TYPE_STRUCT || type->kind == C_TYPE_UNION) {
+		if (type->size <= sizeof(void*)) {
+			type = (type->size <= 4) ? &c_type_u32 : &c_type_u64;
+		} else {
+//???			yy_error("long struct arguments not implemented yet"); //???
+		}
+	}
+	return c_type2ir(type);
+}
+
+static ir_type c_type2ir_ret(const c_type *type)
+{
+	if (type->kind == C_TYPE_STRUCT || type->kind == C_TYPE_UNION) {
+		if (type->size <= sizeof(void*)) {
+			type = (type->size <= 4) ? &c_type_u32 : &c_type_u64;
+		} else {
+//???			yy_error("long struct return not implemented yet"); //???
+		}
+	}
+	return c_type2ir(type);
+}
+
 static void rcc_dump_func_proto(c_name name, bool prototype, FILE *f)
 {
 	c_sym *sym = yy_hash.data[name].sym;
@@ -72,10 +96,10 @@ static void rcc_dump_func_proto(c_name name, bool prototype, FILE *f)
 		int n = t->func.num_params;
 		const c_param *p = t->func.params;
 
-		fprintf(f, "%s", ir_type_cname[c_type2ir(p->type)]);
+		fprintf(f, "%s", ir_type_cname[c_type2ir_arg(p->type)]);
 		p++;
 		while (--n) {
-			fprintf(f, ", %s", ir_type_cname[c_type2ir(p->type)]);
+			fprintf(f, ", %s", ir_type_cname[c_type2ir_arg(p->type)]);
 			p++;
 		}
 		if (t->attr & C_ATTR_VARIADIC) {
@@ -84,7 +108,7 @@ static void rcc_dump_func_proto(c_name name, bool prototype, FILE *f)
 	} else if (t->attr & C_ATTR_VARIADIC) {
 		fprintf(f, "...");
 	}
-	fprintf(f, "): %s", ir_type_cname[c_type2ir(t->func.ret_type)]);
+	fprintf(f, "): %s", ir_type_cname[c_type2ir_ret(t->func.ret_type)]);
 
 //???
 //	if (flags & IR_FASTCALL_FUNC) {
