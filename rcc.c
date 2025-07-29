@@ -656,15 +656,30 @@ static size_t rcc_emit_ir_data(FILE *f, const c_type *type, const void *addr)
 		int i;
 
 		for (i = 0; i < type->record.num_fields; field++, i++) {
-			if (C_IS_BIT_FIELD(field->bit_field)) {
-				IR_ASSERT(0); //???
-			}
 			while (offset < field->offset) {
 				fprintf(f, "\tuint8_t 0x00,\n");
 				/* padding */
 				offset++;
 			}
-			offset += rcc_emit_ir_data(f, field->type, (const char*)addr + field->offset);
+			if (C_IS_BIT_FIELD(field->bit_field)) {
+				while (i + 1 < type->record.num_fields
+				 && C_IS_BIT_FIELD((field + 1)->bit_field)
+				 && (field + 1)->offset == offset) {
+					field++;
+					i++;
+				}
+				size_t next = (i + 1 < type->record.num_fields) ? (field + 1)->offset : type->size;
+				while (offset < next) {
+					offset += rcc_emit_ir_data(f, &c_type_u8, (const char*)addr + offset);
+				}
+			} else {
+				offset += rcc_emit_ir_data(f, field->type, (const char*)addr + field->offset);
+			}
+		}
+		while (offset < type->size) {
+			fprintf(f, "\tuint8_t 0x00,\n");
+			/* padding */
+			offset++;
 		}
 		return offset;
 	} else if (type->kind == C_TYPE_UNION) {
@@ -682,6 +697,11 @@ static size_t rcc_emit_ir_data(FILE *f, const c_type *type, const void *addr)
 		}
 		if (best_field) {
 			offset += rcc_emit_ir_data(f, best_field->type, addr);
+		}
+		while (offset < type->size) {
+			fprintf(f, "\tuint8_t 0x00,\n");
+			/* padding */
+			offset++;
 		}
 		return offset;
 	} else {
@@ -710,11 +730,6 @@ static void rcc_emit_ir(FILE *f)
 				fprintf(f, "extern %s %s;\n",
 					c_is_type_const(p->sym->value.type) ? "const" : "var",
 					yy_sym2str(i));
-				continue;
-			}
-			if (!p->sym->value.type) {
-				// TODO: fix this ???
-				fprintf(f, "%s %s ???\n", "var", yy_sym2str(i));
 				continue;
 			}
 			fprintf(f, "%s %s [%" PRIuPTR "]%s",
