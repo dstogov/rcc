@@ -949,7 +949,7 @@ static void rcc_emit_ir(FILE *f)
 			if (p->sym->linkage == C_LINK_INTERNAL) {
 				fprintf(f, "static ");
 			} else if (p->sym->is_external || !c_value_is_set(&p->sym->value)) {
-				fprintf(f, "extern %s %s;\n",
+				fprintf(f, "extern %s @%s;\n",
 					c_is_type_const(p->sym->value.type) ? "const" : "var",
 					yy_sym2str(i));
 				continue;
