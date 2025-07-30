@@ -180,7 +180,9 @@ static ir_ref c_type2proto(const c_type *t, uint32_t linkage)
 	if (t->attr & C_ATTR_VARIADIC) {
 		flags |= IR_VARARG_FUNC;
 	}
-	if (linkage == C_LINK_BUILTIN) {
+	if (linkage == C_LINK_INTERNAL) {
+		flags |= IR_STATIC;
+	} else if (linkage == C_LINK_BUILTIN) {
 		flags |= IR_BUILTIN_FUNC;
 	}
 	return ir_proto(active_ctx, flags, c_type2ir(ret_type), params_count, param_types);
@@ -6267,6 +6269,9 @@ void c_do_func_start(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 	c_push_scope(scope);
 
 	flags = 0;
+	if (d->flags & C_DCL_STATIC) {
+		flags |= IR_STATIC;
+	}
 	if (type->attr & C_ATTR_VARIADIC) {
 		flags |= IR_VARARG_FUNC;
 	}

@@ -34,11 +34,12 @@
 #define C_DUMP_IR_AFTER_SCHEDULE (1<<3)
 #define C_DUMP_IR_CODEGEN        (1<<4)
 #define C_DUMP_IR                (1<<5)
-#define C_DUMP_ASM               (1<<6)
-#define C_DUMP_SIZE              (1<<7)
-#define C_DUMP_TIME              (1<<8)
-#define C_GDB                    (1<<9)
-#define C_PERF                   (1<<10)
+#define C_DUMP_LLVM              (1<<6)
+#define C_DUMP_ASM               (1<<7)
+#define C_DUMP_SIZE              (1<<8)
+#define C_DUMP_TIME              (1<<9)
+#define C_GDB                    (1<<10)
+#define C_PERF                   (1<<11)
 
 #define C_OPT_LEVEL              0x3
 #define C_OPT_INLINE             (1<<2)
@@ -987,6 +988,92 @@ static void rcc_emit_ir(FILE *f)
 	}
 }
 
+static void rcc_emit_llvm_proto(const char *name, c_sym *func, FILE *f)
+{
+	const c_type *t = func->value.type;
+	uint32_t flags = 0;
+	uint32_t params_count;
+	uint8_t *param_types;
+	int i;
+	const c_type *ret_type;
+
+	IR_ASSERT(t->kind == C_TYPE_FUNC);
+	ret_type = t->func.ret_type;
+	if (ret_type->kind == C_TYPE_STRUCT || ret_type->kind == C_TYPE_UNION) {
+		if (ret_type->size <= sizeof(void*)) {
+			ret_type = (ret_type->size <= 4) ? &c_type_u32 : &c_type_u64;
+		} else {
+//???			yy_error("long struct return not implemented yet"); //???
+return;
+		}
+	}
+	if (t->func.num_params > 0) {
+		params_count = t->func.num_params;
+		param_types = alloca(params_count);
+		for (i = 0; i < t->func.num_params; i++) {
+			const c_type *param_type = t->func.params[i].type;
+
+			if (param_type->kind == C_TYPE_STRUCT || param_type->kind == C_TYPE_UNION) {
+				if (param_type->size <= sizeof(void*)) {
+					param_type = (param_type->size <= 4) ? &c_type_u32 : &c_type_u64;
+				} else {
+//???					yy_error("long struct arguments not implemented yet"); //???
+return;
+				}
+			}
+			param_types[i] = c_type2ir(param_type);
+		}
+	} else {
+		params_count = 0;
+		param_types = NULL;
+	}
+	if (t->attr & C_ATTR_VARIADIC) {
+		flags |= IR_VARARG_FUNC;
+	}
+	if (func->linkage == C_LINK_INTERNAL) {
+		flags |= IR_STATIC;
+	} else if (func->linkage == C_LINK_BUILTIN) {
+		flags |= IR_BUILTIN_FUNC;
+	}
+	ir_emit_llvm_func_decl(name, flags, c_type2ir(ret_type), params_count, param_types, f);
+}
+
+static void rcc_emit_llvm(FILE *f)
+{
+	uint32_t i;
+	yy_hash_bucket *p;
+
+	for (i = YY_LAST_KEYWORD + 1, p = yy_hash.data + i; i < yy_hash.count; p++, i++) {
+		if (p->sym && p->sym->kind == C_SYM_FUNC && !p->sym->ctx) {
+			rcc_emit_llvm_proto(p->str, p->sym, f);
+		}
+	}
+
+	for (i = YY_LAST_KEYWORD + 1, p = yy_hash.data + i; i < yy_hash.count; p++, i++) {
+		if (p->sym && p->sym->kind == C_SYM_VAR) {
+			uint32_t flags = 0;
+
+			if (p->sym->linkage == C_LINK_INTERNAL) {
+				flags |= IR_STATIC;
+			} else if (p->sym->is_external || !c_value_is_set(&p->sym->value)) {
+				flags |= IR_EXTERN;
+			}
+			if (c_is_type_const(p->sym->value.type)) {
+				flags |= IR_CONST;
+			}
+			//TODO: type ???
+			ir_emit_llvm_sym_decl(p->str, flags, f);
+			//TODO: initializer ???
+		}
+	}
+
+	for (i = YY_LAST_KEYWORD + 1, p = yy_hash.data + i; i < yy_hash.count; p++, i++) {
+		if (p->sym && p->sym->kind == C_SYM_FUNC && p->sym->ctx) {
+			ir_emit_llvm(p->sym->ctx, p->str, f);
+		}
+	}
+}
+
 static int rcc_preprocess(const char *file_name, FILE *f)
 {
 	if (!rcc_read(file_name)) {
@@ -1008,6 +1095,9 @@ static int rcc_compile(const char *file_name)
 	rcc_fix_flexible_data();
 	if (c_dump_flags & C_DUMP_IR) {
 		rcc_emit_ir(c_out);
+	}
+	if (c_dump_flags & C_DUMP_LLVM) {
+		rcc_emit_llvm(c_out);
 	}
 	if (ir_list_capasity(&c_codegen_list)) {
 		do {
@@ -1086,7 +1176,8 @@ static void rcc_help(const char *cmd)
 		"  --save-ir-after-sccp       - print IR after SCCP optimization pass\n"
 		"  --save-ir-after-schedule   - print IR after scheduling\n"
 		"  --save-ir-codegen          - print IR with selcted code rules and registers"
-		"  --emit-ir                  - print final IR\n"
+		"  --emit-ir                  - emit final IR\n"
+		"  --emit-llvm                - emit LLVM code (implementation is incomplete)\n"
 		"Utility Options\n"
 		"  --dump-size                - print size of generated code\n"
 		"  --dump-time                - print compilation and execution time\n"
@@ -1234,6 +1325,8 @@ int main(int argc, const char **argv)
 			c_dump_flags |= C_DUMP_IR_CODEGEN;
 		} else if (strcmp(argv[i], "--emit-ir") == 0) {
 			c_dump_flags |= C_DUMP_IR;
+		} else if (strcmp(argv[i], "--emit-llvm") == 0) {
+			c_dump_flags |= C_DUMP_LLVM;
 		} else if (strcmp(argv[i], "-S") == 0) {
 			c_dump_flags |= C_DUMP_ASM;
 		} else if (strcmp(argv[i], "--dump-size") == 0) {
