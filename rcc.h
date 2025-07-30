@@ -669,6 +669,15 @@ typedef enum {
 	C_LINK_BUILTIN,
 } c_sym_linkage;
 
+typedef struct _c_reloc c_reloc;
+
+struct _c_reloc {
+	size_t   obj_offset;
+	c_name   name;
+	size_t   name_offset;
+	c_reloc *next;
+};
+
 struct _c_sym {
 	c_sym_kind             kind: 2;
 	c_sym_linkage          linkage: 2;         /* only for C_SYM_VAR and C_SYM_FUNC */
@@ -680,6 +689,7 @@ struct _c_sym {
 	bool                   tmp_data: 1;        /* temporary growable data area */
 	c_scope               *scope;
 	c_value                value;              /* type is part of the value */
+	c_reloc               *reloc;
 	ir_ctx                *ctx;                /* function IR (used for delayed code-gen or function inlining) */
 };
 
@@ -944,7 +954,8 @@ void yy_warning_fmt(const char *fmt, ...);
 
 /* Linker */
 void *c_linker_allocate_data(const char *name, size_t size);
-void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, uint32_t flags);
+void *c_linker_resolve_sym_name(ir_loader *loader, const char *name, uint32_t flags);
+bool  c_linker_fix_reloc(c_sym *obj, size_t obj_offset, c_value *val);
 
 /* IR compiler */
 void rcc_ir_init(ir_ctx *ctx, uint32_t flags);

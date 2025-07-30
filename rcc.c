@@ -47,7 +47,7 @@
 static bool            c_native = 0;
 static uint32_t        c_opt_flags = 2 | C_OPT_INLINE | C_OPT_MEM2SSA;
 static uint32_t        c_dump_flags = 0;
-static uint32_t        c_save_flags = 0;
+static uint32_t        c_save_flags = IR_SAVE_SAFE_NAMES;
 static ir_arena       *c_linker_arena;
 static ir_code_buffer  c_code_buffer;
 static bool            protected = 1;
@@ -89,7 +89,7 @@ static void rcc_dump_func_proto(c_name name, bool prototype, FILE *f)
 	} else if (sym->is_external || (prototype && !sym->ctx)) {
 		fprintf(f, "extern ");
 	}
-	fprintf(f, "func %s(", yy_sym2str(name));
+	fprintf(f, "func @%s(", yy_sym2str(name));
 
 	t = sym->value.type;
 	if (t->func.num_params > 0) {
@@ -278,7 +278,6 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym)
 		}
 	}
 
-
 	if (!RCC_DELAY_CODE_GEN) {
 		rcc_ir_codegen(name, ctx, sym);
 		ir_free(ctx);
@@ -381,6 +380,100 @@ void *c_linker_allocate_data(const char *name, size_t size)
 	}
 	memset(data, 0, size);
 	return data;
+}
+
+static void c_linker_add_reloc(c_sym *obj, size_t obj_offset, c_name name, size_t name_offset)
+{
+	c_reloc *reloc = ir_arena_alloc(&yy_arena, sizeof(c_reloc));
+
+	if (c_value_is_ref(&obj->value)) {
+		size_t len;
+		const char *str = ir_get_strl(active_ctx, active_ctx->ir_base[obj->value.u.ref].val.name, &len);
+		c_name sym = yy_hash_find(str, len);
+		obj = yy_hash.data[sym].sym;
+	}
+
+	reloc->obj_offset = obj_offset;
+	reloc->name = name;
+	reloc->name_offset = name_offset;
+	reloc->next = obj->reloc;
+	obj->reloc = reloc;
+}
+
+bool c_linker_fix_reloc(c_sym *obj, size_t obj_offset, c_value *val)
+{
+	ir_insn *addr_insn;
+
+	if (val->type->kind != C_TYPE_POINTER) {
+		return 0;
+	}
+
+	addr_insn = &active_ctx->ir_base[val->u.ref];
+	if (!IR_IS_CONST_REF(val->u.ref)) {
+		if (addr_insn->opt == IR_OPT(IR_ADD, IR_ADDR)
+		 && IR_IS_CONST_REF(addr_insn->op1)
+		 && IR_IS_CONST_REF(addr_insn->op2)) {
+			// address resolution (add reloc) ???
+			size_t offset;
+
+			if (active_ctx->ir_base[addr_insn->op1].op == IR_SYM
+			 && !IR_IS_SYM_CONST(active_ctx->ir_base[addr_insn->op2].op)) {
+				offset = active_ctx->ir_base[addr_insn->op2].val.u64;
+				addr_insn = &active_ctx->ir_base[addr_insn->op1];
+			} else if (active_ctx->ir_base[addr_insn->op2].op == IR_SYM
+			 && !IR_IS_SYM_CONST(active_ctx->ir_base[addr_insn->op1].op)) {
+				offset = active_ctx->ir_base[addr_insn->op1].val.u64;
+				addr_insn = &active_ctx->ir_base[addr_insn->op2];
+		    } else {
+				return 0;
+			}
+			size_t len;
+			const char *name = ir_get_strl(active_ctx, addr_insn->val.name, &len);
+			c_name n = yy_hash_lookup(name, len);
+
+			c_linker_add_reloc(obj, obj_offset, n, offset);
+			IR_ASSERT(yy_hash.data[n].sym
+				&& yy_hash.data[n].sym->kind == C_SYM_VAR
+				&& c_value_is_const(&yy_hash.data[n].sym->value)
+				&& yy_hash.data[n].sym->value.u.type == IR_ADDR
+				&& yy_hash.data[n].sym->value.u.val.addr);
+			val->u.val.addr = yy_hash.data[n].sym->value.u.val.addr + offset;
+			return 1;
+		}
+	} else if (addr_insn->op == IR_SYM) {
+		// address resolution (add reloc) ???
+		size_t len;
+		const char *name = ir_get_strl(active_ctx, addr_insn->val.name, &len);
+		c_name n = yy_hash_lookup(name, len);
+
+		c_linker_add_reloc(obj, obj_offset, n, 0);
+		IR_ASSERT(yy_hash.data[n].sym
+			&& yy_hash.data[n].sym->kind == C_SYM_VAR
+			&& c_value_is_const(&yy_hash.data[n].sym->value)
+			&& yy_hash.data[n].sym->value.u.type == IR_ADDR
+			&& yy_hash.data[n].sym->value.u.val.addr);
+		val->u.val.addr = yy_hash.data[n].sym->value.u.val.addr;
+		return 1;
+	} else if (addr_insn->op == IR_FUNC) {
+		size_t len;
+		const char *name = ir_get_strl(active_ctx, addr_insn->val.name, &len);
+		c_name n = yy_hash_lookup(name, len);
+
+		c_linker_add_reloc(obj, obj_offset, n, 0);
+		IR_ASSERT(yy_hash.data[n].sym && yy_hash.data[n].sym->kind == C_SYM_FUNC);
+		if (!c_value_is_const(&yy_hash.data[n].sym->value)) {
+			if (!c_native) return 1;
+			/* resolve name or add thunk */
+			void *addr = c_linker_resolve_sym_name(NULL, name, IR_RESOLVE_SYM_ADD_THUNK);
+			IR_ASSERT(addr || !c_native);
+			(void)addr;
+		}
+		IR_ASSERT(yy_hash.data[n].sym->value.u.type == IR_ADDR
+			&& yy_hash.data[n].sym->value.u.val.addr);
+		val->u.val.addr = yy_hash.data[n].sym->value.u.val.addr;
+		return 1;
+	}
+	return 0;
 }
 
 ir_loader c_linker = {
@@ -624,8 +717,11 @@ static bool c_is_type_const(const c_type *type)
 	return 0;
 }
 
-static size_t rcc_emit_ir_data(FILE *f, const c_type *type, const void *addr)
+static size_t rcc_emit_ir_data(FILE *f, const c_type *type, const void *addr, size_t base, c_reloc *rel)
 {
+	while (rel && rel->obj_offset < base) {
+		rel = rel->next;
+	}
 	if (C_IS_TYPE_KIND_SCALAR(type->kind) || type->kind == C_TYPE_ENUM) {
 		ir_type t = c_type2ir(type);
 		size_t size = ir_type_size[t];
@@ -647,18 +743,24 @@ static size_t rcc_emit_ir_data(FILE *f, const c_type *type, const void *addr)
 				IR_ASSERT(0);
 		}
 	} else if (type->kind == C_TYPE_POINTER) {
-		if (!*(uintptr_t*)addr) {
+		if (rel && rel->obj_offset == base) {
+			if (rel->name_offset) {
+				fprintf(f, "\tuintptr_t sym(@%s)+%lld,\n", yy_sym2str(rel->name), (long long)rel->name_offset);
+			} else {
+				fprintf(f, "\tuintptr_t sym(@%s),\n", yy_sym2str(rel->name));
+			}
+		} else if (!*(uintptr_t*)addr) {
 			fprintf(f, "\tuintptr_t 0,\n");
 		} else {
-			// TODO: symbolic constants ???
 			fprintf(f, "\tuintptr_t 0x%" PRIxPTR ",\n", *(uintptr_t*)addr);
 		}
 		return sizeof(void*);
 	} else if (type->kind == C_TYPE_FUNC) {
-		if (!*(uintptr_t*)addr) {
+		if (rel && rel->obj_offset == base) {
+			fprintf(f, "\tuintptr_t func(@%s),\n", yy_sym2str(rel->name));
+		} else if (!*(uintptr_t*)addr) {
 			fprintf(f, "\tuintptr_t 0,\n");
 		} else {
-			// TODO: symbolic constants ???
 			fprintf(f, "\tuintptr_t 0x%" PRIxPTR ",\n", *(uintptr_t*)addr);
 		}
 		return sizeof(void*);
@@ -672,9 +774,9 @@ static size_t rcc_emit_ir_data(FILE *f, const c_type *type, const void *addr)
 				fprintf(f, "\tuint8_t 0x00,\n");
 				offset++;
 			}
-			offset += rcc_emit_ir_data(f, type->array.type, (const char*)addr + el_offset);
+			offset += rcc_emit_ir_data(f, type->array.type, (const char*)addr + el_offset, base + el_offset, rel);
 		}
-			return offset;
+		return offset;
 	} else if (type->kind == C_TYPE_STRUCT) {
 		size_t offset = 0;
 		const c_field *field = type->record.fields;
@@ -695,10 +797,10 @@ static size_t rcc_emit_ir_data(FILE *f, const c_type *type, const void *addr)
 				}
 				size_t next = (i + 1 < type->record.num_fields) ? (field + 1)->offset : type->size;
 				while (offset < next) {
-					offset += rcc_emit_ir_data(f, &c_type_u8, (const char*)addr + offset);
+					offset += rcc_emit_ir_data(f, &c_type_u8, (const char*)addr + offset, base + offset, rel);
 				}
 			} else {
-				offset += rcc_emit_ir_data(f, field->type, (const char*)addr + field->offset);
+				offset += rcc_emit_ir_data(f, field->type, (const char*)addr + field->offset, base + field->offset, rel);
 			}
 		}
 		while (offset < type->size) {
@@ -721,7 +823,7 @@ static size_t rcc_emit_ir_data(FILE *f, const c_type *type, const void *addr)
 			}
 		}
 		if (best_field) {
-			offset += rcc_emit_ir_data(f, best_field->type, addr);
+			offset += rcc_emit_ir_data(f, best_field->type, addr, base, rel);
 		}
 		while (offset < type->size) {
 			fprintf(f, "\tuint8_t 0x00,\n");
@@ -761,6 +863,36 @@ static void rcc_emit_ir_mbstring(FILE *f, const c_type *type, const void *addr, 
 	}
 }
 
+static void rcc_sort_relocs(c_sym *sym)
+{
+	c_reloc *first, *last, *next, *rel;
+
+	first = last = sym->reloc;
+	next = first->next;
+	first->next = NULL;
+	while (next) {
+		rel = next;
+		next = rel->next;
+		if (rel->obj_offset < first->obj_offset) {
+			rel->next = first;
+			first = rel;
+		} else if(rel->obj_offset > last->obj_offset) {
+			last->next = rel;
+			rel->next = NULL;
+			last = rel;
+		} else {
+			c_reloc *q, *p = first;
+			while (rel->obj_offset > p->obj_offset) {
+				q = p;
+				p = p->next;
+			}
+			q->next = rel;
+			rel->next = p;
+		}
+	}
+	sym->reloc = first;
+}
+
 static void rcc_emit_ir(FILE *f)
 {
 	uint32_t i;
@@ -785,15 +917,18 @@ static void rcc_emit_ir(FILE *f)
 				continue;
 			}
 			size = p->sym->is_string ? (size_t)p->sym->value.u.ref : p->sym->value.type->size;
-			fprintf(f, "%s %s[%" PRIuPTR "]%s",
+			fprintf(f, "%s @%s[%" PRIuPTR "]%s",
 				c_is_type_const(p->sym->value.type) ? "const" : "var",
 				yy_sym2str(i),
 				size,
 				p->sym->is_implemented ?
 					((p->sym->is_string && p->sym->value.type->array.type->size == 1) ? " = \"" : " = {\n") : ";\n");
 			if (p->sym->is_implemented) {
+				if (p->sym->reloc) {
+					rcc_sort_relocs(p->sym);
+				}
 				if (!p->sym->is_string) {
-					rcc_emit_ir_data(f, p->sym->value.type, p->sym->value.u.val.ptr);
+					rcc_emit_ir_data(f, p->sym->value.type, p->sym->value.u.val.ptr, 0, p->sym->reloc);
 					fprintf(f, "};\n");
 				} else if (p->sym->value.type->array.type->size > 1) {
 					rcc_emit_ir_mbstring(f, p->sym->value.type->array.type, p->sym->value.u.val.ptr, size);

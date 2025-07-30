@@ -5534,83 +5534,9 @@ void c_do_computed_goto(c_value *v)
 	yy_error("computed goto not implemented yet"); //???
 }
 
-static bool c_do_init_fix_reloc(c_value *val)
-{
-	ir_insn *addr_insn;
-
-	if (val->type->kind != C_TYPE_POINTER) {
-		return 0;
-	}
-
-	addr_insn = &active_ctx->ir_base[val->u.ref];
-	if (!IR_IS_CONST_REF(val->u.ref)) {
-		if (addr_insn->opt == IR_OPT(IR_ADD, IR_ADDR)
-		 && IR_IS_CONST_REF(addr_insn->op1)
-		 && IR_IS_CONST_REF(addr_insn->op2)) {
-			// address resolution (add reloc) ???
-			size_t offset;
-
-			if (active_ctx->ir_base[addr_insn->op1].op == IR_SYM
-			 && !IR_IS_SYM_CONST(active_ctx->ir_base[addr_insn->op2].op)) {
-				offset = active_ctx->ir_base[addr_insn->op2].val.u64;
-				addr_insn = &active_ctx->ir_base[addr_insn->op1];
-			} else if (active_ctx->ir_base[addr_insn->op2].op == IR_SYM
-			 && !IR_IS_SYM_CONST(active_ctx->ir_base[addr_insn->op1].op)) {
-				offset = active_ctx->ir_base[addr_insn->op1].val.u64;
-				addr_insn = &active_ctx->ir_base[addr_insn->op2];
-		    } else {
-				return 0;
-			}
-			size_t len;
-			const char *name = ir_get_strl(active_ctx, addr_insn->val.name, &len);
-			c_name n = yy_hash_lookup(name, len);
-			IR_ASSERT(yy_hash.data[n].sym
-				&& yy_hash.data[n].sym->kind == C_SYM_VAR
-				&& c_value_is_const(&yy_hash.data[n].sym->value)
-				&& yy_hash.data[n].sym->value.u.type == IR_ADDR
-				&& yy_hash.data[n].sym->value.u.val.addr);
-			val->u.val.addr = yy_hash.data[n].sym->value.u.val.addr + offset;
-			return 1;
-		}
-	} else if (addr_insn->op == IR_SYM) {
-		// address resolution (add reloc) ???
-		size_t len;
-		const char *name = ir_get_strl(active_ctx, addr_insn->val.name, &len);
-		c_name n = yy_hash_lookup(name, len);
-		IR_ASSERT(yy_hash.data[n].sym
-			&& yy_hash.data[n].sym->kind == C_SYM_VAR
-			&& c_value_is_const(&yy_hash.data[n].sym->value)
-			&& yy_hash.data[n].sym->value.u.type == IR_ADDR
-			&& yy_hash.data[n].sym->value.u.val.addr);
-		val->u.val.addr = yy_hash.data[n].sym->value.u.val.addr;
-		return 1;
-	} else if (addr_insn->op == IR_FUNC) {
-		size_t len;
-		const char *name = ir_get_strl(active_ctx, addr_insn->val.name, &len);
-		c_name n = yy_hash_lookup(name, len);
-		IR_ASSERT(yy_hash.data[n].sym && yy_hash.data[n].sym->kind == C_SYM_FUNC);
-		if (!c_value_is_const(&yy_hash.data[n].sym->value)) {
-			/* resolve name or add thunk */
-			void *addr = c_linker_resolve_sym_name(NULL, name, IR_RESOLVE_SYM_ADD_THUNK);
-			IR_ASSERT(addr);
-			(void)addr;
-		}
-		IR_ASSERT(yy_hash.data[n].sym->value.u.type == IR_ADDR
-			&& yy_hash.data[n].sym->value.u.val.addr);
-		val->u.val.addr = yy_hash.data[n].sym->value.u.val.addr;
-		return 1;
-	}
-	return 0;
-}
-
 static void c_do_init(void *addr, c_value *val)
 {
 	const c_type *type = val->type;
-
-	if (!c_value_is_const(val) && !c_do_init_fix_reloc(val)) {
-		yy_error("initializer element is not constant");
-	}
-
 	c_type_kind kind = type->kind;
 repeat:
 	switch (kind) {
@@ -5707,7 +5633,9 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 			}
 			if (c_value_is_const(&obj->value)
 			 || (c_value_is_ref(&obj->value) && IR_IS_CONST_REF(obj->value.u.ref))) {
-				if (!c_value_is_const(val) && !c_do_init_fix_reloc(val)) yy_error("initializer element is not constant");
+				if (!c_value_is_const(val) && !c_linker_fix_reloc(obj, 0, val)) {
+					yy_error("initializer element is not constant");
+				}
 				IR_ASSERT(obj->value.u.type == IR_ADDR);
 				memcpy((char*)obj->value.u.val.ptr, str, len);
 				if (obj->tmp_data) {
@@ -5734,6 +5662,9 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 				&& IR_IS_CONST_REF(obj->value.u.ref)
 				&& active_ctx->ir_base[obj->value.u.ref].op == IR_SYM
 				&& obj->value.u.val.ptr));
+		if (!c_value_is_const(val) && !c_linker_fix_reloc(obj, 0, val)) {
+			yy_error("initializer element is not constant");
+		}
 		c_do_init(obj->value.u.val.ptr, val);
 	} else if (C_IS_TYPE_SCALAR_OR_PTR(obj->value.type)) {
 		IR_ASSERT(c_value_is_ref(&obj->value));
@@ -5746,7 +5677,9 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 		IR_ASSERT(obj->value.type->size == val->type->size);
 		if (c_value_is_const(&obj->value)
 		 || (c_value_is_ref(&obj->value) && IR_IS_CONST_REF(obj->value.u.ref))) {
-			if (!c_value_is_const(val) && !c_do_init_fix_reloc(val)) yy_error("initializer element is not constant");
+			if (!c_value_is_const(val) && !c_linker_fix_reloc(obj, 0, val)) {
+				yy_error("initializer element is not constant");
+			}
 			IR_ASSERT(obj->value.u.type == IR_ADDR);
 			IR_ASSERT(val->u.type == IR_ADDR);
 			memcpy((char*)obj->value.u.val.ptr, val->u.val.ptr, val->type->size);
@@ -6045,7 +5978,9 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 		IR_ASSERT(offset + type->size <= obj->value.type->size || C_IS_BIT_FIELD(bit_field));
 	}
 	if (c_value_is_const(&obj->value) || (c_value_is_ref(&obj->value) && IR_IS_CONST_REF(obj->value.u.ref))) {
-		if (!c_value_is_const(val) && !c_do_init_fix_reloc(val)) yy_error("initializer element is not constant");
+		if (!c_value_is_const(val) && !c_linker_fix_reloc(obj, offset, val)) {
+			yy_error("initializer element is not constant");
+		}
 		IR_ASSERT(obj->value.u.type == IR_ADDR && obj->value.u.val.ptr);
 		if (new_size > *size) {
 			c_do_grow_flexible(obj, *size, new_size);
