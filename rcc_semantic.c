@@ -797,6 +797,15 @@ static c_name c_create_static_var(c_name name, c_dcl *d)
 	return name;
 }
 
+static bool c_value_is_const_str(c_value *val)
+{
+	return val->type->kind == C_TYPE_ARRAY
+		&& (val->type == &c_type_string
+		 || val->type == &c_type_lstring
+		 || val->type == &c_type_string_u16
+		 || val->type == &c_type_string_u32);
+}
+
 static ir_ref c_create_str_sym(c_value *res)
 {
 	const c_type *type = res->type;
@@ -2065,12 +2074,7 @@ void c_sizeof_expr(c_value *res, yy_sym op, c_value *expr, ir_ref old_control)
 	if (op == YY_SIZEOF) {
 		if (C_IS_BIT_FIELD(expr->u.proto)) {
 			yy_error("\"sizeof\" applied to a bit-field");
-		} else if (c_value_is_const(expr)
-		 && expr->type->kind == C_TYPE_ARRAY
-		 && (expr->type == &c_type_string
-		  || expr->type == &c_type_lstring
-		  || expr->type == &c_type_string_u16
-		  || expr->type == &c_type_string_u32)) {
+		} else if (c_value_is_const(expr) && c_value_is_const_str(expr)) {
 			val.u64 = expr->u.ref; /* ref keeps string lenght (with terminating zero) */
 		} else if (expr->type->attr & C_ATTR_FLEXIBLE) {
 			yy_error_fmt("invalid application of \"%s\" to incomplete type", "sizeof");
@@ -2392,11 +2396,7 @@ void c_value_rval(c_value *val)
 static ir_ref c_value_ref(c_value *val)
 {
 	if (c_value_is_const(val)) {
-		if (val->type->kind == C_TYPE_ARRAY
-		 && (val->type == &c_type_string
-		  || val->type == &c_type_lstring
-		  || val->type == &c_type_string_u16
-		  || val->type == &c_type_string_u32)) {
+		if (c_value_is_const_str(val)) {
 			return c_create_str_sym(val);
 		}
 		ir_type t = (val->type->kind == C_TYPE_ENUM) ? c_type2ir(val->type) : val->u.type;
@@ -2440,7 +2440,7 @@ static void c_do_bitcast(const c_type *t, ir_type type, c_value *v)
 {
 	IR_ASSERT(t->size == v->type->size);
 	IR_ASSERT(ir_type_size[type] == ir_type_size[v->u.type]);
-	if (c_value_is_ref(v)) {
+	if (c_value_is_ref(v) || c_value_is_const_str(v)) {
 		c_value_set_rval(v, t, type, ir_BITCAST(type, c_value_ref(v)));
 	} else {
 		switch (type) {
@@ -2654,11 +2654,7 @@ static void c_do_cvt(const c_type *t, ir_type type, c_value *v)
 			IR_ASSERT(0);
 		}
 	} else if (t != v->type) {
-		if (v->type->kind == C_TYPE_ARRAY
-		 && (v->type == &c_type_string
-		  || v->type == &c_type_lstring
-		  || v->type == &c_type_string_u16
-		  || v->type == &c_type_string_u32)) {
+		if (c_value_is_const_str(v)) {
 			c_create_str_sym(v);
 		}
 		v->type = t;
@@ -2693,6 +2689,9 @@ void c_do_addr(c_value *v)
 			c_value_set_const(v, type, IR_ADDR, active_ctx->ir_base[ref].val);
 		}
 	} else {
+		if (c_value_is_const_str(v)) {
+			c_create_str_sym(v);
+		}
 		v->type = type; // check type ???
 	}
 }
@@ -3978,7 +3977,7 @@ static void c_do_add(const c_type *type, c_value *op1, c_value *op2)
 			element_size = op1->type->pointer.type->size;
 		}
 		IR_ASSERT(C_IS_TYPE_INT(op2->type) || op2->type->kind == C_TYPE_ENUM);
-		if (c_value_is_const(op1) && c_value_is_const(op2)) {
+		if (c_value_is_const(op1) && !c_value_is_const_str(op1) && c_value_is_const(op2)) {
 			val.addr = op1->u.val.addr + op2->u.val.u64 * element_size;
 			c_value_set_const(op1, type, IR_ADDR, val);
 		} else {
@@ -4017,7 +4016,7 @@ static void c_do_add(const c_type *type, c_value *op1, c_value *op2)
 			element_size = op2->type->pointer.type->size;
 		}
 		IR_ASSERT(C_IS_TYPE_INT(op1->type) || op1->type->kind == C_TYPE_ENUM);
-		if (c_value_is_const(op1) && c_value_is_const(op2)) {
+		if (c_value_is_const(op1) && c_value_is_const(op2) && !c_value_is_const_str(op2)) {
 			val.addr = op2->u.val.addr + op1->u.val.u64 * element_size;
 			c_value_set_const(op1, type, IR_ADDR, val);
 		} else {
@@ -4082,7 +4081,8 @@ static void c_do_sub(const c_type *type, c_value *op1, c_value *op2)
 		}
 		if (op2->type->kind == C_TYPE_POINTER || op2->type->kind == C_TYPE_ARRAY) {
 			IR_ASSERT(op1->type->pointer.type->size == op2->type->pointer.type->size);
-			if (c_value_is_const(op1) && c_value_is_const(op2)) {
+			if (c_value_is_const(op1) && !c_value_is_const_str(op1)
+			 && c_value_is_const(op2) && !c_value_is_const_str(op2)) {
 				val.i64 = (op1->u.val.addr - op2->u.val.addr) / element_size;
 				c_value_set_const(op1, &c_type_ssize_t, IR_SSIZE_T, val);
 			 } else {
@@ -4096,7 +4096,7 @@ static void c_do_sub(const c_type *type, c_value *op1, c_value *op2)
 			 }
 		} else {
 			IR_ASSERT(C_IS_TYPE_INT(op2->type) || op2->type->kind == C_TYPE_ENUM);
-			if (c_value_is_const(op1) && c_value_is_const(op2)) {
+			if (c_value_is_const(op1) && !c_value_is_const_str(op1) && c_value_is_const(op2)) {
 				val.addr = op1->u.val.addr - op2->u.val.u64 * element_size;
 				c_value_set_const(op1, type, IR_ADDR, val);
 			} else {

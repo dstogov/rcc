@@ -400,33 +400,53 @@ static void c_linker_add_reloc(c_sym *obj, size_t obj_offset, c_name name, size_
 	obj->reloc = reloc;
 }
 
+static ir_insn *c_linker_find_sym_offset(ir_insn *insn, size_t *offset)
+{
+	if (insn->op == IR_SYM) {
+		return insn;
+	} else if (insn->op == IR_BITCAST) {
+		return c_linker_find_sym_offset(&active_ctx->ir_base[insn->op1], offset);
+	} else if (insn->op == IR_ADD) {
+		if (IR_IS_CONST_REF(insn->op2) && !IR_IS_SYM_CONST(active_ctx->ir_base[insn->op2].op)) {
+			ir_insn *sym = c_linker_find_sym_offset(&active_ctx->ir_base[insn->op1], offset);
+			if (sym) {
+				*offset += active_ctx->ir_base[insn->op2].val.u64;
+				return sym;
+			}
+		} else if (IR_IS_CONST_REF(insn->op1) && !IR_IS_SYM_CONST(active_ctx->ir_base[insn->op1].op)) {
+			ir_insn *sym = c_linker_find_sym_offset(&active_ctx->ir_base[insn->op2], offset);
+			if (sym) {
+				*offset += active_ctx->ir_base[insn->op1].val.u64;
+				return sym;
+			}
+		}
+	} else if (insn->op == IR_SUB) {
+		if (IR_IS_CONST_REF(insn->op2) && !IR_IS_SYM_CONST(active_ctx->ir_base[insn->op2].op)) {
+			ir_insn *sym = c_linker_find_sym_offset(&active_ctx->ir_base[insn->op1], offset);
+			if (sym) {
+				*offset -= active_ctx->ir_base[insn->op2].val.u64;
+				return sym;
+			}
+		}
+	}
+	return NULL;
+}
+
 bool c_linker_fix_reloc(c_sym *obj, size_t obj_offset, c_value *val)
 {
 	ir_insn *addr_insn;
 
-	if (val->type->kind != C_TYPE_POINTER) {
+	if (val->type->size != sizeof(void*) || !IR_IS_TYPE_INT(val->u.type)) {
+//???	if (val->type->kind != C_TYPE_POINTER) {
 		return 0;
 	}
 
 	addr_insn = &active_ctx->ir_base[val->u.ref];
 	if (!IR_IS_CONST_REF(val->u.ref)) {
-		if (addr_insn->opt == IR_OPT(IR_ADD, IR_ADDR)
-		 && IR_IS_CONST_REF(addr_insn->op1)
-		 && IR_IS_CONST_REF(addr_insn->op2)) {
-			// address resolution (add reloc) ???
-			size_t offset;
+		size_t offset = 0;
 
-			if (active_ctx->ir_base[addr_insn->op1].op == IR_SYM
-			 && !IR_IS_SYM_CONST(active_ctx->ir_base[addr_insn->op2].op)) {
-				offset = active_ctx->ir_base[addr_insn->op2].val.u64;
-				addr_insn = &active_ctx->ir_base[addr_insn->op1];
-			} else if (active_ctx->ir_base[addr_insn->op2].op == IR_SYM
-			 && !IR_IS_SYM_CONST(active_ctx->ir_base[addr_insn->op1].op)) {
-				offset = active_ctx->ir_base[addr_insn->op1].val.u64;
-				addr_insn = &active_ctx->ir_base[addr_insn->op2];
-		    } else {
-				return 0;
-			}
+		addr_insn = c_linker_find_sym_offset(addr_insn, &offset);
+		if (addr_insn) {
 			size_t len;
 			const char *name = ir_get_strl(active_ctx, addr_insn->val.name, &len);
 			c_name n = yy_hash_lookup(name, len);
@@ -725,6 +745,16 @@ static size_t rcc_emit_ir_data(FILE *f, const c_type *type, const void *addr, si
 	if (C_IS_TYPE_KIND_SCALAR(type->kind) || type->kind == C_TYPE_ENUM) {
 		ir_type t = c_type2ir(type);
 		size_t size = ir_type_size[t];
+
+		if (rel && rel->obj_offset == base) {
+			IR_ASSERT(size == sizeof(void*));
+			if (rel->name_offset) {
+				fprintf(f, "\tuintptr_t sym(@%s)+%lld,\n", yy_sym2str(rel->name), (long long)rel->name_offset);
+			} else {
+				fprintf(f, "\tuintptr_t sym(@%s),\n", yy_sym2str(rel->name));
+			}
+			return size;
+		}
 
 		switch (size) {
 			case 1:
