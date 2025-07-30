@@ -436,8 +436,16 @@ bool c_linker_fix_reloc(c_sym *obj, size_t obj_offset, c_value *val)
 {
 	ir_insn *addr_insn;
 
-	if (val->type->size != sizeof(void*) || !IR_IS_TYPE_INT(val->u.type)) {
-//???	if (val->type->kind != C_TYPE_POINTER) {
+	if ((val->type->kind == C_TYPE_STRUCT || val->type->kind == C_TYPE_UNION)
+	 && IR_IS_CONST_REF(val->u.ref)
+	 && val->u.val.ptr) {
+		/* Use a copy of struct/union value */
+		val->u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
+		val->u.ref = IR_UNUSED;
+		return 1;
+	}
+	if (val->type->kind != C_TYPE_POINTER
+	 && (!C_IS_TYPE_INT(val->type) || val->type->size != sizeof(void*))) {
 		return 0;
 	}
 
@@ -911,7 +919,7 @@ static void rcc_sort_relocs(c_sym *sym)
 			rel->next = NULL;
 			last = rel;
 		} else {
-			c_reloc *q, *p = first;
+			c_reloc *q = NULL, *p = first;
 			while (rel->obj_offset > p->obj_offset) {
 				q = p;
 				p = p->next;

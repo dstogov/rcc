@@ -6131,17 +6131,30 @@ void c_do_init_expr_start(c_sym *obj, const c_type *type)
 		ir_ref addr = ir_ALLOCA(size);
 		ir_memzero(active_ctx, addr, size);
 		c_value_set_rval(&obj->value, type, IR_ADDR, addr);
-	} else if (c_is_flexible(type)) {
-		ir_val val;
-
-		obj->tmp_data = 1;
-		val.ptr = ir_mem_calloc(1, type->size);
-		c_value_set_const(&obj->value, type, IR_ADDR, val);
 	} else {
-		ir_val val;
+		c_dcl d = {.type = type, .flags = C_DCL_DEFINITION, .attr = 0};
+		c_name sym_name = c_create_static_var(YY_UNDEF, &d);
+		size_t len;
+		const char *str = yy_sym2strl(sym_name, &len);
+		ir_ref ref;
+		void *addr;
 
-		val.ptr = c_linker_allocate_data(NULL, type->size);
-		c_value_set_const(&obj->value, type, IR_ADDR, val);
+		if (c_is_flexible(type)) {
+			obj->tmp_data = 1;
+			addr = ir_mem_calloc(1, type->size);
+		} else {
+			addr = c_linker_allocate_data(NULL, type->size);
+		}
+
+		yy_hash.data[sym_name].sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
+		yy_hash.data[sym_name].sym->value.u.val.ptr = addr;
+		ref = ir_const_sym(active_ctx, ir_strl(active_ctx, str, len));
+		if (type->kind == C_TYPE_ARRAY) {
+			c_value_set_rval(&obj->value, type, c_type2ir(type), ref);
+		} else {
+			c_value_set_lval(&obj->value, type, c_type2ir(type), ref);
+		}
+		obj->value.u.val.ptr = addr; /* keep address in addition to ref */
 	}
 }
 
@@ -6152,8 +6165,10 @@ void c_do_init_expr_end(c_value *v, c_sym *obj, size_t size)
 		c_value_set_const(v, obj->value.type, c_type2ir(obj->value.type), obj->value.u.val);
 	} else if (obj->value.type->kind != C_TYPE_ARRAY) {
 		c_value_set_lval(v, obj->value.type, c_type2ir(obj->value.type), obj->value.u.ref);
+		if (IR_IS_CONST_REF(obj->value.u.ref)) v->u.val.ptr = obj->value.u.val.ptr;
 	} else {
 		c_value_set_rval(v, obj->value.type, c_type2ir(obj->value.type), obj->value.u.ref);
+		if (IR_IS_CONST_REF(obj->value.u.ref)) v->u.val.ptr = obj->value.u.val.ptr;
 	}
 }
 
