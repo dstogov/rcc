@@ -441,12 +441,14 @@ typedef struct {
 	uint32_t                 len;
 } pp_list;
 
+bool pp_add_include_dir(const char *path);
+
+void pp_start(void);
+void pp_dtor(void);
 void pp_macro_define(yy_sym name, uint32_t flags, uint32_t num_args, yy_sym *tokens);
 bool pp_macro_expand(pp_macro *macro, yy_sym sym);
 void pp_parse_directive(void);
 void pp_pop_include(void);
-void pp_start(void);
-void pp_dtor(void);
 void pp_preprocess(FILE *f);
 void pp_list_grow(pp_list *l, uint32_t size);
 

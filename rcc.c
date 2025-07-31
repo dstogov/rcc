@@ -1165,6 +1165,9 @@ static void rcc_help(const char *cmd)
 		"Preprocessor Options:\n"
 		"  -E                         - preprocess only\n"
 		"  -P                         - inhibit generation of linemarkers\n"
+		"  -D name[=value]            - define macro\n"
+		"  -U name                    - undefine macro\n"
+		"  -I                         - add include directory\n"
 		"  -dM                        - generate list of #define directives\n"
 		"  -dN                        - generate list of #define directives (names only)\n"
 		"  -dD                        - preprocess and generate list of #define directives\n"
@@ -1282,6 +1285,23 @@ int main(int argc, const char **argv)
 			} else {
 				ir_list_push(&def, i);
 			}
+		} else if (argv[i][0] == '-' && argv[i][1] == 'I') {
+			const char *path;
+
+			if (argv[i][2] == 0) {
+				if (i + 1 == argc || argv[i+1][0] == '-') {
+					fprintf(stderr, "ERROR: include directory missing after \"-%c\"\n", argv[i][1]);
+					goto exit;
+				}
+				path = argv[i+1];
+				i++;
+			} else {
+				path = argv[i] + 2;
+			}
+			if (!pp_add_include_dir(path)) {
+				fprintf(stderr, "ERROR: too many -I options");
+				goto exit;
+			}
 		} else if (argv[i][0] == '-' && argv[i][1] == 'o') {
 			if (argv[i][2] == 0) {
 				if (i + 1 == argc || (argv[i+1][0] == '-' && argv[i+1][1] != 0)) {
@@ -1311,9 +1331,6 @@ int main(int argc, const char **argv)
 			preprocess_flags |= PP_DUMP_INCLUDES;
 		} else if (strcmp(argv[i], "-w") == 0) {
 			compiler_flags |= YY_NO_WARNINGS;
-//TODO: -I ???
-//TODO: -include file
-//TODO: -isystem dir
 		} else if (strcmp(argv[i], "--save-ir-after-load") == 0) {
 			c_dump_flags |= C_DUMP_IR_AFTER_LOAD;
 		} else if (strcmp(argv[i], "--save-ir-after-mem2ssa") == 0) {

@@ -82,30 +82,6 @@ static ir_hashtab           *pp_include_hash = NULL;  /* map include file-name -
 static uint8_t               pp_pack_stack_pos = 0;
 static uint8_t               pp_pack_stack[PACK_STACK_SIZE];
 
-void pp_start(void)
-{
-	pp_recursion_level = 0;
-	pp_counter = 0;
-	pp_ifdef_level = 0;
-	pp_include_level = 0;
-	pp_include_ifdef_level = 0;
-	pp_include_ifndef_state = 0; /* don't set YY_INCLUDE_START -> don't detect "#ifndef X" in the main file */
-	pp_include_ifndef_macro = 0;
-	pp_include_hash = NULL;
-	pp_subst_level = 0;
-	pp_pack = 0;
-	pp_pack_stack_pos = 0;
-}
-
-void pp_dtor(void)
-{
-	if (pp_include_hash) {
-		ir_hashtab_free(pp_include_hash);
-		ir_mem_free(pp_include_hash);
-		pp_include_hash = NULL;
-	}
-}
-
 #if PP_DEBUG
 # define pp_debug 1
 static void pp_debug_print_context(void);
@@ -142,7 +118,11 @@ static void pp_debug_print_list(const char *hdr, yy_sym *tokens);
 # endif
 #endif
 
-const char *pp_include_paths[] = {
+#define PP_MAX_INCLUDE_PATHS 31
+
+static int pp_include_paths_count = 0;
+
+const char *pp_include_paths[PP_MAX_INCLUDE_PATHS + 1] = {
 	NULL
 };
 
@@ -151,6 +131,37 @@ const char *pp_sys_include_paths[] = {
 	"/usr/include",
 	NULL
 };
+
+bool pp_add_include_dir(const char *path)
+{
+	if (pp_include_paths_count >= PP_MAX_INCLUDE_PATHS) return 0;
+	pp_include_paths[pp_include_paths_count++] = path;
+	return 1;
+}
+
+void pp_start(void)
+{
+	pp_recursion_level = 0;
+	pp_counter = 0;
+	pp_ifdef_level = 0;
+	pp_include_level = 0;
+	pp_include_ifdef_level = 0;
+	pp_include_ifndef_state = 0; /* don't set YY_INCLUDE_START -> don't detect "#ifndef X" in the main file */
+	pp_include_ifndef_macro = 0;
+	pp_include_hash = NULL;
+	pp_subst_level = 0;
+	pp_pack = 0;
+	pp_pack_stack_pos = 0;
+}
+
+void pp_dtor(void)
+{
+	if (pp_include_hash) {
+		ir_hashtab_free(pp_include_hash);
+		ir_mem_free(pp_include_hash);
+		pp_include_hash = NULL;
+	}
+}
 
 static bool pp_macro_is_defined(yy_sym id)
 {
