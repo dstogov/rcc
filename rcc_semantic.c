@@ -38,7 +38,7 @@ const c_type c_type_string = {
 	.kind = C_TYPE_ARRAY,
 	.flags = C_TYPE_GLOBAL,
 	.size = sizeof(void*),
-	.attr = 1 | /*C_ATTR_CONST | ???*/ C_ATTR_FLEXIBLE,
+	.attr = 1 | C_ATTR_FLEXIBLE,
 	.array.type = &c_type_char,
 	.array.length = 0
 };
@@ -47,7 +47,7 @@ const c_type c_type_lstring = {
 	.kind = C_TYPE_ARRAY,
 	.flags = C_TYPE_GLOBAL,
 	.size = sizeof(void*),
-	.attr = 3 | /*C_ATTR_CONST | ???*/ C_ATTR_FLEXIBLE,
+	.attr = 3 | C_ATTR_FLEXIBLE,
 	.array.type = &c_type_i32,
 	.array.length = 0
 };
@@ -56,7 +56,7 @@ const c_type c_type_string_u16 = {
 	.kind = C_TYPE_ARRAY,
 	.flags = C_TYPE_GLOBAL,
 	.size = sizeof(void*),
-	.attr = 2 | /*C_ATTR_CONST | ???*/ C_ATTR_FLEXIBLE,
+	.attr = 2 | C_ATTR_FLEXIBLE,
 	.array.type = &c_type_u16,
 	.array.length = 0
 };
@@ -65,7 +65,7 @@ const c_type c_type_string_u32 = {
 	.kind = C_TYPE_ARRAY,
 	.flags = C_TYPE_GLOBAL,
 	.size = sizeof(void*),
-	.attr = 3 | /*C_ATTR_CONST | ???*/ C_ATTR_FLEXIBLE,
+	.attr = 3 | C_ATTR_FLEXIBLE,
 	.array.type = &c_type_u32,
 	.array.length = 0
 };
