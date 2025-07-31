@@ -697,7 +697,7 @@ static void rcc_dtor(void)
 	yy_hash_bucket *p;
 
 	for (i = YY_LAST_KEYWORD + 1, p = yy_hash.data + i; i < yy_hash.count; p++, i++) {
-		if (p->sym && p->sym->ctx) {
+		if (p->sym && p->sym->kind == C_SYM_FUNC && p->sym->ctx) {
 			ir_free(p->sym->ctx);
 			ir_mem_free(p->sym->ctx);
 		}

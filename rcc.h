@@ -690,8 +690,10 @@ struct _c_sym {
 	bool                   tmp_data: 1;        /* temporary growable data area */
 	c_scope               *scope;
 	c_value                value;              /* type is part of the value */
-	c_reloc               *reloc;
-	ir_ctx                *ctx;                /* function IR (used for delayed code-gen or function inlining) */
+	union {
+		c_reloc               *reloc;          /* list of cross-references to other symbols */
+		ir_ctx                *ctx;            /* function IR (used for delayed code-gen or function inlining) */
+	};
 };
 
 struct _c_tag {
