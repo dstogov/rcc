@@ -799,20 +799,11 @@ static c_name c_create_static_var(c_name name, c_dcl *d)
 	return name;
 }
 
-static bool c_value_is_const_str(c_value *val)
-{
-	return val->type->kind == C_TYPE_ARRAY
-		&& (val->type == &c_type_string
-		 || val->type == &c_type_lstring
-		 || val->type == &c_type_string_u16
-		 || val->type == &c_type_string_u32);
-}
-
 static ir_ref c_create_str_sym(c_value *res)
 {
 	const c_type *type = res->type;
-	const void *str = res->u.val.ptr;
-	size_t size = res->u.ref; /* string lenght (with terminating zero) */
+	const void *str = c_value_str_addr(res);
+	size_t size = c_value_str_size(res);
 	void *addr;
 	char buf[32];
 	uint32_t i, n;
@@ -2076,8 +2067,8 @@ void c_sizeof_expr(c_value *res, yy_sym op, c_value *expr, ir_ref old_control)
 	if (op == YY_SIZEOF) {
 		if (C_IS_BIT_FIELD(expr->u.proto)) {
 			yy_error("\"sizeof\" applied to a bit-field");
-		} else if (c_value_is_const(expr) && c_value_is_const_str(expr)) {
-			val.u64 = expr->u.ref; /* ref keeps string lenght (with terminating zero) */
+		} else if (c_value_is_const_str(expr)) {
+			val.u64 = c_value_str_size(expr);
 		} else if (expr->type->attr & C_ATTR_FLEXIBLE) {
 			yy_error_fmt("invalid application of \"%s\" to incomplete type", "sizeof");
 		} else {
@@ -5594,21 +5585,14 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 	}
 	c_value_rval(val);
 	if (obj->value.type != val->type) {
-		if (obj->value.type->kind == C_TYPE_ARRAY
-		 && c_value_is_const(val)
-		 && val->type->kind == C_TYPE_ARRAY
-		 && ((val->type == &c_type_string
-		   && (obj->value.type->array.type->kind == C_TYPE_CHAR
-		    || obj->value.type->array.type->kind == C_TYPE_U8
-		    || obj->value.type->array.type->kind == C_TYPE_I8))
-		  || (val->type == &c_type_lstring
-		   && obj->value.type->array.type == val->type->array.type)
-		  || (val->type == &c_type_string_u16
-		   && obj->value.type->array.type == val->type->array.type)
-		  || (val->type == &c_type_string_u32
-		   && obj->value.type->array.type == val->type->array.type))) {
-			const char *str = val->u.val.ptr;
-			size_t len = val->u.ref; /* ref keeps string lenght (with terminating zero) */
+		if (c_value_is_const_str(val)
+		 && obj->value.type->kind == C_TYPE_ARRAY
+		 && (obj->value.type->array.type->kind == val->type->array.type->kind
+		  || (val->type->array.type->size == 1
+		   && (obj->value.type->array.type->kind == C_TYPE_U8
+		    || obj->value.type->array.type->kind == C_TYPE_I8)))) {
+			const void *str = c_value_str_addr(val);
+			size_t len = c_value_str_size(val);
 			if (obj->value.type->attr & C_ATTR_FLEXIBLE) {
 				/* Convert "flexible" array to regular */
 				c_type *type = ir_arena_alloc(&c_arena, sizeof(c_type));
@@ -5810,14 +5794,11 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 		if (type == val->type) {
 			break;
 		} else if (type->kind == C_TYPE_ARRAY) {
-			if (type->kind == C_TYPE_ARRAY
-			 && ((val->type == &c_type_string
-			   && (type->array.type->kind == C_TYPE_CHAR
-			    || type->array.type->kind == C_TYPE_I8
-			    || type->array.type->kind == C_TYPE_U8))
-			  || (val->type == &c_type_lstring && type->array.type == val->type->array.type)
-			  || (val->type == &c_type_string_u16 && type->array.type == val->type->array.type)
-			  || (val->type == &c_type_string_u32 && type->array.type == val->type->array.type))) {
+			if (c_value_is_const_str(val)
+			 && (type->array.type->kind == val->type->array.type->kind
+			  || (val->type->array.type->size == 1
+			   && (type->array.type->kind == C_TYPE_U8
+			    || type->array.type->kind == C_TYPE_I8)))) {
 				break;
 			}
 			type = type->array.type;
@@ -5853,14 +5834,12 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 			break;
 		}
 
-		if (type->kind == C_TYPE_ARRAY
-		 && ((val->type == &c_type_string
-		   && (type->array.type->kind == C_TYPE_CHAR
-		    || type->array.type->kind == C_TYPE_I8
-		    || type->array.type->kind == C_TYPE_U8))
-		  || (val->type == &c_type_lstring && type->array.type == val->type->array.type)
-		  || (val->type == &c_type_string_u16 && type->array.type == val->type->array.type)
-		  || (val->type == &c_type_string_u32 && type->array.type == val->type->array.type))) {
+		if (c_value_is_const_str(val)
+		 && type->kind == C_TYPE_ARRAY
+		 && (type->array.type->kind == val->type->array.type->kind
+		  || (val->type->array.type->size == 1
+		   && (type->array.type->kind == C_TYPE_U8
+		    || type->array.type->kind == C_TYPE_I8)))) {
 			break;
 		}
 
@@ -5895,21 +5874,14 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 	}
 
 	if (val->type != type) {
-		if (type->kind == C_TYPE_ARRAY
-		 && c_value_is_const(val)
-		 && val->type->kind == C_TYPE_ARRAY
-		 && ((val->type == &c_type_string
-		   && (type->array.type->kind == C_TYPE_CHAR
-		    || type->array.type->kind == C_TYPE_U8
-		    || type->array.type->kind == C_TYPE_I8))
-		  || (val->type == &c_type_lstring
-		   && type->array.type == val->type->array.type)
-		  || (val->type == &c_type_string_u16
-		   && type->array.type == val->type->array.type)
-		  || (val->type == &c_type_string_u32
-		   && type->array.type == val->type->array.type))) {
-			const char *str = val->u.val.ptr;
-			size_t len = val->u.ref; /* ref keeps string lenght (with terminating zero) */
+		if (c_value_is_const_str(val)
+		 && type->kind == C_TYPE_ARRAY
+		 && (type->array.type->kind == val->type->array.type->kind
+		  || (val->type->array.type->size == 1
+		   && (type->array.type->kind == C_TYPE_U8
+		    || type->array.type->kind == C_TYPE_I8)))) {
+			const void *str = c_value_str_addr(val);
+			size_t len = c_value_str_size(val);
 
 			if (len > (size_t)type->array.length && !(type->attr & C_ATTR_FLEXIBLE)) {
 				if (len - type->array.type->size == (size_t)type->array.length) {

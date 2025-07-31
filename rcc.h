@@ -643,6 +643,7 @@ struct _c_type {
 #define C_VAL_VAR      (1<<3)
 #define C_VAL_BUILTIN  (1<<4)
 #define C_VAL_INLINE   (1<<5)
+#define C_VAL_STR      (1<<6)
 
 typedef struct {
 	const c_type  *type;
@@ -1129,6 +1130,15 @@ IR_ALWAYS_INLINE void c_value_set_const(c_value *res, const c_type *type, ir_typ
 	res->u.val = val;
 }
 
+IR_ALWAYS_INLINE void c_value_set_const_str(c_value *res, const c_type *type, ir_type t, const void *str, size_t size)
+{
+	res->type = type;
+	res->u.optx = IR_OPT(C_VAL_CONST | C_VAL_STR, t);
+	res->u.val.ptr = (void*)str;
+	IR_ASSERT(size <= 0x7fffffff);
+	res->u.ref = size; /* string size (including terminating zero) */
+}
+
 IR_ALWAYS_INLINE bool c_value_is_const(c_value *v)
 {
 	return (v->u.op & C_VAL_CONST);
@@ -1164,6 +1174,21 @@ IR_ALWAYS_INLINE void c_value_clear(c_value *res)
 {
 	res->type = &c_type_void;
 	res->u.optx = 0;
+}
+
+IR_ALWAYS_INLINE bool c_value_is_const_str(c_value *v)
+{
+	return (v->u.op & C_VAL_STR) != 0;
+}
+
+IR_ALWAYS_INLINE const void *c_value_str_addr(c_value *v)
+{
+	return v->u.val.ptr;
+}
+
+IR_ALWAYS_INLINE size_t c_value_str_size(c_value *v)
+{
+	return v->u.ref; /* string size (including terminating zero) */
 }
 
 #endif /* RCC_H */

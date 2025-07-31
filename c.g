@@ -1788,7 +1788,6 @@ static void yy_strings(c_value *res, str_list *first, str_list *last)
 	yy_dyn_str dyn_str;
 	char prefix = 0;
 	const c_type *type;
-	ir_val val;
 
 	yy_dyn_str_init(&dyn_str, "", 0);
 	do {
@@ -1811,9 +1810,7 @@ static void yy_strings(c_value *res, str_list *first, str_list *last)
 		type = &c_type_string_u32;
 	}
 
-	val.ptr = (void*)dyn_str.str;
-	c_value_set_const(res, type, IR_ADDR, val);
-	res->u.ref = dyn_str.len; // find a better place for str len ???
+	c_value_set_const_str(res, type, IR_ADDR, dyn_str.str, dyn_str.len);
 }
 
 /* CPP helper */
