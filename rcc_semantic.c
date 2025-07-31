@@ -28,8 +28,7 @@ const c_type c_type_il                  = {.kind = C_TYPE_IL,     .flags = C_TYP
 const c_type c_type_ill                 = {.kind = C_TYPE_ILL,    .flags = C_TYPE_GLOBAL, .size = 8,  .attr = 4};
 const c_type c_type_float               = {.kind = C_TYPE_FLOAT,  .flags = C_TYPE_GLOBAL, .size = 4,  .attr = 3};
 const c_type c_type_double              = {.kind = C_TYPE_DOUBLE, .flags = C_TYPE_GLOBAL, .size = 8,  .attr = 4};
-//??? TODO: long double support ???
-//???const c_type c_type_long_double         = {.kind = C_TYPE_LONG_DOUBLE,         .size = 16, .attr = 4};
+// TODO: long double support ???
 const c_type c_type_long_double         = {.kind = C_TYPE_DOUBLE,              .flags = C_TYPE_GLOBAL, .size = 8,  .attr = 4};
 const c_type c_type_float_complex       = {.kind = C_TYPE_FLOAT_COMPLEX,       .flags = C_TYPE_GLOBAL, .size = 8,  .attr = 3};
 const c_type c_type_double_complex      = {.kind = C_TYPE_DOUBLE_COMPLEX,      .flags = C_TYPE_GLOBAL, .size = 16, .attr = 5};
@@ -198,7 +197,7 @@ static bool c_fix_incomplete_type(const c_type *type)
 		uint32_t attr = type->attr;
 		c_type *t = (c_type*)type;
 		*t = *yy_hash.data[type->tag].tag->type;
-		t->attr |= (attr & C_TYPE_ATTRS); //???
+		t->attr |= (attr & C_TYPE_ATTRS);
 		return 1;
 	}
 	return 0;
@@ -554,7 +553,6 @@ static bool c_compatible_types(const c_type *t1, const c_type *t2, bool unqualif
 		if (t1->enumeration.tag != t2->enumeration.tag) return 0;
 		if (t1->enumeration.tag && t2->enumeration.tag) return 1;
 		if (t1->enumeration.values != t2->enumeration.values) return 0;
-//		return 0;
 	} else if (t1->kind == C_TYPE_ARRAY) {
 		if (!(t1->attr & C_ATTR_FLEXIBLE) && !(t2->attr & C_ATTR_FLEXIBLE) && t1->array.length != t2->array.length) return 0;
 		if (!c_compatible_types(t1->array.type, t2->array.type, 0, 0)) return 0;
@@ -906,7 +904,7 @@ c_sym *c_declare(c_name name, c_dcl *d)
 
 	sym = yy_hash.data[name].sym;
 	if (sym) {
-		if (d->flags & C_DCL_EXTERN) { // && sym is extern
+		if (d->flags & C_DCL_EXTERN) { // && sym is extern ???
 			if (!sym->scope) {
 				c_validate_redeclaration(name, d, sym);
 				return sym;
@@ -1597,11 +1595,9 @@ void c_finish_struct_type(c_type *type, c_dcl *d)
 					 && (field->type->kind == C_TYPE_UNION || field->type->kind == C_TYPE_STRUCT)) {
 						c_do_check_nested_redeclarations(type, field->type);
 					}
-					if (/*field->type->kind == C_TYPE_ARRAY
-					 && */(field->type->attr & C_ATTR_FLEXIBLE)) {
+					if (field->type->attr & C_ATTR_FLEXIBLE) {
 						if (type->kind == C_TYPE_UNION) yy_error("flexible array member in union");
 						if (i != type->record.num_fields - 1) yy_error("flexible array member not at the end of struct");
-//						if (type->record.num_fields == 1) yy_error("flexible array member in a struct with no named members");
 					}
 
 					field_align = c_gcc_field_alignment(type, field, &packed);
@@ -1661,11 +1657,9 @@ void c_finish_struct_type(c_type *type, c_dcl *d)
 					 && (field->type->kind == C_TYPE_UNION || field->type->kind == C_TYPE_STRUCT)) {
 						c_do_check_nested_redeclarations(type, field->type);
 					}
-					if (/*field->type->kind == C_TYPE_ARRAY
-					 && */(field->type->attr & C_ATTR_FLEXIBLE)) {
+					if (field->type->attr & C_ATTR_FLEXIBLE) {
 						if (type->kind == C_TYPE_UNION) yy_error("flexible array member in union");
 						if (i != type->record.num_fields - 1) yy_error("flexible array member not at the end of struct");
-//						if (type->record.num_fields == 1) yy_error("flexible array member in a struct with no named members");
 					}
 
 					field_align = c_ms_field_alignment(type, field);
@@ -3392,7 +3386,9 @@ static ir_ref c_do_convert_builtin(c_value *func, int32_t num_args, ir_ref *arg_
 		if (sym_name == YY_ABS) {
 			return ir_ABS_I32(arg_refs[0]);
 		} else if (sym_name == YY_LABS) {
-			return ir_ABS_I64(arg_refs[0]); //???
+			return ir_ABS(IR_LONG, arg_refs[0]);
+		} else if (sym_name == YY_LLABS) {
+			return ir_ABS_I64(arg_refs[0]);
 		} else if (sym_name == YY_FABS) {
 			return ir_ABS_D(arg_refs[0]);
 		} else if (sym_name == YY_FABSF) {
@@ -5475,7 +5471,7 @@ void c_do_set_label_attrs(c_label *label, c_dcl *attrs)
 	}
 }
 
- void c_do_finish_label(c_name name, c_label *label)
+void c_do_finish_label(c_name name, c_label *label)
 {
 	if (label->dst) {
 		ir_ref end, *ops;
@@ -5632,7 +5628,7 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 				IR_ASSERT(active_ctx->ir_base[obj->value.u.ref].op == IR_ALLOCA);
 				ir_memcpy(active_ctx,
 					obj->value.u.ref,
-					c_create_str_sym(val), //ir_const_addr(active_ctx, (uintptr_t)str),???
+					c_create_str_sym(val),
 					ir_const_size_t(active_ctx, len));
 			}
 			return;
@@ -5861,7 +5857,6 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 			}
 		} else if (t->kind == C_TYPE_STRUCT || t->kind == C_TYPE_UNION) {
 			if (init->stack[i].pos < t->record.num_fields) {
-//				offset += t->record.fields[init->stack[i].pos].offset;
 				c_field *f = &t->record.fields[init->stack[i].pos];
 				offset += f->offset;
 				bit_field = f->bit_field;
@@ -5921,7 +5916,7 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 				if (new_size > *size) *size = new_size;
 				ir_memcpy(active_ctx,
 					ir_ADD_A(obj->value.u.ref, ir_const_size_t(active_ctx, offset)),
-					c_create_str_sym(val), //ir_const_addr(active_ctx, (uintptr_t)str),???
+					c_create_str_sym(val),
 					ir_const_size_t(active_ctx, len));
 			}
 			return;
@@ -6413,7 +6408,6 @@ void c_do_func_end(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 					yy_hash.data[id].tag = ptr;
 					break;
 				case C_POP_LABEL:
-//					c_do_finish_label(id, yy_hash.data[id].label);
 					if (!yy_hash.data[id].label->is_local) {
 						ir_mem_free(yy_hash.data[id].label);
 					}

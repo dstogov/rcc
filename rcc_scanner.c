@@ -149,6 +149,15 @@ static void yy_scanner_error(void) yy_noreturn;
 static bool yy_at_start_of_line(void);
 static yy_sym yy_parse_pp_number(const char *str, size_t len);
 
+// TODO: Trigraphs are not supported yet ???
+#define _YY_TRIGRAPHS(_) \
+	_("<:",                            YY__LBRACK)                \
+	_(":>",                            YY__RBRACK)                \
+	_("<%:",                           YY__LBRACE)                \
+	_("%>",                            YY__RBRACE)                \
+	_("%:",                            YY__HASH)                  \
+	_("%:%:",                          YY__HASH_HASH)             \
+
 yy_sym yy_next(void)
 {
 	uint32_t h;

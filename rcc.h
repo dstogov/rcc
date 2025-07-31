@@ -87,15 +87,6 @@
 	_("##",                            YY_PP_JOIN)                     \
 	_("<PLACE>",                       YY_PP_PLACE_MARKER)             \
 
-// TODO: Trigraphs are not supported yet ???
-#define _YY_TRIGRAPHS(_) \
-	_("<:",                            YY__LBRACK_SPEC)                \
-	_(":>",                            YY__RBRACK_SPEC)                \
-	_("<%:",                           YY__LBRACE_SPEC)                \
-	_("%>",                            YY__RBRACE_SPEC)                \
-	_("%:",                            YY__HASH_SPEC)                  \
-	_("%:%:",                          YY__HASH_HASH_SPEC)             \
-
 #define YY_FIRST_KEYWORD               YY_AUTO
 
 #define _YY_KEYWORDS(_) \
@@ -298,6 +289,7 @@
 	/* builtin functions */                                            \
 	_("abs",                           YY_ABS)                         \
 	_("labs",                          YY_LABS)                        \
+	_("llabs",                         YY_LLABS)                       \
 	_("fabs",                          YY_FABS)                        \
 	_("fabsf",                         YY_FABSF)                       \
 	_("ceil",                          YY_CEIL)                        \
