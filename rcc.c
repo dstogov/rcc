@@ -674,6 +674,7 @@ static int rcc_read(const char *file_name)
 	close(fd);
 
 	if (ret != size) {
+		ir_mem_free(buf);
 		fprintf(stderr, "ERROR: Cannot read file \"%s\"\n", file_name);
 		return 0;
 	}
@@ -1353,6 +1354,11 @@ int main(int argc, const char **argv)
 			}
 			input = argv[i];
 		}
+	}
+
+	if (!input) {
+		fprintf(stderr, "ERROR: no input file\n");
+		goto exit;
 	}
 
 	if (output && output[0] != '-' && output[1] != 0) {
