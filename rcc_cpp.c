@@ -2417,7 +2417,7 @@ static void pp_debug_line(FILE *f)
 
 static void pp_debug_include(const char *name, bool is_user)
 {
-	FILE *f = out_file;
+	FILE *f = out_file ? out_file : stdout;
 
 	if (!(yy_flags & PP_NO_LINEMARKERS)) {
 		if (out_level != pp_include_level || out_file_name != yy_file_name || out_line != yy_line) {
@@ -2466,7 +2466,7 @@ static void pp_debug_tokens(FILE *f, yy_sym *tokens)
 
 static void pp_debug_macro(yy_sym sym, yy_sym name, pp_macro *macro)
 {
-	FILE *f = out_file;
+	FILE *f = out_file ? out_file : stdout;
 
 	if (!(yy_flags & PP_NO_LINEMARKERS)) {
 		if (out_level != pp_include_level || out_file_name != yy_file_name || out_line != yy_line) {
