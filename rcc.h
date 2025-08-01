@@ -351,6 +351,7 @@ typedef struct _pp_macro_list pp_macro_list;
 typedef struct _c_sym c_sym;
 typedef struct _c_tag c_tag;
 typedef struct _c_label c_label;
+typedef struct _c_linker_sym c_linker_sym;
 
 typedef struct _yy_hash_bucket {
 	uint32_t                 h;      /* hash value */
@@ -362,6 +363,7 @@ typedef struct _yy_hash_bucket {
 	c_sym                   *sym;
 	c_tag                   *tag;
 	c_label                 *label;
+	c_linker_sym            *link;
 } yy_hash_bucket;
 
 typedef struct {
@@ -673,6 +675,12 @@ struct _c_reloc {
 	c_reloc *next;
 };
 
+struct _c_linker_sym {
+	const void *addr;
+	c_reloc    *reloc;
+	bool        is_thunk;
+};
+
 struct _c_sym {
 	c_sym_kind             kind: 2;
 	c_sym_linkage          linkage: 2;         /* only for C_SYM_VAR and C_SYM_FUNC */
@@ -680,7 +688,8 @@ struct _c_sym {
 	bool                   is_thread_local: 1; /* only for C_SYM_VAR */
 	bool                   is_implemented: 1;  /* only for C_SYM_VAR and C_SYM_FUNC */
 	bool                   is_string: 1;
-	bool                   has_thunk: 1;       /* TODO: replace thunks with relocs ??? */
+	bool                   is_thunk: 1;        /* TODO: replace thunks with relocs ??? */
+	bool                   has_code: 1;
 	bool                   tmp_data: 1;        /* temporary growable data area */
 	c_scope               *scope;
 	c_value                value;              /* type is part of the value */

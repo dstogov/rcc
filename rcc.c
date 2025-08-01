@@ -40,6 +40,7 @@
 #define C_DUMP_TIME              (1<<9)
 #define C_GDB                    (1<<10)
 #define C_PERF                   (1<<11)
+#define C_RUN                    (1<<12)
 
 #define C_OPT_LEVEL              0x3
 #define C_OPT_INLINE             (1<<2)
@@ -179,8 +180,9 @@ static void rcc_ir_codegen(c_name name, ir_ctx *ctx, c_sym *sym)
 		entry = ir_emit_code(ctx, &size);
 		IR_ASSERT(entry);
 		if (c_value_is_const(func)) {
-			if (!sym->has_thunk) yy_error_fmt("external symbol \"%s\" used before the local one", yy_sym2str(name));
+			if (!sym->is_thunk) yy_error_fmt("external symbol \"%s\" used before the local one", yy_sym2str(name));
 			ir_fix_thunk(func->u.val.ptr, entry);
+			sym->is_thunk = 0;
 		}
 #ifndef _WIN32
 		if (c_dump_flags & C_GDB) {
@@ -282,8 +284,11 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym)
 	if (!RCC_DELAY_CODE_GEN) {
 		rcc_ir_codegen(name, ctx, sym);
 		ir_free(ctx);
+		sym->has_code = 1;
 	} else {
-		if (name == YY_MAIN) {
+		if (sym->linkage == C_LINK_EXTERNAL && !sym->has_code) {
+			sym->has_code = 1;
+//		if (name == YY_MAIN) {
 			if (!ir_list_capasity(&c_codegen_list)) ir_list_init(&c_codegen_list, 32);
 			ir_list_push(&c_codegen_list, name);
 		}
@@ -319,6 +324,7 @@ void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, uint32_t fl
 		} else if (protected) {
 			/* Generate code early to avoid linking through thunk */
 			rcc_ir_codegen(id, sym->ctx, sym);
+			sym->has_code = 1;
 			if (c_value_is_const(&sym->value)) {
 				return sym->value.u.val.ptr;
 			}
@@ -352,7 +358,7 @@ add_thunk:
 			if (!addr) {
 				yy_error_fmt("internal error");
 			}
-			sym->has_thunk = 1;
+			sym->is_thunk = 1;
 			sym->value.u.op |= C_VAL_CONST;
 			sym->value.u.type = IR_ADDR;
 			sym->value.u.val.ptr = addr;
@@ -360,7 +366,8 @@ add_thunk:
 				/* thunk and real symbol use the same name */
 				ir_disasm_add_symbol(name, (uint64_t)(uintptr_t)addr, size);
 			}
-			if (RCC_DELAY_CODE_GEN || sym->ctx) {
+			if ((RCC_DELAY_CODE_GEN || sym->ctx) && !sym->has_code) {
+				sym->has_code = 1;
 				if (!ir_list_capasity(&c_codegen_list)) ir_list_init(&c_codegen_list, 32);
 				ir_list_push(&c_codegen_list, id);
 			}
@@ -701,6 +708,7 @@ static void rcc_dtor(void)
 		if (p->sym && p->sym->kind == C_SYM_FUNC && p->sym->ctx) {
 			ir_free(p->sym->ctx);
 			ir_mem_free(p->sym->ctx);
+			p->sym->ctx = NULL;
 		}
 	}
 	pp_dtor();
@@ -1106,6 +1114,7 @@ static int rcc_compile(const char *file_name)
 			c_name name = ir_list_pop(&c_codegen_list);
 			c_sym *sym = yy_hash.data[name].sym;
 			if (sym && sym->ctx) {
+				if (sym->value.u.val.ptr && !sym->is_thunk && !sym->is_external) continue; // already done ???
 				rcc_ir_codegen(name, sym->ctx, sym);
 			}
 		} while (ir_list_len(&c_codegen_list));
@@ -1114,6 +1123,52 @@ static int rcc_compile(const char *file_name)
 	c_do_compile_end();
 	rcc_dtor();
 	return 1;
+}
+
+static void rcc_link(void)
+{
+	yy_sym i;
+	yy_hash_bucket *p, *q;
+	c_linker_sym *link;
+	c_reloc *reloc;
+	void *addr;
+
+	ir_mem_unprotect(c_code_buffer.start, (char*)c_code_buffer.end - (char*)c_code_buffer.start);
+	for (i = YY_LAST_KEYWORD + 1, p = yy_hash.data + i; i < yy_hash.count; p++, i++) {
+		link = p->link;
+		if (link) {
+			if (!link->addr || link->is_thunk) {
+				addr = ir_resolve_sym_name(p->str);
+				if (!addr) yy_error_fmt("Unresolved symbol \"%s\"", p->str);
+				if (link->is_thunk) ir_fix_thunk((void*)link->addr, addr);
+				link->addr = addr;
+				link->is_thunk = 0;
+			}
+			reloc = link->reloc;
+			while (reloc) {
+				q = &yy_hash.data[reloc->name];
+				link = q->link;
+				if (!link) {
+					addr = ir_resolve_sym_name(q->str);
+					if (!addr) yy_error_fmt("Unresolved symbol \"%s\"", q->str);
+					link = ir_arena_alloc(&yy_arena, sizeof(c_linker_sym));
+					link->addr = addr;
+					link->reloc = NULL;
+					link->is_thunk = 0;
+					q->link = link;
+				} else if (!link->addr || link->is_thunk) {
+					addr = ir_resolve_sym_name(q->str);
+					if (!addr) yy_error_fmt("Unresolved symbol \"%s\"", q->str);
+					if (link->is_thunk) ir_fix_thunk((void*)link->addr, addr);
+					link->addr = addr;
+					link->is_thunk = 0;
+				}
+				*(void**)((char*)p->link->addr + reloc->obj_offset) = (char*)link->addr + reloc->name_offset;
+				reloc = reloc->next;
+			}
+		}
+	}
+	ir_mem_protect(c_code_buffer.start, (char*)c_code_buffer.end - (char*)c_code_buffer.start);
 }
 
 static struct {
@@ -1137,11 +1192,39 @@ static void rcc_remember_state(void)
 	c_init_state.checkpoint = ir_arena_checkpoint(c_arena);
 }
 
+static void rcc_update_link(yy_hash_bucket *p)
+{
+	if (p->link) {
+		if (p->sym->is_thunk) {
+			if (!p->link->is_thunk || p->sym->value.u.val.ptr != p->link->addr) {
+				ir_fix_thunk((void*)p->sym->value.u.val.ptr, (void*)p->link->addr);
+			}
+		} else if (p->link->is_thunk) {
+			ir_fix_thunk((void*)p->link->addr, (void*)p->sym->value.u.val.ptr);
+			p->link->addr = p->sym->value.u.val.ptr;
+			p->link->is_thunk = 0;
+		} else if (p->sym->value.u.val.ptr != p->link->addr) {
+			yy_error_fmt("redefined symbol \"%s\"", p->str);
+		}
+	} else {
+		c_linker_sym *link = ir_arena_alloc(&yy_arena, sizeof(c_linker_sym));
+
+		IR_ASSERT(!p->link);
+		link->addr = p->sym->value.u.val.ptr;
+		link->reloc = p->sym->reloc;
+		link->is_thunk = p->sym->is_thunk;
+		p->link = link;
+	}
+}
+
 static void rcc_reset_state(void)
 {
 	yy_sym i;
 	yy_hash_bucket *p;
 
+	if (c_dump_flags & C_RUN) {
+		ir_mem_unprotect(c_code_buffer.start, (char*)c_code_buffer.end - (char*)c_code_buffer.start);
+	}
 	for (i = YY_LAST_KEYWORD + 1, p = yy_hash.data + i; i < c_init_state.num_syms; p++, i++) {
 		if (p->macro && !(p->macro->flags & PP_MACRO_PREDEFINED)) {
 			p->macro = NULL;
@@ -1150,10 +1233,22 @@ static void rcc_reset_state(void)
 		p->tag = NULL;
 		p->label = NULL;
 		if (i != YY_MEMCPY && i != YY_MEMSET) {
+			if ((c_dump_flags & C_RUN)
+			 && p->sym
+			 && (p->sym->linkage == C_LINK_EXTERNAL
+			  || (p->sym->kind == C_SYM_VAR && p->sym->reloc))) {
+				rcc_update_link(p);
+			}
 			p->sym = NULL;
 		}
 	}
 	for (; i < yy_hash.count; p++, i++) {
+		if ((c_dump_flags & C_RUN)
+		 && p->sym
+		 && (p->sym->linkage == C_LINK_EXTERNAL
+		  || (p->sym->kind == C_SYM_VAR && p->sym->reloc))) {
+			rcc_update_link(p);
+		}
 		p->macro = NULL;
 		p->macro_stack = NULL;
 		p->sym = NULL;
@@ -1161,6 +1256,9 @@ static void rcc_reset_state(void)
 		p->label = NULL;
 	}
 	ir_arena_release(&c_arena, c_init_state.checkpoint);
+	if (c_dump_flags & C_RUN) {
+		ir_mem_protect(c_code_buffer.start, (char*)c_code_buffer.end - (char*)c_code_buffer.start);
+	}
 }
 
 #ifndef _WIN32
@@ -1279,7 +1377,6 @@ int main(int argc, const char **argv)
 {
 	bool preprocess_only = 0;
 	uint32_t preprocess_flags = 0, compiler_flags = 0;
-	bool run = 0;
 	int run_args = 0;
 	const char *output = NULL;
 	ir_list src, def;
@@ -1404,7 +1501,7 @@ int main(int argc, const char **argv)
 		} else if (strcmp(argv[i], "-p") == 0) {
 			c_dump_flags |= C_PERF;
 		} else if (strcmp(argv[i], "--run") == 0) {
-			run = 1;
+			c_dump_flags |= C_RUN;
 			if (i + 1 < argc) {
 				run_args = i + 1;
 				break;
@@ -1473,7 +1570,7 @@ int main(int argc, const char **argv)
 
 		ret = 0;
 	} else {
-		c_native = run || (c_dump_flags & (C_DUMP_SIZE|C_DUMP_ASM));
+		c_native = (c_dump_flags & (C_DUMP_SIZE|C_DUMP_ASM|C_RUN)) != 0;
 
 		if (c_native) {
 			size_t size = 2 * 1024 * 1024;
@@ -1514,20 +1611,37 @@ int main(int argc, const char **argv)
 			start_time = t;
 		}
 
-		if (run) {
+		if (c_dump_flags & C_RUN) {
 			int jit_argc = 1;
 			const char **jit_argv;
-			c_sym *sym = yy_hash.data[YY_MAIN].sym;
 			int (*func)(int, const char**) = NULL;
 
-			if (!sym || sym->kind != C_SYM_FUNC || !c_value_is_const(&sym->value)) {
-				rcc_free();
-				ir_free(&ctx);
-				fprintf(stderr, "undefined reference to function \"main\"\n");
-				goto exit;
+			if (ir_list_len(&src) > 1) {
+				c_linker_sym *link;
+
+				rcc_reset_state();
+				rcc_link();
+				link = yy_hash.data[YY_MAIN].link;
+
+				if (!link || !link->addr) {
+					rcc_free();
+					ir_free(&ctx);
+					fprintf(stderr, "undefined reference to function \"main\"\n");
+					goto exit;
+				}
+				func = link->addr;
+			} else {
+				c_sym *sym = yy_hash.data[YY_MAIN].sym;
+
+				if (!sym || sym->kind != C_SYM_FUNC || !c_value_is_const(&sym->value)) {
+					rcc_free();
+					ir_free(&ctx);
+					fprintf(stderr, "undefined reference to function \"main\"\n");
+					goto exit;
+				}
+				IR_ASSERT(sym->value.u.type == IR_ADDR && sym->value.u.val.ptr);
+				func = sym->value.u.val.ptr;
 			}
-			IR_ASSERT(sym->value.u.type == IR_ADDR && sym->value.u.val.ptr);
-			func = sym->value.u.val.ptr;
 
 			if (run_args && argc > run_args) {
 				jit_argc = argc - run_args + 1;
