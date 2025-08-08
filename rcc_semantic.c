@@ -2400,8 +2400,7 @@ static void c_do_trunc(const c_type *t, ir_type type, c_value *v)
 {
 	ir_val val;
 
-// enum support ???
-	IR_ASSERT((C_IS_TYPE_INT_OR_PTR(t) || t->kind == C_TYPE_ARRAY)
+	IR_ASSERT(C_IS_TYPE_INT_OR_PTR(t)
 		&& (C_IS_TYPE_INT_OR_PTR(v->type) || v->type->kind == C_TYPE_ARRAY)
 		&& t->size < v->type->size);
 	IR_ASSERT(IR_IS_TYPE_INT(type) && IR_IS_TYPE_INT(v->u.type) && ir_type_size[type] < ir_type_size[v->u.type]);
