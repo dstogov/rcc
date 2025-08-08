@@ -3695,9 +3695,23 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args)
 		if (func_type->func.num_params < 0) {
 			/* pass */
 		} else if (num_args < func_type->func.num_params) {
-			yy_error("too few arguments"); // TODO: to function "%s" ???
+			if (c_value_is_ref(func)
+			 && IR_IS_CONST_REF(func->u.ref)
+			 && active_ctx->ir_base[func->u.ref].op == IR_FUNC) {
+				yy_error_fmt("too few arguments to function \"%s\"",
+					ir_get_str(active_ctx, active_ctx->ir_base[func->u.ref].val.str));
+			} else {
+				yy_error("too few arguments");
+			}
 		} else if (!(func_type->attr & C_ATTR_VARIADIC)) {
-			yy_error("too many arguments"); // TODO: to function "%s" ???
+			if (c_value_is_ref(func)
+			 && IR_IS_CONST_REF(func->u.ref)
+			 && active_ctx->ir_base[func->u.ref].op == IR_FUNC) {
+				yy_error_fmt("too many arguments to function \"%s\"",
+					ir_get_str(active_ctx, active_ctx->ir_base[func->u.ref].val.str));
+			} else {
+				yy_error("too many arguments");
+			}
 		}
 	}
 	if ((func_type->func.ret_type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(func_type->func.ret_type)) {
