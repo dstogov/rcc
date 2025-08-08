@@ -83,6 +83,8 @@ static c_loop     *active_loop = NULL;
 static c_name      active_func_name = 0;
 static uint32_t    c_static_sym_num = 0;
 static uint32_t    c_static_str_num = 0;
+static ir_ref      c_last_expect_ref = IR_UNUSED;
+static bool        c_last_expect_val;
 static ir_strtab   c_strtab;
 
 static bool c_valid_alignment(c_value *val)
@@ -3367,8 +3369,13 @@ void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 		c_value_set_rval(val, &c_type_void, IR_VOID, IR_UNUSED);
 	} else if (name == YY___BUILTIN_EXPECT) {
 		if (num_args != 2) yy_error("wrong number of arguments in __builtin_expect() call");
-		// TODO: set IF propability ???
 		c_value_set_rval(val, args[0].type, args[0].u.type, c_value_ref(&args[0]));
+		if (c_value_is_const(&args[1]) && C_IS_TYPE_INT(args[1].type)) {
+			c_last_expect_ref = val->u.ref;
+			c_last_expect_val = args[1].u.val.u64 != 0;
+		} else {
+			yy_warning("second argument of __builtin_expect() must be an integer constant");
+		}
 	} else {
 		IR_ASSERT(0);
 	}
@@ -4575,6 +4582,32 @@ static void c_do_bool(c_value *res, c_value *op1)
 	}
 }
 
+/* wrappers to support __builtin_expect() */
+static void c_ir_IF_TRUE(ir_ref ref)
+{
+	if (!c_last_expect_ref
+	 || c_last_expect_ref != active_ctx->ir_base[ref].op2
+	 || c_last_expect_val) {
+		ir_IF_TRUE(ref);
+	} else {
+		ir_IF_TRUE_cold(ref);
+	}
+}
+
+static void c_ir_IF_FALSE(ir_ref ref)
+{
+	if (!c_last_expect_ref
+	 || c_last_expect_ref != active_ctx->ir_base[ref].op2
+	 || !c_last_expect_val) {
+		ir_IF_FALSE(ref);
+	} else {
+		ir_IF_FALSE_cold(ref);
+	}
+}
+
+#define c_ir_MERGE_WITH_EMPTY_TRUE(_if)     do {ir_ref end = ir_END(); c_ir_IF_TRUE(_if); ir_MERGE_2(end, ir_END());} while (0)
+#define c_ir_MERGE_WITH_EMPTY_FALSE(_if)    do {ir_ref end = ir_END(); c_ir_IF_FALSE(_if); ir_MERGE_2(end, ir_END());} while (0)
+
 ir_ref c_do_bool_and_start(c_value *op1)
 {
 	if (op1->type->kind == C_TYPE_VOID || op1->type->kind == C_TYPE_STRUCT || op1->type->kind == C_TYPE_UNION) {
@@ -4586,7 +4619,7 @@ ir_ref c_do_bool_and_start(c_value *op1)
 	}
 	c_do_bool(op1, op1);
 	ir_ref ref = ir_IF(c_value_ref(op1));
-	ir_IF_TRUE(ref);
+	c_ir_IF_TRUE(ref);
 	return ref;
 }
 
@@ -4602,7 +4635,7 @@ void c_do_bool_and_end(c_value *op1, c_value *op2, ir_ref if_ref)
 
 		c_do_bool(op2, op2);
 		ref = c_value_ref(op2);
-		ir_MERGE_WITH_EMPTY_FALSE(if_ref);
+		c_ir_MERGE_WITH_EMPTY_FALSE(if_ref);
 		if (c_value_is_const(op1) && c_value_is_const(op2)) {
 			if (c_value_is_true(op1) && c_value_is_true(op2)) {
 				val.u64 = 1;
@@ -4630,7 +4663,7 @@ ir_ref c_do_bool_or_start(c_value *op1)
 	}
 	c_do_bool(op1, op1);
 	ir_ref ref = ir_IF(c_value_ref(op1));
-	ir_IF_FALSE(ref);
+	c_ir_IF_FALSE(ref);
 	return ref;
 }
 
@@ -4646,7 +4679,7 @@ void c_do_bool_or_end(c_value *op1, c_value *op2, ir_ref if_ref)
 
 		c_do_bool(op2, op2);
 		ref = c_value_ref(op2);
-		ir_MERGE_WITH_EMPTY_TRUE(if_ref);
+		c_ir_MERGE_WITH_EMPTY_TRUE(if_ref);
 		if ((c_value_is_const(op1) && c_value_is_true(op1))
 		 || (c_value_is_const(op2) && c_value_is_true(op2))) {
 			val.u64 = 1;
@@ -4762,7 +4795,7 @@ ir_ref c_do_if(c_value *cond)
 	if (IR_IS_CONST_REF(ref) && !ir_const_is_true(&active_ctx->ir_base[ref])) c_dead_code = 1;
 	ref = ir_IF(ref);
 	active_ctx->ir_base[ref].op3 = IR_UNUSED;
-	ir_IF_TRUE(ref);
+	c_ir_IF_TRUE(ref);
 	return ref;
 }
 
@@ -4770,7 +4803,7 @@ void c_do_if_else(ir_ref if_ref, bool orig_dead_code)
 {
 	ir_ref end_true_ref = ir_END();
 	active_ctx->ir_base[if_ref].op3 = end_true_ref;
-	ir_IF_FALSE(if_ref);
+	c_ir_IF_FALSE(if_ref);
 	if (!orig_dead_code) {
 		ir_ref cond = active_ctx->ir_base[if_ref].op2;
 		c_dead_code = (IR_IS_CONST_REF(cond) && ir_const_is_true(&active_ctx->ir_base[cond]));
@@ -4785,7 +4818,7 @@ void c_do_if_end(ir_ref if_ref, bool orig_dead_code)
 		active_ctx->ir_base[if_ref].op3 = IR_UNUSED;
 		ir_MERGE_2(end_true_ref, ir_END());
 	} else {
-		ir_MERGE_WITH_EMPTY_FALSE(if_ref);
+		c_ir_MERGE_WITH_EMPTY_FALSE(if_ref);
 	}
 	c_dead_code = orig_dead_code;
 }
@@ -5181,7 +5214,7 @@ void c_do_loop_check(c_loop *loop, c_value *cond)
 		ref = c_value_ref(cond);
 	}
 	loop->check = ir_IF(ref);
-	ir_IF_TRUE(loop->check);
+	c_ir_IF_TRUE(loop->check);
 }
 
 void c_do_loop_continue_label(c_loop *loop)
@@ -5201,7 +5234,7 @@ void c_do_loop_end(c_loop *loop)
 	}
 	ir_ref end = ir_LOOP_END();
 	active_ctx->ir_base[loop->start].op2 = end;
-	ir_IF_FALSE(loop->check);
+	c_ir_IF_FALSE(loop->check);
 	if (loop->break_list) {
 		ir_END_list(loop->break_list);
 		ir_MERGE_list(loop->break_list);
@@ -5327,7 +5360,7 @@ void c_do_for_end(c_loop *loop)
 	active_ctx->ir_base[loop->start].op2 = end;
 
 	if (loop->check) {
-		ir_IF_FALSE(loop->check);
+		c_ir_IF_FALSE(loop->check);
 		if (loop->break_list) {
 			ir_END_list(loop->break_list);
 			ir_MERGE_list(loop->break_list);
@@ -6231,6 +6264,7 @@ void c_do_func_start(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 	IR_ASSERT(func);
 	active_func = func;
 	active_func_name = name;
+	c_last_expect_ref = IR_UNUSED;
 
 	c_push_scope(scope);
 
