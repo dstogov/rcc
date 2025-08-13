@@ -1,0 +1,11 @@
+--TEST--
+Incomplete type 001
+--CODE--
+typedef struct _t1 t1;
+typedef union _t2 t2;
+typedef enum _t3 t3;
+t3 v3;
+--EXPECT--
+./tests/rcc/incomplete-001.c:4:6: error: storage size of "v3" isn't known
+
+exit code = 1

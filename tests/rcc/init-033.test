@@ -1,0 +1,12 @@
+--TEST--
+Initializers 033:
+--CODE--
+int x;
+const int *b = &x;
+int *c = b;
+--EXPECT--
+./tests/rcc/init-033.c:3:11: warning: assignment discards "const" qualifier from pointer target type
+./tests/rcc/init-033.c:3:11: error: initializer element is not constant
+
+exit code = 1
+

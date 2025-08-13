@@ -1,0 +1,12 @@
+--TEST--
+for 001:
+--CODE--
+int test(int *a, int n) {
+	int i = 42, sum;
+	for (int i = 0; i < n; i++) {
+		int i = a[n];
+		sum += i; 
+	} 
+	return sum + i;
+}
+--EXPECT--

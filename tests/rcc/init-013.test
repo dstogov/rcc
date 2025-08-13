@@ -1,0 +1,10 @@
+--TEST--
+Initializers 013:
+--CODE--
+int i;
+int a[2] = {i, i};
+--EXPECT--
+./tests/rcc/init-013.c:2:14: error: initializer element is not constant
+
+exit code = 1
+

@@ -1,0 +1,14 @@
+--TEST--
+Call 001:
+--CODE--
+void f(int i) {
+}
+void test(void) {
+	int i;
+	f(5);
+	f(6.5);
+	f(i);
+	f(&i);
+}
+--EXPECT--
+./tests/rcc/call-001.c:8:6: warning: passing argument 1 makes integer from pointer without a cast

@@ -1,0 +1,15 @@
+--TEST--
+Label 001:
+--CODE--
+void test(int i) {
+	goto l2;
+	l1: goto l3;
+	l2: goto l1;
+	l3:
+	l1:
+	return;
+}
+--EXPECT--
+./tests/rcc/label-002.c:6:4: error: duplicate label "l1"
+
+exit code = 1

@@ -1,0 +1,11 @@
+--TEST--
+Pre-inc opertor 001:
+--CODE--
+void test(int a) {
+	++a;
+	++42;
+}
+--EXPECT--
+./tests/rcc/pre_inc-01.c:3:6: error: lvalue required as "++" operand
+
+exit code = 1

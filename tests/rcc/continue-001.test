@@ -1,0 +1,10 @@
+--TEST--
+continue 001:
+--CODE--
+void test() {
+	continue;
+}
+--EXPECT--
+./tests/rcc/continue-001.c:3:1: error: continue statement not within a loop
+
+exit code = 1

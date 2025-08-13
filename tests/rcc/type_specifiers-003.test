@@ -1,0 +1,30 @@
+--TEST--
+Type specifiers 003:
+--CODE--
+signed char x1;
+unsigned char x2;
+char signed x3;
+char unsigned x4;
+short int x5;
+signed short x6;
+unsigned short x7;
+signed short int x8;
+unsigned short int x9;
+signed int x10;
+unsigned int x11;
+long int x12;
+signed long x13;
+unsigned long x14;
+signed long int x15;
+unsigned long int x16;
+long long x17;
+long long int x18;
+signed long long x19;
+unsigned long long x20;
+signed long long int x21;
+unsigned long long int x22;
+long double x23;
+float _Complex x24;
+double _Complex x25;
+long double _Complex x26;
+--EXPECT--

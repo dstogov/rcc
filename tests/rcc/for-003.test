@@ -1,0 +1,15 @@
+--TEST--
+for 003:
+--CODE--
+int test(int *a, int n) {
+	int i = 42, sum;
+	for (static int i = 0; i < n; i++) {
+		int i = a[n];
+		sum += i; 
+	} 
+	return sum + i;
+}
+--EXPECT--
+./tests/rcc/for-003.c:3:20: error: declaration of non-local variable in "for" loop
+
+exit code = 1

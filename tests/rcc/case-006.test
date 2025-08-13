@@ -1,0 +1,10 @@
+--TEST--
+case 006:
+--CODE--
+void test(int i) {
+	switch (i) {
+		case 4 ... 2: return;
+	}
+}
+--EXPECT--
+./tests/rcc/case-006.c:3:15: warning: empty range specified

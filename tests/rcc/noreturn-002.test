@@ -1,0 +1,11 @@
+--TEST--
+noreturn 002:
+--ARGS--
+--run
+--CODE--
+extern _Noreturn void exit(int);
+int main() {
+	exit(42);
+}
+--EXPECT--
+exit code = 42

@@ -1,0 +1,11 @@
+--TEST--
+Initializers 030:
+--CODE--
+int x;
+int y = &x;
+--EXPECT--
+./tests/rcc/init-030.c:2:11: warning: assignment makes integer from pointer without a cast
+./tests/rcc/init-030.c:2:11: error: initializer element is not computable at load time
+
+exit code = 1
+

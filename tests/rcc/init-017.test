@@ -1,0 +1,11 @@
+--TEST--
+Initializers 017:
+--CODE--
+int a[3][3] = {0, 1, 2, 3, 4, 5, 6, 7, 8};
+int b[3][3] = {[1][2] = 1, 2, 3, 4};
+int c[3][3] = {[1][2] = 1, 2, 3, 4, 5};
+--EXPECT--
+./tests/rcc/init-017.c:3:37: error: excess elements in array initializer
+
+exit code = 1
+

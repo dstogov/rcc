@@ -1,0 +1,10 @@
+--TEST--
+case 001:
+--CODE--
+void test() {
+	case 1: return;
+}
+--EXPECT--
+./tests/rcc/case-001.c:2:8: error: case label not within a switch statement
+
+exit code = 1

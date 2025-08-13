@@ -1,0 +1,13 @@
+--TEST--
+Label 004:
+--CODE--
+void test(int i) {
+	if (i) {
+		__label__ l1, l1;
+		l1: return;
+	}
+}
+--EXPECT--
+./tests/rcc/label-004.c:3:19: error: duplicate label declaration "l1"
+
+exit code = 1

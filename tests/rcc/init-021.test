@@ -1,0 +1,20 @@
+--TEST--
+Initializers 021:
+--ARGS--
+--run
+--CODE--
+typedef struct {int x,y;} t;
+int test(int x, int y)
+{
+	t p1 = {x, y};
+	t p2;
+	p2 = (t){x, y};
+	return p1.x + p1.y + p2.x + p2.y;
+}
+int main()
+{
+	return test(5, 3);
+}
+--EXPECT--
+
+exit code = 16

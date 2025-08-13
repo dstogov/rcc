@@ -1,0 +1,10 @@
+--TEST--
+Call 003:
+--CODE--
+void f(int *i) {
+}
+void test(const int *p) {
+	f(p);
+}
+--EXPECT--
+./tests/rcc/call-004.c:4:5: warning: passing argument 1 discards "const" qualifier from pointer target type

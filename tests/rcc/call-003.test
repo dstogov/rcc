@@ -1,0 +1,11 @@
+--TEST--
+Call 003:
+--CODE--
+void f(int *i) {
+}
+void test(void) {
+	double *d;
+	f(d);
+}
+--EXPECT--
+./tests/rcc/call-003.c:5:5: warning: passing argument 1 from incompatible pointer type

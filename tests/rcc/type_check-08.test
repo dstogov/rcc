@@ -1,0 +1,11 @@
+--TEST--
+Type check 008:
+--CODE--
+typedef struct _x x;
+void test(x *p) {
+	*p;
+}
+--EXPECT--
+./tests/rcc/type_check-08.c:3:4: error: invalid use of undefined "struct _x"
+
+exit code = 1

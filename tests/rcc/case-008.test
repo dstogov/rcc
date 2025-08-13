@@ -1,0 +1,23 @@
+--TEST--
+case 008:
+--ARGS--
+--run
+--CODE--
+extern int printf(const char *, ...);
+int test(int c) {
+	int ret;
+	switch (c) {
+		case 1: ret = 1; break;
+		case 2 ... 5: ret = 2; break;
+		case 6: ret = 4;
+		case 7: ret = 7; break;
+		default: ret = - 1;
+	}
+	return ret;
+}
+int main()  {
+	printf("%d", test(6));
+	return 0;
+}
+--EXPECT--
+7

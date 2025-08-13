@@ -1,0 +1,66 @@
+--TEST--
+Enum 002: (Use __attribute instead of __attribute__ for workaround)
+--ARGS--
+--run
+--CODE--
+#include <stdio.h>
+
+enum e1 {a1} v1;                                 // 4
+__attribute((packed)) enum e2 {a2} v2;           // 4  (warning: "packed" attribute ignored)
+enum __attribute((packed)) e3 {a3} v3;           // 1
+enum e4 {a4} __attribute((packed)) v4;           // 1
+enum e5 {a5} v5 __attribute((packed));           // 4  (warning: "packed" attribute ignored)
+enum e6 {a6=127} __attribute((packed)) v6;       // 1
+enum e7 {a7=128} __attribute((packed)) v7;       // 1
+enum e8 {a8=128U} __attribute((packed)) v8;      // 1
+enum e9 {a9=256} __attribute((packed)) v9;       // 2
+enum e10 {a10=0x7fffffff} v10;                   // 4
+enum e11 {a11=0xffffffff} v11;                   // 4
+enum e12 {a12=0xffffffff, b12=-1} v12;           // 8
+enum e13 {a13=0x1ffffffff} v13;                  // 8
+enum e14 {a14=0x7fffffffffffffff} v14;           // 8
+enum e15 {a15=0xffffffffffffffff} v15;           // 8
+enum e16 {a16=0xffffffffffffffff, b16=-1} v16;   // 8? (warning: enumeration values exceed range of largest integer)
+enum e17 {a17=0xffffffffffffffff, b17} v17;      // 8?  (warning: incremented enumerator value 18446744073709551616 is not representable in the largest integer type)
+int main() {
+	printf("%d %d\n", (int)sizeof(enum e1), (int)sizeof(v1));
+	printf("%d %d\n", (int)sizeof(enum e2), (int)sizeof(v2));
+	printf("%d %d\n", (int)sizeof(enum e3), (int)sizeof(v3));
+	printf("%d %d\n", (int)sizeof(enum e4), (int)sizeof(v4));
+	printf("%d %d\n", (int)sizeof(enum e5), (int)sizeof(v5));
+	printf("%d %d\n", (int)sizeof(enum e6), (int)sizeof(v6));
+	printf("%d %d\n", (int)sizeof(enum e7), (int)sizeof(v7));
+	printf("%d %d\n", (int)sizeof(enum e8), (int)sizeof(v8));
+	printf("%d %d\n", (int)sizeof(enum e9), (int)sizeof(v9));
+	printf("%d %d\n", (int)sizeof(enum e10), (int)sizeof(v10));
+	printf("%d %d\n", (int)sizeof(enum e11), (int)sizeof(v11));
+	printf("%d %d\n", (int)sizeof(enum e12), (int)sizeof(v12));
+	printf("%d %d\n", (int)sizeof(enum e13), (int)sizeof(v13));
+	printf("%d %d\n", (int)sizeof(enum e14), (int)sizeof(v14));
+	printf("%d %d\n", (int)sizeof(enum e15), (int)sizeof(v15));
+	printf("%d %d\n", (int)sizeof(enum e16), (int)sizeof(v16));
+	printf("%d %d\n", (int)sizeof(enum e17), (int)sizeof(v17));
+	return 0;
+}
+--EXPECT--
+./tests/rcc/enum-002.c:4:20: warning: "packed" attribure ignored
+./tests/rcc/enum-002.c:7:36: warning: "packed" attribure ignored
+./tests/rcc/enum-002.c:18:43: warning: enumeration values exceed range of largest integer
+./tests/rcc/enum-002.c:19:38: warning: incremented enumerator value is not representable in the largest integer type
+4 4
+4 4
+1 1
+1 1
+4 4
+1 1
+1 1
+1 1
+2 2
+4 4
+4 4
+8 8
+8 8
+8 8
+8 8
+8 8
+8 8

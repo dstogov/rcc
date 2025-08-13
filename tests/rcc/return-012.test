@@ -1,0 +1,8 @@
+--TEST--
+Return 012:
+--CODE--
+int *test(double *p) {
+	return p;
+}
+--EXPECT--
+./tests/rcc/return-012.c:3:1: warning: return from incompatible pointer type

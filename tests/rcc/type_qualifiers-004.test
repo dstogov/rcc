@@ -1,0 +1,8 @@
+--TEST--
+Type qualifiers 004:
+--CODE--
+restrict void * x1;
+--EXPECT--
+./tests/rcc/type_qualifiers-004.c:1:1: error: invalid use of "restrict"
+
+exit code = 1

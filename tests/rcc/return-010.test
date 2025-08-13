@@ -1,0 +1,9 @@
+--TEST--
+Return 010:
+--CODE--
+int test(void) {
+	static int i;
+	return &i;
+}
+--EXPECT--
+./tests/rcc/return-010.c:4:1: warning: return makes integer from pointer without a cast

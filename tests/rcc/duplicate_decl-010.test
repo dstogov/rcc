@@ -1,0 +1,16 @@
+--TEST--
+Duplicate declarations 010
+--CODE--
+typedef struct _a a;
+typedef struct _a {
+  int x;
+  int y;
+} a;
+typedef struct _a {
+  int x;
+  int y;
+} a;
+--EXPECT--
+./tests/rcc/duplicate_decl-010.c:6:19: error: redefinition of "struct _a"
+
+exit code = 1

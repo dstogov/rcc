@@ -1,0 +1,10 @@
+--TEST--
+Duplicate declarations 001
+--CODE--
+typedef int y;
+typedef int y;
+extern int x;
+extern int x;
+int z(int x);
+int z(int y);
+--EXPECT--

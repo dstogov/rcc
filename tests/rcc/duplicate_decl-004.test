@@ -1,0 +1,9 @@
+--TEST--
+Duplicate declarations 004
+--CODE--
+int z(int);
+int z(int,...);
+--EXPECT--
+./tests/rcc/duplicate_decl-004.c:2:15: error: incompatible redeclaration of "z"
+
+exit code = 1

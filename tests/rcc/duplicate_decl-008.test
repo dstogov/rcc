@@ -1,0 +1,8 @@
+--TEST--
+Duplicate declarations 008
+--CODE--
+void test(void) {
+	extern int x;
+	extern int x;
+}
+--EXPECT--

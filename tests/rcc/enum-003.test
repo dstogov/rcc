@@ -1,0 +1,17 @@
+--TEST--
+Enum 003: (Use __attribute instead of __attribute__ for workaround)
+--ARGS--
+--run
+--CODE--
+#include <stdio.h>
+
+enum e {a} v1;
+enum __attribute((packed)) e v2;
+enum e __attribute((packed)) v3; // warning
+int main() {
+	printf("%d %d %d %d\n", (int)sizeof(enum e), (int)sizeof(v1), (int)sizeof(v2), (int)sizeof(v3));
+	return 0;
+}
+--EXPECT--
+./tests/rcc/enum-003.c:5:27: warning: "packed" attribure ignored
+4 4 4 4

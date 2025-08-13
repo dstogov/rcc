@@ -1,0 +1,16 @@
+--TEST--
+Label 005:
+--CODE--
+void test(int i) {
+	__label__ l1;
+	if (i) {
+		l1: return;
+	} else {
+		l1: return;
+	}
+}
+--EXPECT--
+./tests/rcc/label-005.c:6:5: error: duplicate label "l1"
+
+exit code = 1
+

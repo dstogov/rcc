@@ -1,0 +1,10 @@
+--TEST--
+Type check 007:
+--CODE--
+void test(int p) {
+	p[1];
+}
+--EXPECT--
+./tests/rcc/type_check-07.c:2:6: error: subscripted value is neither array nor pointer
+
+exit code = 1

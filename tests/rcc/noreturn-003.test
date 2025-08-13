@@ -1,0 +1,11 @@
+--TEST--
+noreturn 003:
+--ARGS--
+--run
+--CODE--
+extern __attribute__((noreturn)) void exit(int);
+int main() {
+	exit(42);
+}
+--EXPECT--
+exit code = 42

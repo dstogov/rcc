@@ -1,0 +1,10 @@
+--TEST--
+Initializers 008:
+--CODE--
+int a[2] = {1, 2};
+int b[2] = {[0]=1, [1]=2};
+int c[2] = {1, 2, 3};
+--EXPECT--
+./tests/rcc/init-008.c:3:19: error: excess elements in array initializer
+
+exit code = 1

@@ -1,0 +1,9 @@
+--TEST--
+Label 006:
+--CODE--
+void test(int i) {
+	__label__ l1;
+	return;
+}
+--EXPECT--
+

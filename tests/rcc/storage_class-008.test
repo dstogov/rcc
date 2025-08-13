@@ -1,0 +1,10 @@
+--TEST--
+Storage-class specifiers 008
+--CODE--
+void test(void) {
+	_Thread_local int x4;
+}
+--EXPECT--
+./tests/rcc/storage_class-008.c:2:22: error: function-scope "x4" declared "_Thread_local"
+
+exit code = 1

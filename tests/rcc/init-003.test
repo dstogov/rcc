@@ -1,0 +1,9 @@
+--TEST--
+Initializers 003:
+--CODE--
+typedef struct {int x,y;} t;
+t a = {.z = 2};
+--EXPECT--
+./tests/rcc/init-003.c:2:11: error: struct or union has no member named "z"
+
+exit code = 1

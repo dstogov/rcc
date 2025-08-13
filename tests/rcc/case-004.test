@@ -1,0 +1,12 @@
+--TEST--
+case 004:
+--CODE--
+void test(int i, int j) {
+	switch (i) {
+		case j: return j;
+	}
+}
+--EXPECT--
+./tests/rcc/case-004.c:3:9: error: case label does not reduce to an integer constant
+
+exit code = 1

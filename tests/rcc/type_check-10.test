@@ -1,0 +1,10 @@
+--TEST--
+Type check 010:
+--CODE--
+void test(int n) {
+	1 + (void)n;
+}
+--EXPECT--
+./tests/rcc/type_check-10.c:2:13: error: invalid operands to binary "+"
+
+exit code = 1

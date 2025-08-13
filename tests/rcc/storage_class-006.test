@@ -1,0 +1,8 @@
+--TEST--
+Storage-class specifiers 006
+--CODE--
+register int x6;
+--EXPECT--
+./tests/rcc/storage_class-006.c:1:16: error: global register variables are not implemented yet
+
+exit code = 1

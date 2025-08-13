@@ -1,0 +1,13 @@
+--TEST--
+Call 002:
+--CODE--
+void f(int i) {
+}
+void test(void) {
+	struct {int x,y;} s;
+	f(s);
+}
+--EXPECT--
+./tests/rcc/call-002.c:5:5: error: incompatible type for argument 1
+
+exit code = 1

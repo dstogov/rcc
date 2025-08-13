@@ -1,0 +1,9 @@
+--TEST--
+Duplicate declarations 002
+--CODE--
+typedef int y;
+typedef char y;
+--EXPECT--
+./tests/rcc/duplicate_decl-002.c:2:15: error: incompatible redeclaration of "y"
+
+exit code = 1

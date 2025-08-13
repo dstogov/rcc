@@ -1,0 +1,8 @@
+--TEST--
+Type qualifiers 002:
+--CODE--
+void restrict * x1;
+--EXPECT--
+./tests/rcc/type_qualifiers-003.c:1:6: error: invalid use of "restrict"
+
+exit code = 1

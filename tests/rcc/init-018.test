@@ -1,0 +1,14 @@
+--TEST--
+Initializers 018:
+--CODE--
+int x = {0};
+int y[1] = {0};
+int z[1] = {{0}};
+int a[3] = {};
+int b[3] = {0,};
+int c[3] = {,};
+--EXPECT--
+./tests/rcc/init-018.c:3:13: warning: braces around scalar initializer
+./tests/rcc/init-018.c:6:13: error: '}' expected, got ","
+
+exit code = 1

@@ -1,0 +1,9 @@
+--TEST--
+Duplicate declarations 014
+--CODE--
+typedef void (*f)();
+typedef void (*f)(void);
+--EXPECT--
+./tests/rcc/duplicate_decl-014.c:2:24: error: incompatible redeclaration of "f"
+
+exit code = 1

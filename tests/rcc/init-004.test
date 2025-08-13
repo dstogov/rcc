@@ -1,0 +1,9 @@
+--TEST--
+Initializers 004:
+--CODE--
+typedef struct {int x,y;} t;
+t a = {1,2,3};
+--EXPECT--
+./tests/rcc/init-004.c:2:12: error: excess elements in struct initializer
+
+exit code = 1

@@ -1,0 +1,19 @@
+--TEST--
+sizeof 001:
+--ARGS--
+--run
+--CODE--
+extern int printf(const char *, ...);
+int test(void) {
+	static int i = 0;
+	return ++i;
+}
+int main() {
+	printf("%d %d %d %d\n",
+		sizeof(test()) == sizeof(int),
+		__alignof test() == __alignof(int),
+		test(), test());
+	return 0;
+}
+--EXPECT--
+1 1 1 2

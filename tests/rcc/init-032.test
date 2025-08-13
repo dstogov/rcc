@@ -1,0 +1,10 @@
+--TEST--
+Initializers 032:
+--CODE--
+int x;
+int *y = 0;
+int *a = &x;
+const int *b = &y;
+--EXPECT--
+./tests/rcc/init-032.c:4:18: warning: assignment from incompatible pointer type
+

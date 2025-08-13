@@ -1,0 +1,17 @@
+--TEST--
+Addr opertor 001:
+--CODE--
+void *test1(void) {
+	static int a;
+	return (void*)&a;	
+}
+void *test2(void) {
+	return (void*)&test1;	
+}
+void *test3(void) {
+	return (void*)&42;	
+}
+--EXPECT--
+./tests/rcc/addr-01.c:9:19: error: lvalue required as unary "&" operand
+
+exit code = 1
