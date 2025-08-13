@@ -1,0 +1,22 @@
+--TEST--
+tinycc 060.68: error and warnings
+--ARGS--
+--run
+--XFAIL--
+VLA arrays are not implemented yet
+--CODE--
+int amain(int argc, char *argv[static argc + 1])
+{
+    int i;
+    int printf(const char*, ...);
+    for (i = 0; i < argc; ++i)
+        printf("arg[%d] = \"%s\"\n", i, argv[i]);
+    return 0;
+}
+int main()
+{
+    return amain(2, (char *[]){ "X", "Y", 0 });
+}
+--EXPECT--
+arg[0] = "X"
+arg[1] = "Y"

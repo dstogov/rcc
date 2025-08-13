@@ -1,0 +1,10 @@
+--TEST--
+tinycc 060.02: error and warnings
+--ARGS--
+--run
+--CODE--
+char int i;
+--EXPECT--
+./tests/tinycc/tests2/060_02_errors_and_warnings.c:1:6: error: unexpected "int"
+
+exit code = 1

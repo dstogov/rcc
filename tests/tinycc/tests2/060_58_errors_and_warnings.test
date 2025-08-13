@@ -1,0 +1,21 @@
+--TEST--
+tinycc 060.58: error and warnings
+--ARGS--
+--run
+--CODE--
+struct S1 {
+  int b;
+  struct {
+    int b;
+  } c;
+};
+struct S2 {
+  int d;
+  struct {
+    int d;
+  };
+};
+--EXPECT--
+./tests/tinycc/tests2/060_58_errors_and_warnings.c:12:2: error: duplicate member "d"
+
+exit code = 1

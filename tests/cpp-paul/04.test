@@ -1,0 +1,10 @@
+--TEST--
+Paul 04
+--ARGS--
+-E -P
+--CODE--
+#define F() 123
+
+F() *
+--EXPECT--
+123 *

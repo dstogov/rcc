@@ -1,0 +1,10 @@
+--TEST--
+Macro 012 - argument after variadic
+--ARGS--
+-E -P
+--CODE--
+#define A1(...,b)
+--EXPECT--
+./tests/cpp/macro-012.c:1:15: error: expected ')' after "..."
+
+exit code = 1

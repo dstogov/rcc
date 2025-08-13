@@ -1,0 +1,17 @@
+--TEST--
+tinycc 060.42: error and warnings
+--ARGS--
+--run
+--CODE--
+int main () {
+    int hello(int);
+    hello(123);
+    return 0;
+}
+int printf(const char*, ...);
+int hello(int a, int b)
+{ printf("%s: a = %d\n", __FUNCTION__, a); return 0; }
+--EXPECT--
+./tests/tinycc/tests2/060_42_errors_and_warnings.c:8:1: error: incompatible redeclaration of "hello"
+
+exit code = 1

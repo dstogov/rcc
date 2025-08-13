@@ -1,0 +1,42 @@
+--TEST--
+tinycc 038: multiple array index
+--ARGS--
+--run
+--CODE--
+#include <stdio.h>
+
+int main()
+{
+   int a[4][4];
+   int b = 0;
+   int x;
+   int y;
+
+   for (x = 0; x < 4; x++)
+   {
+      for (y = 0; y < 4; y++)
+      {
+         b++;
+         a[x][y] = b;
+      }
+   }
+
+   for (x = 0; x < 4; x++)
+   {
+      printf("x=%d: ", x);
+      for (y = 0; y < 3; y++)
+      {
+         printf("%d ", a[x][y]);
+      }
+      printf("%d\n", a[x][y]);
+   }
+
+   return 0;
+}
+
+/* vim: set expandtab ts=4 sw=3 sts=3 tw=80 :*/
+--EXPECT--
+x=0: 1 2 3 4
+x=1: 5 6 7 8
+x=2: 9 10 11 12
+x=3: 13 14 15 16

@@ -1,0 +1,10 @@
+--TEST--
+tinycc 060: error and warnings
+--ARGS--
+--run
+--CODE--
+int (*fct)[42](int x);
+--EXPECT--
+./tests/tinycc/tests2/060_05_errors_and_warnings.c:1:22: error: array of functions
+
+exit code = 1

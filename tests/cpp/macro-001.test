@@ -1,0 +1,12 @@
+--TEST--
+Macro 001 - valid empty macros
+--ARGS--
+-E -P
+--CODE--
+#define A1
+#define A2()
+#define A3(a)
+#define A4(a,b)
+#define A5(a,b...)
+#define A6(a,b,...)
+--EXPECT--

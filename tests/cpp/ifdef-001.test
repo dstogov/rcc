@@ -1,0 +1,31 @@
+--TEST--
+ifdef 001 - #ifdef
+--ARGS--
+-E -P
+--CODE--
+#define A
+0
+#ifdef A
+1
+# ifdef B
+2
+# else
+3
+# endif
+4
+#else
+5
+# ifdef B
+6
+# else
+7
+# endif
+8
+#endif
+9
+--EXPECT--
+0
+1
+3
+4
+9

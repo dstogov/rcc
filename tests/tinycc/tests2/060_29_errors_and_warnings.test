@@ -1,0 +1,11 @@
+--TEST--
+tinycc 060.29: error and warnings
+--ARGS--
+--run
+--CODE--
+ _Static_assert(1, "1"" is 1");
+struct y {  _Static_assert(0, "0"" is 0"); };
+--EXPECT--
+./tests/tinycc/tests2/060_29_errors_and_warnings.c:2:42: error: static assertion failed "0 is 0"
+
+exit code = 1

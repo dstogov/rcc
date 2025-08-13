@@ -1,0 +1,18 @@
+--TEST--
+tinycc 060.43: error and warnings
+--ARGS--
+--run
+--CODE--
+int main () {
+    static
+    int hello(int);
+    hello(123);
+    return 0;
+}
+int printf(const char*, ...);
+int hello(int a)
+{ printf("%s: a = %d\n", __FUNCTION__, a); return 0; }
+--EXPECT--
+./tests/tinycc/tests2/060_43_errors_and_warnings.c:3:19: error: invalid storage class for function "hello"
+
+exit code = 1

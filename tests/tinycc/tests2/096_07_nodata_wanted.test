@@ -1,0 +1,19 @@
+--TEST--
+tinycc 096.07: nodata wanted
+--ARGS--
+--run
+--CODE--
+#include <stdio.h>
+int main(int argc, char **argv)
+{
+    goto there;
+    if (0) {
+        static int a = 1;
+        printf("hello\n"); /* the "hello\n" string is still suppressed */
+there:
+        printf("a = %d\n", a);
+    }
+    return 0;
+}
+--EXPECT--
+a = 1

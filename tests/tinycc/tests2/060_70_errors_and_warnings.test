@@ -1,0 +1,12 @@
+--TEST--
+tinycc 060.70: error and warnings
+--ARGS--
+--run
+--CODE--
+int main() {
+    char *str = "\Uffffffff";
+}
+--EXPECT--
+./tests/tinycc/tests2/060_70_errors_and_warnings.c:2:29: error: bad universal character 0xffffffff
+
+exit code = 1

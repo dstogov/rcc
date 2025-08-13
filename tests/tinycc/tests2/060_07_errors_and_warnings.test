@@ -1,0 +1,12 @@
+--TEST--
+tinycc 060.07: error and warnings
+--ARGS--
+--run
+--CODE--
+enum color { RED, GREEN, BLUE };
+enum rgb { RED, G, B};
+enum color c = RED;
+--EXPECT--
+./tests/tinycc/tests2/060_07_errors_and_warnings.c:2:15: error: redeclaration of "RED"
+
+exit code = 1

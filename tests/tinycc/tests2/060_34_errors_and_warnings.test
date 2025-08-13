@@ -1,0 +1,10 @@
+--TEST--
+tinycc 060.34: error and warnings
+--ARGS--
+--run
+--CODE--
+  struct s t[3];
+--EXPECT--
+./tests/tinycc/tests2/060_34_errors_and_warnings.c:1:16: error: array type has incomplete element type
+
+exit code = 1

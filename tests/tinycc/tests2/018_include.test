@@ -1,0 +1,63 @@
+--TEST--
+tinycc 018: include
+--ARGS--
+--run
+--XFAIL--
+__has_include_next() is not implemented yet
+--CODE--
+#include <stdio.h>
+
+int main()
+{
+   printf("including\n");
+#include "inc/018_include.h"
+#define  test_missing_nl
+   printf("done\n");
+
+#define  INC   "inc/018_include.h"
+
+#ifdef __has_include
+#if defined __has_include
+#if __has_include("inc/018_include.h")
+   printf("has_include\n");
+#endif
+#if __has_include(INC)
+   printf("has_include\n");
+#endif
+#if __has_include("inc/not_found_18_include.h")
+   printf("has_include not found\n");
+#endif
+#endif
+#endif
+
+#ifdef __has_include_next
+#if defined __has_include_next
+#if __has_include_next("inc/018_include.h")
+   printf("has_include_next\n");
+#endif
+#if __has_include_next(INC)
+   printf("has_include_next\n");
+#endif
+#if __has_include_next("inc/not_found_18_include.h")
+   printf("has_include_next not found\n");
+#endif
+#endif
+#endif
+
+#include "inc/018_include2.h"
+#include "./inc/018_include2.h"
+#include "../tinycc/inc/018_include2.h"
+
+   return 0;
+}
+
+/* vim: set expandtab ts=4 sw=3 sts=3 tw=80 :*/
+--EXPECT--
+including
+included
+done
+has_include
+has_include
+has_include_next
+has_include_next
+counter 0

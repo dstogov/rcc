@@ -1,0 +1,15 @@
+--TEST--
+tinycc 060.60: error and warnings
+--ARGS--
+--run
+--CODE--
+void foo (void)
+{
+  typedef int localfunctype (int);
+  extern localfunctype func2;
+  typedef void localfunctype (int, int);
+}
+--EXPECT--
+./tests/tinycc/tests2/060_60_errors_and_warnings.c:5:40: error: incompatible redeclaration of "localfunctype"
+
+exit code = 1

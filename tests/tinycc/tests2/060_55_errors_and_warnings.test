@@ -1,0 +1,10 @@
+--TEST--
+tinycc 060.55: error and warnings
+--ARGS--
+--run
+--CODE--
+int n[sizeof({3;})]; // crashed in block() due to missing local scope
+--EXPECT--
+./tests/tinycc/tests2/060_55_errors_and_warnings.c:1:15: error: statement expression allowed only inside a function
+
+exit code = 1

@@ -1,0 +1,17 @@
+--TEST--
+tinycc 060.24: error and warnings
+--ARGS--
+--run
+--CODE--
+int i;
+void foo(void) {
+    int i;
+      {
+        extern double i;
+        i = 42.2;
+      }
+}
+--EXPECT--
+./tests/tinycc/tests2/060_24_errors_and_warnings.c:5:24: error: incompatible redeclaration of "i"
+
+exit code = 1

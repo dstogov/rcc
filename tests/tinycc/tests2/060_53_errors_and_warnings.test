@@ -1,0 +1,14 @@
+--TEST--
+tinycc 060.53: error and warnings
+--ARGS--
+--run
+--CODE--
+/* similar to test_var_array2 but with string initializers */
+struct A { int a; char b[]; };
+struct A a = { 1, "1" };
+struct B { struct A a; };
+struct B b = { { 1, "1" } };
+--EXPECT--
+./tests/tinycc/tests2/060_53_errors_and_warnings.c:5:25: error: initialization of flexible array member in a nested context
+
+exit code = 1

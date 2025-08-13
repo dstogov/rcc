@@ -1,0 +1,10 @@
+--TEST--
+Macro 006 - unterminated #define
+--ARGS--
+-E -P
+--CODE--
+#define A1(x
+--EXPECT--
+./tests/cpp/macro-006.c:1:13: error: expected ')' before end of line
+
+exit code = 1

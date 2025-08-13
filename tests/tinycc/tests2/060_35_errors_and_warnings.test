@@ -1,0 +1,11 @@
+--TEST--
+tinycc 060.35: error and warnings
+--ARGS--
+--run
+--CODE--
+  typedef void f(void);
+  const f t[3];
+--EXPECT--
+./tests/tinycc/tests2/060_35_errors_and_warnings.c:2:15: error: array of functions
+
+exit code = 1

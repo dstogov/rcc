@@ -1,0 +1,10 @@
+--TEST--
+TCC 16
+--ARGS--
+-E -P
+--CODE--
+/* The following should warn */
+#define A ...
+#define A <<=
+--EXPECT--
+./tests/tinycc/pp/16.c:3:9: warning: "A" redefined

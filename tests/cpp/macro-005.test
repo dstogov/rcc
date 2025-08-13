@@ -1,0 +1,10 @@
+--TEST--
+Macro 005 - unterminated #define
+--ARGS--
+-E -P
+--CODE--
+#define A1(
+--EXPECT--
+./tests/cpp/macro-005.c:1:12: error: expected parameter name before end of line
+
+exit code = 1

@@ -1,0 +1,17 @@
+--TEST--
+TCC 25
+--ARGS--
+-E -P
+--CODE--
+#define FUNC_LIKE(a,b) (a+b+c)
+#define FUNC_LIKE(b,a) (b+a+c)
+#define MIN(a,b) (((a)<(b))?(a):(b))
+#define MAX(a,b) (((a)>(b))?(a):(b))
+#define MAX(a,b) ((a) > (b) ? (a) : (b))
+#define MIN(a,b) ((a) < (b) ? (a) : (b))
+ok
+--EXPECT--
+./tests/tinycc/pp/25.c:2:9: warning: "FUNC_LIKE" redefined
+./tests/tinycc/pp/25.c:5:9: warning: "MAX" redefined
+./tests/tinycc/pp/25.c:6:9: warning: "MIN" redefined
+ok

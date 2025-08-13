@@ -1,0 +1,11 @@
+--TEST--
+tinycc 060.03: error and warnings
+--ARGS--
+--run
+--CODE--
+int f(void) { return 0; }
+int f(void) { return 1; }
+--EXPECT--
+./tests/tinycc/tests2/060_03_errors_and_warnings.c:2:13: error: redefinition of "f"
+
+exit code = 1

@@ -1,0 +1,48 @@
+--TEST--
+tinycc 060.47: error and warnings
+--ARGS--
+--run
+--CODE--
+#define P(n,v) printf("%-5s: %d ; %d\n", __FUNCTION__, n, v)
+int bar();
+int printf(const char*, ...);
+int main ()
+{
+    int xxx = 2;
+    {
+        extern int xxx[
+        ];
+        P(1, xxx[0]);
+        xxx[0] += 2;
+    }
+    P(2, xxx);
+    bar(123);
+    return 0;
+}
+int xxx[1] = {1};
+int bar() { P(3, xxx[0]); return 0; }
+
+struct yyy { int y; };
+struct zzz;
+void f1() {
+    extern char *x;
+    extern char **xx;
+    extern struct yyy y;
+    extern struct yyy *yy;
+    extern struct zzz z;
+    extern struct zzz *zz;
+}
+void f2() {
+    extern char *x;
+    extern char **xx;
+    extern struct yyy y;
+    extern struct yyy *yy;
+    extern struct zzz z;
+    extern struct zzz *zz;
+}
+struct yyy y, *yy;
+struct zzz { int z; } z, *zz;
+--EXPECT--
+main : 1 ; 1
+main : 2 ; 2
+bar  : 3 ; 3

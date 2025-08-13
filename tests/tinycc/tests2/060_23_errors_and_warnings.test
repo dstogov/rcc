@@ -1,0 +1,12 @@
+--TEST--
+tinycc 060.23: error and warnings
+--ARGS--
+--run
+--CODE--
+enum E {
+    x = 1 / 0
+};
+--EXPECT--
+./tests/tinycc/tests2/060_23_errors_and_warnings.c:3:1: error: division by zero
+
+exit code = 1

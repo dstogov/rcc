@@ -1,0 +1,10 @@
+--TEST--
+Paul 07
+--ARGS--
+-E -P
+--CODE--
+#define EAT(x)
+#define BINARY(a, b) // ...
+
+EAT( BINARY() )
+--EXPECT--

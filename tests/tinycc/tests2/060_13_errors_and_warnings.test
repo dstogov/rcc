@@ -1,0 +1,14 @@
+--TEST--
+tinycc 060.13: error and warnings
+--ARGS--
+--run
+--CODE--
+enum e6 { E1 = -1, E0 };
+void f3(enum e6);
+void f3(int);        // should work as int and e6 are compatible
+void f4(enum e6 e);
+void f4(unsigned e); // should error as unsigned and e6 are incompatible
+--EXPECT--
+./tests/tinycc/tests2/060_13_errors_and_warnings.c:5:20: error: incompatible redeclaration of "f4"
+
+exit code = 1

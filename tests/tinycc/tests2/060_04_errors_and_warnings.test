@@ -1,0 +1,12 @@
+--TEST--
+tinycc 060.04: error and warnings
+--ARGS--
+--run
+--CODE--
+int xxx = 1;
+int xxx;
+int xxx = 2;
+--EXPECT--
+./tests/tinycc/tests2/060_04_errors_and_warnings.c:3:9: error: redefinition of "xxx"
+
+exit code = 1

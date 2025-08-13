@@ -1,0 +1,10 @@
+--TEST--
+tinycc 060.66: error and warnings
+--ARGS--
+--run
+--CODE--
+void func(int a, int b, int a);
+--EXPECT--
+./tests/tinycc/tests2/060_66_errors_and_warnings.c:1:30: error: redefinition of parameter "a"
+
+exit code = 1

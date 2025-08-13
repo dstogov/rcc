@@ -1,0 +1,15 @@
+--TEST--
+tinycc 060.50: error and warnings
+--ARGS--
+--run
+--CODE--
+int printf(const char*, ...);
+int main()
+{
+#define _S(x) #x
+#define S(x) _S(x)
+    printf("%sn\n", S(\\));
+    return 0;
+}
+--EXPECT--
+\n

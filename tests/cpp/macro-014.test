@@ -1,0 +1,10 @@
+--TEST--
+Macro 014 - unterminated #define
+--ARGS--
+-E -P
+--CODE--
+#define A1(+
+--EXPECT--
+./tests/cpp/macro-014.c:1:12: error: expected parameter name, found "+"
+
+exit code = 1

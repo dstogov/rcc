@@ -1,0 +1,14 @@
+--TEST--
+tinycc 060.25: error and warnings
+--ARGS--
+--run
+--CODE--
+union u {
+    union u {
+        int i;
+    } m;
+};
+--EXPECT--
+./tests/tinycc/tests2/060_25_errors_and_warnings.c:2:13: error: nested redefinition of "union u"
+
+exit code = 1

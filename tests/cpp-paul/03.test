@@ -1,0 +1,10 @@
+--TEST--
+Paul 03
+--ARGS--
+-E -P
+--CODE--
+#define A + + +
+
+A *
+--EXPECT--
++ + + *

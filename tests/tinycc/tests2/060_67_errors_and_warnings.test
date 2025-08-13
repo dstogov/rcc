@@ -1,0 +1,10 @@
+--TEST--
+tinycc 060.67: error and warnings
+--ARGS--
+--run
+--CODE--
+void func(int a, int if);
+--EXPECT--
+./tests/tinycc/tests2/060_67_errors_and_warnings.c:1:22: error: unexpected "if"
+
+exit code = 1

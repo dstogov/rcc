@@ -1,0 +1,15 @@
+--TEST--
+tinycc 060.48: error and warnings
+--ARGS--
+--run
+--XFAIL--
+long double is not supported yet
+--CODE--
+int main()
+{
+    double *a = 0;
+    long double *b = a;
+    int n = _Generic(*a, double:0, long double:1);
+}
+--EXPECT--
+60_errors_and_warnings.c:327: warning: assignment from incompatible pointer type

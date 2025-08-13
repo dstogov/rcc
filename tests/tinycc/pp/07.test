@@ -1,0 +1,12 @@
+--TEST--
+TCC 07
+--ARGS--
+-E -P
+--CODE--
+#define a() YES
+#define b() a
+b()
+b()()
+--EXPECT--
+a
+YES
