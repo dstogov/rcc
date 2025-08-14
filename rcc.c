@@ -964,13 +964,13 @@ static void rcc_emit_ir(FILE *f)
 				fprintf(f, "static ");
 			} else if (p->sym->is_external || !c_value_is_set(&p->sym->value)) {
 				fprintf(f, "extern %s @%s;\n",
-					c_is_type_const(p->sym->value.type) ? "const" : "var",
+					(p->sym->is_string || c_is_type_const(p->sym->value.type)) ? "const" : "var",
 					yy_sym2str(i));
 				continue;
 			}
 			size = p->sym->is_string ? (size_t)p->sym->value.u.ref : p->sym->value.type->size;
 			fprintf(f, "%s @%s[%" PRIuPTR "]%s",
-				c_is_type_const(p->sym->value.type) ? "const" : "var",
+				(p->sym->is_string || c_is_type_const(p->sym->value.type)) ? "const" : "var",
 				yy_sym2str(i),
 				size,
 				p->sym->is_implemented ?
