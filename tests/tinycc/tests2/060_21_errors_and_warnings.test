@@ -5,6 +5,6 @@ tinycc 060.21: error and warnings
 --CODE--
 int ga = 0.42 { 2 };
 --EXPECT--
-./tests/tinycc/tests2/060_21_errors_and_warnings.c:1:15: error: ';' expected, got "{"
+./tests/tinycc/tests2/060_21_errors_and_warnings.c:1:15: error: unexpected "{"
 
 exit code = 1

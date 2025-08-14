@@ -7,6 +7,6 @@ struct S { int a, b; };
 struct T { struct S x; };
 struct T gt = { 42 a: 1, 43 };
 --EXPECT--
-./tests/tinycc/tests2/060_22_errors_and_warnings.c:3:20: error: '}' expected, got "a"
+./tests/tinycc/tests2/060_22_errors_and_warnings.c:3:20: error: unexpected "a"
 
 exit code = 1

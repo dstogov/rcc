@@ -7,6 +7,6 @@ void test(void) {
 	point * scale;
 }
 --EXPECT--
-./tests/rcc/parse-01.c:3:2: error: ';' expected, got "struct"
+./tests/rcc/parse-01.c:3:2: error: unexpected "struct"
 
 exit code = 1
