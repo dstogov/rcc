@@ -1286,6 +1286,7 @@ static void rcc_atexit(void)
 {
 	if (rcc_atexit_start) {
 		double t = rcc_time();
+		fflush(stdout);
 		fprintf(stderr, "\nexecution time = %0.6f\n", t - rcc_atexit_start);
 		rcc_atexit_start = 0.0;
 	}
@@ -1600,6 +1601,10 @@ int main(int argc, const char **argv)
 			}
 		}
 
+		if (c_dump_flags & (C_DUMP_SIZE - 1)) {
+			fflush(stdout);
+		}
+
 		if (c_dump_flags & C_DUMP_SIZE) {
 			fprintf(stderr, "\ncode size = %lld\n",
 				(long long int)((char*)c_code_buffer.pos - (char*)c_code_buffer.start));
@@ -1661,6 +1666,7 @@ int main(int argc, const char **argv)
 
 			if ((c_dump_flags & C_DUMP_TIME) && rcc_atexit_start) {
 				double t = rcc_time();
+				fflush(stdout);
 				fprintf(stderr, "\nexecution time = %0.6f\n", t - rcc_atexit_start);
 				rcc_atexit_start = 0.0;
 			}
