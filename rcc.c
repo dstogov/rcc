@@ -338,6 +338,9 @@ void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, uint32_t fl
 				sym->is_external = 1;
 				sym->value.u.opt = IR_OPT(C_VAL_CONST, IR_ADDR);
 				sym->value.u.val.ptr = addr;
+				if (c_dump_flags & C_DUMP_ASM) {
+					ir_disasm_add_symbol(name, (uint64_t)(uintptr_t)addr, sizeof(void*));
+				}
 				return addr;
 			}
 		}
