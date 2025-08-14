@@ -210,16 +210,7 @@ static yy_sym parse_strings_tail(yy_sym sym, c_value *val, str_list *first, str_
 static yy_sym parse_actual_parameters(yy_sym sym, c_value *func);
 static yy_sym parse_builtin_parameters(yy_sym sym, c_value *val, c_name name);
 static yy_sym parse_unary_expression(yy_sym sym, c_value *val);
-static yy_sym parse_multiplicative_expression(yy_sym sym, c_value *val);
-static yy_sym parse_additive_expression(yy_sym sym, c_value *val);
-static yy_sym parse_shift_expression(yy_sym sym, c_value *val);
-static yy_sym parse_relational_expression(yy_sym sym, c_value *val);
-static yy_sym parse_equality_expression(yy_sym sym, c_value *val);
-static yy_sym parse_and_expression(yy_sym sym, c_value *val);
-static yy_sym parse_exclusive_or_expression(yy_sym sym, c_value *val);
-static yy_sym parse_inclusive_or_expression(yy_sym sym, c_value *val);
-static yy_sym parse_logical_and_expression(yy_sym sym, c_value *val);
-static yy_sym parse_logical_or_expression(yy_sym sym, c_value *val);
+static yy_sym parse_infix_expression(yy_sym sym, c_value *val, yy_sym prev);
 static yy_sym parse_conditional_expression(yy_sym sym, c_value *val);
 static yy_sym parse_assignment_expression(yy_sym sym, c_value *val);
 static yy_sym parse_expression(yy_sym sym, c_value *val);
@@ -1715,7 +1706,7 @@ static yy_sym parse_strings_tail(yy_sym sym, c_value *val, str_list *first, str_
 		last->next = &list;
 		sym = parse_STRING(sym);
 		sym = parse_strings_tail(sym, val, first, &list);
-	} else if (sym == YY__RPAREN || sym == YY__LBRACK || sym == YY__LPAREN || sym == YY__POINT || sym == YY__MINUS_GREATER || sym == YY__PLUS_PLUS || sym == YY__MINUS_MINUS || sym == YY__STAR || sym == YY__SLASH || sym == YY__PERCENT || sym == YY__PLUS || sym == YY__MINUS || sym == YY__LESS_LESS || sym == YY__GREATER_GREATER || sym == YY__LESS || sym == YY__GREATER || sym == YY__LESS_EQUAL || sym == YY__GREATER_EQUAL || sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL || sym == YY__AND || sym == YY__UPARROW || sym == YY__BAR || sym == YY__AND_AND || sym == YY__BAR_BAR || sym == YY__QUERY || sym == YY__EQUAL || sym == YY__STAR_EQUAL || sym == YY__SLASH_EQUAL || sym == YY__PERCENT_EQUAL || sym == YY__PLUS_EQUAL || sym == YY__MINUS_EQUAL || sym == YY__LESS_LESS_EQUAL || sym == YY__GREATER_GREATER_EQUAL || sym == YY__AND_EQUAL || sym == YY__UPARROW_EQUAL || sym == YY__BAR_EQUAL || sym == YY__RBRACK || sym == YY__COMMA || sym == YY__SEMICOLON || sym == YY__RBRACE || sym == YY__COLON || sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__ || sym == YY__POINT_POINT_POINT) {
+	} else if (sym == YY__RPAREN || sym == YY__LBRACK || sym == YY__LPAREN || sym == YY__POINT || sym == YY__MINUS_GREATER || sym == YY__PLUS_PLUS || sym == YY__MINUS_MINUS || sym == YY__BAR_BAR || sym == YY__AND_AND || sym == YY__BAR || sym == YY__UPARROW || sym == YY__AND || sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL || sym == YY__LESS || sym == YY__GREATER || sym == YY__LESS_EQUAL || sym == YY__GREATER_EQUAL || sym == YY__LESS_LESS || sym == YY__GREATER_GREATER || sym == YY__PLUS || sym == YY__MINUS || sym == YY__STAR || sym == YY__SLASH || sym == YY__PERCENT || sym == YY__QUERY || sym == YY__EQUAL || sym == YY__STAR_EQUAL || sym == YY__SLASH_EQUAL || sym == YY__PERCENT_EQUAL || sym == YY__PLUS_EQUAL || sym == YY__MINUS_EQUAL || sym == YY__LESS_LESS_EQUAL || sym == YY__GREATER_GREATER_EQUAL || sym == YY__AND_EQUAL || sym == YY__UPARROW_EQUAL || sym == YY__BAR_EQUAL || sym == YY__RBRACK || sym == YY__COMMA || sym == YY__SEMICOLON || sym == YY__RBRACE || sym == YY__COLON || sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__ || sym == YY__POINT_POINT_POINT) {
 		yy_strings(val, first, last);
 	} else {
 		yy_error_sym("unexpected", sym);
@@ -2032,170 +2023,114 @@ static yy_sym parse_unary_expression(yy_sym sym, c_value *val) {
 	return sym;
 }
 
-static yy_sym parse_multiplicative_expression(yy_sym sym, c_value *val) {
-	sym = parse_unary_expression(sym, val);
-	while (sym == YY__STAR || sym == YY__SLASH || sym == YY__PERCENT) {
-		int op = sym;
-		c_value op2 = {0};
-		sym = get_sym();
+static yy_sym parse_infix_expression(yy_sym sym, c_value *val, yy_sym prev) {
+	c_value op2;
+	ir_ref if_ref = IR_UNUSED;
+	bool orig_dead_code = 0;
+	do {
+		yy_sym next, op = sym;
+		if (sym == YY__BAR_BAR) {
+			orig_dead_code = c_dead_code;
+			if_ref = c_do_bool_or_start(val);
+			sym = get_sym();
+			next = YY__BAR_BAR;
+		} else if (sym == YY__AND_AND) {
+			orig_dead_code = c_dead_code;
+			if_ref = c_do_bool_and_start(val);
+			sym = get_sym();
+			next = YY__AND_AND;
+		} else if (sym == YY__BAR) {
+			sym = get_sym();
+			next = YY__BAR;
+		} else if (sym == YY__UPARROW) {
+			sym = get_sym();
+			next = YY__UPARROW;
+		} else if (sym == YY__AND) {
+			sym = get_sym();
+			next = YY__AND;
+		} else if (sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL) {
+			sym = get_sym();
+			next = YY__EQUAL_EQUAL;
+		} else if (sym == YY__LESS || sym == YY__GREATER || sym == YY__LESS_EQUAL || sym == YY__GREATER_EQUAL) {
+			sym = get_sym();
+			next = YY__LESS;
+		} else if (sym == YY__LESS_LESS || sym == YY__GREATER_GREATER) {
+			sym = get_sym();
+			next = YY__LESS_LESS;
+		} else if (sym == YY__PLUS || sym == YY__MINUS) {
+			sym = get_sym();
+			next = YY__PLUS;
+		} else if (sym == YY__STAR || sym == YY__SLASH || sym == YY__PERCENT) {
+			sym = get_sym();
+			next = YY__STAR;
+		} else {
+			yy_error_sym("unexpected", sym);
+		}
 		sym = parse_unary_expression(sym, &op2);
-		c_do_binary_op(op, val, &op2);
-	}
-	return sym;
-}
-
-static yy_sym parse_additive_expression(yy_sym sym, c_value *val) {
-	sym = parse_multiplicative_expression(sym, val);
-	while (sym == YY__PLUS || sym == YY__MINUS) {
-		int op = sym;
-		c_value op2 = {0};
-		sym = get_sym();
-		sym = parse_multiplicative_expression(sym, &op2);
-		c_do_binary_op(op, val, &op2);
-	}
-	return sym;
-}
-
-static yy_sym parse_shift_expression(yy_sym sym, c_value *val) {
-	sym = parse_additive_expression(sym, val);
-	while (sym == YY__LESS_LESS || sym == YY__GREATER_GREATER) {
-		int op = sym;
-		c_value op2 = {0};
-		sym = get_sym();
-		sym = parse_additive_expression(sym, &op2);
-		c_do_binary_op(op, val, &op2);
-	}
-	return sym;
-}
-
-static yy_sym parse_relational_expression(yy_sym sym, c_value *val) {
-	sym = parse_shift_expression(sym, val);
-	while (sym == YY__LESS || sym == YY__GREATER || sym == YY__LESS_EQUAL || sym == YY__GREATER_EQUAL) {
-		int op = sym;
-		c_value op2 = {0};
-		sym = get_sym();
-		sym = parse_shift_expression(sym, &op2);
-		c_do_binary_op(op, val, &op2);
-	}
-	return sym;
-}
-
-static yy_sym parse_equality_expression(yy_sym sym, c_value *val) {
-	sym = parse_relational_expression(sym, val);
-	while (sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL) {
-		int op = sym;
-		c_value op2 = {0};
-		sym = get_sym();
-		sym = parse_relational_expression(sym, &op2);
-		c_do_binary_op(op, val, &op2);
-	}
-	return sym;
-}
-
-static yy_sym parse_and_expression(yy_sym sym, c_value *val) {
-	sym = parse_equality_expression(sym, val);
-	while (sym == YY__AND) {
-		c_value op2 = {0};
-		sym = get_sym();
-		sym = parse_equality_expression(sym, &op2);
-		c_do_binary_op(YY__AND, val, &op2);
-	}
-	return sym;
-}
-
-static yy_sym parse_exclusive_or_expression(yy_sym sym, c_value *val) {
-	sym = parse_and_expression(sym, val);
-	while (sym == YY__UPARROW) {
-		c_value op2 = {0};
-		sym = get_sym();
-		sym = parse_and_expression(sym, &op2);
-		c_do_binary_op(YY__UPARROW, val, &op2);
-	}
-	return sym;
-}
-
-static yy_sym parse_inclusive_or_expression(yy_sym sym, c_value *val) {
-	sym = parse_exclusive_or_expression(sym, val);
-	while (sym == YY__BAR) {
-		c_value op2 = {0};
-		sym = get_sym();
-		sym = parse_exclusive_or_expression(sym, &op2);
-		c_do_binary_op(YY__BAR, val, &op2);
-	}
-	return sym;
-}
-
-static yy_sym parse_logical_and_expression(yy_sym sym, c_value *val) {
-	sym = parse_inclusive_or_expression(sym, val);
-	if (sym == YY__AND_AND) {
-		bool orig_dead_code = c_dead_code;
-		do {
-			c_value op2 = {0};
-			ir_ref if_ref = c_do_bool_and_start(val);
-			if (sym != YY__AND_AND) {
-				yy_error_sym("'&&' expected, got", sym);
-			}
-			sym = get_sym();
-			sym = parse_inclusive_or_expression(sym, &op2);
-			c_do_bool_and_end(val, &op2, if_ref);
-		} while (sym == YY__AND_AND);
-		c_dead_code = orig_dead_code;
-	}
-	return sym;
-}
-
-static yy_sym parse_logical_or_expression(yy_sym sym, c_value *val) {
-	sym = parse_logical_and_expression(sym, val);
-	if (sym == YY__BAR_BAR) {
-		bool orig_dead_code = c_dead_code;
-		do {
-			c_value op2 = {0};
-			ir_ref if_ref = c_do_bool_or_start(val);
-			if (sym != YY__BAR_BAR) {
-				yy_error_sym("'||' expected, got", sym);
-			}
-			sym = get_sym();
-			sym = parse_logical_and_expression(sym, &op2);
+		if ((sym == YY__BAR_BAR || sym == YY__AND_AND || sym == YY__BAR || sym == YY__UPARROW || sym == YY__AND || sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL || sym == YY__LESS || sym == YY__GREATER || sym == YY__LESS_EQUAL || sym == YY__GREATER_EQUAL || sym == YY__LESS_LESS || sym == YY__GREATER_GREATER || sym == YY__PLUS || sym == YY__MINUS || sym == YY__STAR || sym == YY__SLASH || sym == YY__PERCENT) && (sym >= YY__STAR && sym < next)) {
+			sym = parse_infix_expression(sym, &op2, next - 1);
+		}
+		if (op == YY__BAR_BAR) {
 			c_do_bool_or_end(val, &op2, if_ref);
-		} while (sym == YY__BAR_BAR);
-		c_dead_code = orig_dead_code;
-	}
+			c_dead_code = orig_dead_code;
+		} else if (op == YY__AND_AND) {
+			c_do_bool_and_end(val, &op2, if_ref);
+			c_dead_code = orig_dead_code;
+		} else {
+			c_do_binary_op(op, val, &op2);
+		}
+	} while ((sym == YY__BAR_BAR || sym == YY__AND_AND || sym == YY__BAR || sym == YY__UPARROW || sym == YY__AND || sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL || sym == YY__LESS || sym == YY__GREATER || sym == YY__LESS_EQUAL || sym == YY__GREATER_EQUAL || sym == YY__LESS_LESS || sym == YY__GREATER_GREATER || sym == YY__PLUS || sym == YY__MINUS || sym == YY__STAR || sym == YY__SLASH || sym == YY__PERCENT) && (sym <= prev));
 	return sym;
 }
 
 static yy_sym parse_conditional_expression(yy_sym sym, c_value *val) {
-	sym = parse_logical_or_expression(sym, val);
-	if (sym == YY__QUERY) {
-		ir_ref check;
-		bool orig_dead_code = c_dead_code;
-		c_value op2 = {0}, op3;
-		sym = get_sym();
-		check = c_do_if(val);
-		if (sym == YY__LPAREN || C_IS_ID(sym) || sym == YY_DECIMAL_NUMBER || sym == YY_OCTAL_NUMBER || sym == YY_HEXADECIMAL_NUMBER || sym == YY_BINARY_NUMBER || sym == YY_FLOATING_NUMBER || sym == YY_HEXADECIMAL_FLOATING_NUMBER || sym == YY_CHARACTER || sym == YY_STRING || sym == YY__GENERIC || sym == YY___EXTENSION__ || sym == YY__PLUS_PLUS || sym == YY__MINUS_MINUS || sym == YY__AND || sym == YY__STAR || sym == YY__PLUS || sym == YY__MINUS || sym == YY__TILDE || sym == YY__BANG || sym == YY_SIZEOF || sym == YY__ALIGNOF || sym == YY___ALIGNOF__ || sym == YY___ALIGNOF || sym == YY__AND_AND || sym == YY___BUILTIN_VA_START || sym == YY___BUILTIN_VA_ARG || sym == YY___BUILTIN_VA_END || sym == YY___BUILTIN_VA_COPY || sym == YY___BUILTIN_EXPECT) {
-			sym = parse_expression(sym, &op2);
-			c_value_rval(&op2);
-		}
-		if (sym != YY__COLON) {
-			yy_error_sym("':' expected, got", sym);
-		}
-		sym = get_sym();
-		c_do_if_else(check, orig_dead_code);
-		sym = parse_conditional_expression(sym, &op3);
-		c_value_rval(&op3);
-		c_do_if_end(check, orig_dead_code);
-		c_do_cond_op(val, &op2, &op3);
+	ir_ref check;
+	bool orig_dead_code = c_dead_code;
+	c_value op2 = {0}, op3;
+	if (sym != YY__QUERY) {
+		yy_error_sym("'?' expected, got", sym);
 	}
+	sym = get_sym();
+	check = c_do_if(val);
+	if (sym == YY__LPAREN || C_IS_ID(sym) || sym == YY_DECIMAL_NUMBER || sym == YY_OCTAL_NUMBER || sym == YY_HEXADECIMAL_NUMBER || sym == YY_BINARY_NUMBER || sym == YY_FLOATING_NUMBER || sym == YY_HEXADECIMAL_FLOATING_NUMBER || sym == YY_CHARACTER || sym == YY_STRING || sym == YY__GENERIC || sym == YY___EXTENSION__ || sym == YY__PLUS_PLUS || sym == YY__MINUS_MINUS || sym == YY__AND || sym == YY__STAR || sym == YY__PLUS || sym == YY__MINUS || sym == YY__TILDE || sym == YY__BANG || sym == YY_SIZEOF || sym == YY__ALIGNOF || sym == YY___ALIGNOF__ || sym == YY___ALIGNOF || sym == YY__AND_AND || sym == YY___BUILTIN_VA_START || sym == YY___BUILTIN_VA_ARG || sym == YY___BUILTIN_VA_END || sym == YY___BUILTIN_VA_COPY || sym == YY___BUILTIN_EXPECT) {
+		sym = parse_expression(sym, &op2);
+		c_value_rval(&op2);
+	}
+	if (sym != YY__COLON) {
+		yy_error_sym("':' expected, got", sym);
+	}
+	sym = get_sym();
+	c_do_if_else(check, orig_dead_code);
+	sym = parse_unary_expression(sym, &op3);
+	if (sym == YY__BAR_BAR || sym == YY__AND_AND || sym == YY__BAR || sym == YY__UPARROW || sym == YY__AND || sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL || sym == YY__LESS || sym == YY__GREATER || sym == YY__LESS_EQUAL || sym == YY__GREATER_EQUAL || sym == YY__LESS_LESS || sym == YY__GREATER_GREATER || sym == YY__PLUS || sym == YY__MINUS || sym == YY__STAR || sym == YY__SLASH || sym == YY__PERCENT) {
+		sym = parse_infix_expression(sym, &op3, YY__BAR_BAR);
+	}
+	if (sym == YY__QUERY) {
+		sym = parse_conditional_expression(sym, &op3);
+	}
+	c_value_rval(&op3);
+	c_do_if_end(check, orig_dead_code);
+	c_do_cond_op(val, &op2, &op3);
 	return sym;
 }
 
 static yy_sym parse_assignment_expression(yy_sym sym, c_value *val) {
-	sym = parse_conditional_expression(sym, val);
+	sym = parse_unary_expression(sym, val);
 	if (sym == YY__EQUAL || sym == YY__STAR_EQUAL || sym == YY__SLASH_EQUAL || sym == YY__PERCENT_EQUAL || sym == YY__PLUS_EQUAL || sym == YY__MINUS_EQUAL || sym == YY__LESS_LESS_EQUAL || sym == YY__GREATER_GREATER_EQUAL || sym == YY__AND_EQUAL || sym == YY__UPARROW_EQUAL || sym == YY__BAR_EQUAL) {
 		int op = sym;
 		c_value op2;
 		sym = get_sym();
 		sym = parse_assignment_expression(sym, &op2);
 		c_do_assign_op(op, val, &op2);
+	} else if (sym == YY__BAR_BAR || sym == YY__AND_AND || sym == YY__BAR || sym == YY__UPARROW || sym == YY__AND || sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL || sym == YY__LESS || sym == YY__GREATER || sym == YY__LESS_EQUAL || sym == YY__GREATER_EQUAL || sym == YY__LESS_LESS || sym == YY__GREATER_GREATER || sym == YY__PLUS || sym == YY__MINUS || sym == YY__STAR || sym == YY__SLASH || sym == YY__PERCENT || sym == YY__QUERY || sym == YY__RBRACK || sym == YY__COMMA || sym == YY__SEMICOLON || sym == YY__RBRACE || sym == YY__RPAREN || sym == YY__COLON) {
+		if (sym == YY__BAR_BAR || sym == YY__AND_AND || sym == YY__BAR || sym == YY__UPARROW || sym == YY__AND || sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL || sym == YY__LESS || sym == YY__GREATER || sym == YY__LESS_EQUAL || sym == YY__GREATER_EQUAL || sym == YY__LESS_LESS || sym == YY__GREATER_GREATER || sym == YY__PLUS || sym == YY__MINUS || sym == YY__STAR || sym == YY__SLASH || sym == YY__PERCENT) {
+			sym = parse_infix_expression(sym, val, YY__BAR_BAR);
+		}
+		if (sym == YY__QUERY) {
+			sym = parse_conditional_expression(sym, val);
+		}
+	} else {
+		yy_error_sym("unexpected", sym);
 	}
 	return sym;
 }
@@ -2210,7 +2145,13 @@ static yy_sym parse_expression(yy_sym sym, c_value *val) {
 }
 
 static yy_sym parse_constant_expression(yy_sym sym, c_value *val) {
-	sym = parse_conditional_expression(sym, val);
+	sym = parse_unary_expression(sym, val);
+	if (sym == YY__BAR_BAR || sym == YY__AND_AND || sym == YY__BAR || sym == YY__UPARROW || sym == YY__AND || sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL || sym == YY__LESS || sym == YY__GREATER || sym == YY__LESS_EQUAL || sym == YY__GREATER_EQUAL || sym == YY__LESS_LESS || sym == YY__GREATER_GREATER || sym == YY__PLUS || sym == YY__MINUS || sym == YY__STAR || sym == YY__SLASH || sym == YY__PERCENT) {
+		sym = parse_infix_expression(sym, val, YY__BAR_BAR);
+	}
+	if (sym == YY__QUERY) {
+		sym = parse_conditional_expression(sym, val);
+	}
 	return sym;
 }
 

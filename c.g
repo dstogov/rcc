@@ -944,111 +944,66 @@ unary_expression(c_value *val):
 	)*+                                                    {if (old_control) c_sizeof_expr(val, op, val, old_control);}
 ;
 
-multiplicative_expression(c_value *val):
-	unary_expression(val)
-	(                                                      {int op = sym;}
-	                                                       {c_value op2 = {0};}
-		("*"|"/"|"%") unary_expression(&op2)               {c_do_binary_op(op, val, &op2);}
-	)*
+/* Use recursive-descent in combination with precedence-climbing */
+infix_expression(c_value *val, yy_sym prev):               {c_value op2;}
+                                                           {ir_ref if_ref = IR_UNUSED;}
+                                                           {bool orig_dead_code = 0;}
+	(   ?{sym <= prev}                                     {yy_sym next, op = sym;}
+		(                                                  {orig_dead_code = c_dead_code;}
+		                                                   {if_ref = c_do_bool_or_start(val);}
+		    "||"                                           {next = YY__BAR_BAR;}
+		|                                                  {orig_dead_code = c_dead_code;}
+		                                                   {if_ref = c_do_bool_and_start(val);}
+		    "&&"                                           {next = YY__AND_AND;}
+		|   "|"                                            {next = YY__BAR;}
+		|	"^"                                            {next = YY__UPARROW;}
+		|	"&"                                            {next = YY__AND;}
+		|	("=="|"!=")                                    {next = YY__EQUAL_EQUAL;}
+		|	("<"|">"|"<="|">=")                            {next = YY__LESS;}
+		|	("<<"|">>")                                    {next = YY__LESS_LESS;}
+		|	("+"|"-")                                      {next = YY__PLUS;}
+		|	("*"|"/"|"%")                                  {next = YY__STAR;}
+		)
+		unary_expression(&op2)
+		(   ?{sym >= YY__STAR && sym < next}
+			infix_expression(&op2, next - 1)
+		)?                                                 {
+																if (op == YY__BAR_BAR) {
+																	c_do_bool_or_end(val, &op2, if_ref);
+																	c_dead_code = orig_dead_code;
+																} else if (op == YY__AND_AND) {
+																	c_do_bool_and_end(val, &op2, if_ref);
+																	c_dead_code = orig_dead_code;
+																} else {
+																	c_do_binary_op(op, val, &op2);
+																}
+                                                           }
+	)+
 ;
 
-additive_expression(c_value *val):
-	multiplicative_expression(val)
-	(                                                      {int op = sym;}
-	                                                       {c_value op2 = {0};}
-		("+"|"-") multiplicative_expression(&op2)          {c_do_binary_op(op, val, &op2);}
-	)*
-;
-
-shift_expression(c_value *val):
-	additive_expression(val)
-	(                                                      {int op = sym;}
-	                                                       {c_value op2 = {0};}
-		("<<"|">>") additive_expression(&op2)              {c_do_binary_op(op, val, &op2);}
-	)*
-;
-
-relational_expression(c_value *val):
-	shift_expression(val)
-	(                                                      {int op = sym;}
-	                                                       {c_value op2 = {0};}
-		("<"|">"|"<="|">=") shift_expression(&op2)         {c_do_binary_op(op, val, &op2);}
-	)*
-;
-
-equality_expression(c_value *val):
-	relational_expression(val)
-	(                                                      {int op = sym;}
-	                                                       {c_value op2 = {0};}
-		("=="|"!=") relational_expression(&op2)            {c_do_binary_op(op, val, &op2);}
-	)*
-;
-
-and_expression(c_value *val):
-	equality_expression(val)
-	(                                                      {c_value op2 = {0};}
-		"&" equality_expression(&op2)                      {c_do_binary_op(YY__AND, val, &op2);}
-	)*
-;
-
-exclusive_or_expression(c_value *val):
-	and_expression(val)
-	(                                                      {c_value op2 = {0};}
-		"^" and_expression(&op2)                           {c_do_binary_op(YY__UPARROW, val, &op2);}
-	)*
-;
-
-inclusive_or_expression(c_value *val):
-	exclusive_or_expression(val)
-	(                                                      {c_value op2 = {0};}
-		"|" exclusive_or_expression(&op2)                  {c_do_binary_op(YY__BAR, val, &op2);}
-	)*
-;
-
-logical_and_expression(c_value *val):
-	inclusive_or_expression(val)
-	(                                                      {bool orig_dead_code = c_dead_code;}
-		(                                                  {c_value op2 = {0};}
-	                                                       {ir_ref if_ref = c_do_bool_and_start(val);}
-			"&&" inclusive_or_expression(&op2)             {c_do_bool_and_end(val, &op2, if_ref);}
-		)+                                                 {c_dead_code = orig_dead_code;}
-	)?
-;
-
-logical_or_expression(c_value *val):
-	logical_and_expression(val)
-	(                                                      {bool orig_dead_code = c_dead_code;}
-		(                                                  {c_value op2 = {0};}
-	                                                       {ir_ref if_ref = c_do_bool_or_start(val);}
-			"||" logical_and_expression(&op2)              {c_do_bool_or_end(val, &op2, if_ref);}
-		)+                                                 {c_dead_code = orig_dead_code;}
-	)?
-;
-
-conditional_expression(c_value *val):
-	logical_or_expression(val)
-	(                                                      {ir_ref check;}
+conditional_expression(c_value *val):                      {ir_ref check;}
 	                                                       {bool orig_dead_code = c_dead_code;}
                                                            {c_value op2 = {0}, op3;}
-		"?"                                                {check = c_do_if(val);}
-		(	expression(&op2)                               {c_value_rval(&op2);}
-		)?
-		":"                                                {c_do_if_else(check, orig_dead_code);}
-		conditional_expression(&op3)                       {c_value_rval(&op3);}
+	"?"                                                    {check = c_do_if(val);}
+	(	expression(&op2)                                   {c_value_rval(&op2);}
+	)?
+	":"                                                    {c_do_if_else(check, orig_dead_code);}
+	unary_expression(&op3)
+	infix_expression(&op3, YY__BAR_BAR)?
+	conditional_expression(&op3)?                          {c_value_rval(&op3);}
 		                                                   {c_do_if_end(check, orig_dead_code);}
 		                                                   {c_do_cond_op(val, &op2, &op3);}
-	)?
 ;
 
 assignment_expression(c_value *val):
-	(
-		conditional_expression(val)
-		(                                                  {int op = sym;}
+	unary_expression(val)
+	(                                                      {int op = sym;}
 			                                               {c_value op2;}
-			("="|"*="|"/="|"%="|"+="|"-="|"<<="|">>="|
-			 "&="|"^="|"|=")
-			assignment_expression(&op2)                    {c_do_assign_op(op, val, &op2);}
-		)?
+		("="|"*="|"/="|"%="|"+="|"-="|"<<="|">>="|
+		 "&="|"^="|"|=")
+		assignment_expression(&op2)                        {c_do_assign_op(op, val, &op2);}
+	|	infix_expression(val, YY__BAR_BAR)?
+		conditional_expression(val)?
 	)
 ;
 
@@ -1058,7 +1013,9 @@ expression(c_value *val):
 ;
 
 constant_expression(c_value *val):
-	conditional_expression(val)
+	unary_expression(val)
+	infix_expression(val, YY__BAR_BAR)?
+	conditional_expression(val)?
 ;
 
 /* Lexical Grammar */

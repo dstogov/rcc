@@ -46,14 +46,16 @@
 	_("->",                            YY__MINUS_GREATER)              \
 	_("++",                            YY__PLUS_PLUS)                  \
 	_("--",                            YY__MINUS_MINUS)                \
-	_("&",                             YY__AND)                        \
-	_("*",                             YY__STAR)                       \
-	_("+",                             YY__PLUS)                       \
-	_("-",                             YY__MINUS)                      \
 	_("~",                             YY__TILDE)                      \
 	_("!",                             YY__BANG)                       \
+	_(";",                             YY__SEMICOLON)                  \
+	_("...",                           YY__POINT_POINT_POINT)          \
+	/* infix operators ordered by their precendency */                 \
+	_("*",                             YY__STAR)                       \
 	_("/",                             YY__SLASH)                      \
 	_("%",                             YY__PERCENT)                    \
+	_("+",                             YY__PLUS)                       \
+	_("-",                             YY__MINUS)                      \
 	_("<<",                            YY__LESS_LESS)                  \
 	_(">>",                            YY__GREATER_GREATER)            \
 	_("<",                             YY__LESS)                       \
@@ -62,14 +64,13 @@
 	_(">=",                            YY__GREATER_EQUAL)              \
 	_("==",                            YY__EQUAL_EQUAL)                \
 	_("!=",                            YY__BANG_EQUAL)                 \
+	_("&",                             YY__AND)                        \
 	_("^",                             YY__UPARROW)                    \
 	_("|",                             YY__BAR)                        \
 	_("&&",                            YY__AND_AND)                    \
 	_("||",                            YY__BAR_BAR)                    \
 	_("?",                             YY__QUERY)                      \
 	_(":",                             YY__COLON)                      \
-	_(";",                             YY__SEMICOLON)                  \
-	_("...",                           YY__POINT_POINT_POINT)          \
 	_("=",                             YY__EQUAL)                      \
 	_("*=",                            YY__STAR_EQUAL)                 \
 	_("/=",                            YY__SLASH_EQUAL)                \
@@ -82,6 +83,7 @@
 	_("^=",                            YY__UPARROW_EQUAL)              \
 	_("|=",                            YY__BAR_EQUAL)                  \
 	_(",",                             YY__COMMA)                      \
+	/* preprocessor symbols */                                         \
 	_("#",                             YY__HASH)                       \
 	_("##",                            YY__HASH_HASH)                  \
 	_("##",                            YY_PP_JOIN)                     \
