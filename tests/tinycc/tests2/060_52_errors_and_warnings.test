@@ -1,0 +1,14 @@
+--TEST--
+tinycc 060.52: error and warnings
+--ARGS--
+--run
+--CODE--
+struct c1 { int a; int b[]; };
+struct c1 c1 = { 1, { 2, 3, 4 } };
+
+struct c2 { int c; struct c1 c1; };
+struct c2 c2 = { 1, { 2, { 3, 4, 5 }}};
+--EXPECT--
+./tests/tinycc/tests2/060_52_errors_and_warnings.c:5:29: error: initialization of flexible array member in a nested context
+
+exit code = 1

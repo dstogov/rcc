@@ -1,0 +1,15 @@
+--TEST--
+Initializers 005:
+--CODE--
+typedef union {int x; double y;} t;
+t a = {1};
+t b = {2.4};
+t c = {.x=1};
+t d = {.y=2.4};
+t e = {.x=1, .y=2.4};
+t f = {1, 2.4};
+t g = {1, 2.4, 0};
+--EXPECT--
+./tests/rcc/init-005.c:7:11: warning: excess elements in union initializer
+./tests/rcc/init-005.c:8:11: warning: excess elements in union initializer
+./tests/rcc/init-005.c:8:16: warning: excess elements in union initializer

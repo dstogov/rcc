@@ -1,0 +1,17 @@
+--TEST--
+tinycc 060.40: error and warnings
+--ARGS--
+--run
+--CODE--
+int main () {
+    int hello(int);
+    hello(123);
+    return 0;
+}
+int printf(const char*, ...);
+static int hello(int a)
+{ printf("%s: a = %d\n", __FUNCTION__, a); return 0; }
+--EXPECT--
+./tests/tinycc/tests2/060_40_errors_and_warnings.c:8:1: error: static declaration of "hello" follows non-static declaration
+
+exit code = 1

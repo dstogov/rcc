@@ -1,0 +1,12 @@
+--TEST--
+tinycc 060.06: error and warnings
+--ARGS--
+--run
+--CODE--
+enum color { RED, GREEN, BLUE };
+enum color { R, G, B };
+enum color c;
+--EXPECT--
+./tests/tinycc/tests2/060_06_errors_and_warnings.c:2:12: error: redefinition of "enum color"
+
+exit code = 1

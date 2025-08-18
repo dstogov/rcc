@@ -1,0 +1,14 @@
+--TEST--
+tinycc 060.51: error and warnings
+--ARGS--
+--run
+--CODE--
+static struct var { int i; const char str[]; } var = { 1, "zzz" };
+static struct var_len { int i; const char str[]; } var_array[] =
+{ { 1, "abcdefghijklmnopqrstuvwxyz" },
+  { 2, "longlonglonglonglong" },
+  { 3, "tst3" } };
+--EXPECT--
+./tests/tinycc/tests2/060_51_errors_and_warnings.c:3:37: error: initialization of flexible array member in a nested context
+
+exit code = 1

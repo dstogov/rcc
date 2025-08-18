@@ -1,0 +1,8 @@
+--TEST--
+Storage-class specifiers 002
+--CODE--
+extern _Thread_local int x1;
+static _Thread_local int x2;
+_Thread_local extern int x3;
+_Thread_local static int x4;
+--EXPECT--

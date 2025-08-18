@@ -1,0 +1,9 @@
+--TEST--
+tinycc 060.36: error and warnings
+--ARGS--
+--run
+--CODE--
+int t[][3]; // gr: not an error, see below
+int main() {return 1;}
+--EXPECT--
+exit code = 1

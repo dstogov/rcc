@@ -1,0 +1,11 @@
+--TEST--
+Duplicate declarations 007
+--CODE--
+int test(void) {
+	int x;
+	int x;
+}
+--EXPECT--
+./tests/rcc/duplicate_decl-007.c:3:7: error: redeclaration of "x"
+
+exit code = 1

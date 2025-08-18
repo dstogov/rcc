@@ -1,0 +1,10 @@
+--TEST--
+tinycc 060.09: error and warnings
+--ARGS--
+--run
+--CODE--
+enum rgb3 c = 42;
+--EXPECT--
+./tests/tinycc/tests2/060_09_errors_and_warnings.c:1:13: error: storage size of "c" isn't known
+
+exit code = 1

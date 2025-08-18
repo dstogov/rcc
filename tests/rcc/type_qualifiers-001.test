@@ -1,0 +1,8 @@
+--TEST--
+Type qualifiers 001:
+--CODE--
+const int x1;
+//restrict int x2;
+volatile int x3;
+_Atomic int x4;
+--EXPECT--

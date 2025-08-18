@@ -1,0 +1,13 @@
+--TEST--
+tinycc 060.20: error and warnings
+--ARGS--
+--run
+--CODE--
+void f(char*);
+void g(void) {
+  f((char[]){1, ,});
+}
+--EXPECT--
+./tests/tinycc/tests2/060_20_errors_and_warnings.c:3:17: error: unexpected ","
+
+exit code = 1

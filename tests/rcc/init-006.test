@@ -1,0 +1,9 @@
+--TEST--
+Initializers 006:
+--CODE--
+int a = {1};
+int b = {1, 2};
+--EXPECT--
+./tests/rcc/init-006.c:2:13: error: excess elements in scalar initializer
+
+exit code = 1

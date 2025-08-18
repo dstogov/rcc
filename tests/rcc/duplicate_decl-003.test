@@ -1,0 +1,9 @@
+--TEST--
+Duplicate declarations 003
+--CODE--
+extern int x;
+extern char x;
+--EXPECT--
+./tests/rcc/duplicate_decl-003.c:2:14: error: incompatible redeclaration of "x"
+
+exit code = 1

@@ -1,0 +1,10 @@
+--TEST--
+Macro 013 - duplicate macro parameter
+--ARGS--
+-E -P
+--CODE--
+#define A1(x,x)
+--EXPECT--
+./tests/cpp/macro-013.c:1:14: error: duplicate macro parameter "x"
+
+exit code = 1

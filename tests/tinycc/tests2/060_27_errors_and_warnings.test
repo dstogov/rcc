@@ -1,0 +1,11 @@
+--TEST--
+tinycc 060.27: error and warnings
+--ARGS--
+--run
+--CODE--
+/* _Alignas is no type qualifier */
+void * _Alignas(16) p1;
+--EXPECT--
+./tests/tinycc/tests2/060_27_errors_and_warnings.c:2:8: error: unexpected "_Alignas"
+
+exit code = 1

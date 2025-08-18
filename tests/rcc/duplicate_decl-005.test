@@ -1,0 +1,6 @@
+--TEST--
+Duplicate declarations 005
+--CODE--
+int x;
+int x;
+--EXPECT--

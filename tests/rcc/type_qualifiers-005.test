@@ -1,0 +1,10 @@
+--TEST--
+Type qualifiers 005:
+--CODE--
+_Atomic int x1[10];
+typedef int x2[10];
+_Atomic x2 x3;
+--EXPECT--
+./tests/rcc/type_qualifiers-005.c:3:14: error: "_Atomic"-qualified array type
+
+exit code = 1

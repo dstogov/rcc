@@ -1,0 +1,10 @@
+--TEST--
+tinycc 060.33: error and warnings
+--ARGS--
+--run
+--CODE--
+  enum e t[3];
+--EXPECT--
+./tests/tinycc/tests2/060_33_errors_and_warnings.c:1:14: error: array type has incomplete element type
+
+exit code = 1

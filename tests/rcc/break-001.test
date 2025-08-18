@@ -1,0 +1,10 @@
+--TEST--
+break 001:
+--CODE--
+void test() {
+	break;
+}
+--EXPECT--
+./tests/rcc/break-001.c:3:1: error: break statement not within loop or switch
+
+exit code = 1

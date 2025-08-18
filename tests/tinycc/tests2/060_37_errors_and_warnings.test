@@ -1,0 +1,19 @@
+--TEST--
+tinycc 060.37: error and warnings
+--ARGS--
+--run
+--CODE--
+int iii[] = { 1,2,3 };
+extern int iii[];
+int x[];
+int x[2];
+int x[];
+int x[2];
+int x[];
+extern int x[2];
+extern int x[];
+int x[3];
+--EXPECT--
+./tests/tinycc/tests2/060_37_errors_and_warnings.c:10:9: error: incompatible redeclaration of "x"
+
+exit code = 1

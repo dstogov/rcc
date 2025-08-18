@@ -1,0 +1,10 @@
+--TEST--
+Enum 001:
+--CODE--
+int x = 1;
+enum t1 {a, b, c};
+enum t2 {d = 1, e, f = e, g = x};
+--EXPECT--
+./tests/rcc/enum-001.c:3:32: error: enumerator value for "g" is not an integer constant
+
+exit code = 1

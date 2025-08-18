@@ -1,0 +1,18 @@
+--TEST--
+Duplicate declarations 013
+--CODE--
+static void f1(int);
+void f1(int x)
+{
+}
+static void f2(int);
+extern void f2(int x)
+{
+}
+void f3(int);
+static void f3(int);
+--EXPECT--
+./tests/rcc/duplicate_decl-013.c:10:20: error: static declaration of "f3" follows non-static declaration
+
+exit code = 1
+

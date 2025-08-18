@@ -1,0 +1,8 @@
+--TEST--
+Initializers 007:
+--CODE--
+int c = {[0]=1};
+--EXPECT--
+./tests/rcc/init-007.c:1:13: error: array index in non-array initializer
+
+exit code = 1

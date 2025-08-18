@@ -1,0 +1,12 @@
+--TEST--
+Initializers 019:
+--CODE--
+int a[] = {0, 1, [99]=99, 100, [50]=50};
+_Static_assert(sizeof(a) == 404);
+int b[][2] = {1, 2, 3, 4, 5, 6, 7};
+_Static_assert(sizeof(b) == 32);
+struct {int x; int a[];} s = {1, {0, 1, [99]=99, 100, [50]=50}}; 
+_Static_assert(sizeof(s) == 4);
+struct {int x; int a[];} z[] = {{1, {}}, {2}}; 
+_Static_assert(sizeof(z) == 8);
+--EXPECT--

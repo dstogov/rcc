@@ -1,0 +1,61 @@
+--TEST--
+tinycc 036: array initializers
+--ARGS--
+--run
+--CODE--
+#include <stdio.h>
+
+extern int Array3[10];
+int Array3[] = { 12, 34, };
+int main()
+{
+   int Count;
+
+   int Array[10] = { 12, 34, 56, 78, 90, 123, 456, 789, 8642, 9753 };
+
+   for (Count = 0; Count < 10; Count++)
+      printf("%d: %d\n", Count, Array[Count]);
+
+   int Array2[10] = { 12, 34, 56, 78, 90, 123, 456, 789, 8642, 9753, };
+
+   for (Count = 0; Count < 10; Count++)
+      printf("%d: %d\n", Count, Array2[Count]);
+
+   for (Count = 0; Count < 10; Count++)
+      printf("%d: %d\n", Count, Array3[Count]);
+
+   return 0;
+}
+
+/* vim: set expandtab ts=4 sw=3 sts=3 tw=80 :*/
+--EXPECT--
+0: 12
+1: 34
+2: 56
+3: 78
+4: 90
+5: 123
+6: 456
+7: 789
+8: 8642
+9: 9753
+0: 12
+1: 34
+2: 56
+3: 78
+4: 90
+5: 123
+6: 456
+7: 789
+8: 8642
+9: 9753
+0: 12
+1: 34
+2: 0
+3: 0
+4: 0
+5: 0
+6: 0
+7: 0
+8: 0
+9: 0

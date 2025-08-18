@@ -1,0 +1,13 @@
+--TEST--
+Not 001:
+--CODE--
+typedef enum {a,b,c} e1;
+void test(int i, e1 e, double d) {
+	~i;
+	~e;
+	~d;
+}
+--EXPECT--
+./tests/rcc/not-001.c:5:4: error: invalid type argument of unary "~"
+
+exit code = 1

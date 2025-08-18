@@ -1,0 +1,11 @@
+--TEST--
+tinycc 096.04: nodata wanted
+--ARGS--
+--run
+--CODE--
+void foo() {
+    short w = &foo; /* 2 cast warnings */
+}
+int main() {return 0;}
+--EXPECT--
+./tests/tinycc/tests2/096_04_nodata_wanted.c:2:19: warning: assignment makes integer from pointer without a cast

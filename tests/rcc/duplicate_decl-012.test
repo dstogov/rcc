@@ -1,0 +1,11 @@
+--TEST--
+Duplicate declarations 012
+--CODE--
+void f();
+void f(int);
+void f();
+void f(char);
+--EXPECT--
+./tests/rcc/duplicate_decl-012.c:4:13: error: incompatible redeclaration of "f"
+
+exit code = 1

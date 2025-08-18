@@ -1,0 +1,16 @@
+--TEST--
+Return 001:
+--CODE--
+int test1(void) {
+	return 1;
+}
+void test2(void) {
+	return;
+}
+int test3(void) {
+	return;
+}
+--EXPECT--
+./tests/rcc/return-001.c:9:1: error: "return" with no value, in function returning non-void
+
+exit code = 1

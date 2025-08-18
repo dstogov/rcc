@@ -1,0 +1,10 @@
+--TEST--
+Type check 006:
+--CODE--
+void test(int p) {
+	*p;
+}
+--EXPECT--
+./tests/rcc/type_check-06.c:2:4: error: invalid type argument of unary "*"
+
+exit code = 1

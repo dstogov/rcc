@@ -1,0 +1,8 @@
+--TEST--
+Type specifiers 002:
+--CODE--
+void x1;
+--EXPECT--
+./tests/rcc/type_specifiers-002.c:1:8: error: storage size of "x1" isn't known
+
+exit code = 1

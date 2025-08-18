@@ -1,0 +1,9 @@
+--TEST--
+Static Assert 002:
+--CODE--
+_Static_assert(1, "test1");
+_Static_assert(0, "test2");
+--EXPECT--
+./tests/rcc/static_assert-002.c:2:27: error: static assertion failed "test2"
+
+exit code = 1

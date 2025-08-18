@@ -1,0 +1,10 @@
+--TEST--
+tinycc 060.10: error and warnings
+--ARGS--
+--run
+--CODE--
+int i = i++;
+--EXPECT--
+./tests/tinycc/tests2/060_10_errors_and_warnings.c:1:12: error: initializer element is not constant
+
+exit code = 1

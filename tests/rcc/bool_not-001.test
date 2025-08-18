@@ -1,0 +1,18 @@
+--TEST--
+Bool not 001:
+--CODE--
+char a[10];
+void f() {}
+struct {int x;} z;
+void test(int i, double d, char *s) {
+	!i;
+	!d;
+	!s;
+	!a;
+	!z;
+	!f();
+}
+--EXPECT--
+./tests/rcc/bool_not-001.c:9:4: error: invalid type argument of unary "!"
+
+exit code = 1

@@ -1,0 +1,12 @@
+--TEST--
+Duplicate declarations 011
+--CODE--
+typedef struct _a a;
+union _a {
+  int x;
+  int y;
+};
+--EXPECT--
+./tests/rcc/duplicate_decl-011.c:2:10: error: "_a" defined as wrong kind of tag
+
+exit code = 1

@@ -1,0 +1,10 @@
+--TEST--
+case 002:
+--CODE--
+void test() {
+	default: return;
+}
+--EXPECT--
+./tests/rcc/case-002.c:2:11: error: "default" label not within a switch statement
+
+exit code = 1

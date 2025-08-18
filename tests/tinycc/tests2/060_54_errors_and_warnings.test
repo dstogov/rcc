@@ -1,0 +1,11 @@
+--TEST--
+tinycc 060.54: error and warnings
+--ARGS--
+--run
+--CODE--
+n; // warn
+f(); // don't warn
+int main() {return 0;}
+--EXPECT--
+./tests/tinycc/tests2/060_54_errors_and_warnings.c:1:2: warning: type defaults to "int"
+./tests/tinycc/tests2/060_54_errors_and_warnings.c:2:4: warning: type defaults to "int"

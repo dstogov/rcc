@@ -1,0 +1,10 @@
+--TEST--
+tinycc 060.01: error and warnings
+--ARGS--
+--run
+--CODE--
+struct A {} int i;
+--EXPECT--
+./tests/tinycc/tests2/060_01_errors_and_warnings.c:1:13: error: unexpected "int"
+
+exit code = 1

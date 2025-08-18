@@ -1,0 +1,8 @@
+--TEST--
+Initializers 010:
+--CODE--
+int a[2] = {[-1]=1};
+--EXPECT--
+./tests/rcc/init-010.c:1:17: error: array index in initializer exceeds array bounds
+
+exit code = 1

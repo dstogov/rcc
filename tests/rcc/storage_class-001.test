@@ -1,0 +1,10 @@
+--TEST--
+Storage-class specifiers 001
+--CODE--
+typedef int x1;
+extern int x2;
+static int x3;
+_Thread_local int x4;
+//auto int x5;
+//register int x6;
+--EXPECT--

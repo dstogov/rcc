@@ -1,0 +1,20 @@
+--TEST--
+tinycc 060.19: error and warnings
+--ARGS--
+--run
+--CODE--
+int bar(const char *());     // abstract declarator here is okay
+int bar (const char *(*g)()) // should match this 'g' argument
+{
+  g();
+  return 42;
+}
+int foo(int ())              // abstract decl is wrong in definitions
+{
+  return 0;
+}
+int main() {
+  return 0;
+}
+--EXPECT--
+./tests/tinycc/tests2/060_19_errors_and_warnings.c:8:1: warning: omitting the parameter name in a function definition

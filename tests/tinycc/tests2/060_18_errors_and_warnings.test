@@ -1,0 +1,12 @@
+--TEST--
+tinycc 060: error and warnings
+--ARGS--
+--run
+--CODE--
+void foo(void) {
+static enum myenum { L = -1 } L;                                                
+}
+--EXPECT--
+./tests/tinycc/tests2/060_18_errors_and_warnings.c:2:32: error: redeclaration of "L"
+
+exit code = 1

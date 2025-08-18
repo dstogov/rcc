@@ -1,0 +1,11 @@
+--TEST--
+Initializers 016:
+--CODE--
+typedef struct {int x; struct {int y;}; int z;} t;
+t a[3] = {0, 1, 2, 3, 4, 5, 6, 7, 8};
+t b[3] = {[2].x = 1, 2, 3};
+t c[3] = {[2].x = 1, 2, 3, 4};
+--EXPECT--
+./tests/rcc/init-016.c:4:28: error: excess elements in array initializer
+
+exit code = 1

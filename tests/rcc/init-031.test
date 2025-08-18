@@ -1,0 +1,10 @@
+--TEST--
+Initializers 031:
+--CODE--
+struct {int x,y;} test;
+int y = test;
+--EXPECT--
+./tests/rcc/init-031.c:2:13: error: incompatible types in assignment
+
+exit code = 1
+

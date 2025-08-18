@@ -1,0 +1,14 @@
+--TEST--
+tinycc 060.26: error and warnings
+--ARGS--
+--run
+--XFAIL--
+VLA arrays are not implemented yet
+--CODE--
+int X=1;
+
+int main(void) {
+  int t[][][X];
+}
+--EXPECT--
+60_errors_and_warnings.c:184: error: need explicit inner array size in VLAs

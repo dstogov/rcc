@@ -1,0 +1,10 @@
+--TEST--
+Macro 015 - unterminated #define
+--ARGS--
+-E -P
+--CODE--
+#define A1(x+
+--EXPECT--
+./tests/cpp/macro-015.c:1:13: error: expected ',' or ')', found "+"
+
+exit code = 1

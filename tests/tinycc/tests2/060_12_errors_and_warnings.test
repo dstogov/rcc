@@ -1,0 +1,13 @@
+--TEST--
+tinycc 060.12: error and warnings
+--ARGS--
+--run
+--CODE--
+enum e4;
+enum e5;
+void f3(enum e4 e);
+void f3(enum e5 e);
+--EXPECT--
+./tests/tinycc/tests2/060_12_errors_and_warnings.c:4:19: error: incompatible redeclaration of "f3"
+
+exit code = 1

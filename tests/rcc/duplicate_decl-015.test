@@ -1,0 +1,12 @@
+--TEST--
+Duplicate declarations 015
+--CODE--
+typedef enum {x1,x2,x3} t1;
+typedef enum {y1,y2,y3} t2;
+typedef void (*f)(t1);
+typedef void (*f)(const t1);
+typedef void (*f)(t2);
+--EXPECT--
+./tests/rcc/duplicate_decl-015.c:5:22: error: incompatible redeclaration of "f"
+
+exit code = 1

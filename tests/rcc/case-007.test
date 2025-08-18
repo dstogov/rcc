@@ -1,0 +1,14 @@
+--TEST--
+case 007:
+--CODE--
+int test(int i) {
+	switch (i) {
+		default: return 1;
+		default: return 2;
+	}
+	return 3;
+}
+--EXPECT--
+./tests/rcc/case-007.c:4:12: error: multiple default labels in one switch
+
+exit code = 1

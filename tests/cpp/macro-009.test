@@ -1,0 +1,10 @@
+--TEST--
+Macro 009 - missing macro name
+--ARGS--
+-E -P
+--CODE--
+#define
+--EXPECT--
+./tests/cpp/macro-009.c:1:8: error: no macro name given in #define directive
+
+exit code = 1

@@ -1,0 +1,10 @@
+--TEST--
+tinycc 060.17: error and warnings
+--ARGS--
+--run
+--CODE--
+static enum myenum { L = -1 } L;                                                
+--EXPECT--
+./tests/tinycc/tests2/060_17_errors_and_warnings.c:1:32: error: incompatible redeclaration of "L"
+
+exit code = 1

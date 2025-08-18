@@ -1,0 +1,12 @@
+--TEST--
+TCC 06
+--ARGS--
+-E -P
+--CODE--
+#define X(a,b, \
+	c,d) \
+	foo
+
+X(1,2,3,4)
+--EXPECT--
+foo

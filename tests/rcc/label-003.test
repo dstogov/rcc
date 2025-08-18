@@ -1,0 +1,21 @@
+--TEST--
+Label 003:
+--CODE--
+void test(int i) {
+	l2:
+	if (i) {
+		__label__ l1, l2;
+		goto l2;
+		l2: goto l1;
+		l1: goto l3;
+	} else {
+		__label__ l1, l2;
+		goto l2;
+		l2: goto l1;
+		l1: goto l3;
+	}
+	l3: goto l1;
+	l1: goto l2;
+}
+--EXPECT--
+

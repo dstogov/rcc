@@ -1,0 +1,8 @@
+--TEST--
+Static Assert 003: escaping ???
+--CODE--
+_Static_assert(0, "test\\2" "te\x20st3" "\040\'test4\040\'");
+--EXPECT--
+./tests/rcc/static_assert-003.c:1:61: error: static assertion failed "test\2te st3 'test4 '"
+
+exit code = 1

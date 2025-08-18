@@ -1,0 +1,13 @@
+--TEST--
+Type check 003:
+--CODE--
+void test(void) {
+	double s = 2.0, *p = (void*)(0);
+	int i = 10;
+	s = s ? s : i;
+	s = s ? s : p;
+}
+--EXPECT--
+./tests/rcc/type_check-03.c:5:15: error: type mismatch in conditional expression
+
+exit code = 1

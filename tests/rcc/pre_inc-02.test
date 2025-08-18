@@ -1,0 +1,16 @@
+--TEST--
+Pre-inc opertor 002:
+--CODE--
+static char g1[10];
+void test(int i, double d, char *s, char a[], void *v) {
+	++i;
+	++d;
+	++s;
+	++a;
+	++g1;
+}
+--EXPECT--
+./tests/rcc/pre_inc-02.c:7:6: error: lvalue required as "++" operand
+
+exit code = 1
+

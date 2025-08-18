@@ -1,0 +1,11 @@
+--TEST--
+Deref opertor 001:
+--CODE--
+void test(int *p, int q) {
+	*p;
+	*q;
+}
+--EXPECT--
+./tests/rcc/deref-01.c:3:4: error: invalid type argument of unary "*"
+
+exit code = 1

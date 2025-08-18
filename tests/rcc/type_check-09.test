@@ -1,0 +1,11 @@
+--TEST--
+Type check 009:
+--CODE--
+typedef union {int x;} t;
+void test(int n) {
+	((t)n);
+}
+--EXPECT--
+./tests/rcc/type_check-09.c:3:7: error: conversion to non-scalar type requested
+
+exit code = 1

@@ -1,0 +1,33 @@
+--TEST--
+generic 002:
+--ARGS--
+-fno-inline --run
+--CODE--
+extern int printf(const char *, ...);
+
+#define add(a, b) _Generic((a), \
+    int : add_int(a,b), \
+    default : add_double(a,b), \
+    void* : add_int(a,b) \
+)
+ 
+static int add_int(int a, int b)
+{
+	return a + b;
+}
+
+static double add_double(double a, double b)
+{
+	return a + b;
+}
+
+int main()
+{
+	printf("%d %d\n",
+		add(3, 5),
+		(int)add(3.1, 3.9));
+	return 0;
+}
+--EXPECT--
+8 7
+

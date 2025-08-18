@@ -1,0 +1,11 @@
+--TEST--
+tinycc 060.30: error and warnings
+--ARGS--
+--run
+--CODE--
+ _Static_assert(1);
+struct z {  _Static_assert(0); }
+--EXPECT--
+./tests/tinycc/tests2/060_30_errors_and_warnings.c:2:30: error: static assertion failed
+
+exit code = 1

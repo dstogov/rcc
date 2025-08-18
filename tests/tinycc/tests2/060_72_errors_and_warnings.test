@@ -1,0 +1,20 @@
+--TEST--
+tinycc 060.72: error and warnings
+--ARGS--
+--run
+--CODE--
+struct A;
+void f(struct A *);
+
+int main()
+{
+    f(&(struct A){});
+}
+
+struct A {
+    int x;
+};
+--EXPECT--
+./tests/tinycc/tests2/060_72_errors_and_warnings.c:6:18: error: invalid use of undefined "struct A"
+
+exit code = 1

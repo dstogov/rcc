@@ -1,1 +1,8 @@
 *.o
+rcc
+
+tests/**/*.c
+tests/**/*.diff
+tests/**/*.exp
+tests/**/*.out
+tests/**/*.log

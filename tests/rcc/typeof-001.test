@@ -1,0 +1,17 @@
+--TEST--
+typeof 001:
+--ARGS--
+--run
+--CODE--
+extern int printf(const char *, ...);
+int test(void) {
+	static int i = 0;
+	return ++i;
+}
+int main() {
+	typeof(test()) i = 0;
+	printf("%d %d %d\n", i, test(), test());
+	return 0;
+}
+--EXPECT--
+0 1 2

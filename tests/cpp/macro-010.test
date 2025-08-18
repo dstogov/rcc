@@ -1,0 +1,8 @@
+--TEST--
+Macro 010 - incorrect argument name
+--ARGS--
+-E -P
+--CODE--
+#define A1(__VA_ARGS__) z
+--EXPECT--
+./tests/cpp/macro-010.c:1:12: warning: __VA_ARGS__ can only appear in the expansion of a C99 variadic macro

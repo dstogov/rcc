@@ -1,0 +1,17 @@
+--TEST--
+Paul 11
+--ARGS--
+-E -P
+--CODE--
+#define CONCAT_1(a, b) CONCAT_1_D(a, b)
+#define CONCAT_1_D(a, b) a ## b
+
+#define CONCAT_2(a, b) CONCAT_2_D(a, b)
+#define CONCAT_2_D(a, b) a ## b
+
+#define AB(c, x, y) CONCAT_ ## c(x, y)
+#define CONCAT CONCAT_1
+
+CONCAT(A, B(2, p, q))
+--EXPECT--
+pq

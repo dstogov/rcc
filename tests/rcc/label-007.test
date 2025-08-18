@@ -1,0 +1,12 @@
+--TEST--
+Label 007:
+--CODE--
+void test(int i) {
+	__label__ l1;
+	goto l1;
+	return;
+}
+--EXPECT--
+./tests/rcc/label-007.c:5:1: error: label "l1" used but not defined
+
+exit code = 1

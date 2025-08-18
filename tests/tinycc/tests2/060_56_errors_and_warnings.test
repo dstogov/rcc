@@ -1,0 +1,10 @@
+--TEST--
+tinycc 060.56: error and warnings
+--ARGS--
+--run
+--CODE--
+int f(){"12"3;} // second const token killed the value of the first
+--EXPECT--
+./tests/tinycc/tests2/060_56_errors_and_warnings.c:1:13: error: unexpected "<DECIMAL_NUMBER>"
+
+exit code = 1

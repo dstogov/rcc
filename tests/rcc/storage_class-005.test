@@ -1,0 +1,8 @@
+--TEST--
+Storage-class specifiers 005
+--CODE--
+auto int x5;
+--EXPECT--
+./tests/rcc/storage_class-005.c:1:12: error: file-scope declaration of "x5" specifies "auto"
+
+exit code = 1

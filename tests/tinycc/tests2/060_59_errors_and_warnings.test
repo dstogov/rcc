@@ -1,0 +1,12 @@
+--TEST--
+tinycc 060.59: error and warnings
+--ARGS--
+--run
+--CODE--
+extern int array[2];
+int array[] = { 1, 2, 3 };
+int main() {return 0;}
+--EXPECT--
+./tests/tinycc/tests2/060_59_errors_and_warnings.c:2:23: error: excess elements in array initializer
+
+exit code = 1

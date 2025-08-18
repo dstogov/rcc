@@ -1,0 +1,18 @@
+--TEST--
+tinycc 060.63: error and warnings
+--ARGS--
+--run
+--XFAIL--
+#pragma comment
+--CODE--
+#pragma comment(option, "-Wunsupported -Wno-implicit-function-declaration -Wstuff")
+void func()
+{
+    char *ccp = "123";
+    fink();
+}
+__attribute__((stuff)) int fink() {return 0;}
+int main() {return 0;}
+--EXPECT--
+60_errors_and_warnings.c:418: warning: unsupported option '-Wstuff'
+60_errors_and_warnings.c:429: warning: 'stuff' attribute ignored

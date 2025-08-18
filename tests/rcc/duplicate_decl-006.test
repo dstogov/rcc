@@ -1,0 +1,11 @@
+--TEST--
+Duplicate declarations 006
+--CODE--
+void x(int x) {
+}
+void x(int x) {
+}
+--EXPECT--
+./tests/rcc/duplicate_decl-006.c:3:15: error: redefinition of "x"
+
+exit code = 1

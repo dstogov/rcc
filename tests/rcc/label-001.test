@@ -1,0 +1,10 @@
+--TEST--
+Label 001:
+--CODE--
+void test(int i) {
+	goto l2;
+	l2: goto l1;
+	l1: goto l3;
+	l3: return;
+}
+--EXPECT--

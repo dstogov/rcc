@@ -1,0 +1,10 @@
+--TEST--
+tinycc 060.32: error and warnings
+--ARGS--
+--run
+--CODE--
+ void t[3];
+--EXPECT--
+./tests/tinycc/tests2/060_32_errors_and_warnings.c:1:11: error: array of voids
+
+exit code = 1

@@ -1,0 +1,11 @@
+--TEST--
+Return 011:
+--CODE--
+int test(void) {
+	static struct {int x,y;} s;
+	return s;
+}
+--EXPECT--
+./tests/rcc/return-011.c:4:1: error: return incompatible type
+
+exit code = 1

@@ -1,0 +1,16 @@
+--TEST--
+TCC 12
+--ARGS--
+-E -P
+--CODE--
+#define SRC(y...)                       \
+        9999: y;                        \
+        .section __ex_table, "a";       \
+        .long 9999b, 6001f      ;       \
+        // .previous
+
+    SRC(1: movw (%esi), %bx)
+6001:
+--EXPECT--
+    9999: 1: movw (%esi), %bx; .section __ex_table, "a"; .long 9999b, 6001f ;
+6001:

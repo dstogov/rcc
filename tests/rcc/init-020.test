@@ -1,0 +1,17 @@
+--TEST--
+Initializers 020:
+--ARGS--
+--run
+--CODE--
+extern const char *printf(const char *msg, ...);
+struct {int x; char a[];} s = {1, "abcd"}; 
+_Static_assert(sizeof(s) == 4);
+int main() {
+	struct {int x; char a[];} s2 = {1, "dcba"}; 
+	printf("%s\n", s.a);
+	printf("%s\n", s2.a);
+	return 0;
+}
+--EXPECT--
+abcd
+dcba

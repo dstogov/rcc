@@ -1,0 +1,11 @@
+--TEST--
+Type check 002:
+--CODE--
+void test(void) {
+	double s = 2.0, *p = (void*)(0);
+	s *= p;
+}
+--EXPECT--
+./tests/rcc/type_check-02.c:3:8: error: invalid operands to binary "*"
+
+exit code = 1

@@ -1,0 +1,16 @@
+--TEST--
+sizeof 002:
+--ARGS--
+--run
+--CODE--
+extern int printf(const char *, ...);
+int main() {
+	int a[5];
+	printf("%d %d %d\n",
+		sizeof(a[0]),
+		sizeof a[1],
+		sizeof(a)[2]);
+	return 0;
+}
+--EXPECT--
+4 4 4

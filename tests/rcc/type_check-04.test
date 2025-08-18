@@ -1,0 +1,10 @@
+--TEST--
+Type check 004:
+--CODE--
+void test(void *p) {
+	p[0];
+}
+--EXPECT--
+./tests/rcc/type_check-04.c:2:6: error: dereferencing "void *" pointer
+
+exit code = 1

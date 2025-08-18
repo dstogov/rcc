@@ -1,0 +1,11 @@
+--TEST--
+tinycc 060.49: error and warnings
+--ARGS--
+--run
+--XFAIL--
+stray handling
+--CODE--
+#define x \a
+x
+--EXPECT--
+60_errors_and_warnings.c:333: error: stray '\' in program

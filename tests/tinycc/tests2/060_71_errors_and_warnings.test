@@ -1,0 +1,14 @@
+--TEST--
+tinycc 060.71: error and warnings
+--ARGS--
+--run
+--XFAIL--
+stray handling
+--CODE--
+#error \123\\
+456
+
+--EXPECT--
+./tests/tinycc/tests2/060_71_errors_and_warnings.c:3: error: #error \123\456
+
+exit code = 1

@@ -1,0 +1,10 @@
+--TEST--
+tinycc 060.16: error and warnings
+--ARGS--
+--run
+--CODE--
+void f() { _Generic((int(*)[3]){0}, int:0); }
+--EXPECT--
+./tests/tinycc/tests2/060_16_errors_and_warnings.c:1:43: error: no matched type case in "_Generic"
+
+exit code = 1

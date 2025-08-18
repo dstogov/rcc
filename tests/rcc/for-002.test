@@ -1,0 +1,15 @@
+--TEST--
+for 002:
+--CODE--
+int test(int *a, int n) {
+	int i = 42, sum;
+	for (typedef int i; i < n; i++) {
+		int i = a[n];
+		sum += i; 
+	} 
+	return sum + i;
+}
+--EXPECT--
+./tests/rcc/for-002.c:3:20: error: non-variable declaration in "for" loop
+
+exit code = 1

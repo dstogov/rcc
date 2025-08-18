@@ -1,0 +1,5 @@
+--TEST--
+Type qualifiers 002:
+--CODE--
+void * restrict x1;
+--EXPECT--

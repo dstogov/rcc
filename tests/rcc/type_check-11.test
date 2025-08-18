@@ -1,0 +1,11 @@
+--TEST--
+Type check 011:
+--CODE--
+void test(int n, char *p) {
+	n ? p : 0;
+	n ? p : 1;
+}
+--EXPECT--
+./tests/rcc/type_check-11.c:3:11: error: type mismatch in conditional expression
+
+exit code = 1

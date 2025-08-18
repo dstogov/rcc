@@ -1,0 +1,15 @@
+--TEST--
+tinycc 060.39: error and warnings
+--ARGS--
+--run
+--CODE--
+int main () {
+    int hello(int);
+    hello(123);
+    return 0;
+}
+int printf(const char*, ...);
+int hello(int a)
+{ printf("%s: a = %d\n", __FUNCTION__, a); return 0; }
+--EXPECT--
+hello: a = 123

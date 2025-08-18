@@ -1,0 +1,10 @@
+--TEST--
+Macro 008 - wrong macro name
+--ARGS--
+-E -P
+--CODE--
+#define 1
+--EXPECT--
+./tests/cpp/macro-008.c:1:9: error: macro names must be identifiers
+
+exit code = 1

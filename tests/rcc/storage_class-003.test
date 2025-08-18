@@ -1,0 +1,8 @@
+--TEST--
+Storage-class specifiers 003
+--CODE--
+extern static int x1;
+--EXPECT--
+./tests/rcc/storage_class-003.c:1:8: error: multiple storage classes in declaration specifiers
+
+exit code = 1

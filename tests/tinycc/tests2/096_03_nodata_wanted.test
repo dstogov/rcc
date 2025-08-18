@@ -1,0 +1,12 @@
+--TEST--
+tinycc 096.03: nodata wanted
+--ARGS--
+--run
+--CODE--
+void foo();
+static short w = (int)&foo; /* initializer not computable */
+--EXPECT--
+./tests/tinycc/tests2/096_03_nodata_wanted.c:2:27: warning: cast from pointer to integer of different size
+./tests/tinycc/tests2/096_03_nodata_wanted.c:2:27: error: initializer element is not constant
+
+exit code = 1

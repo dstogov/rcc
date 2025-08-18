@@ -1,0 +1,8 @@
+--TEST--
+Return 013:
+--CODE--
+int *test(const int *p) {
+	return p;
+}
+--EXPECT--
+./tests/rcc/return-013.c:3:1: warning: return discards "const" qualifier from pointer target type

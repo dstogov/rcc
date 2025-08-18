@@ -1,0 +1,13 @@
+--TEST--
+Initializers 002:
+--CODE--
+typedef struct {int x,y;} t;
+t a = {1,2};
+t b = {.x = 1, .y = 2};
+int c[1] = {1};
+int d[1] = {[0] = 1};
+int e = {.x = 1};
+--EXPECT--
+./tests/rcc/init-002.c:6:13: error: field name not in struct or union initializer
+
+exit code = 1

@@ -1,0 +1,11 @@
+--TEST--
+Paul 08
+--ARGS--
+-E -P
+--CODE--
+#define A(x) B(x, x + 1)
+#define B(p, q) p + q
+
+A(7) *
+--EXPECT--
+7 + 7 + 1 *

@@ -86,3 +86,13 @@ install: $(BUILD_DIR)/rcc
 
 uninstall:
 	rm $(PREFIX)/bin/rcc
+
+$(BUILD_DIR)/tester: $(SRC_DIR)/tools/tester.c
+	$(CC) $(BUILD_CFLAGS) -o $@ $<
+
+test: $(BUILD_DIR)/rcc $(BUILD_DIR)/tester
+	$(BUILD_DIR)/tester \
+	--test-cmd $(BUILD_DIR)/rcc \
+	--test-extension ".test" \
+	--code-extension ".c" \
+    $(SRC_DIR)/tests

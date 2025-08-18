@@ -1,0 +1,10 @@
+--TEST--
+Type qualifiers 006:
+--CODE--
+_Atomic int x1(void);
+typedef int x2(void);
+_Atomic x2 x3;
+--EXPECT--
+./tests/rcc/type_qualifiers-006.c:3:14: error: "_Atomic"-qualified function type
+
+exit code = 1

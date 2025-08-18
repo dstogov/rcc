@@ -1,0 +1,11 @@
+--TEST--
+Paul 06
+--ARGS--
+-E -P
+--CODE--
+#define A() B
+#define B() A
+
+A()()() *
+--EXPECT--
+B *

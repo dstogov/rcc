@@ -1,0 +1,82 @@
+--TEST--
+tinycc 060.11: error and warnings
+--ARGS--
+--run
+--CODE--
+void (*f1)(void);
+void f2(void) {}
+
+struct s1 *ps1;
+struct s2 *ps2;
+
+void *v1, **v2, ***v3;
+
+enum e1 { a = 4 } e10, *e11, *e12;
+enum e2 { b = -4 } e20, *e21;
+enum e3 { c = 5000000000LL } e30;
+
+int *ip;
+unsigned int *up;
+long *lp;
+long long *llp;
+
+char **c1;
+char const **c2;
+unsigned char **u1;
+
+int no_main ()
+{
+    // function
+    f1 = f2;
+    // struct
+    ps1 = ps2;
+    // void*
+    v1 = v3;
+    v2 = v3;
+
+    // enum
+    e11 = e12;
+    e11 = e21;
+    e11 = &e10;
+    ip = &e10;
+    ip = &e20;
+    up = &e10;
+    up = &e20;
+    up = &e30;
+
+    lp = ip;
+    lp = llp;
+
+    // constness
+    c1 = c2;
+    *c1 = *c2;
+    **c1 = **c2;
+
+    // unsigned = signed
+    u1 = c2;
+    *u1 = *c2;
+    **u1 = **c2;
+
+    c2 = c1;
+    *c2 = *c1;
+    **c2 = **c1;
+
+    return 0;
+}
+--EXPECT--
+./tests/tinycc/tests2/060_11_errors_and_warnings.c:27:14: warning: assignment from incompatible pointer type
+./tests/tinycc/tests2/060_11_errors_and_warnings.c:30:12: warning: assignment from incompatible pointer type
+./tests/tinycc/tests2/060_11_errors_and_warnings.c:34:14: warning: assignment from incompatible pointer type
+./tests/tinycc/tests2/060_11_errors_and_warnings.c:36:14: warning: assignment from incompatible pointer type
+./tests/tinycc/tests2/060_11_errors_and_warnings.c:39:14: warning: assignment from incompatible pointer type
+./tests/tinycc/tests2/060_11_errors_and_warnings.c:40:14: warning: assignment from incompatible pointer type
+./tests/tinycc/tests2/060_11_errors_and_warnings.c:42:12: warning: assignment from incompatible pointer type
+./tests/tinycc/tests2/060_11_errors_and_warnings.c:43:13: warning: pointer targets in assignment differ in signedness
+./tests/tinycc/tests2/060_11_errors_and_warnings.c:46:12: warning: assignment from incompatible pointer type
+./tests/tinycc/tests2/060_11_errors_and_warnings.c:47:14: warning: assignment discards "const" qualifier from pointer target type
+./tests/tinycc/tests2/060_11_errors_and_warnings.c:51:12: warning: assignment from incompatible pointer type
+./tests/tinycc/tests2/060_11_errors_and_warnings.c:52:14: warning: pointer targets in assignment differ in signedness
+./tests/tinycc/tests2/060_11_errors_and_warnings.c:55:12: warning: assignment from incompatible pointer type
+./tests/tinycc/tests2/060_11_errors_and_warnings.c:57:16: error: assignment of read-only location
+
+exit code = 1

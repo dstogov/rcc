@@ -1,0 +1,13 @@
+--TEST--
+tinycc 060.28: error and warnings
+--ARGS--
+--run
+--CODE--
+#define ONE 0
+ _Static_assert(ONE == 0, "don't show me this");
+ struct x{ _Static_assert(ONE == 1, "ONE is not 1"); };
+
+--EXPECT--
+./tests/tinycc/tests2/060_28_errors_and_warnings.c:3:52: error: static assertion failed "ONE is not 1"
+
+exit code = 1

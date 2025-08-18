@@ -1,0 +1,15 @@
+--TEST--
+Add 001:
+--CODE--
+typedef enum {a, b, c} e1;
+typedef enum {x, y, z} e2;
+void test(int i1, int i2, double d1, double d2, char *s1, char *s2) {
+	i1 + i2;
+	d1 + d2;
+	a + z;
+	s1 + s2;
+}
+--EXPECT--
+./tests/rcc/add-001.c:7:9: error: invalid operands to binary "+"
+
+exit code = 1
