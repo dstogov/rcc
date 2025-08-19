@@ -95,4 +95,12 @@ test: $(BUILD_DIR)/rcc $(BUILD_DIR)/tester
 	--test-cmd $(BUILD_DIR)/rcc \
 	--test-extension ".test" \
 	--code-extension ".c" \
-    $(SRC_DIR)/tests
+	$(SRC_DIR)/tests
+
+test-ci: $(BUILD_DIR)/rcc $(BUILD_DIR)/tester
+	$(BUILD_DIR)/tester \
+	--test-cmd $(BUILD_DIR)/rcc \
+	--test-extension ".test" \
+	--code-extension ".c" \
+	--show-diff \
+	$(SRC_DIR)/tests
