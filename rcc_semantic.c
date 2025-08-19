@@ -3228,28 +3228,33 @@ void c_do_array_dim(c_value *v, c_value *dim)
 	}
 	if (!C_IS_TYPE_INT(dim->type) && dim->type->kind != C_TYPE_ENUM) yy_error("array subscript is not an integer");
 	c_value_rval(dim);
-	if (C_IS_TYPE_SIGNED(dim->type)) {
+	if (c_value_is_const(dim) && dim->u.val.u64 == 0) {
+		/* pass */
+	} else if (C_IS_TYPE_SIGNED(dim->type)) {
 		if (dim->type->kind != c_type_ssize_t.kind) {
 			c_do_cvt(&c_type_ssize_t, IR_SSIZE_T, dim);
 		}
-		ref = ir_ADD_A(ref, ir_MUL(IR_SSIZE_T, c_value_ref(dim),
-				ir_const_ssize_t(active_ctx, type->size)));
-		if (type->kind != C_TYPE_ARRAY) {
-			c_value_set_lval(v, type, c_type2ir(type), ref);
+		if (type->size == 1) {
+			ref = ir_ADD_A(ref, c_value_ref(dim));
 		} else {
-			c_value_set_rval(v, type, c_type2ir(type), ref);
+			ref = ir_ADD_A(ref, ir_MUL(IR_SSIZE_T, c_value_ref(dim),
+				ir_const_ssize_t(active_ctx, type->size)));
 		}
 	} else {
 		if (dim->type->kind != c_type_size_t.kind) {
 			c_do_cvt(&c_type_size_t, IR_SIZE_T, dim);
 		}
-		ref = ir_ADD_A(ref, ir_MUL(IR_SIZE_T, c_value_ref(dim),
-				ir_const_size_t(active_ctx, type->size)));
-		if (type->kind != C_TYPE_ARRAY) {
-			c_value_set_lval(v, type, c_type2ir(type), ref);
+		if (type->size == 1) {
+			ref = ir_ADD_A(ref, c_value_ref(dim));
 		} else {
-			c_value_set_rval(v, type, c_type2ir(type), ref);
+			ref = ir_ADD_A(ref, ir_MUL(IR_SIZE_T, c_value_ref(dim),
+				ir_const_size_t(active_ctx, type->size)));
 		}
+	}
+	if (type->kind != C_TYPE_ARRAY) {
+		c_value_set_lval(v, type, c_type2ir(type), ref);
+	} else {
+		c_value_set_rval(v, type, c_type2ir(type), ref);
 	}
 }
 
@@ -3281,7 +3286,10 @@ void c_do_struct_field(c_value *v, c_name field_name)
 				yy_sym2str(field_name));
 		}
 	}
-	ir_ref ref = ir_ADD_A(v->u.ref, ir_const_size_t(active_ctx, offset));
+	ir_ref ref = v->u.ref;
+	if (offset) {
+		ref = ir_ADD_A(ref, ir_const_size_t(active_ctx, offset));
+	}
 	if (field->type->kind != C_TYPE_ARRAY) {
 		c_value_set_lval(v, field->type, c_type2ir(field->type), ref);
 		v->u.proto = field->bit_field;
@@ -3320,7 +3328,10 @@ void c_do_struct_field_deref(c_value *v, c_name field_name)
 				yy_sym2str(field_name));
 		}
 	}
-	ir_ref ref = ir_ADD_A(c_value_ref(v), ir_const_size_t(active_ctx, offset));
+	ir_ref ref = c_value_ref(v);
+	if (offset) {
+		ref = ir_ADD_A(ref, ir_const_size_t(active_ctx, offset));
+	}
 	if (field->type->kind != C_TYPE_ARRAY) {
 		c_value_set_lval(v, field->type, c_type2ir(field->type), ref);
 		v->u.proto = field->bit_field;
