@@ -32,9 +32,10 @@ jobs:
           repository: dstogov/ir
           path: ir
       - name: make ir
-        cd ir
-        make TARGET=x86_64 BUILD=debug all
-        make TARGET=x86_64 BUILD=debug install
+        run: |
+          cd ir
+          make TARGET=x86_64 BUILD=debug all
+          make TARGET=x86_64 BUILD=debug install
       - name: make
         run: make TARGET=x86_64 BUILD=debug all
       - name: test
