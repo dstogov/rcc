@@ -23,7 +23,7 @@ jobs:
           apt update -y
           DEBIAN_FRONTEND=noninteractive apt install -y \
             gcc \
-            glibc-dev \
+            libc6-dev \
             libcapstone-dev \
             libcapstone4 \
             make
