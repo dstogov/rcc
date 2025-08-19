@@ -131,9 +131,9 @@ const char *pp_sys_include_paths[] = {
 	"/usr/include",
 #ifdef __linux__
 # if defined(IR_TARGET_X64)
-	"/usr/include/x86_64-linux-gnu"
+	"/usr/include/x86_64-linux-gnu",
 # elif defined(IR_TARGET_X86)
-	"/usr/include/x86-linux-gnu"
+	"/usr/include/x86-linux-gnu",
 # endif
 #endif
 	NULL
