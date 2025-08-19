@@ -3413,7 +3413,7 @@ static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, i
 	ir_ref ret = IR_UNUSED;
 	ir_ref i, j, op1, op2, op3;
 	ir_ref start = IR_UNUSED, block_begin = IR_UNUSED;
-	bool has_alloca;
+	bool has_var = 0, has_alloca = 0;
 	ir_insn *insn;
 	bool add_phi = 0;
 	ir_list bp_list;
@@ -3463,7 +3463,15 @@ static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, i
 	while (i < func_ctx->insns_count) {
 		ir_ref n = insn->inputs_count;
 		if (n <= 3) {
-			if (insn->op == IR_VAR || insn->op == IR_ALLOCA) {
+			if (insn->op == IR_VAR) {
+				if (insn->op1 == 1) {
+					/* VAR linked to START */
+					has_var = 1;
+				} else {
+					has_alloca = 1;
+				}
+				break;
+			} else if (insn->op == IR_ALLOCA) {
 				has_alloca = 1;
 				break;
 			}
@@ -3477,10 +3485,12 @@ static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, i
 	}
 
 	/* Wrap inlined code with BLOCK_BEGIN/BLOCK_END if necessary */
-	if (has_alloca) {
+	if (has_var) {
 		ir_ref end = ir_emit1(ctx, IR_END, ctx->control);
 		start = ir_emit1(ctx, IR_BEGIN, end);
 		block_begin = xlat2[1] = xlat[1] = ctx->control = ir_emit1(ctx, IR_OPT(IR_BLOCK_BEGIN, IR_ADDR), start);
+	} else if (has_alloca) {
+		start = block_begin = xlat2[1] = xlat[1] = ctx->control = ir_emit1(ctx, IR_OPT(IR_BLOCK_BEGIN, IR_ADDR), ctx->control);
 	} else {
 		start = xlat2[1] = xlat[1] = ctx->control;
 	}
@@ -3652,7 +3662,7 @@ static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, i
 	}
 
 	/* Add BLOCK_END if necessary */
-	if (has_alloca) {
+	if (block_begin) {
 		ctx->control = ir_emit2(ctx, IR_BLOCK_END, ctx->control, block_begin);
 	}
 
