@@ -129,6 +129,13 @@ const char *pp_include_paths[PP_MAX_INCLUDE_PATHS + 1] = {
 const char *pp_sys_include_paths[] = {
 	"/usr/local/include",
 	"/usr/include",
+#ifdef __linux__
+# if defined(IR_TARGET_X64)
+	"/usr/include/x86_64-linux-gnu"
+# elif defined(IR_TARGET_X86)
+	"/usr/include/x86-linux-gnu"
+# endif
+#endif
 	NULL
 };
 
