@@ -1,0 +1,42 @@
+name: Push
+on:
+  push:
+    branches:
+      - draft
+  pull_request:
+    branches:
+      - "**"
+permissions:
+  contents: read
+jobs:
+  Linux_x86_64:
+    name: 'Linux x86_64'
+    runs-on: ubuntu-22.04
+    container:
+      image: ubuntu:22.04
+    env:
+      CFLAGS: '-fsanitize=address,undefined'
+    steps:
+      - uses: actions/checkout@v5
+      - name: apt
+        run: |
+          apt update -y
+          DEBIAN_FRONTEND=noninteractive apt install -y \
+            gcc \
+            libcapstone-dev \
+            libcapstone4 \
+            make
+      - name: git checkout ir
+        uses: actions/checkout@v5
+        with:
+          repository: dstogov/ir
+          path: ir
+      - name: make ir
+        run: |
+          cd ir
+          make TARGET=x86_64 BUILD=debug all
+          make TARGET=x86_64 BUILD=debug install
+      - name: make
+        run: make TARGET=x86_64 BUILD=debug all
+      - name: test
+        run: make TARGET=x86_64 BUILD=debug test-ci
