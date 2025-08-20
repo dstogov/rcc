@@ -4571,23 +4571,23 @@ void c_do_assign_op(yy_sym sym, c_value *op1, c_value *op2)
 	if (!c_value_is_lval(op1) || op1->type->kind == C_TYPE_FUNC) {
 		yy_error("lvalue required as left operand of assignment");
 	}
-	switch (sym) {
-		case YY__EQUAL:                 break;
-		case YY__STAR_EQUAL:            sym = YY__STAR; break;
-		case YY__SLASH_EQUAL:           sym = YY__SLASH; break;
-		case YY__PERCENT_EQUAL:         sym = YY__PERCENT; break;
-		case YY__PLUS_EQUAL:            sym = YY__PLUS; break;
-		case YY__MINUS_EQUAL:           sym = YY__MINUS; break;
-		case YY__LESS_LESS_EQUAL:       sym = YY__LESS_LESS; break;
-		case YY__GREATER_GREATER_EQUAL: sym = YY__GREATER_GREATER; break;
-		case YY__AND_EQUAL:             sym = YY__AND; break;
-		case YY__UPARROW_EQUAL:         sym = YY__UPARROW; break;
-		case YY__BAR_EQUAL:             sym = YY__BAR; break;
-		default: IR_ASSERT(0);
-	}
 	if (sym != YY__EQUAL) {
 		c_value tmp = *op1;
+
 		c_value_rval(&tmp);
+		switch (sym) {
+			case YY__STAR_EQUAL:            sym = YY__STAR; break;
+			case YY__SLASH_EQUAL:           sym = YY__SLASH; break;
+			case YY__PERCENT_EQUAL:         sym = YY__PERCENT; break;
+			case YY__PLUS_EQUAL:            sym = YY__PLUS; break;
+			case YY__MINUS_EQUAL:           sym = YY__MINUS; break;
+			case YY__LESS_LESS_EQUAL:       sym = YY__LESS_LESS; break;
+			case YY__GREATER_GREATER_EQUAL: sym = YY__GREATER_GREATER; break;
+			case YY__AND_EQUAL:             sym = YY__AND; break;
+			case YY__UPARROW_EQUAL:         sym = YY__UPARROW; break;
+			case YY__BAR_EQUAL:             sym = YY__BAR; break;
+			default: IR_ASSERT(0);
+		}
 		c_do_binary_op(sym, &tmp, op2);
 		*op2 = tmp;
 	} else {
