@@ -130,12 +130,9 @@ repeat:
 		case C_TYPE_CHAR:    return IR_CHAR;
 		case C_TYPE_VOID:    return IR_VOID;
 		case C_TYPE_ENUM:    kind = t->enumeration.kind; goto repeat;
-#if 1
-//???
 		case C_TYPE_FUNC:    return IR_ADDR;
 		case C_TYPE_STRUCT:  return IR_ADDR;
 		case C_TYPE_UNION:   return IR_ADDR;
-#endif
 		default:
 			IR_ASSERT(0);
 			return IR_VOID;
@@ -908,7 +905,7 @@ c_sym *c_declare(c_name name, c_dcl *d)
 
 	sym = yy_hash.data[name].sym;
 	if (sym) {
-		if (d->flags & C_DCL_EXTERN) { // && sym is extern ???
+		if (d->flags & C_DCL_EXTERN) {
 			if (!sym->scope) {
 				c_validate_redeclaration(name, d, sym);
 				return sym;
@@ -2691,7 +2688,7 @@ void c_do_addr(c_value *v)
 		if (c_value_is_const_str(v)) {
 			c_create_str_sym(v);
 		}
-		v->type = type; // check type ???
+		v->type = type;
 	}
 }
 
