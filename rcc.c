@@ -299,7 +299,7 @@ delay_codegen:
 	}
 }
 
-void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, uint32_t flags)
+static void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, uint32_t flags)
 {
 	uint32_t len;
 	c_name id;

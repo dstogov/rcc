@@ -962,7 +962,6 @@ void yy_warning_fmt(const char *fmt, ...);
 
 /* Linker */
 void *c_linker_allocate_data(const char *name, size_t size);
-void *c_linker_resolve_sym_name(ir_loader *loader, const char *name, uint32_t flags);
 bool  c_linker_fix_reloc(c_sym *obj, size_t obj_offset, c_value *val);
 
 /* IR compiler */
