@@ -6423,22 +6423,7 @@ static bool c_is_dead_end(ir_insn *insn)
 
 void c_do_func_end(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 {
-	if (scope->list.syms) {
-		yy_sym id, *p = scope->list.syms;
-		uint32_t n = scope->list.len;
-		void *ptr;
-		uintptr_t kind;
-
-		while (n) {
-			id = *p++;
-			n -= 1 + sizeof(void*)/sizeof(uint32_t);
-			p = pp_load_ptr(p, &ptr);
-			kind = ((uintptr_t)ptr) & C_POP_MASK;
-			if (kind == C_POP_LABEL) {
-				c_do_finish_label(id, yy_hash.data[id].label);
-			}
-		}
-	}
+	c_pop_scope(scope);
 
 	if (ctx->control) {
 		if (ctx->control == active_ctx->insns_count - 1
@@ -6464,41 +6449,6 @@ void c_do_func_end(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 	active_func_name = 0; // TODO: nested functions ???
 	active_func_scope = NULL;
 	active_ctx = global_ctx;
-
-	if (scope->list.syms) {
-		yy_sym id, *p = scope->list.syms;
-		uint32_t n = scope->list.len;
-		void *ptr;
-		uintptr_t kind;
-
-		while (n) {
-			id = *p++;
-			n -= 1 + sizeof(void*)/sizeof(uint32_t);
-			p = pp_load_ptr(p, &ptr);
-			kind = ((uintptr_t)ptr) & C_POP_MASK;
-			ptr = (void*)(((uintptr_t)ptr) & ~C_POP_MASK);
-			switch (kind) {
-				case C_POP_SYM:
-					yy_hash.data[id].sym = ptr;
-					break;
-				case C_POP_TAG:
-					yy_hash.data[id].tag = ptr;
-					break;
-				case C_POP_LABEL:
-					if (!yy_hash.data[id].label->is_local) {
-						ir_mem_free(yy_hash.data[id].label);
-					}
-					yy_hash.data[id].label = ptr;
-					break;
-				default:
-					IR_ASSERT(0);
-			}
-		}
-		pp_list_release(scope->list.syms, scope->list.size);
-		scope->list.syms = NULL;
-	}
-
-	c_pop_scope(scope);
 }
 
 yy_sym c_get_current_func_name(void)
