@@ -1385,12 +1385,10 @@ static c_field *c_find_struct_field(const c_type *type, c_name name, size_t *off
 	c_field *f;
 
 	for (i = 0, f = type->record.fields; i < type->record.num_fields; f++, i++) {
-		if (f->name) {
-			if (f->name == name) {
-				*offset = f->offset;
-				return f;
-			}
-		} else if (f->type->kind == C_TYPE_STRUCT || f->type->kind == C_TYPE_UNION) {
+		if (f->name == name) {
+			*offset = f->offset;
+			return f;
+		} else if (!f->name && (f->type->kind == C_TYPE_STRUCT || f->type->kind == C_TYPE_UNION)) {
 			c_field *f2 = c_find_struct_field(f->type, name, offset);
 			if (f2) {
 				*offset += f->offset;
@@ -5634,16 +5632,20 @@ repeat:
 
 static void c_do_init_patch_flexible_alloca(ir_ref ref, size_t len)
 {
+	ir_insn *insn = &active_ctx->ir_base[ref];
+	ir_ref size_ref;
+
 	IR_ASSERT(ref > 0);
-	IR_ASSERT(active_ctx->ir_base[ref].op == IR_ALLOCA);
-	active_ctx->ir_base[ref].op2 = ir_const_size_t(active_ctx, len);
-	if (active_ctx->ir_base[ref + 1].op == IR_CALL
-	 && active_ctx->ir_base[ref + 1].inputs_count == 5
-	 && active_ctx->ir_base[ref + 1].op1 == ref
-//???	 && active_ctx->ir_base[ref + 1].op2 == memset
-	 && 	active_ctx->ir_base[ref + 1].op3 == ref) {
-		ir_ref *ops = active_ctx->ir_base[ref + 1].ops;
-		ops[5] = active_ctx->ir_base[ref].op2;
+	IR_ASSERT(insn->op == IR_ALLOCA);
+	insn->op2 = size_ref = ir_const_size_t(active_ctx, len);
+	insn++;
+	if (insn->op == IR_CALL
+	 && insn->inputs_count == 5
+	 && insn->op1 == ref
+//???	 && insn->op2 == memset
+	 && insn->op3 == ref) {
+		ir_ref *ops = insn->ops;
+		ops[5] = size_ref;
 	}
 }
 
@@ -5784,17 +5786,14 @@ static bool c_find_struct_field_ex(const c_type *type, c_name name, c_init *init
 	c_field *f;
 
 	for (i = 0, f = type->record.fields; i < type->record.num_fields; f++, i++) {
-		if (f->name) {
-			if (f->name == name) {
-				IR_ASSERT(!C_IS_BIT_FIELD(f->bit_field)); //???
-				if (init->level >= C_INIT_STACK_SIZE) yy_error("too deep initialization level");
-				init->stack[init->level].pos = i;
-				init->level++;
-				init->stack[init->level].type = f->type;
-				init->stack[init->level].pos = 0;
-				return 1;
-			}
-		} else if (f->type->kind == C_TYPE_STRUCT || f->type->kind == C_TYPE_UNION) {
+		if (f->name == name) {
+			if (init->level >= C_INIT_STACK_SIZE) yy_error("too deep initialization level");
+			init->stack[init->level].pos = i;
+			init->level++;
+			init->stack[init->level].type = f->type;
+			init->stack[init->level].pos = 0;
+			return 1;
+		} else if (!f->name && (f->type->kind == C_TYPE_STRUCT || f->type->kind == C_TYPE_UNION)) {
 			if (init->level >= C_INIT_STACK_SIZE) yy_error("too deep initialization level");
 			init->stack[init->level].pos = i;
 			init->level++;
@@ -5824,31 +5823,29 @@ void c_do_init_next(c_sym *obj, c_init *init)
 
 	while (1) {
 		type = init->stack[init->level].type;
-		pos =  init->stack[init->level].pos;
 		if (type->kind == C_TYPE_ARRAY) {
+			pos = init->stack[init->level].pos;
 			if (++pos < type->array.length || (type->attr & C_ATTR_FLEXIBLE)) {
 				init->stack[init->level].pos = pos;
 				return;
 			}
 			if (init->level == 0) yy_error("excess elements in array initializer");
-			init->level--;
 		} else if (type->kind == C_TYPE_STRUCT) {
+			pos = init->stack[init->level].pos;
 			if (++pos < type->record.num_fields) {
 				init->stack[init->level].pos = pos;
 				return;
 			}
 			if (init->level == 0) yy_error("excess elements in struct initializer");
-			init->level--;
 		} else if (type->kind == C_TYPE_UNION) {
 			if (init->level == 0) {
 				yy_warning("excess elements in union initializer");
 				return;
 			}
-			init->level--;
 		} else {
 			if (init->level == 0) yy_error("excess elements in scalar initializer");
-			init->level--;
 		}
+		init->level--;
 	}
 }
 
@@ -6002,7 +5999,6 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 	new_size = *size;
 	if (obj->value.type->kind == C_TYPE_ARRAY && (obj->value.type->attr & C_ATTR_FLEXIBLE)) {
 		if (offset + type->size > obj->value.type->size) {
-			// TODO: alignment support ???
 			size_t len =
 				(offset + type->size + obj->value.type->array.type->size - 1) / obj->value.type->array.type->size;
 			if (obj->value.type->array.type->size * len > *size) {
