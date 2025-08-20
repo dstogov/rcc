@@ -191,14 +191,15 @@ static ir_ref c_type2proto(const c_type *t, uint32_t linkage)
 
 static bool c_fix_incomplete_type(const c_type *type)
 {
+	c_tag *tag;
+
 	IR_ASSERT((type->flags & C_TYPE_INCOMPLETE) && type->tag);
-	if (yy_hash.data[type->tag].tag
-	 && yy_hash.data[type->tag].tag->type != type
-	 && yy_hash.data[type->tag].tag->type->kind == type->kind
-	 && !(yy_hash.data[type->tag].tag->type->flags & C_TYPE_INCOMPLETE)) {
+	tag = yy_hash.data[type->tag].tag;
+	if (tag && tag->type != type && !(tag->type->flags & C_TYPE_INCOMPLETE)) {
+		/* The incomplete type reffers to a complete tag. */
 		uint32_t attr = type->attr;
 		c_type *t = (c_type*)type;
-		*t = *yy_hash.data[type->tag].tag->type;
+		*t = *tag->type;
 		t->attr |= (attr & C_TYPE_ATTRS);
 		return 1;
 	}
@@ -623,6 +624,7 @@ static void c_do_end_flexible(c_sym *obj, size_t size)
 		obj->value.u.val.ptr = addr;
 		obj->tmp_data = 0;
 
+		/* Fix global symbol */
 		c_name sym = yy_hash_find(str, len);
 		yy_hash.data[sym].sym->value.u.val.ptr = obj->value.u.val.ptr;
 		if (yy_hash.data[sym].sym->value.type->attr & C_ATTR_FLEXIBLE) {
