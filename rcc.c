@@ -46,6 +46,8 @@
 #define C_OPT_INLINE             (1<<2)
 #define C_OPT_MEM2SSA            (1<<3)
 
+#define IR_UNKNOWN_SIZE          1
+
 static bool            c_native = 0;
 static uint32_t        c_opt_flags = 2 | C_OPT_INLINE | C_OPT_MEM2SSA;
 static uint32_t        c_dump_flags = 0;
@@ -339,7 +341,7 @@ static void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, uint
 				sym->value.u.opt = IR_OPT(C_VAL_CONST, IR_ADDR);
 				sym->value.u.val.ptr = addr;
 				if (c_dump_flags & C_DUMP_ASM) {
-					ir_disasm_add_symbol(name, (uint64_t)(uintptr_t)addr, sizeof(void*));
+					ir_disasm_add_symbol(name, (uint64_t)(uintptr_t)addr, IR_UNKNOWN_SIZE);
 				}
 				return addr;
 			}
