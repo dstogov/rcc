@@ -5,6 +5,7 @@ OS         = $(shell uname -s)
 BUILD      = release
 BUILD_DIR  = .
 SRC_DIR    = .
+TESTS      = $(SRC_DIR)/tests
 
 PREFIX     = /usr/local
 
@@ -95,7 +96,7 @@ test: $(BUILD_DIR)/rcc $(BUILD_DIR)/tester
 	--test-cmd $(BUILD_DIR)/rcc \
 	--test-extension ".test" \
 	--code-extension ".c" \
-	$(SRC_DIR)/tests
+	$(TESTS)
 
 test-ci: $(BUILD_DIR)/rcc $(BUILD_DIR)/tester
 	$(BUILD_DIR)/tester \
@@ -103,4 +104,4 @@ test-ci: $(BUILD_DIR)/rcc $(BUILD_DIR)/tester
 	--test-extension ".test" \
 	--code-extension ".c" \
 	--show-diff \
-	$(SRC_DIR)/tests
+	$(TESTS)
