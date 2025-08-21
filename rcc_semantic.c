@@ -690,8 +690,7 @@ static void c_validate_redeclaration(c_name name, c_dcl *d, c_sym *sym)
 		if (d->flags & C_DCL_DEFINITION) {
 			sym->is_implemented = 1;
 		}
-		if (sym->linkage == C_LINK_EXTERNAL
-		 && !c_value_is_const(&sym->value)
+		if (!c_value_is_const(&sym->value)
 		 && !(d->flags & C_DCL_EXTERN)
 		 && ((d->flags & C_DCL_DEFINITION) || !(d->type->attr & C_ATTR_FLEXIBLE))) {
 			sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);

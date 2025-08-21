@@ -42,6 +42,10 @@
 #define C_PERF                   (1<<11)
 #define C_RUN                    (1<<12)
 
+#define C_SINGLE_FILE            (1<<16)
+#define C_DO_LINK_INTERNAL       (1<<17)
+#define C_DO_LINK_EXTERNAL       (1<<18)
+
 #define C_OPT_LEVEL              0x3
 #define C_OPT_INLINE             (1<<2)
 #define C_OPT_MEM2SSA            (1<<3)
@@ -367,6 +371,12 @@ add_thunk:
 			sym->value.u.op |= C_VAL_CONST;
 			sym->value.u.type = IR_ADDR;
 			sym->value.u.val.ptr = addr;
+			if (sym->linkage == C_LINK_INTERNAL) {
+				c_dump_flags |= C_DO_LINK_INTERNAL;
+			} else {
+				IR_ASSERT(sym->linkage == C_LINK_EXTERNAL);
+				c_dump_flags |= C_DO_LINK_EXTERNAL;
+			}
 			if (c_dump_flags & C_DUMP_ASM) {
 				/* thunk and real symbol use the same name */
 				ir_disasm_add_symbol(name, (uint64_t)(uintptr_t)addr, size);
@@ -448,6 +458,7 @@ static ir_insn *c_linker_find_sym_offset(ir_insn *insn, size_t *offset)
 bool c_linker_fix_reloc(c_sym *obj, size_t obj_offset, c_value *val)
 {
 	ir_insn *addr_insn;
+	size_t offset = 0;
 
 	if ((val->type->kind == C_TYPE_STRUCT || val->type->kind == C_TYPE_UNION)
 	 && IR_IS_CONST_REF(val->u.ref)
@@ -464,55 +475,68 @@ bool c_linker_fix_reloc(c_sym *obj, size_t obj_offset, c_value *val)
 
 	addr_insn = &active_ctx->ir_base[val->u.ref];
 	if (!IR_IS_CONST_REF(val->u.ref)) {
-		size_t offset = 0;
-
 		addr_insn = c_linker_find_sym_offset(addr_insn, &offset);
-		if (addr_insn) {
-			size_t len;
-			const char *name = ir_get_strl(active_ctx, addr_insn->val.name, &len);
-			c_name n = yy_hash_lookup(name, len);
+		if (!addr_insn) return 0;
+	}
 
-			c_linker_add_reloc(obj, obj_offset, n, offset);
-			IR_ASSERT(yy_hash.data[n].sym
-				&& yy_hash.data[n].sym->kind == C_SYM_VAR
-				&& c_value_is_const(&yy_hash.data[n].sym->value)
-				&& yy_hash.data[n].sym->value.u.type == IR_ADDR
-				&& yy_hash.data[n].sym->value.u.val.addr);
-			val->u.val.addr = yy_hash.data[n].sym->value.u.val.addr + offset;
-			return 1;
-		}
-	} else if (addr_insn->op == IR_SYM) {
-		// address resolution (add reloc) ???
+	if (addr_insn->op == IR_SYM || addr_insn->op == IR_FUNC) {
 		size_t len;
 		const char *name = ir_get_strl(active_ctx, addr_insn->val.name, &len);
 		c_name n = yy_hash_lookup(name, len);
+		c_sym *sym = yy_hash.data[n].sym;
 
-		c_linker_add_reloc(obj, obj_offset, n, 0);
-		IR_ASSERT(yy_hash.data[n].sym
-			&& yy_hash.data[n].sym->kind == C_SYM_VAR
-			&& c_value_is_const(&yy_hash.data[n].sym->value)
-			&& yy_hash.data[n].sym->value.u.type == IR_ADDR
-			&& yy_hash.data[n].sym->value.u.val.addr);
-		val->u.val.addr = yy_hash.data[n].sym->value.u.val.addr;
+		IR_ASSERT(sym && (sym->kind == C_SYM_VAR || (sym->kind == C_SYM_FUNC && offset == 0)));
+		if (c_dump_flags & C_DUMP_IR) {
+			c_linker_add_reloc(obj, obj_offset, n, offset);
+		}
+		if (c_value_is_const(&sym->value)) {
+			IR_ASSERT(sym->value.u.type == IR_ADDR && sym->value.u.val.addr);
+			val->u.val.addr = sym->value.u.val.addr + offset;
+		} else {
+			val->u.val.addr = 0;
+			if (sym->kind == C_SYM_FUNC && !sym->has_code) {
+				sym->has_code = 1;
+				if (!ir_list_capasity(&c_codegen_list)) ir_list_init(&c_codegen_list, 32);
+				ir_list_push(&c_codegen_list, n);
+			}
+			if (c_dump_flags & C_RUN) {
+				if (!(c_dump_flags & C_DUMP_IR)) {
+					/* reloc was already added before */
+					c_linker_add_reloc(obj, obj_offset, n, offset);
+				}
+				if (sym->linkage == C_LINK_INTERNAL) {
+					c_dump_flags |= C_DO_LINK_INTERNAL;
+				} else {
+					IR_ASSERT(sym->linkage == C_LINK_EXTERNAL);
+					c_dump_flags |= C_DO_LINK_EXTERNAL;
+				}
+			}
+		}
 		return 1;
+#if 0
 	} else if (addr_insn->op == IR_FUNC) {
 		size_t len;
 		const char *name = ir_get_strl(active_ctx, addr_insn->val.name, &len);
 		c_name n = yy_hash_lookup(name, len);
+		c_sym *sym = yy_hash.data[n].sym;
 
-		c_linker_add_reloc(obj, obj_offset, n, 0);
-		IR_ASSERT(yy_hash.data[n].sym && yy_hash.data[n].sym->kind == C_SYM_FUNC);
-		if (!c_value_is_const(&yy_hash.data[n].sym->value)) {
+		IR_ASSERT(sym && sym->kind == C_SYM_FUNC && offset == 0);
+		if (c_dump_flags & C_DUMP_IR) {
+			c_linker_add_reloc(obj, obj_offset, n, 0);
+		}
+		if (c_value_is_const(&sym->value)) {
+			IR_ASSERT(sym->value.u.type == IR_ADDR && sym->value.u.val.addr);
+			val->u.val.addr = sym->value.u.val.addr;
+		} else {
 			if (!c_native) return 1;
 			/* resolve name or add thunk */
 			void *addr = c_linker_resolve_sym_name(NULL, name, IR_RESOLVE_SYM_ADD_THUNK);
-			IR_ASSERT(addr || !c_native);
-			(void)addr;
+			IR_ASSERT(addr);
+			IR_ASSERT(sym->value.u.type == IR_ADDR && sym->value.u.val.addr == (uintptr_t)addr);
+			val->u.val.addr = (uintptr_t)addr;
 		}
-		IR_ASSERT(yy_hash.data[n].sym->value.u.type == IR_ADDR
-			&& yy_hash.data[n].sym->value.u.val.addr);
-		val->u.val.addr = yy_hash.data[n].sym->value.u.val.addr;
 		return 1;
+#endif
 	}
 	return 0;
 }
@@ -1130,6 +1154,73 @@ static int rcc_compile(const char *file_name)
 	return 1;
 }
 
+static void rcc_link_internal(void)
+{
+	yy_sym i;
+	yy_hash_bucket *p, *q;
+	c_reloc *reloc;
+	c_sym *sym;
+
+	ir_mem_unprotect(c_code_buffer.start, (char*)c_code_buffer.end - (char*)c_code_buffer.start);
+	for (i = YY_LAST_KEYWORD + 1, p = yy_hash.data + i; i < yy_hash.count; p++, i++) {
+		if (p->sym) {
+			if (p->sym->is_thunk) {
+				if (p->sym->linkage == C_LINK_INTERNAL) {
+					yy_error_fmt("Unresolved symbol \"%s\"", p->str);
+				} else {
+					IR_ASSERT(p->sym->linkage == C_LINK_EXTERNAL);
+					if (c_dump_flags & C_SINGLE_FILE) {
+						void *addr = ir_resolve_sym_name(p->str);
+						if (!addr) {
+							yy_error_fmt("Unresolved symbol \"%s\"", p->str);
+						} else {
+							ir_fix_thunk((void*)p->sym->value.u.val.addr, addr);
+							p->sym->value.u.val.addr = (uintptr_t)addr;
+							p->sym->is_thunk = 0;
+						}
+					}
+				}
+			}
+			reloc = p->sym->reloc;
+			while (reloc) {
+				q = &yy_hash.data[reloc->name];
+				sym = q->sym;
+				if (!sym) yy_error_fmt("Unresolved symbol \"%s\"", q->str);
+				if (sym->linkage == C_LINK_INTERNAL) {
+					if (!c_value_is_const(&sym->value) || sym->is_thunk) yy_error_fmt("Unresolved symbol \"%s\"", q->str);
+					IR_ASSERT(sym->value.u.type == IR_ADDR && sym->value.u.val.addr);
+					*(void**)((char*)p->sym->value.u.val.addr + reloc->obj_offset) =
+						(char*)sym->value.u.val.addr + reloc->name_offset;
+				} else {
+					IR_ASSERT(sym->linkage == C_LINK_EXTERNAL);
+					if (c_value_is_const(&sym->value)
+					 && !sym->is_thunk) {
+						IR_ASSERT(sym->value.u.type == IR_ADDR && sym->value.u.val.addr);
+						*(void**)((char*)p->sym->value.u.val.addr + reloc->obj_offset) =
+							(char*)sym->value.u.val.addr + reloc->name_offset;
+					} else if (c_dump_flags & C_SINGLE_FILE) {
+						void *addr = ir_resolve_sym_name(q->str);
+						if (!addr) {
+							yy_error_fmt("Unresolved symbol \"%s\"", q->str);
+						} else {
+							if (sym->is_thunk) {
+								ir_fix_thunk((void*)sym->value.u.val.addr, addr);
+								sym->is_thunk = 0;
+							}
+							sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
+							sym->value.u.val.addr = (uintptr_t)addr;
+							*(void**)((char*)p->sym->value.u.val.addr + reloc->obj_offset) =
+								(char*)sym->value.u.val.addr + reloc->name_offset;
+						}
+					}
+				}
+				reloc = reloc->next;
+			}
+		}
+	}
+	ir_mem_protect(c_code_buffer.start, (char*)c_code_buffer.end - (char*)c_code_buffer.start);
+}
+
 static void rcc_link(void)
 {
 	yy_sym i;
@@ -1594,7 +1685,11 @@ int main(int argc, const char **argv)
 		if (ir_list_len(&def)) rcc_process_defines(&def, argv);
 
 		uint32_t n = ir_list_len(&src);
-		if (n > 1) rcc_remember_state();
+		if (n > 1) {
+			rcc_remember_state();
+		} else {
+			c_dump_flags |= C_SINGLE_FILE;
+		}
 		for (uint32_t j = 0; j < n; j++) {
 			const char *input = argv[ir_list_at(&src, j)];
 
@@ -1603,6 +1698,11 @@ int main(int argc, const char **argv)
 				rcc_free();
 				ir_free(&ctx);
 				goto exit;
+			}
+			if ((c_dump_flags & C_DO_LINK_INTERNAL)
+			 || (n == 1 && (c_dump_flags & C_DO_LINK_EXTERNAL))) {
+				rcc_link_internal();
+				c_dump_flags &= ~(C_DO_LINK_INTERNAL|C_DO_LINK_EXTERNAL);
 			}
 		}
 
