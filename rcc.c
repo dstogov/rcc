@@ -292,9 +292,9 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym)
 		ir_free(ctx);
 		sym->has_code = 1;
 	} else {
-		if (sym->linkage == C_LINK_EXTERNAL && !sym->has_code) {
+		if (((c_dump_flags & C_SINGLE_FILE) ? name == YY_MAIN : sym->linkage == C_LINK_EXTERNAL)
+		 && !sym->has_code) {
 			sym->has_code = 1;
-//		if (name == YY_MAIN) {
 			if (!ir_list_capasity(&c_codegen_list)) ir_list_init(&c_codegen_list, 32);
 			ir_list_push(&c_codegen_list, name);
 		}
