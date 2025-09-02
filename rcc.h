@@ -550,7 +550,6 @@ typedef enum {
 	C_TYPE_U32,
 	C_TYPE_UL,
 	C_TYPE_ULL,
-//	C_TYPE_ADDR,
 	C_TYPE_CHAR,
 	C_TYPE_I8,
 	C_TYPE_I16,
