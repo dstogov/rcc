@@ -264,7 +264,10 @@ static const char c_float_h[] =
 "\n"
 "#endif /* #ifndef __FLOAT_H */\n";
 
-#define STDINC_COUNT 4
+static const char c_alloca_h[] =
+"#define alloca(size) __builtin_alloca(size)\n";
+
+#define STDINC_COUNT 5
 
 static struct {
 	yy_sym      name;
@@ -291,6 +294,10 @@ void c_stdinc_init(void)
 	c_stdinc[3].name = yy_hash_lookup("float.h", sizeof("float.h") - 1);
 	c_stdinc[3].content = c_float_h;
 	c_stdinc[3].content_len = sizeof(c_float_h) - 1;
+
+	c_stdinc[4].name = yy_hash_lookup("alloca.h", sizeof("alloca.h") - 1);
+	c_stdinc[4].content = c_alloca_h;
+	c_stdinc[4].content_len = sizeof(c_alloca_h) - 1;
 
 	yy_file_name = yy_hash_lookup("builtin", sizeof("builtin") - 1);
 	yy_pos = yy_text = yy_linepos = yy_buf = c_boot;

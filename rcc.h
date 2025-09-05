@@ -163,6 +163,7 @@
 	_("__builtin_va_arg",              YY___BUILTIN_VA_ARG)            \
 	_("__builtin_va_end",              YY___BUILTIN_VA_END)            \
 	_("__builtin_va_copy",             YY___BUILTIN_VA_COPY)           \
+	_("__builtin_alloca",              YY___BUILTIN_ALLOCA)            \
 	_("__builtin_expect",              YY___BUILTIN_EXPECT)            \
 
 #define YY_LAST_KEYWORD                YY___BUILTIN_EXPECT
