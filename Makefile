@@ -80,7 +80,7 @@ $(OBJS_RCC): $(BUILD_DIR)/$(notdir %.o): $(SRC_DIR)/$(notdir %.c)
 	$(CC) $(CFLAGS) -I$(BUILD_DIR) -I$(SRC_DIR)/ir -o $@ -c $<
 
 clean:
-	rm -rf $(BUILD_DIR)/rcc $(BUILD_DIR)/*.o
+	rm -rf $(BUILD_DIR)/rcc $(BUILD_DIR)/*.o $(BUILD_DIR)/tester
 
 install: $(BUILD_DIR)/rcc
 	install -m a+rx $(BUILD_DIR)/rcc $(PREFIX)/bin
