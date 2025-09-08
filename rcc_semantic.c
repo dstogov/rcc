@@ -870,11 +870,7 @@ static ir_ref c_create_str_sym(c_value *res)
 
 static bool c_is_builtin_func_name(c_name name)
 {
-#if defined(IR_TARGET_X64) || defined(IR_TARGET_X86)
 	return name >= YY_BUILTIN_FIRST && name <= YY_BUILTIN_LAST;
-#else
-	return 0;
-#endif
 }
 
 c_sym *c_declare(c_name name, c_dcl *d)

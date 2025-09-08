@@ -316,7 +316,11 @@ _YY_DIRECTIVES(_YY_SYM)
 _YY_NAMES(_YY_SYM)
 YY_LAST_NAME,
 YY_BUILTIN_FIRST = YY_ABS,
+#if defined(IR_TARGET_X64) || defined(IR_TARGET_X86)
 YY_BUILTIN_LAST = YY_TRUNCF,
+#else
+YY_BUILTIN_LAST = YY_FABSF,
+#endif
 YY_LAST = 0x7fffffff,
 #undef _YY_SYM
 } yy_sym;
