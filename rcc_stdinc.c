@@ -176,7 +176,7 @@ static const char c_stdarg_h[] =
 "  void    *vr_top;\n"
 "  int      gr_offset;\n"
 "  int      vr_offset;\n"
-"} va_list;\n"
+"} va_list[1];\n"
 "#endif\n"
 "\n"
 "#define va_start(ap, param) __builtin_va_start (ap)\n"
