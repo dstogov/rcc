@@ -64,7 +64,7 @@ $(BUILD_DIR):
 	@mkdir -p $(BUILD_DIR)
 
 $(BUILD_DIR)/rcc: $(OBJS_RCC)
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS) -lir -lcapstone
+	$(CC) $(CFLAGS) -o $@ $^ -lir -lcapstone $(LDFLAGS)
 
 $(BUILD_DIR)/rcc_scanner.o: $(SRC_DIR)/rcc.h
 $(BUILD_DIR)/rcc_cpp.o: $(SRC_DIR)/rcc.h
