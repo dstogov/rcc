@@ -134,6 +134,8 @@ const char *pp_sys_include_paths[] = {
 	"/usr/include/x86_64-linux-gnu",
 # elif defined(IR_TARGET_X86)
 	"/usr/include/x86-linux-gnu",
+# elif defined(IR_TARGET_AARCH64)
+	"/usr/include/aarch64-linux-gnu",
 # endif
 #endif
 	NULL
