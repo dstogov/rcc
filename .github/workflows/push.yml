@@ -69,7 +69,7 @@ jobs:
             cd ir
             make CC=gcc TARGET=aarch64 BUILD=debug all
             make CC=gcc TARGET=aarch64 BUILD=debug install
-          run: |
+            cd ..
             make CC=gcc TARGET=aarch64 BUILD=debug all
             # FIXME: For some reason some of the object files are rebuilt
             make CC=gcc TARGET=aarch64 BUILD=debug test-ci
