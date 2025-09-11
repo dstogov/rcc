@@ -62,34 +62,14 @@ static bool            protected = 1;
 static ir_list         c_codegen_list;
 static FILE           *c_out = NULL;
 
-static ir_type c_type2ir_arg(const c_type *type)
-{
-	if (type->kind == C_TYPE_STRUCT || type->kind == C_TYPE_UNION) {
-		if (type->size <= sizeof(void*)) {
-			type = (type->size <= 4) ? &c_type_u32 : &c_type_u64;
-		} else {
-//???			yy_error("long struct arguments not implemented yet"); //???
-		}
-	}
-	return c_type2ir(type);
-}
-
-static ir_type c_type2ir_ret(const c_type *type)
-{
-	if (type->kind == C_TYPE_STRUCT || type->kind == C_TYPE_UNION) {
-		if (type->size <= sizeof(void*)) {
-			type = (type->size <= 4) ? &c_type_u32 : &c_type_u64;
-		} else {
-//???			yy_error("long struct return not implemented yet"); //???
-		}
-	}
-	return c_type2ir(type);
-}
-
 static void rcc_dump_func_proto(c_name name, bool prototype, FILE *f)
 {
 	c_sym *sym = yy_hash.data[name].sym;
 	const c_type *t;
+	uint8_t flags;
+	ir_type ret_type;
+	uint32_t params_count;
+	uint8_t *param_types;
 
 	IR_ASSERT(sym && sym->kind == C_SYM_FUNC);
 	if (sym->linkage == C_LINK_INTERNAL) {
@@ -97,38 +77,22 @@ static void rcc_dump_func_proto(c_name name, bool prototype, FILE *f)
 	} else if (sym->is_external || (prototype && !sym->ctx)) {
 		fprintf(f, "extern ");
 	}
-	fprintf(f, "func @%s(", yy_sym2str(name));
+	fprintf(f, "func @%s", yy_sym2str(name));
 
 	t = sym->value.type;
-	if (t->func.num_params > 0) {
-		int n = t->func.num_params;
-		const c_param *p = t->func.params;
-
-		fprintf(f, "%s", ir_type_cname[c_type2ir_arg(p->type)]);
-		p++;
-		while (--n) {
-			fprintf(f, ", %s", ir_type_cname[c_type2ir_arg(p->type)]);
-			p++;
-		}
-		if (t->attr & C_ATTR_VARIADIC) {
-			fprintf(f, ", ...");
-		}
-	} else if (t->attr & C_ATTR_VARIADIC) {
-		fprintf(f, "...");
+	IR_ASSERT(t->kind == C_TYPE_FUNC);
+	param_types = alloca(t->func.num_params + 16);
+	c_type2proto_ex(t, &flags, &ret_type, &params_count, param_types);
+	if (sym->linkage == C_LINK_BUILTIN) {
+		flags |= IR_BUILTIN_FUNC;
 	}
-	fprintf(f, "): %s", ir_type_cname[c_type2ir_ret(t->func.ret_type)]);
-
-//???
-//	if (flags & IR_FASTCALL_FUNC) {
-//		fprintf(f, " __fastcall");
-//	} else if (flags & IR_BUILTIN_FUNC) {
-//		fprintf(f, " __builtin");
-//	}
+	ir_print_proto_ex(flags, ret_type, params_count, param_types, f);
 	if (prototype) {
 		fprintf(f, ";\n");
 	} else {
 		fprintf(f, "\n");
 	}
+
 }
 
 static bool rcc_may_inline(c_value *func, ir_ctx *ctx)
@@ -1030,51 +994,20 @@ static void rcc_emit_ir(FILE *f)
 static void rcc_emit_llvm_proto(const char *name, c_sym *func, FILE *f)
 {
 	const c_type *t = func->value.type;
-	uint32_t flags = 0;
+	uint8_t flags;
+	ir_type ret_type;
 	uint32_t params_count;
 	uint8_t *param_types;
-	int i;
-	const c_type *ret_type;
 
 	IR_ASSERT(t->kind == C_TYPE_FUNC);
-	ret_type = t->func.ret_type;
-	if (ret_type->kind == C_TYPE_STRUCT || ret_type->kind == C_TYPE_UNION) {
-		if (ret_type->size <= sizeof(void*)) {
-			ret_type = (ret_type->size <= 4) ? &c_type_u32 : &c_type_u64;
-		} else {
-//???			yy_error("long struct return not implemented yet"); //???
-return;
-		}
-	}
-	if (t->func.num_params > 0) {
-		params_count = t->func.num_params;
-		param_types = alloca(params_count);
-		for (i = 0; i < t->func.num_params; i++) {
-			const c_type *param_type = t->func.params[i].type;
-
-			if (param_type->kind == C_TYPE_STRUCT || param_type->kind == C_TYPE_UNION) {
-				if (param_type->size <= sizeof(void*)) {
-					param_type = (param_type->size <= 4) ? &c_type_u32 : &c_type_u64;
-				} else {
-//???					yy_error("long struct arguments not implemented yet"); //???
-return;
-				}
-			}
-			param_types[i] = c_type2ir(param_type);
-		}
-	} else {
-		params_count = 0;
-		param_types = NULL;
-	}
-	if (t->attr & C_ATTR_VARIADIC) {
-		flags |= IR_VARARG_FUNC;
-	}
+	param_types = alloca(t->func.num_params + 16);
+	c_type2proto_ex(t, &flags, &ret_type, &params_count, param_types);
 	if (func->linkage == C_LINK_INTERNAL) {
 		flags |= IR_STATIC;
 	} else if (func->linkage == C_LINK_BUILTIN) {
 		flags |= IR_BUILTIN_FUNC;
 	}
-	ir_emit_llvm_func_decl(name, flags, c_type2ir(ret_type), params_count, param_types, f);
+	ir_emit_llvm_func_decl(name, flags, ret_type, params_count, param_types, f);
 }
 
 static void rcc_emit_llvm(FILE *f)

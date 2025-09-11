@@ -2,8 +2,6 @@
 tinycc 121: struct return
 --ARGS--
 --run
---XFAIL--
-long struct arguments/return not implemented yet
 --CODE--
 #include <stdio.h>
 
@@ -39,6 +37,7 @@ int main(void) {
     char val;
     data = init (data);
     print_data(data);
+    return 0;
 }
 --EXPECT--
 0 1 2 3 1234 2345

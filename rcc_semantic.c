@@ -147,51 +147,134 @@ repeat:
 	}
 }
 
-static ir_ref c_type2proto(const c_type *t, uint32_t linkage)
+#define MAX_ABI_TYPES 2
+
+static int c_abi_lower_struct(const c_type *t, ir_type *types)
 {
-	uint32_t flags = 0;
+#ifdef IR_TARGET_X86
+	return 0; /* always pass structires on stack */
+#elif defined(IR_TARGET_X64) && defined(_WIN64)
+	if (t->size == 1) {
+		types[0] = IR_U8;
+		return 1;
+	} else if (t->size == 2) {
+		types[0] = IR_U16;
+		return 1;
+	} else if (t->size == 4) {
+		types[0] = IR_U32;
+		return 1;
+	} else if (t->size == 8) {
+		types[0] = IR_U64;
+		return 1;
+	}
+	/* pass copy of value thorough hidden pointer */
+	return 0;
+#else
+	// TODO: Full support for different ABIs is not implemented yet ???
+	if (t->size <= sizeof(void*)) {
+		types[0] = (t->size <= 4) ? IR_U32 : IR_U64;
+		return 1; /* return number of registers */
+	}
+	/* pass value on stack */
+	return 0;
+#endif
+}
+
+static int c_abi_lower_struct_arg(const c_type *t, ir_type *types)
+{
+	return c_abi_lower_struct(t, types);
+}
+
+static int c_abi_lower_struct_ret(const c_type *t, ir_type *types)
+{
+#ifdef IR_TARGET_X86
+	/* short struct may be returned in register(s) (See GCC -freg-struct-return) */
+	if (t->size <= sizeof(void*) && 0) {
+		types[0] = IR_U32;
+		return 1; /* return number of registers */
+	}
+#endif
+	return c_abi_lower_struct(t, types);
+}
+
+void c_type2proto_ex(const c_type *t, uint8_t *flags_ptr, ir_type *ret_type_ptr,
+                                      uint32_t *params_count_ptr, uint8_t *param_types)
+{
+	uint8_t flags = 0;
+	ir_type ret_type;
 	uint32_t params_count;
-	uint8_t *param_types;
-	int i;
-	const c_type *ret_type;
+	int i, j = 0;
 
 	IR_ASSERT(t->kind == C_TYPE_FUNC);
-	ret_type = t->func.ret_type;
-	if (ret_type->kind == C_TYPE_STRUCT || ret_type->kind == C_TYPE_UNION) {
-		if (ret_type->size <= sizeof(void*)) {
-			ret_type = (ret_type->size <= 4) ? &c_type_u32 : &c_type_u64;
+	if (t->func.ret_type->kind == C_TYPE_STRUCT || t->func.ret_type->kind == C_TYPE_UNION) {
+		ir_type types[MAX_ABI_TYPES];
+		int n = c_abi_lower_struct_ret(t->func.ret_type, types);
+
+		if (n == 1) {
+			ret_type = types[0];
 		} else {
-			yy_error("long struct return not implemented yet"); //???
+			IR_ASSERT(n == 0);
+			ret_type = IR_ADDR;
+			param_types[0] = IR_ADDR;
+			j = 1;
 		}
+	} else {
+		ret_type = c_type2ir(t->func.ret_type);
 	}
 	if (t->func.num_params > 0) {
-		params_count = t->func.num_params;
-		param_types = alloca(params_count);
+		params_count = t->func.num_params + j;
 		for (i = 0; i < t->func.num_params; i++) {
 			const c_type *param_type = t->func.params[i].type;
 
 			if (param_type->kind == C_TYPE_STRUCT || param_type->kind == C_TYPE_UNION) {
-				if (param_type->size <= sizeof(void*)) {
-					param_type = (param_type->size <= 4) ? &c_type_u32 : &c_type_u64;
+				ir_type types[MAX_ABI_TYPES];
+				int n = c_abi_lower_struct_arg(param_type, types);
+
+				if (n == 1) {
+					param_types[i + j] = types[0];
 				} else {
-					yy_error("long struct arguments not implemented yet"); //???
+					IR_ASSERT(n == 0);
+					/* pass struct arg on stack */
+					param_types[i + j] = IR_ADDR;
 				}
+			} else {
+				param_types[i + j] = c_type2ir(param_type);
 			}
-			param_types[i] = c_type2ir(param_type);
 		}
+	} else if (j) {
+		params_count = 1;
+		param_types[0] = IR_ADDR;
 	} else {
 		params_count = 0;
-		param_types = NULL;
 	}
 	if (t->attr & C_ATTR_VARIADIC) {
 		flags |= IR_VARARG_FUNC;
 	}
+	if (t->attr & C_ATTR_FASTCALL) {
+		flags |= IR_FASTCALL_FUNC;
+	}
+
+	*flags_ptr = flags;
+	*ret_type_ptr = ret_type;
+	*params_count_ptr = params_count;
+}
+
+static ir_ref c_type2proto(const c_type *t, uint32_t linkage)
+{
+	uint8_t flags;
+	uint32_t params_count;
+	uint8_t *param_types;
+	ir_type ret_type;
+
+	IR_ASSERT(t->kind == C_TYPE_FUNC);
+	param_types = alloca(t->func.num_params + 16);
+	c_type2proto_ex(t, &flags, &ret_type, &params_count, param_types);
 	if (linkage == C_LINK_INTERNAL) {
 		flags |= IR_STATIC;
 	} else if (linkage == C_LINK_BUILTIN) {
 		flags |= IR_BUILTIN_FUNC;
 	}
-	return ir_proto(active_ctx, flags, c_type2ir(ret_type), params_count, param_types);
+	return ir_proto(active_ctx, flags, ret_type, params_count, param_types);
 }
 
 static bool c_fix_incomplete_type(const c_type *type)
@@ -1053,8 +1136,21 @@ c_sym *c_declare(c_name name, c_dcl *d)
 				ref = c_do_alloca(size, (d->flags & C_DCL_DEFINITION) != 0);
 				c_value_set_rval(&sym->value, d->type, c_type2ir(d->type), ref);
 			} else if (d->type->kind == C_TYPE_STRUCT || d->type->kind == C_TYPE_UNION) {
-				ref = c_do_alloca(d->type->size, (d->flags & C_DCL_DEFINITION) != 0);
-				c_value_set_lval(&sym->value, d->type, c_type2ir(d->type), ref);
+				if (d->flags == C_DCL_PARAM) {
+					ir_type types[MAX_ABI_TYPES];
+					int n = c_abi_lower_struct_arg(d->type, types);
+
+					if (n == 1) {
+						ref = c_do_alloca(d->type->size, (d->flags & C_DCL_DEFINITION) != 0);
+						c_value_set_lval(&sym->value, d->type, types[0], ref);
+					} else {
+						IR_ASSERT(n == 0);
+						c_value_set_lval(&sym->value, d->type, IR_ADDR, IR_UNUSED);
+					}
+				} else {
+					ref = c_do_alloca(d->type->size, (d->flags & C_DCL_DEFINITION) != 0);
+					c_value_set_lval(&sym->value, d->type, c_type2ir(d->type), ref);
+				}
 			} else {
 				ref = ir_var(active_ctx, c_type2ir(d->type), 1, yy_sym2str(name));
 				c_value_set_var(&sym->value, d->type, c_type2ir(d->type), ref);
@@ -3371,13 +3467,20 @@ void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 		type = type->pointer.type;
 		if (type->kind == C_TYPE_STRUCT || type->kind == C_TYPE_UNION) {
 			ir_ref alloca;
+			ir_type types[MAX_ABI_TYPES];
+			int n = c_abi_lower_struct_arg(type, types);
 
-			if (type->size > sizeof(void*)) yy_error("long struct arguments not implemented yet"); //???
-			t = (type->size <= 4) ? IR_U32 : IR_U64;
-			ref = ir_VA_ARG(c_value_ref(&args[0]), t);
-			alloca = ir_ALLOCA(ir_const_size_t(active_ctx, type->size));
-			ir_STORE(alloca, ref);
-			c_value_set_lval(val, type, IR_ADDR, alloca);
+			if (n == 1) {
+				t = types[0];
+				ref = ir_VA_ARG(c_value_ref(&args[0]), t);
+				alloca = ir_ALLOCA(ir_const_size_t(active_ctx, type->size));
+				ir_STORE(alloca, ref);
+				c_value_set_lval(val, type, IR_ADDR, alloca);
+			} else {
+				IR_ASSERT(n == 0);
+				ref = ir_VA_ARG_EX(c_value_ref(&args[0]), IR_ADDR, (type->size << 3) | (type->attr & 7));
+				c_value_set_lval(val, type, IR_ADDR, ref);
+			}
 		} else {
 			t = c_type2ir(type);
 			ref = ir_VA_ARG(c_value_ref(&args[0]), t);
@@ -3443,7 +3546,7 @@ static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, i
 	ir_ref ret = IR_UNUSED;
 	ir_ref i, j, op1, op2, op3;
 	ir_ref start = IR_UNUSED, block_begin = IR_UNUSED;
-	bool has_var = 0, has_alloca = 0;
+	bool has_var = 0, has_alloca = 0, has_copy = 0;
 	ir_insn *insn;
 	bool add_phi = 0;
 	ir_list bp_list;
@@ -3483,7 +3586,14 @@ static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, i
 	insn = func_ctx->ir_base + i;
 	while (insn->op == IR_PARAM) {
 		IR_ASSERT((uint32_t)i < num_args + 2);
-		xlat2[i] = xlat[i] = args[i - 2];
+		ir_ref arg = args[i - 2];
+		ir_insn *arg_insn = &ctx->ir_base[arg];
+
+		if (arg_insn->op == IR_ARGVAL) {
+			arg = arg_insn->op1;
+			has_copy = 1;
+		}
+		xlat2[i] = xlat[i] = arg;
 		insn++;
 		i++;
 	}
@@ -3519,10 +3629,33 @@ static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, i
 		ir_ref end = ir_emit1(ctx, IR_END, ctx->control);
 		start = ir_emit1(ctx, IR_BEGIN, end);
 		block_begin = xlat2[1] = xlat[1] = ctx->control = ir_emit1(ctx, IR_OPT(IR_BLOCK_BEGIN, IR_ADDR), start);
-	} else if (has_alloca) {
+	} else if (has_alloca || has_copy) {
 		start = block_begin = xlat2[1] = xlat[1] = ctx->control = ir_emit1(ctx, IR_OPT(IR_BLOCK_BEGIN, IR_ADDR), ctx->control);
 	} else {
 		start = xlat2[1] = xlat[1] = ctx->control;
+	}
+
+	if (has_copy) {
+		i = 2;
+		insn = func_ctx->ir_base + i;
+		while (insn->op == IR_PARAM) {
+			IR_ASSERT((uint32_t)i < num_args + 2);
+			ir_ref arg = args[i - 2];
+			ir_insn *arg_insn = &ctx->ir_base[arg];
+
+			if (arg_insn->op == IR_ARGVAL) {
+				/* copy struct passed by value */
+				int size = ir_const_size_t(ctx, arg_insn->op2);
+				ir_ref dst = ir_ALLOCA(size);
+				ir_ref src = arg_insn->op1;
+				ir_memcpy(ctx, dst, src, size);
+				MAKE_NOP(arg_insn);
+				xlat2[i] = xlat[i] = dst;
+				xlat2[1] = xlat[1] = ctx->control;
+			}
+			insn++;
+			i++;
+		}
 	}
 
 	/* Copy instuctions */
@@ -3702,9 +3835,10 @@ static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, i
 void c_do_call(c_value *func, int32_t num_args, c_value *args)
 {
 	const c_type *func_type, *ret_type;
-	ir_type t;
+	ir_type _ret_type;
 	ir_ref ref, ret_struct = IR_UNUSED;
 	ir_ref *arg_refs = NULL;
+	int j = 0;
 
 	c_value_rval(func);
 	if (func->type->kind == C_TYPE_FUNC) {
@@ -3722,14 +3856,26 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args)
 		yy_error("called object is not a function or function pointer");
 	}
 	IR_ASSERT(func->u.type == IR_ADDR);
+	if ((func_type->func.ret_type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(func_type->func.ret_type)) {
+		yy_error_fmt("invalid use of undefined \"%s %s\"",
+			c_type_kind2str(func_type->func.ret_type->kind), yy_sym2str(func_type->func.ret_type->tag));
+	}
 	ret_type = func_type->func.ret_type;
 	if (ret_type->kind == C_TYPE_STRUCT || ret_type->kind == C_TYPE_UNION) {
-		if (ret_type->size <= sizeof(void*)) {
+		ir_type types[MAX_ABI_TYPES];
+		int n = c_abi_lower_struct_ret(ret_type, types);
+
+		if (n == 1) {
+			_ret_type = types[0];
 			ret_struct = ir_ALLOCA(ir_const_size_t(active_ctx, ret_type->size));
-			ret_type = (ret_type->size <= 4) ? &c_type_u32 : &c_type_u64;
 		} else {
-			yy_error("long struct return not implemented yet"); //???
+			IR_ASSERT(n == 0);
+			_ret_type = IR_ADDR;
+			j = 1;
+			ret_struct = ir_ALLOCA(ir_const_size_t(active_ctx, ret_type->size));
 		}
+	} else {
+		_ret_type = c_type2ir(ret_type);
 	}
 	if (num_args != func_type->func.num_params) {
 		if (func_type->func.num_params < 0) {
@@ -3754,15 +3900,13 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args)
 			}
 		}
 	}
-	if ((func_type->func.ret_type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(func_type->func.ret_type)) {
-		yy_error_fmt("invalid use of undefined \"%s %s\"",
-			c_type_kind2str(func_type->func.ret_type->kind), yy_sym2str(func_type->func.ret_type->tag));
-	}
-	t = c_type2ir(ret_type);
 	if (num_args > 0) {
 		int i;
 
-		arg_refs = alloca(sizeof(ir_ref) * num_args);
+		arg_refs = alloca(sizeof(ir_ref) * (num_args + j));
+		if (j) {
+			arg_refs[0] = ret_struct;
+		}
 		for (i = 0; i < num_args; i++) {
 			c_value_rval(&args[i]);
 			if (i < func_type->func.num_params) {
@@ -3782,52 +3926,60 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args)
 				}
 			}
 			if (args[i].type->kind == C_TYPE_STRUCT || args[i].type->kind == C_TYPE_UNION) {
-				if (args[i].type->size <= sizeof(void*)) {
-					if (args[i].type->size <= 4) {
-						arg_refs[i] = ir_LOAD_U32(args[i].u.ref);
+				ir_type types[MAX_ABI_TYPES];
+				int n = c_abi_lower_struct_arg(args[i].type, types);
+
+				if (n == 1) {
+					if (IR_IS_TYPE_INT(types[0])) {
+						if (ir_type_size[types[0]] <= 4) {
+							arg_refs[i + j] = ir_LOAD_U32(args[i].u.ref);
+						} else {
+							arg_refs[i + j] = ir_LOAD_U64(args[i].u.ref);
+						}
 					} else {
-						arg_refs[i] = ir_LOAD_U64(args[i].u.ref);
+						arg_refs[i + j] = ir_LOAD(types[0], args[i].u.ref);
 					}
 				} else {
-					yy_error("long struct arguments not implemented yet"); //???
+					IR_ASSERT(n == 0);
+					arg_refs[i + j] = ir_emit3(active_ctx, IR_OPT(IR_ARGVAL, IR_ADDR), args[i].u.ref,
+						args[i].type->size, c_attr2align(args[i].type->attr));
 				}
 			} else {
-				arg_refs[i] = c_value_ref(&args[i]);
+				arg_refs[i + j] = c_value_ref(&args[i]);
 			}
 		}
+	} else if (j) {
+		arg_refs = alloca(sizeof(ir_ref));
+		arg_refs[0] = ret_struct;
 	}
 	if (func->u.op & C_VAL_INLINE) {
-		ref = ir_inline_call(active_ctx, (ir_ctx*)func->u.val.ptr, num_args, arg_refs);
+		ref = ir_inline_call(active_ctx, (ir_ctx*)func->u.val.ptr, num_args + j, arg_refs);
 	} else if (!(func->u.op & C_VAL_BUILTIN)) {
-		ref = ir_CALL_N(t, c_value_ref(func), num_args, arg_refs);
+		ref = ir_CALL_N(_ret_type, c_value_ref(func), num_args + j, arg_refs);
 		if (func->type->attr & C_ATTR_NORETURN) {
 			ir_val val;
 
 			ir_UNREACHABLE();
 			ir_BEGIN(IR_UNUSED);
-			ret_type = func_type->func.ret_type;
-			t = c_type2ir(ret_type);
 			val.u64 = 0;
-			c_value_set_const(func, ret_type, t, val);
+			c_value_set_const(func, ret_type, _ret_type, val);
 			return;
 		}
 	} else {
-		ref = c_do_convert_builtin(func, num_args, arg_refs);
+		ref = c_do_convert_builtin(func, num_args + j, arg_refs);
 		if (!ref) {
-			ref = ir_CALL_N(t, c_value_ref(func), num_args, arg_refs);
+			ref = ir_CALL_N(_ret_type, c_value_ref(func), num_args + j, arg_refs);
 		}
 	}
-	ret_type = func_type->func.ret_type;
-	t = c_type2ir(ret_type);
 	if (ret_type->kind == C_TYPE_STRUCT || ret_type->kind == C_TYPE_UNION) {
-		if (ret_type->size <= sizeof(void*)) {
+		if (!j) {
 			ir_STORE(ret_struct, ref);
-			c_value_set_lval(func, ret_type, t, ret_struct);
+			c_value_set_lval(func, ret_type, _ret_type, ret_struct);
 		} else {
-			yy_error("long struct return not implemented yet"); //???
+			c_value_set_lval(func, ret_type, _ret_type, ret_struct);
 		}
 	} else {
-		c_value_set_rval(func, ret_type, t, ref);
+		c_value_set_rval(func, ret_type, _ret_type, ref);
 	}
 }
 
@@ -5464,14 +5616,16 @@ void c_do_return(c_value *val)
 			c_do_check_cvt(active_func->value.type->func.ret_type, val, 0);
 		}
 		if (val->type->kind == C_TYPE_STRUCT || val->type->kind == C_TYPE_UNION) {
-			if (val->type->size <= sizeof(void*)) {
-				if (val->type->size <= 4) {
-					ir_RETURN(ir_LOAD_U32(val->u.ref));
-				} else {
-					ir_RETURN(ir_LOAD_U64(val->u.ref));
-				}
+			ir_type types[MAX_ABI_TYPES];
+			int n = c_abi_lower_struct_ret(val->type, types);
+
+			if (n == 1) {
+				ir_RETURN(ir_LOAD(types[0], val->u.ref));
 			} else {
-				yy_error("long struct return not implemented yet"); //???
+				IR_ASSERT(n == 0);
+				ir_ref ret_param = 2; /* 2 - reference to the first IR_PARAM */
+				ir_memcpy(active_ctx, ret_param, val->u.ref, ir_const_size_t(active_ctx, val->type->size));
+				ir_RETURN(ret_param);
 			}
 		} else {
 			ir_RETURN(c_value_ref(val));
@@ -6307,7 +6461,7 @@ void c_do_func_start(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 	c_sym *func;
 	const c_type *type = d->type;
 	uint32_t flags;
-	int32_t i;
+	int32_t i, j = 0;
 
 	d->flags |= C_DCL_DEFINITION;
 	func = c_declare(name, d);
@@ -6328,10 +6482,15 @@ void c_do_func_start(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 
 	rcc_ir_init(ctx, flags);
 	if (type->func.ret_type->kind == C_TYPE_STRUCT || type->func.ret_type->kind == C_TYPE_UNION) {
-		if (type->func.ret_type->size <= sizeof(void*)) {
-			ctx->ret_type = (type->func.ret_type->size <= 4) ? IR_U32 : IR_U64;
+		ir_type types[MAX_ABI_TYPES];
+		int n = c_abi_lower_struct_ret(type->func.ret_type, types);
+
+		if (n == 1) {
+			ctx->ret_type = types[0];
 		} else {
-			yy_error("long struct return not implemented yet"); //???
+			IR_ASSERT(n == 0);
+			ctx->ret_type = IR_ADDR;
+			j = 1;
 		}
 	} else {
 		ctx->ret_type = c_type2ir(type->func.ret_type);
@@ -6343,6 +6502,9 @@ void c_do_func_start(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 	ir_START();
 	if ((type->func.ret_type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(type->func.ret_type)) {
 		yy_error("return type is an incomplete type");
+	}
+	if (j) {
+		ir_param(active_ctx, IR_ADDR, 1, "$ret", 1);
 	}
 	if (type->func.num_params <= 0) return;
 	for (i = 0; i < type->func.num_params; i++) {
@@ -6357,13 +6519,23 @@ void c_do_func_start(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 			yy_error_fmt("parameter %d has incomplete type", i + 1);
 		}
 		if (t->kind == C_TYPE_STRUCT || t->kind == C_TYPE_UNION) {
-			if (t->size <= sizeof(void*)) {
-				t = (t->size <= 4) ? &c_type_u32 : &c_type_u64;
+			ir_type types[MAX_ABI_TYPES];
+			int n = c_abi_lower_struct_arg(t, types);
+
+			if (n == 1) {
+				ir_param(active_ctx, types[0], 1, yy_sym2str(p->name), i + j + 1);
 			} else {
-				yy_error("long struct arguments not implemented yet"); //???
+				IR_ASSERT(n == 0);
+				ir_param(active_ctx, IR_ADDR, 1, yy_sym2str(p->name), i + j + 1);
+				if (!active_ctx->value_params) {
+					active_ctx->value_params = ir_mem_calloc(type->func.num_params + j, sizeof(ir_value_param));
+				}
+				active_ctx->value_params[i + j].size = t->size;
+				active_ctx->value_params[i + j].align = c_attr2align(t->attr);
 			}
+		} else {
+			ir_param(active_ctx, c_type2ir(t), 1, yy_sym2str(p->name), i + j + 1);
 		}
-		ir_param(active_ctx, c_type2ir(t), 1, yy_sym2str(p->name), i + 1);
 	}
 	for (i = 0; i < type->func.num_params; i++) {
 		c_param *p = &type->func.params[i];
@@ -6380,15 +6552,19 @@ void c_do_func_start(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 			obj = c_declare(name, &dcl);
 			IR_ASSERT(obj &&  obj->kind == C_SYM_VAR && c_value_is_ref(&obj->value));
 			if (t->kind == C_TYPE_STRUCT || t->kind == C_TYPE_UNION) {
-				if (t->size <= sizeof(void*)) {
+				ir_type types[MAX_ABI_TYPES];
+				int n = c_abi_lower_struct_arg(t, types);
+
+				if (n == 1) {
 					if (t->size) {
-						ir_STORE(obj->value.u.ref, i + 2);
+						ir_STORE(obj->value.u.ref, i + j + 2);
 					}
 				} else {
-					yy_error("long struct arguments not implemented yet"); //???
+					IR_ASSERT(n == 0);
+					c_value_set_lval(&obj->value, t, IR_ADDR, i + j + 2);
 				}
 			} else {
-				ir_VSTORE(obj->value.u.ref, i + 2);
+				ir_VSTORE(obj->value.u.ref, i + j + 2);
 			}
 		} else {
 			yy_warning("omitting the parameter name in a function definition");

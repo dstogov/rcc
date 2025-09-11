@@ -3,7 +3,7 @@ tinycc 073: arm64
 --ARGS--
 --run
 --XFAIL--
-long struct arguments/return not implemented yet
+long double is not supported yet
 --CODE--
 // This program is designed to test some arm64-specific things, such as the
 // calling convention, but should give the same results on any architecture.

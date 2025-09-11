@@ -2,8 +2,6 @@
 tinycc 130: large argument 
 --ARGS--
 --run
---XFAIL--
-long struct arguments/return not implemented yet
 --CODE--
 #include<stdio.h>
 

@@ -877,6 +877,9 @@ ir_type c_type2ir(const c_type *t);
 c_sym *c_global_sym(c_sym *sym);
 yy_sym c_get_current_func_name(void);
 
+void c_type2proto_ex(const c_type *t, uint8_t *flags_ptr, ir_type *ret_type_ptr,
+                                      uint32_t *params_count_ptr, uint8_t *param_types);
+
 /* IR Code Generation */
 void c_value_rval(c_value *val);
 
