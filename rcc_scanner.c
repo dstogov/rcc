@@ -133,8 +133,11 @@ static yy_sym yy_hash_lookup_ex(const char *str, size_t len, uint32_t h)
 	p->next = ((uint32_t*)data)[(int32_t)h];
 	((uint32_t*)data)[(int32_t)h] = pos;
 	p->macro = NULL;
+	p->macro_stack = NULL;
 	p->sym = NULL;
 	p->tag = NULL;
+	p->label = NULL;
+	p->link = NULL;
 
 	return pos;
 }
