@@ -822,7 +822,7 @@ strings_tail(c_value *val, str_list *first, str_list *last):
 actual_parameters(c_value *func):                          {int32_t num_args = 0;}
 	                                                       {c_value *args = alloca(sizeof(c_value) * C_ALLOCA_PARAMS);}
 	(   assignment_expression(&args[num_args])             {num_args++;}
-		(	","                                            {IR_ASSERT(num_args < C_ALLOCA_PARAMS);}
+		(	","                                            {if (num_args % C_ALLOCA_PARAMS == 0) args = c_do_grow_actual_parameters(args, num_args);}
 			assignment_expression(&args[num_args])         {num_args++;}
 		)*
 	)?                                                     {c_do_call(func, num_args, args);}
@@ -831,7 +831,7 @@ actual_parameters(c_value *func):                          {int32_t num_args = 0
 builtin_parameters(c_value *val, c_name name):             {int32_t num_args = 0;}
 	                                                       {c_value *args = alloca(sizeof(c_value) * C_ALLOCA_PARAMS);}
 	(   assignment_expression(&args[num_args])             {num_args++;}
-		(	","                                            {IR_ASSERT(num_args < C_ALLOCA_PARAMS);}
+		(	","                                            {if (num_args % C_ALLOCA_PARAMS == 0) args = c_do_grow_actual_parameters(args, num_args);}
 			assignment_expression(&args[num_args])         {num_args++;}
 		)*
 	)?                                                     {c_do_builtin(val, name, num_args, args);}

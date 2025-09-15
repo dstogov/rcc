@@ -899,6 +899,7 @@ void c_do_bool_not(c_value *v);
 void c_do_array_dim(c_value *v, c_value *dim);
 void c_do_struct_field(c_value *v, c_name field);
 void c_do_struct_field_deref(c_value *v, c_name field);
+c_value *c_do_grow_actual_parameters(c_value *args, int32_t num_args);
 void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args);
 void c_do_call(c_value *func, int32_t num_args, c_value *args);
 void c_do_binary_op(yy_sym sym, c_value *v, c_value *op2);

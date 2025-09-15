@@ -3449,6 +3449,18 @@ void c_do_struct_field_deref(c_value *v, c_name field_name)
 	}
 }
 
+c_value *c_do_grow_actual_parameters(c_value *args, int32_t num_args)
+{
+	if (num_args == C_ALLOCA_PARAMS) {
+		c_value *new_args = ir_mem_malloc(C_ALLOCA_PARAMS * 2 * sizeof(c_value));
+		memcpy(new_args, args, C_ALLOCA_PARAMS * sizeof(c_value));
+		return new_args;
+	} else {
+		IR_ASSERT(num_args % C_ALLOCA_FIELDS == 0);
+		return ir_mem_realloc(args, (num_args + C_ALLOCA_PARAMS) * sizeof(c_value));
+	}
+}
+
 void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 {
 	if (name == YY___BUILTIN_VA_START) {
@@ -3512,7 +3524,7 @@ void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 	} else {
 		IR_ASSERT(0);
 	}
-	return;
+	if (num_args > C_ALLOCA_PARAMS) ir_mem_free(args);
 }
 
 static ir_ref c_do_convert_builtin(c_value *func, int32_t num_args, ir_ref *arg_refs)
@@ -3981,6 +3993,7 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args)
 	} else {
 		c_value_set_rval(func, ret_type, _ret_type, ref);
 	}
+	if (num_args > C_ALLOCA_PARAMS) ir_mem_free(args);
 }
 
 static const c_type *c_common_type(yy_sym sym, c_value *op1, c_value *op2)

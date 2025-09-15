@@ -1722,7 +1722,7 @@ static yy_sym parse_actual_parameters(yy_sym sym, c_value *func) {
 		num_args++;
 		while (sym == YY__COMMA) {
 			sym = get_sym();
-			IR_ASSERT(num_args < C_ALLOCA_PARAMS);
+			if (num_args % C_ALLOCA_PARAMS == 0) args = c_do_grow_actual_parameters(args, num_args);
 			sym = parse_assignment_expression(sym, &args[num_args]);
 			num_args++;
 		}
@@ -1739,7 +1739,7 @@ static yy_sym parse_builtin_parameters(yy_sym sym, c_value *val, c_name name) {
 		num_args++;
 		while (sym == YY__COMMA) {
 			sym = get_sym();
-			IR_ASSERT(num_args < C_ALLOCA_PARAMS);
+			if (num_args % C_ALLOCA_PARAMS == 0) args = c_do_grow_actual_parameters(args, num_args);
 			sym = parse_assignment_expression(sym, &args[num_args]);
 			num_args++;
 		}
