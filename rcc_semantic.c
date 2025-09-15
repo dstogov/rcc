@@ -4970,7 +4970,8 @@ void c_do_cond_op(c_value *cond, c_value *op1, c_value *op2)
 		if (op1->type != type) c_do_cvt(type, c_type2ir(type), op1);
 		if (op2->type != type) c_do_cvt(type, c_type2ir(type), op2);
 	}
-	if (c_value_is_const(cond)) {
+	// TODO: We might need PHI decause of dominance ???
+	if (c_value_is_const(cond) && (c_value_is_true(cond) ? c_value_is_const(op1) : c_value_is_const(op2))) {
 		if (c_value_is_true(cond)) {
 			if (c_value_is_set(op1)) {
 				*cond = *op1;
