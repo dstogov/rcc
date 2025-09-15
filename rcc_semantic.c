@@ -3757,7 +3757,7 @@ static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, i
 				xlat2[i] = xlat[i] = ir_emit(ctx, insn->opt, op1, op2, op3);
 			} else {
 				IR_ASSERT(op != IR_PROTO);
-				IR_ASSERT(op != IR_VA_START && op != IR_VA_ARG && op != IR_VA_COPY && op != IR_VA_END);
+				IR_ASSERT(op != IR_VA_START);
 				xlat2[i] = xlat[i] = ir_emit(ctx, insn->opt, op1, op2, op3);
 			}
 			insn++;
