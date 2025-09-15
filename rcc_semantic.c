@@ -5758,7 +5758,8 @@ void c_do_finish_label(c_name name, c_label *label)
 					ir_BEGIN(prev);
 				}
 			}
-			ops = active_ctx->ir_base[label->dst].ops;
+			insn = &active_ctx->ir_base[label->dst];
+			ops = insn->ops;
 			ops[insn->inputs_count] = end;
 		}
 	} else if (label->src_list) {
