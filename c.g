@@ -318,7 +318,7 @@ type_specifier_or_qualifier(c_dcl *d):                     {c_name name;}
 	|                                                      {if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_LONG|C_TYPE_SPEC_COMPLEX))) yy_error_sym("unexpected", sym);}
 		"double"                                           {d->flags |= C_TYPE_SPEC_DOUBLE;}
 	|                                                      {if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_CHAR|C_TYPE_SPEC_SHORT|C_TYPE_SPEC_INT|C_TYPE_SPEC_LONG|C_TYPE_SPEC_LONG_LONG))) yy_error_sym("unexpected", sym);}
-		"signed"                                           {d->flags |= C_TYPE_SPEC_SIGNED;}
+		("signed"|"__signed"|"__signed__")                 {d->flags |= C_TYPE_SPEC_SIGNED;}
 	|                                                      {if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_CHAR|C_TYPE_SPEC_SHORT|C_TYPE_SPEC_INT|C_TYPE_SPEC_LONG|C_TYPE_SPEC_LONG_LONG))) yy_error_sym("unexpected", sym);}
 		"unsigned"                                         {d->flags |= C_TYPE_SPEC_UNSIGNED;}
 	|                                                      {if (d->flags & C_TYPE_SPEC_ANY) yy_error_sym("unexpected", sym);}
