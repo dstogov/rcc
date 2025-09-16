@@ -28,23 +28,33 @@
 #define _ir_CTX active_ctx
 
 /* IR compiler */
-#define C_DUMP_IR_AFTER_LOAD     (1<<0)
-#define C_DUMP_IR_AFTER_MEM2SSA  (1<<1)
-#define C_DUMP_IR_AFTER_SCCP     (1<<2)
-#define C_DUMP_IR_AFTER_SCHEDULE (1<<3)
-#define C_DUMP_IR_CODEGEN        (1<<4)
-#define C_DUMP_IR                (1<<5)
-#define C_DUMP_LLVM              (1<<6)
-#define C_DUMP_ASM               (1<<7)
-#define C_DUMP_SIZE              (1<<8)
-#define C_DUMP_TIME              (1<<9)
-#define C_GDB                    (1<<10)
-#define C_PERF                   (1<<11)
-#define C_RUN                    (1<<12)
+#define C_RUN                         (1<<0)
+#define C_DUMP_IR                     (1<<1)
+#define C_DUMP_ASM                    (1<<2)
+#define C_DUMP_LLVM                   (1<<3)
+#define C_DUMP_SIZE                   (1<<4)
+#define C_DUMP_TIME                   (1<<5)
+#define C_GDB                         (1<<6)
+#define C_PERF                        (1<<7)
 
-#define C_SINGLE_FILE            (1<<16)
-#define C_DO_LINK_INTERNAL       (1<<17)
-#define C_DO_LINK_EXTERNAL       (1<<18)
+#define C_DUMP_IR_AFTER_LOAD          (1<<10)
+#define C_DUMP_IR_AFTER_USE_LISTS     (1<<11)
+#define C_DUMP_IR_AFTER_MEM2SSA       (1<<11)
+#define C_DUMP_IR_AFTER_SCCP          (1<<12)
+#define C_DUMP_IR_AFTER_CFG           (1<<13)
+#define C_DUMP_IR_AFTER_DOM           (1<<14)
+#define C_DUMP_IR_AFTER_LOOP          (1<<15)
+#define C_DUMP_IR_AFTER_GCM           (1<<16)
+#define C_DUMP_IR_AFTER_SCHEDULING    (1<<17)
+#define C_DUMP_IR_AFTER_CODE_MATCHING (1<<18)
+#define C_DUMP_IR_AFTER_LIVE_RANGES   (1<<19)
+#define C_DUMP_IR_AFTER_COALESCING    (1<<20)
+#define C_DUMP_IR_AFTER_REGALLOC      (1<<21)
+#define C_DUMP_IR_CODEGEN             (1<<22)
+
+#define C_SINGLE_FILE                 (1<<29)
+#define C_DO_LINK_INTERNAL            (1<<30)
+#define C_DO_LINK_EXTERNAL            (1<<31)
 
 #define C_OPT_LEVEL              0x3
 #define C_OPT_INLINE             (1<<2)
@@ -54,8 +64,11 @@
 
 static bool            c_native = 0;
 static uint32_t        c_opt_flags = 2 | C_OPT_INLINE | C_OPT_MEM2SSA;
-static uint32_t        c_dump_flags = 0;
+static uint32_t        c_flags = 0;
 static uint32_t        c_save_flags = IR_SAVE_SAFE_NAMES;
+static uint32_t        ir_flags = 0;
+static uint32_t        ir_mflags = 0;
+static uint64_t        ir_debug_regset = 0xffffffffffffffff;
 static ir_arena       *c_linker_arena;
 static ir_code_buffer  c_code_buffer;
 static bool            protected = 1;
@@ -118,20 +131,39 @@ static void rcc_ir_codegen(c_name name, ir_ctx *ctx, c_sym *sym)
 
 	if ((c_opt_flags & C_OPT_LEVEL) > 0 || c_native || 0) {
 		ir_assign_virtual_registers(ctx);
+		if (c_flags & C_DUMP_IR_AFTER_CODE_MATCHING) {
+			rcc_dump_func_proto(name, 0, stderr);
+			ir_save(ctx, c_save_flags | IR_SAVE_CFG | IR_SAVE_RULES, stderr);
+		}
 	}
 
 	if ((c_opt_flags & C_OPT_LEVEL) > 0) {
 		ir_compute_live_ranges(ctx);
+		if (c_flags & C_DUMP_IR_AFTER_LIVE_RANGES) {
+			rcc_dump_func_proto(name, 0, stderr);
+			ir_save(ctx, c_save_flags | IR_SAVE_CFG | IR_SAVE_RULES | IR_SAVE_REGS, stderr);
+		}
+
 		ir_coalesce(ctx);
+		if (c_flags & C_DUMP_IR_AFTER_COALESCING) {
+			rcc_dump_func_proto(name, 0, stderr);
+			ir_save(ctx, c_save_flags | IR_SAVE_CFG | IR_SAVE_RULES | IR_SAVE_REGS, stderr);
+		}
+
 		if (c_native) {
 			ir_reg_alloc(ctx);
+			if (c_flags & C_DUMP_IR_AFTER_REGALLOC) {
+				rcc_dump_func_proto(name, 0, stderr);
+				ir_save(ctx, c_save_flags | IR_SAVE_CFG | IR_SAVE_RULES | IR_SAVE_REGS, stderr);
+			}
 		}
+
 		ir_schedule_blocks(ctx);
 	} else if (c_native || 0) {
 		ir_compute_dessa_moves(ctx);
 	}
 
-	if (c_dump_flags & C_DUMP_IR_CODEGEN) {
+	if (c_flags & C_DUMP_IR_CODEGEN) {
 		rcc_dump_func_proto(name, 0, stderr);
 		ir_dump_codegen(ctx, stderr);
 	}
@@ -155,14 +187,14 @@ static void rcc_ir_codegen(c_name name, ir_ctx *ctx, c_sym *sym)
 			sym->is_thunk = 0;
 		}
 #ifndef _WIN32
-		if (c_dump_flags & C_GDB) {
+		if (c_flags & C_GDB) {
 			ir_gdb_register(yy_sym2str(name), entry, size, sizeof(void*), 0);
 		}
 #endif
 		ir_mem_protect(c_code_buffer.start, (char*)c_code_buffer.end - (char*)c_code_buffer.start);
 		protected = 1;
 
-		if (c_dump_flags & C_DUMP_ASM) {
+		if (c_flags & C_DUMP_ASM) {
 //			ir_ref i;
 //			ir_insn *insn;
 //
@@ -182,7 +214,7 @@ static void rcc_ir_codegen(c_name name, ir_ctx *ctx, c_sym *sym)
 		}
 
 #ifndef _WIN32
-		if (c_dump_flags & C_PERF) {
+		if (c_flags & C_PERF) {
 			ir_perf_map_register(yy_sym2str(name), entry, size);
 			ir_perf_jitdump_register(yy_sym2str(name), entry, size);
 		}
@@ -198,12 +230,16 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym)
 {
 	c_value *func = &sym->value;
 
-	if (c_dump_flags & C_DUMP_IR_AFTER_LOAD) {
+	if (c_flags & C_DUMP_IR_AFTER_LOAD) {
 		rcc_dump_func_proto(name, 0, stderr);
 		ir_save(ctx, c_save_flags, stderr);
 	}
 
 	ir_build_def_use_lists(ctx);
+	if (c_flags & C_DUMP_IR_AFTER_USE_LISTS) {
+		rcc_dump_func_proto(name, 0, stderr);
+		ir_save(ctx, c_save_flags | IR_SAVE_USE_LISTS, stderr);
+	}
 
 #ifdef IR_DEBUG
 	ir_check(ctx);
@@ -213,29 +249,48 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym)
 		ir_build_cfg(ctx);
 		ir_build_dominators_tree(ctx);
 		ir_mem2ssa(ctx);
-		if (c_dump_flags & C_DUMP_IR_AFTER_MEM2SSA) {
+		if (c_flags & C_DUMP_IR_AFTER_MEM2SSA) {
 			rcc_dump_func_proto(name, 0, stderr);
-			ir_save(ctx, c_save_flags, stderr);
+			ir_save(ctx, c_save_flags | IR_SAVE_CFG, stderr);
 		}
 		ir_reset_cfg(ctx);
 	}
 
 	if ((c_opt_flags & C_OPT_LEVEL) > 1) {
 		ir_sccp(ctx);
-		if (c_dump_flags & C_DUMP_IR_AFTER_SCCP) {
+		if (c_flags & C_DUMP_IR_AFTER_SCCP) {
 			rcc_dump_func_proto(name, 0, stderr);
 			ir_save(ctx, c_save_flags, stderr);
 		}
 	}
 
 	ir_build_cfg(ctx);
+	if (c_flags & C_DUMP_IR_AFTER_CFG) {
+		rcc_dump_func_proto(name, 0, stderr);
+		ir_save(ctx, c_save_flags | IR_SAVE_CFG, stderr);
+	}
 
 	if ((c_opt_flags & C_OPT_LEVEL) > 0) {
 		ir_build_dominators_tree(ctx);
+		if (c_flags & C_DUMP_IR_AFTER_DOM) {
+			rcc_dump_func_proto(name, 0, stderr);
+			ir_save(ctx, c_save_flags | IR_SAVE_CFG, stderr);
+		}
+
 		ir_find_loops(ctx);
+		if (c_flags & C_DUMP_IR_AFTER_LOOP) {
+			rcc_dump_func_proto(name, 0, stderr);
+			ir_save(ctx, c_save_flags | IR_SAVE_CFG, stderr);
+		}
+
 		ir_gcm(ctx);
+		if (c_flags & C_DUMP_IR_AFTER_GCM) {
+			rcc_dump_func_proto(name, 0, stderr);
+			ir_save(ctx, c_save_flags | IR_SAVE_CFG | IR_SAVE_CFG_MAP, stderr);
+		}
+
 		ir_schedule(ctx);
-		if (c_dump_flags & C_DUMP_IR_AFTER_SCHEDULE) {
+		if (c_flags & C_DUMP_IR_AFTER_SCHEDULING) {
 			rcc_dump_func_proto(name, 0, stderr);
 			ir_save(ctx, c_save_flags | IR_SAVE_CFG, stderr);
 		}
@@ -256,7 +311,7 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym)
 		ir_free(ctx);
 		sym->has_code = 1;
 	} else {
-		if (((c_dump_flags & C_SINGLE_FILE) ? name == YY_MAIN : sym->linkage == C_LINK_EXTERNAL)
+		if (((c_flags & C_SINGLE_FILE) ? name == YY_MAIN : sym->linkage == C_LINK_EXTERNAL)
 		 && !sym->has_code) {
 			sym->has_code = 1;
 			if (!ir_list_capasity(&c_codegen_list)) ir_list_init(&c_codegen_list, 32);
@@ -308,7 +363,7 @@ static void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, uint
 				sym->is_external = 1;
 				sym->value.u.opt = IR_OPT(C_VAL_CONST, IR_ADDR);
 				sym->value.u.val.ptr = addr;
-				if (c_dump_flags & C_DUMP_ASM) {
+				if (c_flags & C_DUMP_ASM) {
 					ir_disasm_add_symbol(name, (uint64_t)(uintptr_t)addr, IR_UNKNOWN_SIZE);
 				}
 				return addr;
@@ -336,12 +391,12 @@ add_thunk:
 			sym->value.u.type = IR_ADDR;
 			sym->value.u.val.ptr = addr;
 			if (sym->linkage == C_LINK_INTERNAL) {
-				c_dump_flags |= C_DO_LINK_INTERNAL;
+				c_flags |= C_DO_LINK_INTERNAL;
 			} else {
 				IR_ASSERT(sym->linkage == C_LINK_EXTERNAL);
-				c_dump_flags |= C_DO_LINK_EXTERNAL;
+				c_flags |= C_DO_LINK_EXTERNAL;
 			}
-			if (c_dump_flags & C_DUMP_ASM) {
+			if (c_flags & C_DUMP_ASM) {
 				/* thunk and real symbol use the same name */
 				ir_disasm_add_symbol(name, (uint64_t)(uintptr_t)addr, size);
 			}
@@ -362,7 +417,7 @@ add_thunk:
 void *c_linker_allocate_data(const char *name, size_t size)
 {
 	void *data = ir_arena_alloc(&c_linker_arena, size);
-	if ((c_dump_flags & C_DUMP_ASM) && name) {
+	if ((c_flags & C_DUMP_ASM) && name) {
 		ir_disasm_add_symbol(name, (uintptr_t)data, size);
 	}
 	memset(data, 0, size);
@@ -450,7 +505,7 @@ bool c_linker_fix_reloc(c_sym *obj, size_t obj_offset, c_value *val)
 		c_sym *sym = yy_hash.data[n].sym;
 
 		IR_ASSERT(sym && (sym->kind == C_SYM_VAR || (sym->kind == C_SYM_FUNC && offset == 0)));
-		if (c_dump_flags & C_DUMP_IR) {
+		if (c_flags & C_DUMP_IR) {
 			c_linker_add_reloc(obj, obj_offset, n, offset);
 		}
 		if (c_value_is_const(&sym->value)) {
@@ -463,16 +518,16 @@ bool c_linker_fix_reloc(c_sym *obj, size_t obj_offset, c_value *val)
 				if (!ir_list_capasity(&c_codegen_list)) ir_list_init(&c_codegen_list, 32);
 				ir_list_push(&c_codegen_list, n);
 			}
-			if (c_dump_flags & C_RUN) {
-				if (!(c_dump_flags & C_DUMP_IR)) {
+			if (c_flags & C_RUN) {
+				if (!(c_flags & C_DUMP_IR)) {
 					/* reloc was already added before */
 					c_linker_add_reloc(obj, obj_offset, n, offset);
 				}
 				if (sym->linkage == C_LINK_INTERNAL) {
-					c_dump_flags |= C_DO_LINK_INTERNAL;
+					c_flags |= C_DO_LINK_INTERNAL;
 				} else {
 					IR_ASSERT(sym->linkage == C_LINK_EXTERNAL);
-					c_dump_flags |= C_DO_LINK_EXTERNAL;
+					c_flags |= C_DO_LINK_EXTERNAL;
 				}
 			}
 		}
@@ -485,7 +540,7 @@ bool c_linker_fix_reloc(c_sym *obj, size_t obj_offset, c_value *val)
 		c_sym *sym = yy_hash.data[n].sym;
 
 		IR_ASSERT(sym && sym->kind == C_SYM_FUNC && offset == 0);
-		if (c_dump_flags & C_DUMP_IR) {
+		if (c_flags & C_DUMP_IR) {
 			c_linker_add_reloc(obj, obj_offset, n, 0);
 		}
 		if (c_value_is_const(&sym->value)) {
@@ -515,7 +570,10 @@ void rcc_ir_init(ir_ctx *ctx, uint32_t flags)
 	if ((c_opt_flags & C_OPT_LEVEL) > 0) {
 		flags |= IR_OPT_FOLDING | IR_OPT_CFG | IR_OPT_CODEGEN;
 	}
+	flags |= ir_flags;
 	ir_init(ctx, flags, 256, 1024);
+	ctx->mflags = ir_mflags;
+	ctx->fixed_regset = ~ir_debug_regset;
 	ctx->loader = &c_linker;
 }
 
@@ -1065,10 +1123,10 @@ static int rcc_compile(const char *file_name)
 	c_do_compile_start();
 	rcc_parse();
 	rcc_fix_flexible_data();
-	if (c_dump_flags & C_DUMP_IR) {
+	if (c_flags & C_DUMP_IR) {
 		rcc_emit_ir(c_out);
 	}
-	if (c_dump_flags & C_DUMP_LLVM) {
+	if (c_flags & C_DUMP_LLVM) {
 		rcc_emit_llvm(c_out);
 	}
 	if (ir_list_capasity(&c_codegen_list)) {
@@ -1102,7 +1160,7 @@ static void rcc_link_internal(void)
 					yy_error_fmt("Unresolved symbol \"%s\"", p->str);
 				} else {
 					IR_ASSERT(p->sym->linkage == C_LINK_EXTERNAL);
-					if (c_dump_flags & C_SINGLE_FILE) {
+					if (c_flags & C_SINGLE_FILE) {
 						void *addr = ir_resolve_sym_name(p->str);
 						if (!addr) {
 							yy_error_fmt("Unresolved symbol \"%s\"", p->str);
@@ -1131,7 +1189,7 @@ static void rcc_link_internal(void)
 						IR_ASSERT(sym->value.u.type == IR_ADDR && sym->value.u.val.addr);
 						*(void**)((char*)p->sym->value.u.val.addr + reloc->obj_offset) =
 							(char*)sym->value.u.val.addr + reloc->name_offset;
-					} else if (c_dump_flags & C_SINGLE_FILE) {
+					} else if (c_flags & C_SINGLE_FILE) {
 						void *addr = ir_resolve_sym_name(q->str);
 						if (!addr) {
 							yy_error_fmt("Unresolved symbol \"%s\"", q->str);
@@ -1251,7 +1309,7 @@ static void rcc_reset_state(void)
 	yy_sym i;
 	yy_hash_bucket *p;
 
-	if (c_dump_flags & C_RUN) {
+	if (c_flags & C_RUN) {
 		ir_mem_unprotect(c_code_buffer.start, (char*)c_code_buffer.end - (char*)c_code_buffer.start);
 	}
 	for (i = YY_LAST_KEYWORD + 1, p = yy_hash.data + i; i < c_init_state.num_syms; p++, i++) {
@@ -1262,7 +1320,7 @@ static void rcc_reset_state(void)
 		p->tag = NULL;
 		p->label = NULL;
 		if (i != YY_MEMCPY && i != YY_MEMSET) {
-			if ((c_dump_flags & C_RUN)
+			if ((c_flags & C_RUN)
 			 && p->sym
 			 && (p->sym->linkage == C_LINK_EXTERNAL
 			  || (p->sym->kind == C_SYM_VAR && p->sym->reloc))) {
@@ -1272,7 +1330,7 @@ static void rcc_reset_state(void)
 		}
 	}
 	for (; i < yy_hash.count; p++, i++) {
-		if ((c_dump_flags & C_RUN)
+		if ((c_flags & C_RUN)
 		 && p->sym
 		 && (p->sym->linkage == C_LINK_EXTERNAL
 		  || (p->sym->kind == C_SYM_VAR && p->sym->reloc))) {
@@ -1285,7 +1343,7 @@ static void rcc_reset_state(void)
 		p->label = NULL;
 	}
 	ir_arena_release(&c_arena, c_init_state.checkpoint);
-	if (c_dump_flags & C_RUN) {
+	if (c_flags & C_RUN) {
 		ir_mem_protect(c_code_buffer.start, (char*)c_code_buffer.end - (char*)c_code_buffer.start);
 	}
 }
@@ -1335,9 +1393,18 @@ static void rcc_help(const char *cmd)
 		"  -S                         - show generated assembler code\n"
 		"  -o <file-name>             - put primary output into the specified file\n"
 		"Optimization Options:\n"
-		"  -O[012]                    - optimization level (default: 2)\n"
-		"  -fno-inline                - disable function inlining\n"
-		"  -fno-mem2ssa               - disable MEM2SSA pass\n"
+		"  -O[012]                    - optimization level (default: -O2)\n"
+		"  -f[no-]inline              - enable/disable function inlining (default: enabled at -O1)\n"
+		"  -fno-mem2ssa               - disable MEM2SSA pass (default: enabled at -O1)\n"
+		"Code Generation Options:\n"
+#if defined(IR_TARGET_X86) || defined(IR_TARGET_X64)
+		"  -mavx                      - use AVX instruction set\n"
+		"  -m[no-]bmi1                - enable/disable BMI1 instruction set\n"
+#endif
+		"  -muse-fp                   - use base frame pointer register\n"
+#if defined(IR_TARGET_X86)
+		"  -mfastcall                 - use fastcall calling convention\n"
+#endif
 		"Preprocessor Options:\n"
 		"  -E                         - preprocess only\n"
 		"  -P                         - inhibit generation of linemarkers\n"
@@ -1352,10 +1419,28 @@ static void rcc_help(const char *cmd)
 		"  -w                         - inhibit all warning messages\n"
 		"IR Debugging Options:\n"
 		"  --save-ir-after-load       - print IR generated by C front-end\n"
+		"  --save-ir-after-use-lists  - print IR after USE-LISTS construction\n"
 		"  --save-ir-after-mem2ssa    - print IR after SSA construction pass\n"
 		"  --save-ir-after-sccp       - print IR after SCCP optimization pass\n"
-		"  --save-ir-after-schedule   - print IR after scheduling\n"
-		"  --save-ir-codegen          - print IR with selcted code rules and registers"
+		"  --save-ir-after-cfg        - print IR after CFG construction\n"
+		"  --save-ir-after-dom        - print IR after Dominators tree construction\n"
+		"  --save-ir-after-loop       - print IR after Loop detection\n"
+		"  --save-ir-after-gcm        - print IR after GCM optimization pass\n"
+		"  --save-ir-after-scheduling - print IR after scheduling\n"
+		"  --save-ir-after-matching   - print IR after code selection\n"
+		"  --save-ir-after-live-ranges - print IR after live ranges identification\n"
+		"  --save-ir-after-coalescing - print IR after live ranges coalescing\n"
+		"  --save-ir-after-regalloc   - print IR after register allocation\n"
+		"  --save-ir-codegen          - print IR with selcted code rules and registers\n"
+#ifdef IR_DEBUG
+		"  --debug-sccp               - debug SCCP optimization pass\n"
+		"  --debug-gcm                - debug GCM optimization pass\n"
+		"  --debug-gcm-split          - debug floating node splitting\n"
+		"  --debug-scheduling         - debug SCHEDULE optimization pass\n"
+		"  --debug-regalloc           - debug register allocator\n"
+		"  --debug-regset <bit-mask>  - restrict available register set\n"
+		"  --debug-bb-scheduling      - debug BB PLCEMENT optimization pass\n"
+#endif
 		"Utility Options\n"
 		"  --emit-ir                  - emit final IR\n"
 		"  --emit-llvm                - emit LLVM code (implementation is incomplete)\n"
@@ -1414,6 +1499,9 @@ int main(int argc, const char **argv)
 	ir_ctx ctx;
 	double start_time = 0.0;
 	int ret = 1;
+#if defined(IR_TARGET_X86) || defined(IR_TARGET_X64)
+	uint32_t mflags_disabled = 0;
+#endif
 
 	ir_consistency_check();
 
@@ -1441,6 +1529,7 @@ int main(int argc, const char **argv)
 		} else if (argv[i][0] == '-' && argv[i][1] == 'O' && strlen(argv[i]) == 3) {
 			if (argv[i][2] == '0') {
 				c_opt_flags = (c_opt_flags & ~C_OPT_LEVEL) | 0;
+				c_opt_flags &= ~C_OPT_INLINE;
 			} else if (argv[i][2] == '1') {
 				c_opt_flags = (c_opt_flags & ~C_OPT_LEVEL) | 1;
 			} else if (argv[i][2] == '2') {
@@ -1490,6 +1579,8 @@ int main(int argc, const char **argv)
 			}
 		} else if (strcmp(argv[i], "-fno-inline") == 0) {
 			c_opt_flags &= ~C_OPT_INLINE;
+		} else if (strcmp(argv[i], "-finline") == 0) {
+			c_opt_flags |= C_OPT_INLINE;
 		} else if (strcmp(argv[i], "-fno-mem2ssa") == 0) {
 			c_opt_flags &= ~C_OPT_MEM2SSA;
 		} else if (strcmp(argv[i], "-E") == 0) {
@@ -1506,32 +1597,85 @@ int main(int argc, const char **argv)
 			preprocess_flags |= PP_DUMP_INCLUDES;
 		} else if (strcmp(argv[i], "-w") == 0) {
 			compiler_flags |= YY_NO_WARNINGS;
+#if defined(IR_TARGET_X86) || defined(IR_TARGET_X64)
+		} else if (strcmp(argv[i], "-mavx") == 0) {
+			ir_mflags |= IR_X86_AVX;
+		} else if (strcmp(argv[i], "-mbmi1") == 0) {
+			ir_mflags |= IR_X86_BMI1;
+		} else if (strcmp(argv[i], "-mno-bmi1") == 0) {
+			mflags_disabled |= IR_X86_BMI1;
+#endif
+		} else if (strcmp(argv[i], "-muse-fp") == 0) {
+			ir_flags |= IR_USE_FRAME_POINTER;
+#if defined(IR_TARGET_X86)
+		} else if (strcmp(argv[i], "-mfastcall") == 0) {
+			ir_flags |= IR_FASTCALL_FUNC;
+#endif
 		} else if (strcmp(argv[i], "--save-ir-after-load") == 0) {
-			c_dump_flags |= C_DUMP_IR_AFTER_LOAD;
+			c_flags |= C_DUMP_IR_AFTER_LOAD;
+		} else if (strcmp(argv[i], "--save-ir-after-use-lists") == 0) {
+			c_flags |= C_DUMP_IR_AFTER_USE_LISTS;
 		} else if (strcmp(argv[i], "--save-ir-after-mem2ssa") == 0) {
-			c_dump_flags |= C_DUMP_IR_AFTER_MEM2SSA;
+			c_flags |= C_DUMP_IR_AFTER_MEM2SSA;
 		} else if (strcmp(argv[i], "--save-ir-after-sccp") == 0) {
-			c_dump_flags |= C_DUMP_IR_AFTER_SCCP;
-		} else if (strcmp(argv[i], "--save-ir-after-schedule") == 0) {
-			c_dump_flags |= C_DUMP_IR_AFTER_SCHEDULE;
+			c_flags |= C_DUMP_IR_AFTER_SCCP;
+		} else if (strcmp(argv[i], "--save-ir-after-cfg") == 0) {
+			c_flags |= C_DUMP_IR_AFTER_CFG;
+		} else if (strcmp(argv[i], "--save-ir-after-dom") == 0) {
+			c_flags |= C_DUMP_IR_AFTER_DOM;
+		} else if (strcmp(argv[i], "--save-ir-after-loop") == 0) {
+			c_flags |= C_DUMP_IR_AFTER_LOOP;
+		} else if (strcmp(argv[i], "--save-ir-after-gcm") == 0) {
+			c_flags |= C_DUMP_IR_AFTER_GCM;
+		} else if (strcmp(argv[i], "--save-ir-after-scheduling") == 0) {
+			c_flags |= C_DUMP_IR_AFTER_SCHEDULING;
+		} else if (strcmp(argv[i], "--save-ir-after-matching") == 0) {
+			c_flags |= C_DUMP_IR_AFTER_CODE_MATCHING;
+		} else if (strcmp(argv[i], "--save-ir-after-live-ranges") == 0) {
+			c_flags |= C_DUMP_IR_AFTER_LIVE_RANGES;
+		} else if (strcmp(argv[i], "--save-ir-after-coalescing") == 0) {
+			c_flags |= C_DUMP_IR_AFTER_COALESCING;
+		} else if (strcmp(argv[i], "--save-ir-after-regalloc") == 0) {
+			c_flags |= C_DUMP_IR_AFTER_REGALLOC;
 		} else if (strcmp(argv[i], "--save-ir-codegen") == 0) {
-			c_dump_flags |= C_DUMP_IR_CODEGEN;
+			c_flags |= C_DUMP_IR_CODEGEN;
+#ifdef IR_DEBUG
+		} else if (strcmp(argv[i], "--debug-sccp") == 0) {
+			ir_flags |= IR_DEBUG_SCCP;
+		} else if (strcmp(argv[i], "--debug-gcm") == 0) {
+			ir_flags |= IR_DEBUG_GCM;
+		} else if (strcmp(argv[i], "--debug-gcm-split") == 0) {
+			ir_flags |= IR_DEBUG_GCM_SPLIT;
+		} else if (strcmp(argv[i], "--debug-scheduling") == 0) {
+			ir_flags |= IR_DEBUG_SCHEDULE;
+		} else if (strcmp(argv[i], "--debug-regalloc") == 0) {
+			ir_flags |= IR_DEBUG_RA;
+		} else if (strcmp(argv[i], "--debug-bb-scheduling") == 0) {
+			ir_flags |= IR_DEBUG_BB_SCHEDULE;
+#endif
+		} else if (strcmp(argv[i], "--debug-regset") == 0) {
+			if (i + 1 == argc || argv[i + 1][0] == '-') {
+				fprintf(stderr, "ERROR: Invalid usage' (use --help)\n");
+				return 1;
+			}
+			ir_debug_regset = strtoull(argv[i + 1], NULL, 0);
+			i++;
 		} else if (strcmp(argv[i], "--emit-ir") == 0) {
-			c_dump_flags |= C_DUMP_IR;
+			c_flags |= C_DUMP_IR;
 		} else if (strcmp(argv[i], "--emit-llvm") == 0) {
-			c_dump_flags |= C_DUMP_LLVM;
+			c_flags |= C_DUMP_LLVM;
 		} else if (strcmp(argv[i], "-S") == 0) {
-			c_dump_flags |= C_DUMP_ASM;
+			c_flags |= C_DUMP_ASM;
 		} else if (strcmp(argv[i], "--dump-size") == 0) {
-			c_dump_flags |= C_DUMP_SIZE;
+			c_flags |= C_DUMP_SIZE;
 		} else if (strcmp(argv[i], "--dump-time") == 0) {
-			c_dump_flags |= C_DUMP_TIME;
+			c_flags |= C_DUMP_TIME;
 		} else if (strcmp(argv[i], "-g") == 0) {
-			c_dump_flags |= C_GDB;
+			c_flags |= C_GDB;
 		} else if (strcmp(argv[i], "-p") == 0) {
-			c_dump_flags |= C_PERF;
+			c_flags |= C_PERF;
 		} else if (strcmp(argv[i], "--run") == 0) {
-			c_dump_flags |= C_RUN;
+			c_flags |= C_RUN;
 			if (i + 1 < argc) {
 				run_args = i + 1;
 				break;
@@ -1560,12 +1704,12 @@ int main(int argc, const char **argv)
 	}
 
 #ifndef _WIN32
-	if (c_dump_flags & C_PERF) {
+	if (c_flags & C_PERF) {
 		ir_perf_jitdump_open();
 	}
 #endif
 
-	if (c_dump_flags & C_DUMP_TIME) {
+	if (c_flags & C_DUMP_TIME) {
 		start_time = rcc_time();
 	}
 
@@ -1593,14 +1737,14 @@ int main(int argc, const char **argv)
 
 		rcc_free();
 
-		if (c_dump_flags & C_DUMP_TIME) {
+		if (c_flags & C_DUMP_TIME) {
 			double t = rcc_time();
 			fprintf(stderr, "\npreprocessing time = %0.6f\n", t - start_time);
 		}
 
 		ret = 0;
 	} else {
-		c_native = (c_dump_flags & (C_DUMP_SIZE|C_DUMP_ASM|C_RUN)) != 0;
+		c_native = (c_flags & (C_DUMP_SIZE|C_DUMP_ASM|C_RUN)) != 0;
 
 		if (c_native) {
 			size_t size = 2 * 1024 * 1024;
@@ -1611,6 +1755,25 @@ int main(int argc, const char **argv)
 			}
 			c_code_buffer.pos = c_code_buffer.start;
 			c_code_buffer.end = (char*)c_code_buffer.start + size;
+
+#if defined(IR_TARGET_X86) || defined(IR_TARGET_X64)
+			if (c_flags & C_RUN) {
+				uint32_t cpuinfo = ir_cpuinfo();
+
+				if (!(cpuinfo & IR_X86_SSE2)) {
+					fprintf(stderr, "ERROR: incompatible CPU (SSE2 is not supported)\n");
+					return 1;
+				}
+
+				if ((ir_mflags & IR_X86_AVX) && !(cpuinfo & IR_X86_AVX)) {
+					fprintf(stderr, "ERROR: -mavx is not compatible with CPU (AVX is not supported)\n");
+					return 1;
+				}
+				if ((cpuinfo & IR_X86_BMI1) && !(mflags_disabled & IR_X86_BMI1)) {
+					ir_mflags |= IR_X86_BMI1;
+				}
+			}
+#endif
 		}
 
 		yy_flags = YY_FLAGS_DEFAULT | compiler_flags;
@@ -1621,7 +1784,7 @@ int main(int argc, const char **argv)
 		if (n > 1) {
 			rcc_remember_state();
 		} else {
-			c_dump_flags |= C_SINGLE_FILE;
+			c_flags |= C_SINGLE_FILE;
 		}
 		for (uint32_t j = 0; j < n; j++) {
 			const char *input = argv[ir_list_at(&src, j)];
@@ -1632,29 +1795,29 @@ int main(int argc, const char **argv)
 				ir_free(&ctx);
 				goto exit;
 			}
-			if ((c_dump_flags & C_DO_LINK_INTERNAL)
-			 || (n == 1 && (c_dump_flags & C_DO_LINK_EXTERNAL))) {
+			if ((c_flags & C_DO_LINK_INTERNAL)
+			 || (n == 1 && (c_flags & C_DO_LINK_EXTERNAL))) {
 				rcc_link_internal();
-				c_dump_flags &= ~(C_DO_LINK_INTERNAL|C_DO_LINK_EXTERNAL);
+				c_flags &= ~(C_DO_LINK_INTERNAL|C_DO_LINK_EXTERNAL);
 			}
 		}
 
-		if (c_dump_flags & (C_DUMP_SIZE - 1)) {
+		if (c_flags & (C_DUMP_SIZE - 1)) {
 			fflush(stdout);
 		}
 
-		if (c_dump_flags & C_DUMP_SIZE) {
+		if (c_flags & C_DUMP_SIZE) {
 			fprintf(stderr, "\ncode size = %lld\n",
 				(long long int)((char*)c_code_buffer.pos - (char*)c_code_buffer.start));
 		}
 
-		if (c_dump_flags & C_DUMP_TIME) {
+		if (c_flags & C_DUMP_TIME) {
 			double t = rcc_time();
 			fprintf(stderr, "\ncompilation time = %0.6f\n", t - start_time);
 			start_time = t;
 		}
 
-		if (c_dump_flags & C_RUN) {
+		if (c_flags & C_RUN) {
 			int jit_argc = 1;
 			const char **jit_argv;
 			int (*func)(int, const char**) = NULL;
@@ -1695,14 +1858,14 @@ int main(int argc, const char **argv)
 				jit_argv[i] = argv[run_args + i - 1];
 			}
 
-			if (c_dump_flags & C_DUMP_TIME) {
+			if (c_flags & C_DUMP_TIME) {
 				rcc_atexit_start = start_time;
 				atexit(rcc_atexit);
 			}
 
 			ret = func(jit_argc, jit_argv);
 
-			if ((c_dump_flags & C_DUMP_TIME) && rcc_atexit_start) {
+			if ((c_flags & C_DUMP_TIME) && rcc_atexit_start) {
 				double t = rcc_time();
 				fflush(stdout);
 				fprintf(stderr, "\nexecution time = %0.6f\n", t - rcc_atexit_start);
@@ -1718,7 +1881,7 @@ int main(int argc, const char **argv)
 	ir_free(&ctx);
 
 #ifndef _WIN32
-	if (c_dump_flags & C_PERF) {
+	if (c_flags & C_PERF) {
 		ir_perf_jitdump_close();
 	}
 #endif
