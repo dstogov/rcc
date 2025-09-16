@@ -54,7 +54,7 @@
 
 #define C_SINGLE_FILE                 (1<<29)
 #define C_DO_LINK_INTERNAL            (1<<30)
-#define C_DO_LINK_EXTERNAL            (1<<31)
+#define C_DO_LINK_EXTERNAL            (1U<<31)
 
 #define C_OPT_LEVEL              0x3
 #define C_OPT_INLINE             (1<<2)
