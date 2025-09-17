@@ -789,6 +789,7 @@ static void c_validate_redeclaration(c_name name, c_dcl *d, c_sym *sym)
 			if (c_is_flexible(sym->value.type)) {
 				sym->tmp_data = 1;
 				sym->value.u.val.ptr = ir_mem_calloc(1, sym->value.type->size);
+				sym->value.u.ref = name; /* keep name in addition to address */
 			} else {
 				sym->value.u.val.ptr = c_linker_allocate_data(yy_sym2str(name), sym->value.type->size);
 			}
