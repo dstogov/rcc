@@ -1747,7 +1747,7 @@ int main(int argc, const char **argv)
 		c_native = (c_flags & (C_DUMP_SIZE|C_DUMP_ASM|C_RUN)) != 0;
 
 		if (c_native) {
-			size_t size = 2 * 1024 * 1024;
+			size_t size = 4 * 1024 * 1024;
 			c_code_buffer.start = ir_mem_mmap(size);
 			if (!c_code_buffer.start) {
 				fprintf(stderr, "ERROR: Cannot allocate JIT code buffer\n");
