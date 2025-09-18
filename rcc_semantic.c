@@ -2513,8 +2513,8 @@ static void c_do_trunc(const c_type *t, ir_type type, c_value *v)
 	ir_val val;
 
 	IR_ASSERT(C_IS_TYPE_INT_OR_PTR(t)
-		&& (C_IS_TYPE_INT_OR_PTR(v->type) || v->type->kind == C_TYPE_ARRAY)
-		&& t->size < v->type->size);
+		&& ((C_IS_TYPE_INT_OR_PTR(v->type) && t->size < v->type->size)
+		 || ((v->type->kind == C_TYPE_ARRAY || v->type->kind == C_TYPE_FUNC) && t->size < sizeof(void*))));
 	IR_ASSERT(IR_IS_TYPE_INT(type) && IR_IS_TYPE_INT(v->u.type) && ir_type_size[type] < ir_type_size[v->u.type]);
 	if (c_value_is_ref(v)) {
 		c_value_set_rval(v, t, type, ir_TRUNC(type, c_value_ref(v)));
