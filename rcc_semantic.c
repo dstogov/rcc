@@ -4928,6 +4928,9 @@ void c_do_cond_op(c_value *cond, c_value *op1, c_value *op2)
 {
 	const c_type *type;
 
+	if (!c_value_is_set(op1)) {
+		*op1 = *cond;
+	}
 	if (op1->type->kind == op2->type->kind && op1->type->kind == C_TYPE_VOID) return;
 	type = c_common_type(YY__COLON, op1, op2);
 	if (!type) yy_error("type mismatch in conditional expression");
@@ -4982,10 +4985,8 @@ void c_do_cond_op(c_value *cond, c_value *op1, c_value *op2)
 	// TODO: We might need PHI decause of dominance ???
 	if (c_value_is_const(cond) && (c_value_is_true(cond) ? c_value_is_const(op1) : c_value_is_const(op2))) {
 		if (c_value_is_true(cond)) {
-			if (c_value_is_set(op1)) {
-				*cond = *op1;
-				cond->type = type;
-			}
+			*cond = *op1;
+			cond->type = type;
 		} else {
 			*cond = *op2;
 			cond->type = type;
