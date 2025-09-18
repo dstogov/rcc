@@ -96,6 +96,7 @@ test: $(BUILD_DIR)/rcc $(BUILD_DIR)/tester
 	--test-cmd $(BUILD_DIR)/rcc \
 	--test-extension ".test" \
 	--code-extension ".c" \
+	--target $(TARGET) \
 	$(TESTS)
 
 test-ci: $(BUILD_DIR)/rcc $(BUILD_DIR)/tester
@@ -104,4 +105,5 @@ test-ci: $(BUILD_DIR)/rcc $(BUILD_DIR)/tester
 	--test-extension ".test" \
 	--code-extension ".c" \
 	--show-diff \
+	--target $(TARGET) \
 	$(TESTS)
