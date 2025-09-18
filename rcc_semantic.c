@@ -2618,7 +2618,7 @@ static void c_do_fp2int(const c_type *t, ir_type type, c_value *v)
 {
 	ir_val val;
 
-	IR_ASSERT(C_IS_TYPE_INT(t) && C_IS_TYPE_FP(v->type));
+	IR_ASSERT((C_IS_TYPE_INT(t) || t->kind == C_TYPE_ENUM) && C_IS_TYPE_FP(v->type));
 	IR_ASSERT(IR_IS_TYPE_INT(type) && IR_IS_TYPE_FP(v->u.type));
 	if (c_value_is_ref(v)) {
 		c_value_set_rval(v, t, type, ir_FP2INT(type, c_value_ref(v)));
@@ -2663,7 +2663,7 @@ static void c_do_int2fp(const c_type *t, ir_type type, c_value *v)
 {
 	ir_val val;
 
-	IR_ASSERT(C_IS_TYPE_FP(t) && C_IS_TYPE_INT(v->type));
+	IR_ASSERT(C_IS_TYPE_FP(t) && (C_IS_TYPE_INT(v->type) || v->type->kind == C_TYPE_ENUM));
 	IR_ASSERT(IR_IS_TYPE_FP(type) && IR_IS_TYPE_INT(v->u.type));
 	if (c_value_is_ref(v)) {
 		c_value_set_rval(v, t, type, ir_INT2FP(type, c_value_ref(v)));
