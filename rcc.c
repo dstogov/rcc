@@ -1705,7 +1705,7 @@ int main(int argc, const char **argv)
 	}
 
 #ifndef _WIN32
-	if (c_flags & C_PERF) {
+	if ((c_flags & C_PERF) && (c_flags & C_RUN) && !preprocess_only) {
 		ir_perf_jitdump_open();
 	}
 #endif
@@ -1850,6 +1850,10 @@ int main(int argc, const char **argv)
 				func = sym->value.u.val.ptr;
 			}
 
+			ir_free(&ctx);
+			ir_list_free(&def);
+			ir_list_free(&src);
+
 			if (run_args && argc > run_args) {
 				jit_argc = argc - run_args + 1;
 			}
@@ -1872,6 +1876,15 @@ int main(int argc, const char **argv)
 				fprintf(stderr, "\nexecution time = %0.6f\n", t - rcc_atexit_start);
 				rcc_atexit_start = 0.0;
 			}
+
+#ifndef _WIN32
+			if (c_flags & C_PERF) {
+				ir_perf_jitdump_close();
+			}
+#endif
+
+			rcc_free();
+			return ret;
 		} else {
 			ret = 0;
 		}
@@ -1880,12 +1893,6 @@ int main(int argc, const char **argv)
 	}
 
 	ir_free(&ctx);
-
-#ifndef _WIN32
-	if (c_flags & C_PERF) {
-		ir_perf_jitdump_close();
-	}
-#endif
 
 exit:
 	ir_list_free(&def);
