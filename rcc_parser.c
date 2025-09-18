@@ -1100,7 +1100,7 @@ static yy_sym parse_array_declarator(yy_sym sym, c_dcl *d, bool is_param) {
 	if (sym == YY__LPAREN || sym == YY__LBRACK) {
 		sym = parse_arrays_and_params(sym, d, 0, is_param);
 	}
-	c_make_array_type(d, &dim, &len, attr);
+	c_make_array_type(d, &dim, &len, attr, is_param);
 	return sym;
 }
 

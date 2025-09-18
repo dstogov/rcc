@@ -868,6 +868,7 @@ static size_t rcc_emit_ir_data(FILE *f, const c_type *type, const void *addr, si
 		size_t offset = 0, el_offset = 0;
 		int i;
 
+		IR_ASSERT(!(type->attr & C_ATTR_VLA));
 		for (i = 0; i < type->array.length; el_offset += type->array.type->size, i++) {
 			while (offset < el_offset) {
 				/* padding */

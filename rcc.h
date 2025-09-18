@@ -738,6 +738,7 @@ struct _c_param {
 struct _c_scope {
 	pp_list   list;
 	void     *checkpoint;
+	ir_ref    block_begin;
 	c_scope  *prev;
 };
 
@@ -849,7 +850,7 @@ c_type *c_resolve_tag(c_name name, c_dcl *dcl, bool define);
 c_type *c_make_struct_type(c_dcl *dcl, c_name tag);
 c_type *c_make_enum_type(c_dcl *dcl, c_name tag);
 void c_make_pointer_type(c_dcl *dcl);
-void c_make_array_type(c_dcl *dcl, c_dcl *dim, c_value *len, uint64_t attr);
+void c_make_array_type(c_dcl *dcl, c_dcl *dim, c_value *len, uint64_t attr, bool is_param);
 void c_make_func_type(c_dcl *dcl, c_param *params, int32_t num_params, bool is_variadic);
 void c_make_nested_type(c_dcl *dcl, c_dcl *nested);
 void c_finish_struct_type(c_type *type, c_dcl *d);

@@ -2,8 +2,6 @@
 tinycc 114: bound signal
 --ARGS--
 --run
---XFAIL--
-VLA arrays are not implemented yet
 --CODE--
 #include <stdio.h>
 #include <pthread.h>

@@ -2,8 +2,6 @@
 tinycc 060.26: error and warnings
 --ARGS--
 --run
---XFAIL--
-VLA arrays are not implemented yet
 --CODE--
 int X=1;
 
@@ -11,4 +9,6 @@ int main(void) {
   int t[][][X];
 }
 --EXPECT--
-60_errors_and_warnings.c:184: error: need explicit inner array size in VLAs
+./tests/tinycc/tests2/060_26_errors_and_warnings.c:4:15: error: array type has element type with undefined size
+
+exit code = 1

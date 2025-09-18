@@ -563,7 +563,7 @@ array_declarator(c_dcl *d, bool is_param):                 {c_value len = {0};}
 		assignment_expression(&len)
 	)
 	"]"
-	arrays_and_params(d, 0, is_param)?                     {c_make_array_type(d, &dim, &len, attr);}
+	arrays_and_params(d, 0, is_param)?                     {c_make_array_type(d, &dim, &len, attr, is_param);}
 ;
 
 parameters(c_dcl *d, bool allow_old_func):                 {bool is_variadic = 0;}
