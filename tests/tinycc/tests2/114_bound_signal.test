@@ -61,7 +61,7 @@ do_fork (void *unused)
         case 0:
             add(1000);
             add(2000);
-            exit(0);
+            _exit(0);
             break;
         case -1:
             return NULL;
