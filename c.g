@@ -665,7 +665,7 @@ compound_statement(c_value *val):
 			","
 			ID(&name)                                      {c_declare_local_label(name);}
 		)* ";"
-	)?
+	)*
 	(	?{!C_IS_ID(sym) || is_label(sym)}
 		labels
 	|	?{!C_IS_ID(sym) || !is_typedef_name(sym)}

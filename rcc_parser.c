@@ -1296,7 +1296,7 @@ static yy_sym parse_static_assert_declaration(yy_sym sym) {
 }
 
 static yy_sym parse_compound_statement(yy_sym sym, c_value *val) {
-	if (sym == YY___LABEL__) {
+	while (sym == YY___LABEL__) {
 		c_name name;
 		sym = get_sym();
 		sym = parse_ID(sym, &name);
