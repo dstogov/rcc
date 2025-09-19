@@ -166,9 +166,33 @@
 	_("__builtin_va_end",              YY___BUILTIN_VA_END)            \
 	_("__builtin_va_copy",             YY___BUILTIN_VA_COPY)           \
 	_("__builtin_alloca",              YY___BUILTIN_ALLOCA)            \
+	_("__builtin_abort",               YY___BUILTIN_ABORT)             \
+	_("__builtin_trap" ,               YY___BUILTIN_TRAP)              \
+	_("__builtin_debugtrap",           YY___BUILTIN_DEBUGTRAP)         \
+	_("__builtin_frame_address",       YY___BUILTIN_FRAME_ADDRESS)     \
+	_("__builtin_abs",                 YY___BUILTIN_ABS)               \
+	_("__builtin_labs",                YY___BUILTIN_LABS)              \
+	_("__builtin_llabs",               YY___BUILTIN_LLABS)             \
+	_("__builtin_fabs",                YY___BUILTIN_FABS)              \
+	_("__builtin_fabsf",               YY___BUILTIN_FABSF)             \
+	_("__builtin_bswap16",             YY___BUILTIN_BSWAP16)           \
+	_("__builtin_bswap32",             YY___BUILTIN_BSWAP32)           \
+	_("__builtin_bswap64",             YY___BUILTIN_BSWAP64)           \
+	_("__builtin_popcount",            YY___BUILTIN_POPCOUNT)          \
+	_("__builtin_popcountl",           YY___BUILTIN_POPCOUNTL)         \
+	_("__builtin_popcountll",          YY___BUILTIN_POPCOUNTLL)        \
+	_("__builtin_clz",                 YY___BUILTIN_CLZ)               \
+	_("__builtin_clzl",                YY___BUILTIN_CLZL)              \
+	_("__builtin_clzll",               YY___BUILTIN_CLZLL)             \
+	_("__builtin_ctz",                 YY___BUILTIN_CTZ)               \
+	_("__builtin_ctzl",                YY___BUILTIN_CTZL)              \
+	_("__builtin_ctzll",               YY___BUILTIN_CTZLL)             \
+	_("__builtin_memcpy",              YY___BUILTIN_MEMCPY)            \
+	_("__builtin_memset",              YY___BUILTIN_MEMSET)            \
 	_("__builtin_expect",              YY___BUILTIN_EXPECT)            \
+	_("__builtin_unreachable",         YY___BUILTIN_UNREACHABLE)       \
 
-#define YY_LAST_KEYWORD                YY___BUILTIN_EXPECT
+#define YY_LAST_KEYWORD                YY___BUILTIN_UNREACHABLE
 
 #define _YY_DIRECTIVES(_) \
 	_("define",                        YY_DEFINE)                      \
@@ -203,6 +227,7 @@
 	_("pop",                           YY_POP)                         \
 	_("memcpy",                        YY_MEMCPY)                      \
 	_("memset",                        YY_MEMSET)                      \
+	_("abort",                         YY_ABORT)                       \
 	_("main",                          YY_MAIN)                        \
 	/* GCC attributes */                                               \
 	_("alias",                         YY_ALIAS)                /*f  */\
