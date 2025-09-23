@@ -501,6 +501,10 @@ bool c_linker_fix_reloc(c_sym *obj, size_t obj_offset, c_value *val)
 		val->u.ref = IR_UNUSED;
 		return 1;
 	}
+	if (IR_IS_CONST_REF(val->u.ref) && !IR_IS_SYM_CONST(active_ctx->ir_base[val->u.ref].op)) {
+		c_value_set_const(val, val->type, val->u.type, active_ctx->ir_base[val->u.ref].val);
+		return 1;
+	}
 	if (val->type->kind != C_TYPE_POINTER
 	 && (!C_IS_TYPE_INT(val->type) || val->type->size != sizeof(void*))) {
 		return 0;
