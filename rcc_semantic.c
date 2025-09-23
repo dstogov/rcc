@@ -6030,7 +6030,8 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 
 				*type = *obj->value.type;
 				if (active_scope) type->flags &= ~C_TYPE_GLOBAL;
-				type->array.length = type->size = len;
+				type->size = len;
+				type->array.length = len / val->type->array.type->size;
 				type->attr &= ~C_ATTR_FLEXIBLE;
 				obj->value.type = type;
 				if (c_value_is_const(&obj->value)
@@ -6039,8 +6040,8 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 				} else {
 					c_do_init_patch_flexible_alloca(obj->value.u.ref, len);
 				}
-			} else if (len > (size_t)obj->value.type->array.length) {
-				if (len - val->type->array.type->size == (size_t)obj->value.type->array.length) {
+			} else if (len > (size_t)obj->value.type->array.length * val->type->array.type->size) {
+				if (len - val->type->array.type->size == (size_t)obj->value.type->array.length * val->type->array.type->size) {
 					len -= val->type->array.type->size;
 				} else if (val->type->array.type->size == 1) {
 					yy_error("initializer-string for array of \"char\" is too long");
