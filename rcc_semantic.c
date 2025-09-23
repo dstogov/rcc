@@ -4458,7 +4458,7 @@ static void c_do_sub(const c_type *type, c_value *op1, c_value *op2)
 				val.i64 = (op1->u.val.addr - op2->u.val.addr) / element_size;
 				c_value_set_const(op1, &c_type_ssize_t, IR_SSIZE_T, val);
 			 } else {
-				ref = ir_SUB_A(c_value_ref(op1), c_value_ref(op2));
+				ref = ir_SUB(IR_SSIZE_T, c_value_ref(op1), c_value_ref(op2));
 				if (element_size != 1 || (element_type->attr & C_ATTR_VLA)) {
 					ref = ir_DIV(IR_SSIZE_T, ref, c_type_ssize(element_type));
 				}
