@@ -74,7 +74,7 @@ $(BUILD_DIR)/rcc_stdinc.o: $(SRC_DIR)/rcc.h
 $(BUILD_DIR)/rcc.o: $(SRC_DIR)/rcc.h
 
 $(SRC_DIR)/rcc_parser.c: $(SRC_DIR)/c.g
-	$(LLK) c.g
+	$(LLK) -v c.g
 
 $(OBJS_RCC): $(BUILD_DIR)/$(notdir %.o): $(SRC_DIR)/$(notdir %.c)
 	$(CC) $(CFLAGS) -I$(BUILD_DIR) -I$(SRC_DIR)/ir -o $@ -c $<
