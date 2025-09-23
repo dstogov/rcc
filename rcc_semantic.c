@@ -3606,6 +3606,11 @@ void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 			yy_error_fmt("wrong level in %s() call", yy_sym2str(name));
 		}
 		c_value_set_rval(val, &c_type_ptr, IR_ADDR, ir_FRAME_ADDR());
+	} else if (name == YY___BUILTIN_CONSTANT_P) {
+		ir_val v;
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		v.u64 = c_value_is_const(&args[0]) ? 1 : 0;
+		c_value_set_const(val, &c_type_i32, IR_I32, v);
 	} else if (name == YY___BUILTIN_MEMCPY) {
 		ir_ref ref;
 

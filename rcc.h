@@ -170,6 +170,7 @@
 	_("__builtin_trap" ,               YY___BUILTIN_TRAP)              \
 	_("__builtin_debugtrap",           YY___BUILTIN_DEBUGTRAP)         \
 	_("__builtin_frame_address",       YY___BUILTIN_FRAME_ADDRESS)     \
+	_("__builtin_constant_p",          YY___BUILTIN_CONSTANT_P)        \
 	_("__builtin_abs",                 YY___BUILTIN_ABS)               \
 	_("__builtin_labs",                YY___BUILTIN_LABS)              \
 	_("__builtin_llabs",               YY___BUILTIN_LLABS)             \
