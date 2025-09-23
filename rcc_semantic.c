@@ -3606,7 +3606,7 @@ void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 		ir_ref ref;
 
 		if (num_args != 3) yy_error("wrong number of arguments in __builtin_memcpy() call");
-		ref = ir_CALL_3(IR_VOID,
+		ref = ir_CALL_3(IR_ADDR,
 			ir_const_func(active_ctx,
 				ir_strl(active_ctx, "memcpy", sizeof("memcpy")-1),
 				ir_proto_3(active_ctx, 0, IR_ADDR, IR_ADDR, IR_ADDR, IR_SIZE_T)),
@@ -3616,7 +3616,7 @@ void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 		ir_ref ref;
 
 		if (num_args != 3) yy_error("wrong number of arguments in __builtin_memset() call");
-		ref = ir_CALL_3(IR_VOID,
+		ref = ir_CALL_3(IR_ADDR,
 			ir_const_func(active_ctx,
 				ir_strl(active_ctx, "memset", sizeof("memset")-1),
 				ir_proto_3(active_ctx, 0, IR_ADDR, IR_ADDR, IR_ADDR, IR_SIZE_T)),
