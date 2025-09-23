@@ -838,6 +838,16 @@ builtin_parameters(c_value *val, c_name name):             {int32_t num_args = 0
 	)?                                                     {c_do_builtin(val, name, num_args, args);}
 ;
 
+dummy_value(const c_type *t):                              {ir_ref old_control = c_do_nocode();}
+                                                           {c_value val;}
+	(                                                      {c_sym obj;}
+	                                                       {size_t size = t->size;}
+	                                                       {c_do_init_expr_start(&obj, t);}
+		initializer_contents(&obj, t, 0, &size)            {c_do_init_expr_end(&val, &obj, size);}
+/*	|	unary_expression(&val)*/
+	)                                                      {c_do_end_nocode(old_control);}
+;
+
 unary_expression(c_value *val):
                                                            {c_name name;}
                                                            {const c_type *t;}
@@ -896,15 +906,18 @@ unary_expression(c_value *val):
 	|	"sizeof"
 		(	&"(" "("
 			(	?{!C_IS_ID(sym) || is_typedef_name(sym)}
-				type_name(&t)                              {c_sizeof_type(val, t);}
+				type_name(&t)
+				")"
+				dummy_value(t)?                            {c_sizeof_type(val, t);}
 			|                                              {old_control = c_do_nocode();}
 				expression(val)
+				")"
 			|                                              {c_scope scope;}
 				"{"                                        {c_do_statement_expression(&scope);}
 				compound_statement(val)                    {c_pop_scope(&scope);}
 				"}"
+				")"
 			)
-			")"
 		|                                                  {ir_ref old = c_do_nocode();}
 			unary_expression(&v)                           {c_sizeof_expr(val, op, &v, old);}
 		)
@@ -913,15 +926,18 @@ unary_expression(c_value *val):
 	|	("__alignof__"|"__alignof")
 		(	&"(" "("
 			(	?{!C_IS_ID(sym) || is_typedef_name(sym)}
-				type_name(&t)                              {c_alignof_type(val, t);}
+				type_name(&t)
+				")"
+				dummy_value(t)?                            {c_alignof_type(val, t);}
 			|                                              {old_control = c_do_nocode();}
 				expression(val)
+				")"
 			|                                              {c_scope scope;}
 				"{"                                        {c_do_statement_expression(&scope);}
 				compound_statement(val)                    {c_pop_scope(&scope);}
 				"}"
+				")"
 			)
-			")"
 		|	                                               {ir_ref old = c_do_nocode();}
 			unary_expression(&v)                           {c_sizeof_expr(val, op, &v, old);}
 		)

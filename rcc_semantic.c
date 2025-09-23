@@ -2219,7 +2219,7 @@ ir_ref c_do_nocode(void)
 	return old_control;
 }
 
-static void c_do_end_nocode(ir_ref old_control)
+void c_do_end_nocode(ir_ref old_control)
 {
 	if (active_ctx->control == active_ctx->insns_count - 1
 	 && active_ctx->ir_base[active_ctx->control].op == IR_BEGIN
