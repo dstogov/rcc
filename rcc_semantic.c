@@ -3601,7 +3601,10 @@ void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 		ir_TRAP();
 		c_value_set_rval(val, &c_type_void, IR_VOID, IR_UNUSED);
 	} else if (name == YY___BUILTIN_FRAME_ADDRESS) {
-		if (num_args != 0) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (!c_value_is_const(&args[0]) || !C_IS_TYPE_INT(args[0].type) || args[0].u.val.u64 != 0) {
+			yy_error_fmt("wrong level in %s() call", yy_sym2str(name));
+		}
 		c_value_set_rval(val, &c_type_ptr, IR_ADDR, ir_FRAME_ADDR());
 	} else if (name == YY___BUILTIN_MEMCPY) {
 		ir_ref ref;
