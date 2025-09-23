@@ -52,6 +52,8 @@
 #define C_DUMP_IR_AFTER_REGALLOC      (1<<22)
 #define C_DUMP_IR_CODEGEN             (1<<23)
 
+#define C_DUMP_LIVE_RANGES            (1<<24)
+
 #define C_SINGLE_FILE                 (1<<29)
 #define C_DO_LINK_INTERNAL            (1<<30)
 #define C_DO_LINK_EXTERNAL            (1U<<31)
@@ -142,12 +144,18 @@ static void rcc_ir_codegen(c_name name, ir_ctx *ctx, c_sym *sym)
 		if (c_flags & C_DUMP_IR_AFTER_LIVE_RANGES) {
 			rcc_dump_func_proto(name, 0, stderr);
 			ir_save(ctx, c_save_flags | IR_SAVE_CFG | IR_SAVE_RULES | IR_SAVE_REGS, stderr);
+			if (c_flags & C_DUMP_LIVE_RANGES) {
+				ir_dump_live_ranges(ctx, stderr);
+			}
 		}
 
 		ir_coalesce(ctx);
 		if (c_flags & C_DUMP_IR_AFTER_COALESCING) {
 			rcc_dump_func_proto(name, 0, stderr);
 			ir_save(ctx, c_save_flags | IR_SAVE_CFG | IR_SAVE_RULES | IR_SAVE_REGS, stderr);
+			if (c_flags & C_DUMP_LIVE_RANGES) {
+				ir_dump_live_ranges(ctx, stderr);
+			}
 		}
 
 		if (c_native) {
@@ -155,6 +163,9 @@ static void rcc_ir_codegen(c_name name, ir_ctx *ctx, c_sym *sym)
 			if (c_flags & C_DUMP_IR_AFTER_REGALLOC) {
 				rcc_dump_func_proto(name, 0, stderr);
 				ir_save(ctx, c_save_flags | IR_SAVE_CFG | IR_SAVE_RULES | IR_SAVE_REGS, stderr);
+				if (c_flags & C_DUMP_LIVE_RANGES) {
+					ir_dump_live_ranges(ctx, stderr);
+				}
 			}
 		}
 
@@ -166,6 +177,9 @@ static void rcc_ir_codegen(c_name name, ir_ctx *ctx, c_sym *sym)
 	if (c_flags & C_DUMP_IR_CODEGEN) {
 		rcc_dump_func_proto(name, 0, stderr);
 		ir_dump_codegen(ctx, stderr);
+		if (c_flags & C_DUMP_LIVE_RANGES) {
+			ir_dump_live_ranges(ctx, stderr);
+		}
 	}
 
 #ifdef IR_DEBUG
@@ -1433,6 +1447,7 @@ static void rcc_help(const char *cmd)
 		"  --save-ir-after-coalescing - print IR after live ranges coalescing\n"
 		"  --save-ir-after-regalloc   - print IR after register allocation\n"
 		"  --save-ir-codegen          - print IR with selcted code rules and registers\n"
+		"  --save-live-ranges         - print info about live ranges (use with --save-ir-after-live-ranges)\n"
 #ifdef IR_DEBUG
 		"  --debug-sccp               - debug SCCP optimization pass\n"
 		"  --debug-gcm                - debug GCM optimization pass\n"
@@ -1640,6 +1655,8 @@ int main(int argc, const char **argv)
 			c_flags |= C_DUMP_IR_AFTER_REGALLOC;
 		} else if (strcmp(argv[i], "--save-ir-codegen") == 0) {
 			c_flags |= C_DUMP_IR_CODEGEN;
+		} else if (strcmp(argv[i], "--save-live-ranges") == 0) {
+			c_flags |= C_DUMP_LIVE_RANGES;
 #ifdef IR_DEBUG
 		} else if (strcmp(argv[i], "--debug-sccp") == 0) {
 			ir_flags |= IR_DEBUG_SCCP;
