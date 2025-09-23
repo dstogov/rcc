@@ -322,6 +322,9 @@ static yy_sym parse_declaration(yy_sym sym, uint32_t flags) {
 				while (sym == YY__COMMA) {
 					sym = get_sym();
 					d = d0;
+					if (sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__) {
+						sym = parse_attributes(sym, &d);
+					}
 					sym = parse_declarator(sym, &d, &name, 0);
 					if (sym == YY_ASM || sym == YY___ASM || sym == YY___ASM__) {
 						sym = parse_simple_asm_expr(sym);

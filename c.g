@@ -218,6 +218,7 @@ declaration(uint32_t flags):                               {c_dcl d0 = {0};}
 				("=" initializer(obj))?
 				(
 					","                                    {d = d0;}
+					attributes(&d)?
 					declarator(&d, &name, 0)
 					simple_asm_expr?
 					attributes(&d)?                        {if (sym == YY__EQUAL) d.flags |= C_DCL_DEFINITION;}
