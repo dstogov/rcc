@@ -3849,12 +3849,12 @@ static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, i
 				ctx->control = IR_UNUSED;
 				xlat2[i] = xlat[i] = IR_UNUSED;
 			} else if (op == IR_UNREACHABLE) {
-				ctx->control = IR_UNUSED;
+				ctx->control = op1;
 				_ir_UNREACHABLE(ctx);
 				xlat2[i] = xlat[i] = ctx->control;
 				ctx->control = IR_UNUSED;
 			} else if (op == IR_IJMP) {
-				ctx->control = IR_UNUSED;
+				ctx->control = op1;
 				_ir_IJMP(ctx, op2);
 				xlat2[i] = xlat[i] = ctx->control;
 				ctx->control = IR_UNUSED;
@@ -3908,6 +3908,9 @@ static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, i
 				IR_ASSERT(op != IR_PROTO);
 				IR_ASSERT(op != IR_VA_START);
 				xlat2[i] = xlat[i] = ir_emit(ctx, insn->opt, op1, op2, op3);
+				if (flags & (IR_OP_FLAG_BB_END|IR_OP_FLAG_TERMINATOR)) {
+					ctx->control = IR_UNUSED;
+				}
 			}
 			insn++;
 			i++;
@@ -3971,6 +3974,9 @@ static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, i
 			ir_MERGE_list(ret);
 			ret = IR_UNUSED;
 		}
+	} else {
+		ir_BEGIN(IR_UNUSED);
+		ret = IR_UNUSED;
 	}
 
 	/* Add BLOCK_END if necessary */
