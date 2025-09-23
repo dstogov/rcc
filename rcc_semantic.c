@@ -6356,6 +6356,9 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 
 	new_size = *size;
 	if (obj->value.type->kind == C_TYPE_ARRAY && (obj->value.type->attr & C_ATTR_FLEXIBLE)) {
+		if (last_array_type && last_array_type != obj->value.type) {
+			yy_error("initialization of flexible array member in a nested context");
+		}
 		if (offset + type->size > obj->value.type->size) {
 			size_t len =
 				(offset + type->size + obj->value.type->array.type->size - 1) / obj->value.type->array.type->size;
