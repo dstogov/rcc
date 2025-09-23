@@ -1069,7 +1069,8 @@ c_sym *c_declare(c_name name, c_dcl *d)
 	  && !(d->flags & (C_DCL_TYPEDEF|C_DCL_EXTERN|C_DCL_DEFINITION))
 	  && scope)
 	 || ((d->type->kind == C_TYPE_VOID)
-	  && !(d->flags & C_DCL_TYPEDEF))) {
+	  && !(d->flags & (C_DCL_TYPEDEF|C_DCL_EXTERN)))
+	  ) {
 		yy_error_fmt("storage size of \"%s\" isn't known", yy_sym2str(name));
 		return NULL;
 	}
