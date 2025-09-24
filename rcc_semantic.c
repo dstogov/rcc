@@ -1371,7 +1371,7 @@ void c_make_array_type(c_dcl *d, c_dcl *dim, c_value *len, uint64_t attr, bool i
 	type = ir_arena_alloc(&c_arena, sizeof(c_type));
 	type->kind = C_TYPE_ARRAY;
 	type->flags = active_scope ? 0 : C_TYPE_GLOBAL;
-	if ((d->type->attr & C_ATTR_ALIGN_MASK) && c_attr2align(d->type->attr) > d->type->size) {
+	if ((d->type->attr & C_ATTR_ALIGN_MASK) && d->type->size && c_attr2align(d->type->attr) > d->type->size) {
 		yy_error("alignment of array elements is greater than element size");
 	}
 	if (attr & C_ATTR_VLA) {
