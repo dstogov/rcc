@@ -3004,6 +3004,7 @@ static ir_ref c_do_store(c_value *addr, c_value *val)
 static void c_do_check_cvt(const c_type *type, c_value *val, int32_t arg)
 {
 	const c_type *val_type = val->type;
+	uint32_t attr;
 
 	if (C_IS_TYPE_NUM(type) || type->kind == C_TYPE_ENUM) {
 		if (!C_IS_TYPE_NUM(val_type) && val_type->kind != C_TYPE_ENUM) {
@@ -3058,9 +3059,10 @@ incompatible:
 					}
 				}
 			} else {
-				uint32_t attr = (val_type->pointer.type->attr & ~type->pointer.type->attr)
+				attr = (val_type->pointer.type->attr & ~type->pointer.type->attr)
 					& (C_ATTR_CONST|C_ATTR_VOLATILE|C_ATTR_ATOMIC);
 				if (attr) {
+check_qualifiers:
 					if (attr & C_ATTR_CONST) {
 						if (arg < 0) {
 							yy_warning_fmt("assignment discards \"%s\" qualifier from pointer target type", "const");
@@ -3090,8 +3092,9 @@ incompatible:
 			}
 		} else if (val_type->kind == C_TYPE_FUNC
 		 && (type->pointer.type->kind == C_TYPE_VOID
-		  || c_compatible_types(type->pointer.type, val_type, 0, 1))) {
-			/* pass */
+		  || c_compatible_types(type->pointer.type, val_type, 1, 1))) {
+			attr = (val_type->attr & ~type->pointer.type->attr) & (C_ATTR_CONST|C_ATTR_VOLATILE|C_ATTR_ATOMIC);
+			if (attr) goto check_qualifiers;
 		} else if (C_IS_TYPE_NUM(val_type) || val_type->kind == C_TYPE_ENUM) {
 			if (arg < 0) {
 				yy_warning("assignment makes pointer from integer without a cast");
