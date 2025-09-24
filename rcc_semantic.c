@@ -3106,7 +3106,7 @@ check_qualifiers:
 		} else {
 			goto incompatible;
 		}
-	} else if ((type->kind == C_TYPE_STRUCT || type->kind == C_TYPE_UNION)
+	} else if ((type->kind == C_TYPE_STRUCT || type->kind == C_TYPE_UNION || type->kind == C_TYPE_ARRAY)
 	 && c_compatible_types(type, val_type, 1, 0)) {
 		val->type = type;
 		return;
