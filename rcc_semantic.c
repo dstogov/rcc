@@ -3108,7 +3108,8 @@ check_qualifiers:
 		}
 	} else if ((type->kind == C_TYPE_STRUCT || type->kind == C_TYPE_UNION)
 	 && c_compatible_types(type, val_type, 1, 0)) {
-		/* pass */
+		val->type = type;
+		return;
 	} else {
 		goto incompatible;
 	}
