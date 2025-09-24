@@ -431,6 +431,7 @@ add_thunk:
 void *c_linker_allocate_data(const char *name, size_t size)
 {
 	void *data = ir_arena_alloc(&c_linker_arena, size);
+	if (UNEXPECTED(!data)) yy_error("not enough memory to allocate data");
 	if ((c_flags & C_DUMP_ASM) && name) {
 		ir_disasm_add_symbol(name, (uintptr_t)data, size);
 	}
