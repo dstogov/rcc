@@ -2140,7 +2140,7 @@ void c_gcc_attribute(c_dcl *d, c_name attr, c_value *val)
 		case YY_NORETURN:
 		case YY___NORETURN__:
 			if (val) yy_warning_fmt("attribute \"%s\" with unused value", yy_sym2str(attr));
-			d->attr |= C_ATTR_NORETURN;
+			if (!(d->flags & C_DCL_TYPEDEF) || !d->type) d->attr |= C_ATTR_NORETURN;
 			break;
 		case YY_NOTHROW:
 		case YY___NOTHROW__:
