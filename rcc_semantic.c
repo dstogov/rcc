@@ -3685,7 +3685,12 @@ void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 	 || name == YY___BUILTIN_FABS
 	 || name == YY___BUILTIN_FABSF) {
 		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
-		c_value_set_rval(val, args[0].type, args[0].u.type, ir_ABS(args[0].u.type, c_value_ref(&args[0])));
+		if (IR_IS_TYPE_UNSIGNED(args[0].u.type)) {
+			*val = args[0];
+		} else {
+			ir_ref ref = ir_ABS(args[0].u.type, c_value_ref(&args[0]));
+			c_value_set_rval(val, args[0].type, args[0].u.type, ref);
+		}
 	} else if (name == YY___BUILTIN_BSWAP16
 	 || name == YY___BUILTIN_BSWAP32
 	 || name == YY___BUILTIN_BSWAP64) {
