@@ -3623,6 +3623,7 @@ void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 			dcl.flags = C_DCL_EXTERN | C_TYPE_SPEC_TYPE;
 
 			type = ir_arena_alloc(&c_arena, sizeof(c_type));
+			if (!type) yy_error("out of memory");
 			memset(type, 0, sizeof(c_type));
 			type->kind = C_TYPE_FUNC;
 			type->func.ret_type = &c_type_void;

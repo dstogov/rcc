@@ -659,11 +659,13 @@ void rcc_init(void)
 	c_type *type;
 
 	c_type *c_type_ptr_const_void = ir_arena_alloc(&c_arena, sizeof(c_type));
+	if (!c_type_ptr_const_void) yy_error("out of memory");
 	memset(c_type_ptr_const_void, 0, sizeof(c_type));
 	c_type_ptr_const_void->kind = C_TYPE_POINTER;
 	c_type_ptr_const_void->size = sizeof(void*);
 	//c_type_ptr_const_void->attr = C_ATTR_RESTRICT;
 	type = ir_arena_alloc(&c_arena, sizeof(c_type));
+	if (!type) yy_error("out of memory");
 	memset(type, 0, sizeof(c_type));
 	type->kind = C_TYPE_VOID;
 	type->attr = C_ATTR_CONST;
@@ -674,6 +676,7 @@ void rcc_init(void)
 	dcl.flags = C_DCL_EXTERN | C_TYPE_SPEC_TYPE;
 
 	type = ir_arena_alloc(&c_arena, sizeof(c_type));
+	if (!type) yy_error("out of memory");
 	memset(type, 0, sizeof(c_type));
 	type->kind = C_TYPE_FUNC;
 	type->func.ret_type = &c_type_ptr;
@@ -690,6 +693,7 @@ void rcc_init(void)
 	c_declare(YY_MEMCPY, &dcl);
 
 	type = ir_arena_alloc(&c_arena, sizeof(c_type));
+	if (!type) yy_error("out of memory");
 	memset(type, 0, sizeof(c_type));
 	type->kind = C_TYPE_FUNC;
 	type->func.ret_type = &c_type_ptr;
