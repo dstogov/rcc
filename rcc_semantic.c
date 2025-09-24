@@ -3671,8 +3671,8 @@ void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
 		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTLZ(args[0].u.type, c_value_ref(&args[0])));
 	} else if (name == YY___BUILTIN_CTZ
-	 || name == YY___BUILTIN_CLZL
-	 || name == YY___BUILTIN_CLZLL) {
+	 || name == YY___BUILTIN_CTZL
+	 || name == YY___BUILTIN_CTZLL) {
 		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
 		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTTZ(args[0].u.type, c_value_ref(&args[0])));
 	} else if (name == YY___BUILTIN_EXPECT) {
