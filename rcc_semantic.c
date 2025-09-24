@@ -799,6 +799,9 @@ static void c_validate_redeclaration(c_name name, c_dcl *d, c_sym *sym)
 			yy_error_fmt("thread-local declaration of \"%s\" follows non-thread-local declaration", yy_sym2str(name));
 		} else if (!(d->flags & C_DCL_THREAD_LOCAL) && sym->is_thread_local) {
 			yy_error_fmt("non-thread-local declaration of \"%s\" follows thread-local declaration", yy_sym2str(name));
+		} else if ((d->flags & (C_DCL_DEFINITION|C_DCL_EXTERN)) == (C_DCL_DEFINITION|C_DCL_EXTERN)) {
+			yy_warning_fmt("\"%s\" initialized and declared \"extern\"", yy_sym2str(name));
+			d->flags &= ~C_DCL_EXTERN;
 		}
 		if (sym->value.type->kind == C_TYPE_ARRAY && (sym->value.type->attr & C_ATTR_FLEXIBLE)
 		 && d->type->kind == C_TYPE_ARRAY && !(d->type->attr & (C_ATTR_FLEXIBLE|C_ATTR_VLA))) {
@@ -1116,7 +1119,7 @@ c_sym *c_declare(c_name name, c_dcl *d)
 			sym->is_thread_local = (d->flags & C_DCL_THREAD_LOCAL) != 0;
 
 			if ((d->flags & C_DCL_EXTERN) && (d->flags & C_DCL_DEFINITION)) {
-				yy_warning_fmt("\%s\" initialized and declared \"extern\"", yy_sym2str(name));
+				yy_warning_fmt("\"%s\" initialized and declared \"extern\"", yy_sym2str(name));
 				d->flags &= ~C_DCL_EXTERN;
 			}
 			if (!(d->flags & C_DCL_EXTERN)

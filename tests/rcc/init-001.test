@@ -7,7 +7,7 @@ extern int z = 3;
 extern int z;
 int z = 3;
 --EXPECT--
-./tests/rcc/init-001.c:3:14: warning: z" initialized and declared "extern"
+./tests/rcc/init-001.c:3:14: warning: "z" initialized and declared "extern"
 ./tests/rcc/init-001.c:5:7: error: redefinition of "z"
 
 exit code = 1
