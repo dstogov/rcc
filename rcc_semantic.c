@@ -2418,10 +2418,12 @@ static void c_do_load_bit_field(c_value *val, uint32_t first_bit, uint32_t bits)
 		}
 		if (ir_type_size[type] * 8 != (first_bit + bits)) {
 			v.u64 = ir_type_size[type] * 8 - (first_bit + bits);
+			IR_ASSERT(v.u64 < ir_type_size[type] * 8);
 			ref = ir_SHL(type, ref, ir_const(active_ctx, v, type));
 		}
 		if (ir_type_size[type] * 8 != bits) {
 			v.u64 = ir_type_size[type] * 8 - bits;
+			IR_ASSERT(v.u64 < ir_type_size[type] * 8);
 			ref = ir_SAR(type, ref, ir_const(active_ctx, v, type));
 		}
 	} else {
@@ -2432,6 +2434,7 @@ static void c_do_load_bit_field(c_value *val, uint32_t first_bit, uint32_t bits)
 		if (ir_type_size[type] * 8 == (first_bit + bits)) {
 			if (ir_type_size[type] * 8 != bits) {
 				v.u64 = ir_type_size[type] * 8 - bits;
+				IR_ASSERT(v.u64 < ir_type_size[type] * 8);
 				ref = ir_SHR(type, ref, ir_const(active_ctx, v, type));
 			}
 		} else if (first_bit == 0 && bits <= 32) { // use AND instead of SHL+SHR if small immediate (AArch64) ???
@@ -2439,9 +2442,11 @@ static void c_do_load_bit_field(c_value *val, uint32_t first_bit, uint32_t bits)
 			ref = ir_AND(type, ref, ir_const(active_ctx, v, type));
 		} else {
 			v.u64 = ir_type_size[type] * 8 - (first_bit + bits);
+			IR_ASSERT(v.u64 < ir_type_size[type] * 8);
 			ref = ir_SHL(type, ref, ir_const(active_ctx, v, type));
 			if (ir_type_size[type] * 8 != bits) {
 				v.u64 = ir_type_size[type] * 8 - bits;
+				IR_ASSERT(v.u64 < ir_type_size[type] * 8);
 				ref = ir_SHR(type, ref, ir_const(active_ctx, v, type));
 			}
 		}
@@ -2480,54 +2485,67 @@ static void c_do_load_bit_field_packed(c_value *val, uint32_t first_bit, uint32_
 	ir_type type = val->u.type;
 	ir_ref addr = val->u.ref;
 	ir_val shift;
-	ir_ref ret, ref;
+	ir_ref ret = IR_UNUSED, ref, a;
+	size_t offset = 0;
 	uint8_t mask;
 	uint32_t orig_bits = bits;
 
-	if (ir_type_size[type] > 1) {
-		ret = ir_ZEXT(type, ir_LOAD_U8(addr));
-	} else {
-		ret = ir_LOAD(type, addr);
+	while (first_bit >= 8) {
+		first_bit -= 8;
+		offset++;
 	}
-	shift.u64 = first_bit;
+
+	shift.i64 = 0;
 	if (first_bit) {
+		a = offset ? ir_ADD_A(addr, ir_const_size_t(active_ctx, offset)) : addr;
+		if (ir_type_size[type] > 1) {
+			ret = ir_ZEXT(type, ir_LOAD_U8(a));
+		} else {
+			ret = ir_LOAD(type, a);
+		}
+		shift.u64 = first_bit;
+		IR_ASSERT(shift.u64 < ir_type_size[type] * 8);
 		ret = ir_SHR(type, ret, ir_const(active_ctx, shift, type));
+		shift.u64 = 8 - first_bit;
 		bits -= 8 - first_bit;
-		shift.u64 = -(int)first_bit;
-	} else {
-		bits -= 8;
+		offset++;
 	}
 
 	while (bits >= 8) {
-		addr = ir_ADD_A(addr, ir_const_size_t(active_ctx, 1));
+		a = offset ? ir_ADD_A(addr, ir_const_size_t(active_ctx, offset)) : addr;
 		if (ir_type_size[type] > 1) {
-			ref = ir_ZEXT(type, ir_LOAD_U8(addr));
+			ref = ir_ZEXT(type, ir_LOAD_U8(a));
 		} else {
-			ref = ir_LOAD(type, addr);
+			ref = ir_LOAD(type, a);
 		}
+		IR_ASSERT(shift.u64 < ir_type_size[type] * 8);
+		ref = ir_SHL(type, ref, ir_const(active_ctx, shift, type));
+		ret = ret ? ir_OR(type, ret, ref) : ref;
 		shift.u64 += 8;
-		ret = ir_OR(type, ret, ir_SHL(type, ref, ir_const(active_ctx, shift, type)));
 		bits -= 8;
+		offset++;
 	}
 
 	if (bits) {
-		addr = ir_ADD_A(addr, ir_const_size_t(active_ctx, 1));
+		a = offset ? ir_ADD_A(addr, ir_const_size_t(active_ctx, offset)) : addr;
 		mask = ((1UL<<bits)-1);
 		if (ir_type_size[type] > 1) {
-			ref = ir_ZEXT(type, ir_AND_U8(ir_LOAD_U8(addr), ir_const_u8(active_ctx, mask)));
+			ref = ir_ZEXT(type, ir_AND_U8(ir_LOAD_U8(a), ir_const_u8(active_ctx, mask)));
 		} else {
 			ir_val v;
 			v.u64 = mask;
-			ref = ir_AND(type, ir_LOAD(type, addr), ir_const(active_ctx, v, type));
+			ref = ir_AND(type, ir_LOAD(type, a), ir_const(active_ctx, v, type));
 		}
-		shift.u64 += 8;
-		ret = ir_OR(type, ret, ir_SHL(type, ref, ir_const(active_ctx, shift, type)));
+		IR_ASSERT(shift.u64 < ir_type_size[type] * 8);
+		ref = ir_SHL(type, ref, ir_const(active_ctx, shift, type));
+		ret = ret ? ir_OR(type, ret, ref) : ref;
 	}
 
 	if (IR_IS_TYPE_SIGNED(val->u.type) && val->type->kind != C_TYPE_ENUM) {
 		/* sign extend */
 		shift.u64 = ir_type_size[val->u.type] * 8 - orig_bits;
 		if (shift.u64) {
+			IR_ASSERT(shift.u64 < ir_type_size[type] * 8);
 			ir_ref c = ir_const(active_ctx, shift, val->u.type);
 			ret = ir_SHL(val->u.type, ret, c);
 			ret = ir_SAR(val->u.type, ret, c);
@@ -2892,6 +2910,7 @@ static ir_ref c_do_store_bit_field(ir_ref addr, uint32_t first_bit, uint32_t bit
 
 	if (first_bit) {
 		v.u64 = first_bit;
+		IR_ASSERT(v.u64 < ir_type_size[type] * 8);
 		ref = ir_SHL(type, ref, ir_const(active_ctx, v, type));
 	}
 
@@ -2908,6 +2927,7 @@ static ir_ref c_do_store_bit_field(ir_ref addr, uint32_t first_bit, uint32_t bit
 		v.u64 = ir_type_size[val->u.type] * 8 - bits;
 		if (v.u64) {
 			ir_ref c = ir_const(active_ctx, v, val->u.type);
+			IR_ASSERT(v.u64 < ir_type_size[val->u.type] * 8);
 			ret = ir_SHL(val->u.type, ret, c);
 			ret = ir_SAR(val->u.type, ret, c);
 		}
@@ -2922,45 +2942,56 @@ static ir_ref c_do_store_bit_field_packed(ir_ref addr, uint32_t first_bit, uint3
 {
 	ir_type type = (ir_type_size[val->u.type] != 1) ? IR_U8 : val->u.type;
 	ir_val shift, mask;
-	ir_ref ret, ref;
+	size_t offset = 0;
+	ir_ref ret, ref, a;
+
+	while (first_bit >= 8) {
+		first_bit -= 8;
+		offset++;
+	}
 
 	ret = ref = c_value_ref(val);
-	shift.u64 = first_bit;
+
+	shift.i64 = 0;
 	if (first_bit) {
 		mask.u64 = ~(((1UL<<(8-first_bit))-1)<<first_bit);
+		shift.u64 = first_bit;
+		IR_ASSERT(shift.u64 < ir_type_size[val->u.type] * 8);
 		ref = ir_SHL(val->u.type, ret, ir_const(active_ctx, shift, val->u.type));
 		if (ir_type_size[val->u.type] != 1) {
 			ref = ir_TRUNC_U8(ref);
 		}
+		a = offset ? ir_ADD_A(addr, ir_const_size_t(active_ctx, offset)) : addr;
 		ir_STORE(
-			addr,
+			a,
 			ir_OR(type,
-				ir_AND(type, ir_LOAD(type, addr), ir_const(active_ctx, mask, type)),
+				ir_AND(type, ir_LOAD(type, a), ir_const(active_ctx, mask, type)),
 				ref));
-		shift.i64 = -(int)first_bit;
+		shift.u64 = 8 - first_bit;
 		bits -= 8 - first_bit;
-	} else {
-		if (ir_type_size[val->u.type] != 1) {
-			ref = ir_TRUNC_U8(ret);
-		}
-		ir_STORE(addr, ref);
-		bits -= 8;
+		offset++;
 	}
 
 	while (bits >= 8) {
-		addr = ir_ADD_A(addr, ir_const_size_t(active_ctx, 1));
-		shift.i64 += 8;
-		ref = ir_SHR(val->u.type, ret, ir_const(active_ctx, shift, val->u.type));
+		a = offset ? ir_ADD_A(addr, ir_const_size_t(active_ctx, offset)) : addr;
+		if (shift.u64) {
+			IR_ASSERT(shift.u64 < ir_type_size[val->u.type] * 8);
+			ref = ir_SHR(val->u.type, ret, ir_const(active_ctx, shift, val->u.type));
+		} else {
+			ref = ret;
+		}
 		if (ir_type_size[val->u.type] != 1) {
 			ref = ir_TRUNC_U8(ref);
 		}
-		ir_STORE(addr, ref);
+		ir_STORE(a, ref);
+		shift.i64 += 8;
 		bits -= 8;
+		offset++;
 	}
 
 	if (bits) {
-		addr = ir_ADD_A(addr, ir_const_size_t(active_ctx, 1));
-		shift.i64 += 8;
+		a = ir_ADD_A(addr, ir_const_size_t(active_ctx, offset));
+		IR_ASSERT(shift.u64 < ir_type_size[val->u.type] * 8);
 		ref = ir_SHR(val->u.type, ret, ir_const(active_ctx, shift, val->u.type));
 		if (ir_type_size[val->u.type] != 1) {
 			ref = ir_TRUNC_U8(ref);
@@ -2971,10 +3002,10 @@ static ir_ref c_do_store_bit_field_packed(ir_ref addr, uint32_t first_bit, uint3
 
 		mask.u64 = ~((1UL<<bits)-1);
 		ir_STORE(
-			addr,
+			a,
 				ir_OR(type,
 				ir_AND(type,
-					ir_LOAD(type, addr),
+					ir_LOAD(type, a),
 					ir_const(active_ctx, mask, type)),
 				ref));
 	}
