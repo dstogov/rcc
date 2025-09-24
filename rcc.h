@@ -836,6 +836,7 @@ extern const c_type c_type_string;
 extern const c_type c_type_lstring;
 extern const c_type c_type_string_u16;
 extern const c_type c_type_string_u32;
+extern const c_type c_type_ptr;
 
 #if __SIZEOF_SIZE_T__ == 8
 # define C_LONG_SIZE    8

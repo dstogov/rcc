@@ -656,15 +656,11 @@ void rcc_init(void)
 	c_linker_arena = ir_arena_create(4096);
 
 	c_type *type;
-	c_type *c_type_ptr_void = ir_arena_alloc(&c_arena, sizeof(c_type));
-	memset(c_type_ptr_void, 0, sizeof(c_type));
-	c_type_ptr_void->kind = C_TYPE_POINTER;
-	//c_type_ptr_void->attr = C_ATTR_RESTRICT;
-	c_type_ptr_void->pointer.type = &c_type_void;
 
 	c_type *c_type_ptr_const_void = ir_arena_alloc(&c_arena, sizeof(c_type));
 	memset(c_type_ptr_const_void, 0, sizeof(c_type));
 	c_type_ptr_const_void->kind = C_TYPE_POINTER;
+	c_type_ptr_const_void->size = sizeof(void*);
 	//c_type_ptr_const_void->attr = C_ATTR_RESTRICT;
 	type = ir_arena_alloc(&c_arena, sizeof(c_type));
 	memset(type, 0, sizeof(c_type));
@@ -679,11 +675,11 @@ void rcc_init(void)
 	type = ir_arena_alloc(&c_arena, sizeof(c_type));
 	memset(type, 0, sizeof(c_type));
 	type->kind = C_TYPE_FUNC;
-	type->func.ret_type = c_type_ptr_void;
+	type->func.ret_type = &c_type_ptr;
 	type->func.num_params = 3;
 	type->func.params = ir_arena_alloc(&c_arena, sizeof(c_param) * 3);
 	type->func.params[0].name = 0;
-	type->func.params[0].type = c_type_ptr_void;
+	type->func.params[0].type = &c_type_ptr;
 	type->func.params[1].name = 0;
 	type->func.params[1].type = c_type_ptr_const_void;
 	type->func.params[2].name = 0;
@@ -695,11 +691,11 @@ void rcc_init(void)
 	type = ir_arena_alloc(&c_arena, sizeof(c_type));
 	memset(type, 0, sizeof(c_type));
 	type->kind = C_TYPE_FUNC;
-	type->func.ret_type = c_type_ptr_void;
+	type->func.ret_type = &c_type_ptr;
 	type->func.num_params = 3;
 	type->func.params = ir_arena_alloc(&c_arena, sizeof(c_param) * 3);
 	type->func.params[0].name = 0;
-	type->func.params[0].type = c_type_ptr_void;
+	type->func.params[0].type = &c_type_ptr;
 	type->func.params[1].name = 0;
 	type->func.params[1].type = &c_type_i32;
 	type->func.params[2].name = 0;
