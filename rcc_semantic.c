@@ -2593,7 +2593,7 @@ static void c_do_trunc(const c_type *t, ir_type type, c_value *v)
 
 static void c_do_bitcast(const c_type *t, ir_type type, c_value *v)
 {
-	IR_ASSERT(t->size == v->type->size);
+	IR_ASSERT(t->size == v->type->size || (t->size == sizeof(void*) && v->type->kind == C_TYPE_ARRAY));
 	IR_ASSERT(ir_type_size[type] == ir_type_size[v->u.type]);
 	if (c_value_is_ref(v) || c_value_is_const_str(v)) {
 		c_value_set_rval(v, t, type, ir_BITCAST(type, c_value_ref(v)));
@@ -3134,7 +3134,7 @@ void c_do_cast(const c_type *t, c_value *v)
 	} else if (v->type->kind == C_TYPE_POINTER || v->type->kind == C_TYPE_ARRAY) {
 		if (C_IS_TYPE_FP(t)) {
 			yy_error("cannot convert pointer to a floating point");
-		} else if (t->size != v->type->size
+		} else if (t->size != sizeof(void*)
 		 && (C_IS_TYPE_INT(t) || t->kind == C_TYPE_ENUM)
 		 && !c_value_is_const(v)) {
 			yy_warning("cast from pointer to integer of different size");
