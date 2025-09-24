@@ -1799,7 +1799,7 @@ static yy_sym parse_unary_expression(yy_sym sym, c_value *val) {
 		} else if (sym == YY__LBRACE) {
 			c_scope scope;
 			sym = get_sym();
-			c_do_statement_expression(&scope);
+			c_do_statement_expression(&scope, val);
 			sym = parse_compound_statement(sym, val);
 			c_pop_scope(&scope);
 			if (sym != YY__RBRACE) {
@@ -1929,7 +1929,7 @@ static yy_sym parse_unary_expression(yy_sym sym, c_value *val) {
 			} else if (sym == YY__LBRACE) {
 				c_scope scope;
 				sym = get_sym();
-				c_do_statement_expression(&scope);
+				c_do_statement_expression(&scope, val);
 				sym = parse_compound_statement(sym, val);
 				c_pop_scope(&scope);
 				if (sym != YY__RBRACE) {
@@ -1986,7 +1986,7 @@ static yy_sym parse_unary_expression(yy_sym sym, c_value *val) {
 			} else if (sym == YY__LBRACE) {
 				c_scope scope;
 				sym = get_sym();
-				c_do_statement_expression(&scope);
+				c_do_statement_expression(&scope, val);
 				sym = parse_compound_statement(sym, val);
 				c_pop_scope(&scope);
 				if (sym != YY__RBRACE) {

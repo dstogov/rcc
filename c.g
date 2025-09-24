@@ -866,7 +866,7 @@ unary_expression(c_value *val):
 			)
 		|   expression(val) ")"
 		|                                                  {c_scope scope;}
-			"{"                                            {c_do_statement_expression(&scope);}
+			"{"                                            {c_do_statement_expression(&scope, val);}
 			compound_statement(val)                        {c_pop_scope(&scope);}
 			"}" ")"
 		)
@@ -913,7 +913,7 @@ unary_expression(c_value *val):
 				expression(val)
 				")"
 			|                                              {c_scope scope;}
-				"{"                                        {c_do_statement_expression(&scope);}
+				"{"                                        {c_do_statement_expression(&scope, val);}
 				compound_statement(val)                    {c_pop_scope(&scope);}
 				"}"
 				")"
@@ -933,7 +933,7 @@ unary_expression(c_value *val):
 				expression(val)
 				")"
 			|                                              {c_scope scope;}
-				"{"                                        {c_do_statement_expression(&scope);}
+				"{"                                        {c_do_statement_expression(&scope, val);}
 				compound_statement(val)                    {c_pop_scope(&scope);}
 				"}"
 				")"

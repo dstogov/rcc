@@ -5196,10 +5196,11 @@ void c_do_cond_op(c_value *cond, c_value *op1, c_value *op2)
 	}
 }
 
-void c_do_statement_expression(c_scope *scope)
+void c_do_statement_expression(c_scope *scope, c_value *val)
 {
 	if (!active_func_scope) yy_error("statement expression allowed only inside a function");
 	c_push_scope(scope);
+	c_value_set_rval(val, &c_type_void, IR_VOID, IR_UNUSED);
 }
 
 ir_ref c_do_if(c_value *cond)
