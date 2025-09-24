@@ -4239,6 +4239,33 @@ static const c_type *c_common_type(yy_sym sym, c_value *op1, c_value *op2)
 		if (t2 == C_TYPE_FUNC && c_compatible_types(op1_type, op2_type, 1, 0)) {
 			if (sym == YY__COLON) return c_create_pointer_type(op1_type);
 			return op1_type;
+		} else if (sym == YY__LESS || sym == YY__LESS_EQUAL || sym == YY__GREATER || sym == YY__GREATER_EQUAL
+			|| sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL || YY__COLON) {
+			if (C_IS_TYPE_INT(op2_type)) {
+				if (c_value_is_const(op2) && op2->u.val.u64 == 0) {
+					op2->type = &c_type_ptr;
+					op2->u.type = IR_ADDR;
+					return op1_type;
+				}
+				if (sym == YY__COLON) return NULL;
+				yy_warning("comparison between pointer and integer");
+				return op1_type;
+			}
+		}
+		return NULL;
+	} else if (t2 == C_TYPE_FUNC) {
+		if (sym == YY__LESS || sym == YY__LESS_EQUAL || sym == YY__GREATER || sym == YY__GREATER_EQUAL
+			|| sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL || YY__COLON) {
+			if (C_IS_TYPE_INT(op1_type)) {
+				if (c_value_is_const(op1) && op1->u.val.u64 == 0) {
+					op1->type = &c_type_ptr;
+					op1->u.type = IR_ADDR;
+					return op2_type;
+				}
+				if (sym == YY__COLON) return NULL;
+				yy_warning("comparison between pointer and integer");
+				return op2_type;
+			}
 		}
 		return NULL;
 	} else if (C_IS_TYPE_KIND_FP(t1)) {
