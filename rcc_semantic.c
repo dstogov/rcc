@@ -2209,6 +2209,9 @@ void c_sizeof_type(c_value *res, const c_type *type)
 
 	if ((type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(type)) {
 		yy_error_fmt("invalid application of \"%s\" to incomplete type", "sizeof");
+	} else if (type->kind == C_TYPE_ARRAY && (type->attr & C_ATTR_VLA)) {
+		c_value_set_rval(res, &c_type_size_t, IR_SIZE_T, c_type_size(type));
+		return;
 	}
 	val.u64 = type->size;
 	c_value_set_const(res, &c_type_size_t, IR_SIZE_T, val);
@@ -2246,6 +2249,10 @@ void c_sizeof_expr(c_value *res, yy_sym op, c_value *expr, ir_ref old_control)
 			val.u64 = c_value_str_size(expr);
 		} else if (expr->type->attr & C_ATTR_FLEXIBLE) {
 			yy_error_fmt("invalid application of \"%s\" to incomplete type", "sizeof");
+		} else if (expr->type->kind == C_TYPE_ARRAY && (expr->type->attr & C_ATTR_VLA)) {
+			c_do_end_nocode(old_control);
+			c_value_set_rval(res, &c_type_size_t, IR_SIZE_T, c_type_size(expr->type));
+			return;
 		} else {
 			if (expr->type->kind == C_TYPE_BOOL
 			 && c_value_is_ref(expr)
