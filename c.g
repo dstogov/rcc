@@ -1442,7 +1442,7 @@ static void yy_read_char(c_value *res, const char *p, size_t len)
 				break;
 		}
 	}
-	IR_ASSERT(*p == '\'');
+	if (*p != '\'') yy_error("multi-character character constant");
 	val.u64 = ch;
 	if (!prefix) {
 		c_value_set_const(res, &c_type_i32, IR_I32, val);
