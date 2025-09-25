@@ -187,6 +187,10 @@ static const char c_boot[] =
 "#define __INTMAX_TYPE__          long int\n"
 "#define __UINTMAX_TYPE__         unsigned long int\n"
 #endif
+
+"#define __CHAR16_TYPE__          short unsigned int\n"
+"#define __CHAR32_TYPE__          unsigned int\n"
+
 "#define __thread                 _Thread_local\n"
 "#define __builtin_offsetof(t, f) ((__SIZE_TYPE__)&(((t*)0)->f))\n"
 "\n";
