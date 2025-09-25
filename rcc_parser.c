@@ -2987,10 +2987,12 @@ bool parse_pp_expr(void)
 	c_value res;
 	bool old_dead_code = c_dead_code;
 	ir_ctx *old_ctx = active_ctx;
+	uint32_t old_flags = yy_flags;
 	yy_sym sym;
 
 	active_ctx = global_ctx;
 	yy_flags |= PP_EVAL_EXPRESSION;
+	yy_flags &= ~YY_ACCEPT_PP_NUMBER;
 	c_dead_code = 0;
 
 	sym = get_sym();
@@ -3000,7 +3002,7 @@ bool parse_pp_expr(void)
 	ret = c_value_is_true(&res);
 
 	c_dead_code = old_dead_code;
-	yy_flags &= ~PP_EVAL_EXPRESSION;	
+	yy_flags = old_flags;
 	active_ctx = old_ctx;
 
 	return ret;
