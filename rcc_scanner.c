@@ -510,9 +510,13 @@ string:
 			if (ch >= '0' && ch <= '9') goto float_mumber_cont;
 			if (ch == '.') {
 				ch = *++pos;
-				if (ch != '.') goto error;
-				pos++;
-				ret = YY__POINT_POINT_POINT;
+				if (ch == '.') {
+					pos++;
+					ret = YY__POINT_POINT_POINT;
+				} else {
+					pos--;
+					ret = YY__POINT;
+				}
 			} else {
 				ret = YY__POINT;
 			}
