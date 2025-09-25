@@ -229,7 +229,7 @@ declaration(uint32_t flags):                               {c_dcl d0 = {0};}
 			|   /* funcrion-definition */                  {ir_ctx ctx, *old_ctx = active_ctx;}
 			                                               {c_scope scope;}
 			                                               {if (!d.type || d.type->kind != C_TYPE_FUNC) yy_error_sym("unexpected", sym);}
-				(   /* old style arguments */
+				(   ?{d.type->attr & C_ATTR_OLD_FUNC}
 					old_style_param_declaration(d.type)+   {c_validate_func_params(name, &d);}
 				)?                                         {c_do_func_start(name, &d, &scope, &ctx);}
 				"{"
@@ -567,24 +567,24 @@ array_declarator(c_dcl *d, bool is_param):                 {c_value len = {0};}
 	arrays_and_params(d, 0, is_param)?                     {c_make_array_type(d, &dim, &len, attr, is_param);}
 ;
 
-parameters(c_dcl *d, bool allow_old_func):                 {bool is_variadic = 0;}
+parameters(c_dcl *d, bool allow_old_func):                 {uint32_t attr = 0;}
                                                            {int32_t num_params = 0;}
                                                            {c_param *params = alloca(sizeof(c_param) * C_ALLOCA_PARAMS);}
 	"("
 	(	?{allow_old_func && !is_typedef_name(sym)}
-		identifier_list(&params, &num_params)
+		identifier_list(&params, &num_params)              {attr |= C_ATTR_OLD_FUNC;}
 	|	parameter_declaration(&params, &num_params)
 		(	","
 			(	parameter_declaration(&params, &num_params)
-			|	"..."                                      {is_variadic = 1;}
+			|	"..."                                      {attr |= C_ATTR_VARIADIC;}
                                                            {break; /* manual conflict resolution */}
 			)
 		)*
-	|	"..."                                              {is_variadic = 1;}
-	|	/* empty */
+	|	"..."                                              {attr |= C_ATTR_VARIADIC;}
+	|	/* empty */                                        {attr |= C_ATTR_OLD_FUNC;}
 	)
 	")"
-	arrays_and_params(d, 0, 0)?                            {c_make_func_type(d, params, num_params, is_variadic);}
+	arrays_and_params(d, 0, 0)?                            {c_make_func_type(d, params, num_params, attr);}
 ;
 
 parameter_declaration(c_param **params, int32_t *num_params):

@@ -550,10 +550,11 @@ void pp_list_grow(pp_list *l, uint32_t size);
 #define C_ATTR_CDECL             (1<<27)
 #define C_ATTR_FASTCALL          (1<<28)
 #define C_ATTR_UNUSED            (1<<29)
+#define C_ATTR_OLD_FUNC          (1<<30)
 
 /* statement attributes */
 #define C_ATTR_FALLTHROUGH       (1<<30)
-#define C_ATTR_MUSTTAIL          (1<<31)
+#define C_ATTR_MUSTTAIL          (1U<<31)
 //#define C_ATTR_ASSUME            (1<<32)
 
 #define C_TYPE_ATTRS \
@@ -570,7 +571,8 @@ void pp_list_grow(pp_list *l, uint32_t size);
 
 #define C_FUNC_TYPE_ATTRS \
 	(C_ATTR_VARIADIC|C_ATTR_INLINE|C_ATTR_NORETURN|C_ATTR_ALWAYS_INLINE|C_ATTR_NOINLINE|C_ATTR_NOTHROW \
-		|C_ATTR_LEAF|C_ATTR_PURE|C_ATTR_HOT|C_ATTR_COLD|C_ATTR_DEPRECATED|C_ATTR_CDECL|C_ATTR_FASTCALL)
+		|C_ATTR_LEAF|C_ATTR_PURE|C_ATTR_HOT|C_ATTR_COLD|C_ATTR_DEPRECATED|C_ATTR_CDECL|C_ATTR_FASTCALL \
+		|C_ATTR_UNUSED|C_ATTR_OLD_FUNC)
 
 #define C_POINTER_ATTRS \
 	(C_ATTR_CONST|C_ATTR_RESTRICT)
@@ -878,7 +880,7 @@ c_type *c_make_struct_type(c_dcl *dcl, c_name tag);
 c_type *c_make_enum_type(c_dcl *dcl, c_name tag);
 void c_make_pointer_type(c_dcl *dcl);
 void c_make_array_type(c_dcl *dcl, c_dcl *dim, c_value *len, uint64_t attr, bool is_param);
-void c_make_func_type(c_dcl *dcl, c_param *params, int32_t num_params, bool is_variadic);
+void c_make_func_type(c_dcl *dcl, c_param *params, int32_t num_params, uint32_t attr);
 void c_make_nested_type(c_dcl *dcl, c_dcl *nested);
 void c_finish_struct_type(c_type *type, c_dcl *d);
 void c_finish_enum_type(c_type *dcl, c_dcl *d, int64_t min, uint64_t max);

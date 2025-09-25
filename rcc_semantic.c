@@ -384,10 +384,10 @@ void c_resolve_sym_name(c_value *res, c_name name, yy_sym sym)
 			c_type *type = type = ir_arena_alloc(&c_arena, sizeof(c_type));
 			type->kind = C_TYPE_FUNC;
 			type->flags = 0;
-			type->attr = 0;
+			type->attr = C_ATTR_OLD_FUNC;
 			type->size = sizeof(void*);
 			type->func.ret_type = &c_type_i32;
-			type->func.num_params = -1;
+			type->func.num_params = 0;
 			type->func.params = NULL;
 			dcl.type = type;
 			s = c_declare(name, &dcl);
@@ -668,9 +668,12 @@ static bool c_compatible_types(const c_type *t1, const c_type *t2, bool unqualif
 		uint32_t n;
 
 		if (!c_compatible_types(t1->func.ret_type, t2->func.ret_type, 0, 0)) return 0;
-		if (func && (t1->func.num_params < 0 || t2->func.num_params < 0)) return 1;
+		if (func) {
+			if ((t1->attr & C_ATTR_OLD_FUNC) || (t2->attr & C_ATTR_OLD_FUNC)) return 1;
+		} else {
+			if ((t1->attr & C_ATTR_OLD_FUNC) != (t2->attr & C_ATTR_OLD_FUNC)) return 0;
+		}
 		if (t1->func.num_params != t2->func.num_params) return 0;
-		if (t1->func.num_params <= 0) return 1;
 		p1 = t1->func.params;
 		p2 = t2->func.params;
 		for (n = t1->func.num_params; n > 0; p1++, p2++, n--) {
@@ -777,8 +780,9 @@ static void c_validate_redeclaration(c_name name, c_dcl *d, c_sym *sym)
 		} else if ((d->flags & C_DCL_STATIC) && sym->linkage != C_LINK_INTERNAL) {
 			yy_error_fmt("static declaration of \"%s\" follows non-static declaration", yy_sym2str(name));
 		} else {
-			if (sym->value.type->func.num_params < 0 && d->type->func.num_params >= 0) {
+			if ((sym->value.type->attr & C_ATTR_OLD_FUNC) && !(d->type->attr & C_ATTR_OLD_FUNC)) {
 				c_type *t = (c_type*)sym->value.type;
+				t->attr &= ~C_ATTR_OLD_FUNC;
 				t->func.num_params = d->type->func.num_params;
 				t->func.params = d->type->func.params;
 			}
@@ -1866,7 +1870,6 @@ void c_validate_func_params(c_name name, c_dcl *d)
 	int32_t i;
 	const c_type *type = d->type;
 
-	if (type->func.num_params <= 0) return;
 	for (i = 0; i < type->func.num_params; i++) {
 		if (!type->func.params[i].type) {
 			yy_warning_fmt("type of \"%s\" defaults to \"int\"", yy_sym2str(type->func.params[i].name));
@@ -1956,7 +1959,7 @@ static void c_validate_func_ret_type(const c_type *t)
 	if (t->kind == C_TYPE_ARRAY) yy_error("function returning an array");
 }
 
-void c_make_func_type(c_dcl *d, c_param *params, int32_t num_params, bool is_variadic)
+void c_make_func_type(c_dcl *d, c_param *params, int32_t num_params, uint32_t attr)
 {
 	c_type *type;
 
@@ -1968,8 +1971,6 @@ void c_make_func_type(c_dcl *d, c_param *params, int32_t num_params, bool is_var
 			if (num_params != 1) yy_error("\"void\" must be the only parameter");
 			num_params = 0;
 		}
-	} else {
-		num_params = -1;
 	}
 	if (num_params > 0) {
 		c_param *ptr = ir_arena_alloc(&c_arena, sizeof(c_param) * num_params);
@@ -1985,7 +1986,7 @@ void c_make_func_type(c_dcl *d, c_param *params, int32_t num_params, bool is_var
 	type->flags = active_scope ? 0 : C_TYPE_GLOBAL;
 	type->size = sizeof(void*);
 	type->attr = d->attr & C_FUNC_TYPE_ATTRS;
-	if (is_variadic) type->attr |= C_ATTR_VARIADIC;
+	type->attr |= attr;
 	type->func.ret_type = d->type;
 	type->func.num_params = num_params;
 	type->func.params = params;
@@ -4096,7 +4097,7 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args)
 		_ret_type = c_type2ir(ret_type);
 	}
 	if (num_args != func_type->func.num_params) {
-		if (func_type->func.num_params < 0) {
+		if (func_type->attr & C_ATTR_OLD_FUNC) {
 			/* pass */
 		} else if (num_args < func_type->func.num_params) {
 			if (c_value_is_ref(func)
@@ -6791,7 +6792,6 @@ void c_do_func_start(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 	if (j) {
 		ir_param(active_ctx, IR_ADDR, 1, "$ret", 1);
 	}
-	if (type->func.num_params <= 0) return;
 	for (i = 0; i < type->func.num_params; i++) {
 		c_param *p = &type->func.params[i];
 		const c_type *t = p->type;
