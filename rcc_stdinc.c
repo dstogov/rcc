@@ -188,6 +188,7 @@ static const char c_boot[] =
 "#define __UINTMAX_TYPE__         unsigned long int\n"
 #endif
 
+"#define __WCHAR_TYPE__           int\n"
 "#define __CHAR16_TYPE__          short unsigned int\n"
 "#define __CHAR32_TYPE__          unsigned int\n"
 
