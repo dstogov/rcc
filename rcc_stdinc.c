@@ -192,6 +192,8 @@ static const char c_boot[] =
 "#define __CHAR32_TYPE__          unsigned int\n"
 
 "#define __thread                 _Thread_local\n"
+"#define static_assert            _Static_assert\n"
+
 "#define __builtin_offsetof(t, f) ((__SIZE_TYPE__)&(((t*)0)->f))\n"
 "\n";
 
