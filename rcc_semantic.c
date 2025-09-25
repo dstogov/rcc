@@ -4058,6 +4058,7 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args)
 	ir_ref ref, ret_struct = IR_UNUSED;
 	ir_ref *arg_refs = NULL;
 	int j = 0;
+	uint8_t inlining = C_VAL_INLINE;
 
 	c_value_rval(func);
 	if (func->type->kind == C_TYPE_FUNC) {
@@ -4098,7 +4099,7 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args)
 	}
 	if (num_args != func_type->func.num_params) {
 		if (func_type->attr & C_ATTR_OLD_FUNC) {
-			/* pass */
+			inlining = 0;
 		} else if (num_args < func_type->func.num_params) {
 			if (c_value_is_ref(func)
 			 && IR_IS_CONST_REF(func->u.ref)
@@ -4171,7 +4172,7 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args)
 		arg_refs = alloca(sizeof(ir_ref));
 		arg_refs[0] = ret_struct;
 	}
-	if (func->u.op & C_VAL_INLINE) {
+	if (func->u.op & inlining) {
 		ref = ir_inline_call(active_ctx, (ir_ctx*)func->u.val.ptr, num_args + j, arg_refs);
 	} else if (!(func->u.op & C_VAL_BUILTIN)) {
 		ref = ir_CALL_N(_ret_type, c_value_ref(func), num_args + j, arg_refs);
