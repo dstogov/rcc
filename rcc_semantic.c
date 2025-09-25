@@ -145,6 +145,10 @@ repeat:
 		case C_TYPE_FUNC:    return IR_ADDR;
 		case C_TYPE_STRUCT:  return IR_ADDR;
 		case C_TYPE_UNION:   return IR_ADDR;
+		case C_TYPE_FLOAT_COMPLEX:
+		case C_TYPE_DOUBLE_COMPLEX:
+		case C_TYPE_LONG_DOUBLE_COMPLEX:
+			yy_error("complex numbers are not supported yet"); //???
 		default:
 			IR_ASSERT(0);
 			return IR_VOID;
