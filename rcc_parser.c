@@ -2995,7 +2995,7 @@ bool parse_pp_expr(void)
 
 	sym = get_sym();
 	sym = parse_constant_expression(sym, &res);
-	IR_ASSERT(sym == YY_EOF);
+	if (sym != YY_EOF) yy_error_fmt("token \"%s\" is not valid in preprocessor expressions", yy_sym2str(sym));
 
 	ret = c_value_is_true(&res);
 
