@@ -4329,7 +4329,8 @@ static const c_type *c_common_type(yy_sym sym, c_value *op1, c_value *op2)
 		}
 		return NULL;
 	} else if (C_IS_TYPE_KIND_FP(t1)) {
-		if (sym == YY__PERCENT || sym == YY__AND || sym == YY__UPARROW || sym == YY__BAR) {
+		if (sym == YY__PERCENT || sym == YY__AND || sym == YY__UPARROW || sym == YY__BAR
+		 || sym == YY__LESS_LESS || sym == YY__GREATER_GREATER) {
 			return NULL;
 		} else if (t1 == t2) {
 			return op1_type;
@@ -4346,7 +4347,8 @@ static const c_type *c_common_type(yy_sym sym, c_value *op1, c_value *op2)
 			return op1_type;
 		}
 	} else if (C_IS_TYPE_KIND_FP(t2)) {
-		if (sym == YY__PERCENT || sym == YY__AND || sym == YY__UPARROW || sym == YY__BAR) {
+		if (sym == YY__PERCENT || sym == YY__AND || sym == YY__UPARROW || sym == YY__BAR
+		 || sym == YY__LESS_LESS || sym == YY__GREATER_GREATER) {
 			return NULL;
 		} else if (C_IS_TYPE_KIND_INT(t1) || t1 == C_TYPE_ENUM) {
 			c_do_int2fp(op2_type, op2->u.type, op1);
