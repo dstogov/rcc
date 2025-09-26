@@ -539,16 +539,21 @@ static void pp_macro_join(yy_sym *tokens)
 static void pp_macro_stringize(yy_sym *tokens)
 {
 	yy_dyn_str dyn_str;
+	int spaces = 0;
 
 	yy_dyn_str_init(&dyn_str, "\"", 1);
 	while (1) {
 		yy_sym sym = *tokens++;
 		if (sym == YY_EOF) break;
-		if (sym == YY_WS) {
+		if (sym == YY_WS || sym == YY_EOL) {
+			spaces++;
+			continue;
+		}
+		while (spaces) {
 			yy_dyn_str_append(&dyn_str, " ", 1);
-		} else if (sym == YY_EOL) {
-			yy_dyn_str_append(&dyn_str, " ", 1);
-		} else if (sym == YY_PP_PLACE_MARKER) {
+			spaces--;
+		}
+		if (sym == YY_PP_PLACE_MARKER) {
 			continue;
 		} else {
 			if (PP_HAS_VAL(sym)) {
