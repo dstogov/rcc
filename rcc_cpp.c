@@ -880,12 +880,17 @@ bool pp_macro_expand(pp_macro *macro, yy_sym name)
 		pp_macro_subst_args(macro, args, &replacement);
 		pp_list_release(tmp.syms, tmp.size);
 	} else if (macro->flags & PP_MACRO_BUILTIN) {
-		if (name == YY___COUNTER__) {
+		if (name == YY___COUNTER__ || name == YY___INCLUDE_LEVEL__) {
 			char buf[16];
 			int i = sizeof(buf);
-			uint32_t n = pp_counter++;
+			uint32_t n;
 			yy_dyn_str dyn_str;
 
+			if (name == YY___COUNTER__) {
+				n = pp_counter++;
+			} else {
+				n = pp_include_level;
+			}
 			buf[--i] = 0;
 			do {
 				buf[--i] = '0' + n % 10;
@@ -917,14 +922,20 @@ bool pp_macro_expand(pp_macro *macro, yy_sym name)
 			pp_list_init(&replacement);
 			pp_list_push(&replacement, YY_STRING);
 			pp_list_push_val(&replacement);
-		} else if (name == YY___FILE__) {
+		} else if (name == YY___FILE__ || name == YY___BASE_FILE__) {
 			yy_dyn_str dyn_str;
 			size_t len;
-			const char *name = yy_sym2strl(yy_file_name, &len);
+			const char *str;
+
+			if (name == YY___FILE__ || pp_include_level == 0) {
+				str = yy_sym2strl(yy_file_name, &len);
+			} else {
+				str = yy_sym2strl(pp_include_stack[pp_include_level].file_name, &len);
+			}
 
 			// TODO: intern the quoted string ???
 			yy_dyn_str_init(&dyn_str, "\"", 1);
-			yy_dyn_str_append(&dyn_str, name, len);
+			yy_dyn_str_append(&dyn_str, str, len);
 			yy_dyn_str_append0(&dyn_str, "\"", 1);
 			yy_text = dyn_str.str;
 			yy_len = dyn_str.len;

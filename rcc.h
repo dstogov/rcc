@@ -218,6 +218,8 @@
 	_("__func__",                      YY___FUNC__)                    \
 	_("__LINE__",                      YY___LINE__)                    \
 	_("__TIME__",                      YY___TIME__)                    \
+	_("__INCLUDE_LEVEL__",             YY___INCLUDE_LEVEL__)           \
+	_("__BASE_FILE__",                 YY___BASE_FILE__)               \
 	_("__VA_ARGS__",                   YY___VA_ARGS__)                 \
 	_("E",                             YY_E)                           \
 	_("once",                          YY_ONCE)                        \

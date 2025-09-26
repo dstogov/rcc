@@ -634,13 +634,15 @@ void rcc_init(void)
 		s += len + 1;
 	}
 
-	pp_macro_define(YY___COUNTER__,  PP_MACRO_BUILTIN, 0, NULL);
-	pp_macro_define(YY___DATE__,     PP_MACRO_BUILTIN, 0, NULL);
-	pp_macro_define(YY___FILE__,     PP_MACRO_BUILTIN, 0, NULL);
-	pp_macro_define(YY___FUNCTION__, PP_MACRO_BUILTIN, 0, NULL);
-	pp_macro_define(YY___FUNC__,     PP_MACRO_BUILTIN, 0, NULL);
-	pp_macro_define(YY___LINE__,     PP_MACRO_BUILTIN, 0, NULL);
-	pp_macro_define(YY___TIME__,     PP_MACRO_BUILTIN, 0, NULL);
+	pp_macro_define(YY___COUNTER__,       PP_MACRO_BUILTIN, 0, NULL);
+	pp_macro_define(YY___DATE__,          PP_MACRO_BUILTIN, 0, NULL);
+	pp_macro_define(YY___FILE__,          PP_MACRO_BUILTIN, 0, NULL);
+	pp_macro_define(YY___FUNCTION__,      PP_MACRO_BUILTIN, 0, NULL);
+	pp_macro_define(YY___FUNC__,          PP_MACRO_BUILTIN, 0, NULL);
+	pp_macro_define(YY___LINE__,          PP_MACRO_BUILTIN, 0, NULL);
+	pp_macro_define(YY___TIME__,          PP_MACRO_BUILTIN, 0, NULL);
+	pp_macro_define(YY___INCLUDE_LEVEL__, PP_MACRO_BUILTIN, 0, NULL);
+	pp_macro_define(YY___BASE_FILE__,     PP_MACRO_BUILTIN, 0, NULL);
 
 	pp_start();
 	c_stdinc_init();
