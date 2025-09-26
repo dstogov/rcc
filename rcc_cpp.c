@@ -557,10 +557,10 @@ static void pp_macro_stringize(yy_sym *tokens)
 					const char *s = yy_text;
 					while (yy_len) {
 						char c = *s;
-					    if ( c < 32 || c == '\"' || c == '\\') {
+					    if ((c < 32 && c != '\t') || c == '\"' || c == '\\') {
 							yy_dyn_str_append(&dyn_str, "\\", 1);
 					    }
-					    if (c >= 32 /*&& c <= 126*/) {
+					    if (c >= 32 || c == '\t' /*&& c <= 126*/) {
 							yy_dyn_str_append(&dyn_str, s, 1);
 					    } else {
 					        if (c == '\n') {
@@ -582,6 +582,19 @@ static void pp_macro_stringize(yy_sym *tokens)
 				yy_text = yy_sym2strl(sym & ~PP_NOSUBST, &yy_len);
 			}
 			yy_dyn_str_append(&dyn_str, yy_text, yy_len);
+		}
+	}
+	if (dyn_str.str[dyn_str.len - 1] == '\\') {
+		int count = 0;
+		size_t pos = dyn_str.len - 1;
+		do {
+			pos--;
+			count++;
+		} while(dyn_str.str[pos] == '\\');
+		if (count % 2 != 0) {
+			yy_warning("invalid string literal, ignoring final \"\\\"");
+			dyn_str.len--;
+			yy_arena->ptr--;
 		}
 	}
 	yy_dyn_str_append0(&dyn_str, "\"", 1);
