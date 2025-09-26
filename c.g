@@ -1843,5 +1843,14 @@ bool parse_pp_expr(void)
 
 void rcc_parse(void)
 {
-	parse();
+	if (0) {
+		parse();
+	} else {
+		/* parse starting from yy_pos */
+		yy_sym sym = parse_translation_unit(get_sym());
+
+		if (sym != YY_EOF) {
+			yy_error_sym("<EOF> expected, got", sym);
+		}
+	}
 }

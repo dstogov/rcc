@@ -766,6 +766,11 @@ static int rcc_read(const char *file_name)
 	yy_end = yy_buf + size;
 	yy_file_name = yy_hash_lookup(file_name, strlen(file_name));
 
+	/* Skip UTF-8 BOM */
+	if (yy_pos[0] == '\xef' && yy_pos[1] == '\xbb' && yy_pos[2] == '\xbf') {
+		yy_pos = yy_text = yy_linepos = yy_pos + 3;
+	}
+
 	pp_start();
 
 	return 1;
