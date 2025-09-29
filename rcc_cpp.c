@@ -398,10 +398,22 @@ static yy_sym pp_paste(yy_sym sym1, const char *s1, size_t len1, yy_sym sym2, co
 		return sym1;
 	} else if (PP_IS_ID(sym1)) {
 		if (PP_IS_ID(sym2) || (sym2 >= YY_DECIMAL_NUMBER && sym2 <= YY_PP_NUMBER)) {
-			yy_dyn_str_init(&dyn_str, s1, len1);
-			yy_dyn_str_append0(&dyn_str, s2, len2);
-			sym = yy_hash_lookup(dyn_str.str, dyn_str.len);
-			return sym;
+			bool ok = 1;
+			size_t i;
+
+			if (sym2 >= YY_FLOATING_NUMBER && sym2 <= YY_PP_NUMBER) {
+				for (i = 0; i < len2; i++) {
+					if (s2[i] == '.' || s2[i] == '+' || s2[i] == '-') {
+						ok = 0;
+					}
+				}
+			}
+			if (ok) {
+				yy_dyn_str_init(&dyn_str, s1, len1);
+				yy_dyn_str_append0(&dyn_str, s2, len2);
+				sym = yy_hash_lookup(dyn_str.str, dyn_str.len);
+				return sym;
+			}
 		}
 	} else if (sym1 >= YY_DECIMAL_NUMBER && sym1 <= YY_PP_NUMBER) {
 		if ((sym2 >= YY_DECIMAL_NUMBER && sym2 <= YY_PP_NUMBER) || PP_IS_ID(sym2) || sym2 == YY__POINT
