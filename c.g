@@ -1859,4 +1859,5 @@ void rcc_parse(void)
 			yy_error_sym("<EOF> expected, got", sym);
 		}
 	}
+	if (pp_ifdef_level) yy_error("mising #endif");
 }

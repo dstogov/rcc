@@ -64,7 +64,7 @@ static uint8_t               pp_ifdef_stack[IFDEF_STACK_SIZE];
 static uint32_t              pp_recursion_level = 0; /* used for debug only */
 
 static uint32_t              pp_counter;              /* __COUNTER__ value */
-static uint32_t              pp_ifdef_level;          /* ifdef nesting level */
+       uint32_t              pp_ifdef_level;          /* ifdef nesting level */
        uint32_t              pp_include_level;        /* include nesting level */
 static uint32_t              pp_include_ifdef_level;  /* ifdef nesting level for the current include */
 
@@ -840,12 +840,14 @@ bool pp_macro_expand(pp_macro *macro, yy_sym name)
 			pp_debug_print_context();
 		}
 
+		yy_flags |= YY_NO_MACRO;
 		sym = yy_next();
 		while (sym == YY_WS || sym == YY_EOL) {
 			if (sym == YY_WS) ws |= 1;
 			if (sym == YY_EOL) ws |= 2;
 			sym = yy_next();
 		}
+		yy_flags = save_flags | YY_ACCEPT_NOSUBST;
 		if (sym != YY__LPAREN) {
 			/* not a function macro, backtrack */
 			if (ws || sym != YY_EOF) {
@@ -1590,7 +1592,12 @@ next:
 			pp_list_push_val(&tokens);
 		} else if (PP_IS_ID(sym)) {
 			/* undefined macro */
-			yy_sym sym2 = yy_next();
+			yy_sym sym2;
+			uint32_t save_flags = yy_flags;
+
+			yy_flags |= YY_NO_MACRO;
+			sym2 = yy_next();
+			yy_flags = save_flags;
 			if (sym2 == YY__LPAREN) {
 				pp_list_push(&tokens, sym);
 			} else {
@@ -2623,4 +2630,5 @@ void pp_preprocess(FILE *f)
 	}
 
 	fflush(f);
+	if (pp_ifdef_level) yy_error("mising #endif");
 }

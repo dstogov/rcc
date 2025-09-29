@@ -367,13 +367,16 @@ number_suffix:
 				}
 			}
 			if (yy_flags & YY_ACCEPT_PP_NUMBER) {
-pp_number:
 				if ((ch >= 'a' && ch <= 'z')
 				 || (ch >= 'A' && ch <= 'Z')
 				 || (ch >= '0' && ch <= '9')
-				 || ch == '_' || ch == '$') {
+				 || ch == '_' || ch == '$'
+				 || ch == '.'
+				 || ((ch == '+' || ch == '-')
+					&& (pos[-1] == 'e' || pos[-1] == 'E' || pos[-1] == 'p' || pos[-1] == 'P'))) {
 					do {
 						ch = *++pos;
+pp_number:
 					} while ((ch >= 'a' && ch <= 'z')
 						|| (ch >= 'A' && ch <= 'Z')
 						|| (ch >= '0' && ch <= '9')

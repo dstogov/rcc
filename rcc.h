@@ -1031,6 +1031,7 @@ extern uint32_t              pp_list_cache_idx;
 extern pp_subst_stream       pp_subst_stack[PP_SUBST_STACK_SIZE];
 extern uint32_t              pp_subst_level;
 
+extern uint32_t              pp_ifdef_level;          /* ifdef nesting level */
 extern uint32_t              pp_include_level;        /* include nesting level */
 extern uint32_t              pp_include_ifndef_state; /* state to catch includes protected by #ifndef macro */
 
