@@ -318,7 +318,12 @@ float_mumber_cont:
 					if (ch == '+' || ch == '-') {
 						ch = *++pos;
 					}
-					if (ch < '0' || ch > '9') goto error;
+					if (ch < '0' || ch > '9') {
+						if (yy_flags & YY_ACCEPT_PP_NUMBER) {
+							goto pp_number;
+						}
+						goto error;
+					}
 					do {
 						ch = *++pos;
 					} while (ch >= '0' && ch <= '9');
@@ -362,6 +367,7 @@ number_suffix:
 				}
 			}
 			if (yy_flags & YY_ACCEPT_PP_NUMBER) {
+pp_number:
 				if ((ch >= 'a' && ch <= 'z')
 				 || (ch >= 'A' && ch <= 'Z')
 				 || (ch >= '0' && ch <= '9')
@@ -371,7 +377,10 @@ number_suffix:
 					} while ((ch >= 'a' && ch <= 'z')
 						|| (ch >= 'A' && ch <= 'Z')
 						|| (ch >= '0' && ch <= '9')
-						|| ch == '_' || ch == '$');
+						|| ch == '_' || ch == '$'
+						|| ch == '.'
+						|| ((ch == '+' || ch == '-')
+							&& (pos[-1] == 'e' || pos[-1] == 'E' || pos[-1] == 'p' || pos[-1] == 'P')));
 					ret = YY_PP_NUMBER;
 				}
 			}
@@ -381,7 +390,12 @@ number_suffix:
 			if (ch == 'X' || ch == 'x') {
 				ch = *++pos;
 				if (ch == '.' || ch == 'P' || ch == 'p') goto hex_float;
-				if ((ch < '0' || ch > '9') && (ch < 'A' || ch > 'F') && (ch < 'a' || ch > 'f')) goto error;
+				if ((ch < '0' || ch > '9') && (ch < 'A' || ch > 'F') && (ch < 'a' || ch > 'f')) {
+					if (yy_flags & YY_ACCEPT_PP_NUMBER) {
+						goto pp_number;
+					}
+					goto error;
+				}
 				do {
 					ch = *++pos;
 				} while ((ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'F') || (ch >= 'a' && ch <= 'f'));
@@ -398,7 +412,12 @@ hex_float:
 						if (ch == '+' || ch == '-') {
 							ch = *++pos;
 						}
-						if (ch < '0' || ch > '9') goto error;
+						if (ch < '0' || ch > '9') {
+							if (yy_flags & YY_ACCEPT_PP_NUMBER) {
+								goto pp_number;
+							}
+							goto error;
+						}
 						do {
 							ch = *++pos;
 						} while (ch >= '0' && ch <= '9');
@@ -413,7 +432,12 @@ hex_float:
 				goto number_suffix;
 			} else if (ch == 'B' || ch == 'b') {
 				ch = *++pos;
-				if (ch != '0' && ch != '1') goto error;
+				if (ch != '0' && ch != '1') {
+					if (yy_flags & YY_ACCEPT_PP_NUMBER) {
+						goto pp_number;
+					}
+					goto error;
+				}
 				do {
 					ch = *++pos;
 				} while (ch == '0' || ch == '1');
