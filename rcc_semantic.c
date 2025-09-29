@@ -4777,7 +4777,7 @@ static void c_do_and(const c_type *type, c_value *op1, c_value *op2)
 		ir_val val;
 
 		switch (op1->u.type) {
-			case IR_I32:
+			case IR_I32: val.i64 = op1->u.val.i32 & op2->u.val.i32; break;
 			case IR_U32: val.u64 = op1->u.val.u32 & op2->u.val.u32; break;
 			case IR_I64:
 			case IR_U64: val.u64 = op1->u.val.u64 & op2->u.val.u64; break;
@@ -4797,7 +4797,7 @@ static void c_do_xor(const c_type *type, c_value *op1, c_value *op2)
 		ir_val val;
 
 		switch (op1->u.type) {
-			case IR_I32:
+			case IR_I32: val.i64 = op1->u.val.i32 ^ op2->u.val.i32; break;
 			case IR_U32: val.u64 = op1->u.val.u32 ^ op2->u.val.u32; break;
 			case IR_I64:
 			case IR_U64: val.u64 = op1->u.val.u64 ^ op2->u.val.u64; break;
@@ -4817,7 +4817,7 @@ static void c_do_or(const c_type *type, c_value *op1, c_value *op2)
 		ir_val val;
 
 		switch (op1->u.type) {
-			case IR_I32:
+			case IR_I32: val.i64 = op1->u.val.i32 | op2->u.val.i32; break;
 			case IR_U32: val.u64 = op1->u.val.u32 | op2->u.val.u32; break;
 			case IR_I64:
 			case IR_U64: val.u64 = op1->u.val.u64 | op2->u.val.u64; break;
