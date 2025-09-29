@@ -4641,11 +4641,21 @@ static void c_do_div(const c_type *type, c_value *op1, c_value *op2)
 		ir_val val;
 
 		if (IR_IS_TYPE_INT(op1->u.type) && c_value_is_const(op2) && op2->u.val.u64 == 0) {
+			if (c_dead_code) {
+				val.u64 = 0;
+				c_value_set_const(op1, type, c_type2ir(type), val);
+				return;
+			}
 			yy_error("division by zero");
 		}
 		switch (op1->u.type) {
 			case IR_I32:
 				if (UNEXPECTED(op2->u.val.i32 == -1 && op1->u.val.u32 == 0x80000000)) {
+					if (c_dead_code) {
+						val.u64 = 0;
+						c_value_set_const(op1, type, c_type2ir(type), val);
+						return;
+					}
 					yy_warning("integer overflow in expression");
 					val.i64 = op1->u.val.i32;
 				} else {
@@ -4657,6 +4667,11 @@ static void c_do_div(const c_type *type, c_value *op1, c_value *op2)
 				break;
 			case IR_I64:
 				if (UNEXPECTED(op2->u.val.i64 == -1 && op1->u.val.u64 == 0x8000000000000000ULL)) {
+					if (c_dead_code) {
+						val.u64 = 0;
+						c_value_set_const(op1, type, c_type2ir(type), val);
+						return;
+					}
 					yy_warning("integer overflow in expression");
 					val.i64 = op1->u.val.i64;
 				} else {
@@ -4681,9 +4696,6 @@ static void c_do_div(const c_type *type, c_value *op1, c_value *op2)
 	} else {
 		ir_type t = c_type2ir(type);
 
-		if (c_value_is_const(op2) && op2->u.val.u64 == 0) {
-			yy_warning("division by zero");
-		}
 		c_value_set_rval(op1, type, t, ir_DIV(t, c_value_ref(op1), c_value_ref(op2)));
 	}
 }
@@ -4694,6 +4706,11 @@ static void c_do_mod(const c_type *type, c_value *op1, c_value *op2)
 		ir_val val;
 
 		if (c_value_is_const(op2) && op2->u.val.u64 == 0) {
+			if (c_dead_code) {
+				val.u64 = 0;
+				c_value_set_const(op1, type, c_type2ir(type), val);
+				return;
+			}
 			yy_error("division by zero");
 		}
 		switch (op1->u.type) {
@@ -4707,9 +4724,6 @@ static void c_do_mod(const c_type *type, c_value *op1, c_value *op2)
 	} else {
 		ir_type t = c_type2ir(type);
 
-		if (c_value_is_const(op2) && op2->u.val.u64 == 0) {
-			yy_warning("division by zero");
-		}
 		c_value_set_rval(op1, type, t, ir_MOD(t, c_value_ref(op1), c_value_ref(op2)));
 	}
 }
