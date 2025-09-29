@@ -2997,7 +2997,13 @@ bool parse_pp_expr(void)
 
 	sym = get_sym();
 	sym = parse_constant_expression(sym, &res);
-	if (sym != YY_EOF) yy_error_fmt("token \"%s\" is not valid in preprocessor expressions", yy_sym2str(sym));
+	if (sym != YY_EOF) {
+		if (sym >= YY_DECIMAL_NUMBER && sym <= YY_PP_NUMBER) {
+			yy_error_fmt("missing operator in preprocessor expressions", yy_sym2str(sym));
+		} else {
+			yy_error_fmt("token \"%s\" is not valid in preprocessor expressions", yy_sym2str(sym));
+		}
+	}
 
 	ret = c_value_is_true(&res);
 
