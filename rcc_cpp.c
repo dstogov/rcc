@@ -1105,7 +1105,7 @@ static bool pp_eval_ifdef(bool ifdef, bool start_of_include)
 	pp_include_ifndef_macro = (start_of_include && !ifdef) ? id : 0;
 	sym = yy_next();
 	if (sym != YY_EOL && sym != YY_EOF) {
-		yy_error_fmt("extra tokens at the end of #%s directive", ifdef ? "ifdef" : "ifndef");
+		yy_warning_fmt("extra tokens at the end of #%s directive", ifdef ? "ifdef" : "ifndef");
 		pp_skip_until_eol();
 	}
 
@@ -1911,7 +1911,7 @@ static void pp_parse_undef(void)
 
 	sym = yy_next();
 	if (sym != YY_EOL && sym != YY_EOF) {
-		yy_error_fmt("extra tokens at the end of #%s directive", "undef");
+		yy_warning_fmt("extra tokens at the end of #%s directive", "undef");
 		pp_skip_until_eol();
 	}
 
