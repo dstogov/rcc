@@ -1364,10 +1364,93 @@ static uint32_t yy_unicode_character(const char *str, size_t len)
 	return n;
 }
 
+static uint32_t yy_read_multi_char(uint32_t res, const char *p)
+{
+	uint32_t ch;
+
+	while (*p != '\'') {
+		ch = (const unsigned char)*p++;
+		if (ch == '\\') {
+			ch = (const unsigned char)*p++;
+			switch (ch) {
+				case '\\': ch = '\\'; break;
+				case '\'': ch = '\''; break;
+				case '"':  ch = '"';  break;
+				case 'a':  ch = '\a'; break;
+				case 'b':  ch = '\b'; break;
+				case 'e':  ch = 27;   break; /* '\e'; */
+				case 'f':  ch = '\f'; break;
+				case 'n':  ch = '\n'; break;
+				case 'r':  ch = '\r'; break;
+				case 't':  ch = '\t'; break;
+				case 'v':  ch = '\v'; break;
+				case '?':  ch = 0x3f; break;
+				case '0':
+				case '1':
+				case '2':
+				case '3':
+				case '4':
+				case '5':
+				case '6':
+				case '7':
+					ch = ch - '0';
+					if (*p >= '0' && *p <= '7') {
+						ch = ch * 8 + (*p - '0');
+						p++;
+						if (*p >= '0' && *p <= '7') {
+							ch = ch * 8 + (*p - '0');
+							p++;
+						}
+					}
+					break;
+				case 'x':
+					ch = *p++;
+					if (ch >= '0' && ch <= '9') {
+						ch = ch - '0';
+					} else if (ch >= 'a' && ch <= 'f') {
+						ch = ch - 'a' + 10;
+					} else if (ch >= 'A' && ch <= 'F') {
+						ch = ch - 'A' + 10;
+					} else {
+						yy_error("unsupported escape sequence");
+					}
+					if (*p >= '0' && *p <= '9') {
+						ch = (ch << 4) + (*p - '0');
+						p++;
+					} else if (*p >= 'a' && *p <= 'f') {
+						ch = (ch << 4) + (*p - 'a' + 10);
+						p++;
+					} else if (*p >= 'A' && *p <= 'F') {
+						ch = (ch << 4) + (*p - 'A' + 10);
+						p++;
+					}
+					break;
+				case 'u':
+					ch = yy_unicode_character(p, 4);
+					p += 4;
+					break;
+				case 'U':
+					ch = yy_unicode_character(p, 8);
+					p += 8;
+					break;
+				case '\n':
+					ch = *p++;
+					continue;
+				default:
+					yy_error("unsupported escape sequence");
+					break;
+			}
+		}
+		res = (res << 8) + ch;
+	}
+	return res;
+}
+
 static void yy_read_char(c_value *res, const char *p, size_t len)
 {
 	ir_val val;
 	char prefix = 0;
+	bool warn = 1;
 	uint32_t ch = (const unsigned char)*p++;
 
 	if (ch == 'L' || ch == 'u' || ch == 'U') {
@@ -1378,8 +1461,46 @@ static void yy_read_char(c_value *res, const char *p, size_t len)
 	IR_ASSERT(ch == '\'');
 
 	ch = (const unsigned char)*p++;
+	if (ch == '\'') yy_error("empty character constant");
 restart:
-	if (ch == '\\') {
+	if (prefix && (unsigned char)ch > 0x7f) {
+		uint32_t uc;
+		unsigned char c = (unsigned char)ch;
+
+		if (c < 0xc2) goto bad_utf8;
+		if (c < 0xe0) {
+			uc = ((c & 0x1f) << 6);
+			c = (unsigned char)*p++;
+			if (c < 0x80 || c > 0xbf) goto bad_utf8;
+			uc |= (c & 0x3f);
+			if (uc < 0x80) goto bad_utf8;
+		} else if (c < 0xf0) {
+			uc = ((c & 0x0f) << 12);
+			c = (unsigned char)*p++;
+			if (c < 0x80 || c > 0xbf) goto bad_utf8;
+			uc |= ((c & 0x3f) << 6);
+			c = (unsigned char)*p++;
+			if (c < 0x80 || c > 0xbf) goto bad_utf8;
+			uc |= (c & 0x3f);
+			if (uc < 0x800) goto bad_utf8;
+			if (uc >= 0xd800 && uc <= 0xdfff) goto bad_utf8; /* surrogate */
+		} else if (c < 0xf5) {
+			uc = ((c & 0x07) << 18);
+			c = (unsigned char)*p++;
+			if (c < 0x80 || c > 0xbf) goto bad_utf8;
+			uc |= ((c & 0x3f) << 12);
+			c = (unsigned char)*p++;
+			if (c < 0x80 || c > 0xbf) goto bad_utf8;
+			uc |= ((c & 0x3f) << 6);
+			c = (unsigned char)*p++;
+			if (c < 0x80 || c > 0xbf) goto bad_utf8;
+			uc |= (c & 0x3f);
+			if (uc < 0x10000 || uc > 0x10ffff) goto bad_utf8;
+		} else {
+bad_utf8:	yy_error("bad UTF-8 sequence");
+		}
+		ch = uc;
+	} else if (ch == '\\') {
 		ch = (const unsigned char)*p++;
 		switch (ch) {
 			case '\\': ch = '\\'; break;
@@ -1450,16 +1571,24 @@ restart:
 				break;
 		}
 	}
-	if (*p != '\'') yy_error("multi-character character constant");
-	val.u64 = ch;
+	if (UNEXPECTED(*p != '\'')) {
+		if (warn) yy_warning("multi-character character constant");
+		warn = 0;
+		if (prefix) goto restart;
+		ch = yy_read_multi_char(ch, p);
+	}
 	if (!prefix) {
+		val.i64 = (int)ch;
 		c_value_set_const(res, &c_type_i32, IR_I32, val);
 	} else if (prefix == 'L') {
+		val.i64 = (int)ch;
 		c_value_set_const(res, &c_type_i32, IR_I32, val);
 	} else if (prefix == 'u') {
+		val.u64 = ch & 0xffff;
 		c_value_set_const(res, &c_type_u16, IR_U16, val);
 	} else {
 		IR_ASSERT(prefix == 'U');
+		val.u64 = ch;
 		c_value_set_const(res, &c_type_u32, IR_U32, val);
 	}
 }
