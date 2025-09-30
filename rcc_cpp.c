@@ -1469,12 +1469,16 @@ static void pp_parse_include(void)
 			break;
 		} else if (sym == YY__LESS) {
 			if (!pp_subst_level) {
+				const char *save_yy_pos = yy_pos;
+
 				while (1) {
 					char ch = *yy_pos++;
 					if (ch == '>') {
 						break;
 					} else if (ch == '\0' || ch == '\r' || ch == '\n') {
-						yy_error("missing terminating > character");
+						yy_pos = save_yy_pos;
+						goto try_expand;
+//						yy_error("missing terminating > character");
 					}
 				}
 				yy_len = yy_pos - yy_text;
@@ -1483,21 +1487,41 @@ static void pp_parse_include(void)
 				sym = yy_next();
 				break;
 			} else {
-				yy_dyn_str_init(&name, "", 0);
+				pp_list list;
+				yy_sym *tokens;
+
+try_expand:
+				pp_list_init(&list);
 				while (1) {
 					sym = yy_next();
 					if (sym == YY__GREATER) {
-						yy_dyn_str_append0(&name, "", 0);
+						pp_list_push(&list, YY_EOF);
 						break;
 					} else if (sym == YY_EOF || sym == YY_EOL) {
 						yy_error("missing terminating > character");
 					} else {
-						if (!PP_HAS_VAL(sym)) {
-							yy_text = yy_sym2strl(sym, &yy_len);
+						pp_list_push(&list, sym);
+						if (PP_HAS_VAL(sym)) {
+							pp_list_push_val(&list);
 						}
-						yy_dyn_str_append(&name, yy_text, yy_len);
 					}
 				}
+
+				yy_dyn_str_init(&name, "", 0);
+				tokens = list.syms;
+				while (*tokens) {
+					sym = *tokens;
+					tokens++;
+					if (PP_HAS_VAL(sym)) {
+						tokens = pp_load_val(tokens);
+					} else {
+						yy_text = yy_sym2strl(sym, &yy_len);
+					}
+					yy_dyn_str_append(&name, yy_text, yy_len);
+				}
+				yy_dyn_str_append0(&name, "", 0);
+				pp_list_release(list.syms, list.size);
+
 				sym = yy_next();
 				is_user = 0;
 				break;
