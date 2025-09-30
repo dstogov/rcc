@@ -1828,8 +1828,11 @@ bool parse_pp_expr(void)
 	yy_flags &= ~YY_ACCEPT_PP_NUMBER;
 	c_dead_code = 0;
 
-	sym = get_sym();
-	sym = parse_constant_expression(sym, &res);
+	do {
+		sym = get_sym();
+		sym = parse_constant_expression(sym, &res);
+	} while (sym == YY__COMMA);
+
 	if (sym != YY_EOF) {
 		if (sym >= YY_DECIMAL_NUMBER && sym <= YY_PP_NUMBER) {
 			yy_error_fmt("missing operator in preprocessor expressions", yy_sym2str(sym));
