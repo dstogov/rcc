@@ -1966,8 +1966,8 @@ static void pp_parse_line(yy_sym sym)
 		if (sym != YY_EOL && sym != YY_EOF) {
 			pp_skip_until_eol();
 		}
-	} else if (sym != YY_EOL && sym != YY_EOF) {
-		yy_error("line must be a number");
+	} else {
+		yy_error("#line directive requires a positive integer argument");
 	}
 }
 
