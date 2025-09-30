@@ -69,7 +69,9 @@ static bool is_label(yy_sym id)
 	uint32_t save_level = pp_subst_level;
 
 	pp_subst_level = 0;
+	yy_flags |= YY_NO_DIRECTIVE;
 	bool ret = get_sym() == YY__COLON;
+	yy_flags &= ~YY_NO_DIRECTIVE;
 
 	while (pp_subst_level > save_level) {
 		pp_subst_level--;
@@ -118,7 +120,9 @@ static bool is_nested_declarator(yy_sym id)
 	uint32_t save_level = pp_subst_level;
 
 	pp_subst_level = 0;
+	yy_flags |= YY_NO_DIRECTIVE;
 	yy_sym sym = get_sym();
+	yy_flags &= ~YY_NO_DIRECTIVE;
 	bool ret = (sym == YY___ATTRIBUTE
 			|| sym == YY___ATTRIBUTE__
 			|| sym == YY__STAR
