@@ -1799,6 +1799,15 @@ static void pp_parse_define(void)
 		if (sym == YY__POINT_POINT_POINT && !(flags & PP_MACRO_VAR_ARG)) {
 			if (!num_args) {
 				pp_list_init(&tokens);
+			} else {
+				uint32_t n = num_args;
+
+				do {
+					n--;
+					if (tokens.syms[n] == YY___VA_ARGS__) {
+						yy_error_fmt("duplicate macro parameter \"__VA_ARGS__\"");
+					}
+				} while (n > 0);
 			}
 			num_args++;
 			pp_list_push(&tokens, YY___VA_ARGS__);
