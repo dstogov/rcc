@@ -257,6 +257,7 @@ identifier2:
 				ch = *++pos;
 			} while ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '$' || ch >= 0x80);
 
+			pp_include_ifndef_state = 0;
 			yy_pos = (const char*)pos;
 			yy_len = yy_pos - yy_text;
 			ret = yy_hash_lookup_ex(yy_text, yy_len, h | 0x10000000);
