@@ -414,6 +414,21 @@ static yy_sym pp_paste(yy_sym sym1, const char *s1, size_t len1, yy_sym sym2, co
 				sym = yy_hash_lookup(dyn_str.str, dyn_str.len);
 				return sym;
 			}
+		} else if (sym2 == YY_STRING && s2[0] == '"'
+				&& ((len1 == 1 && (s1[0] == 'L' || s1[0] == 'U' || s1[0] == 'u'))
+				 || (len1 == 2 && s1[0] == 'u' && s1[1] == '8'))) {
+			yy_dyn_str_init(&dyn_str, s1, len1);
+			yy_dyn_str_append0(&dyn_str, s2, len2);
+			yy_text = dyn_str.str;
+			yy_len = dyn_str.len;
+			return YY_STRING;
+		} else if (sym2 == YY_CHARACTER && s2[0] == '\''
+				&& len1 == 1 && (s1[0] == 'L' || s1[0] == 'U' || s1[0] == 'u')) {
+			yy_dyn_str_init(&dyn_str, s1, len1);
+			yy_dyn_str_append0(&dyn_str, s2, len2);
+			yy_text = dyn_str.str;
+			yy_len = dyn_str.len;
+			return YY_CHARACTER;
 		}
 	} else if (sym1 >= YY_DECIMAL_NUMBER && sym1 <= YY_PP_NUMBER) {
 		if ((sym2 >= YY_DECIMAL_NUMBER && sym2 <= YY_PP_NUMBER) || PP_IS_ID(sym2) || sym2 == YY__POINT
@@ -425,6 +440,12 @@ static yy_sym pp_paste(yy_sym sym1, const char *s1, size_t len1, yy_sym sym2, co
 			yy_len = dyn_str.len;
 			return YY_PP_NUMBER;
 		}
+	} else if (sym1 == YY__POINT && sym2 >= YY_DECIMAL_NUMBER && sym2 <= YY_PP_NUMBER) {
+		yy_dyn_str_init(&dyn_str, s1, len1);
+		yy_dyn_str_append0(&dyn_str, s2, len2);
+		yy_text = dyn_str.str;
+		yy_len = dyn_str.len;
+		return YY_PP_NUMBER;
 	} else if (sym1 == YY__MINUS) {
 		if (sym2 == YY__GREATER) return YY__MINUS_GREATER;
 		if (sym2 == YY__MINUS) return YY__MINUS_MINUS;

@@ -860,7 +860,7 @@ static IR_NEVER_INLINE yy_sym yy_parse_pp_number(const char *str, size_t len)
 	yy_sym ret = 0;
 
 	IR_ASSERT(len > 0);
-	IR_ASSERT(ch >= '0' && ch <= '9');
+	IR_ASSERT((ch >= '0' && ch <= '9') || ch == '.');
 	if (len == 1) return YY_DECIMAL_NUMBER;
 	if (ch == '0') {
 		ch = *++p;
@@ -894,12 +894,15 @@ static IR_NEVER_INLINE yy_sym yy_parse_pp_number(const char *str, size_t len)
 			}
 			ret = YY_OCTAL_NUMBER;
 		}
+	} else if (ch == '.') {
+		goto float_number;
 	} else {
 		while (ch >= '0' && ch <= '9') {
 			ch = *++p;
 		}
 		ret = YY_DECIMAL_NUMBER;
 		if (ch == '.') {
+float_number:
 			ret = YY_FLOATING_NUMBER;
 			do {
 				ch = *++p;
