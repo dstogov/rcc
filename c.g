@@ -1374,6 +1374,7 @@ static void yy_read_char(c_value *res, const char *p, size_t len)
 	IR_ASSERT(ch == '\'');
 
 	ch = (const unsigned char)*p++;
+restart:
 	if (ch == '\\') {
 		ch = (const unsigned char)*p++;
 		switch (ch) {
@@ -1437,6 +1438,9 @@ static void yy_read_char(c_value *res, const char *p, size_t len)
 				ch = yy_unicode_character(p, 8);
 				p += 8;
 				break;
+			case '\n':
+				ch = *p++;
+				goto restart;
 			default:
 				yy_error("unsupported escape sequence");
 				break;
