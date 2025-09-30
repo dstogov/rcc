@@ -1870,7 +1870,7 @@ static void pp_parse_define(void)
 				}
 				do {
 					sym = yy_next();
-				} while (sym == YY_WS);
+				} while (sym == YY_WS || sym == YY__HASH_HASH);
 				if (sym == YY_EOL || sym == YY_EOF) yy_error("##' cannot appear at either end of a macro expansion");
 				flags |= PP_MACRO_HAS_JOIN;
 				pp_list_push(&tokens, YY_PP_JOIN);
