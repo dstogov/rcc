@@ -841,6 +841,12 @@ static void pp_macro_read_args(pp_macro *macro, yy_sym name, pp_arg *args, pp_li
 			yy_error_fmt("macro \"%s\" passed %d arguments, but takes just %d",
 				yy_sym2str(name), num_args, macro->num_args);
 		}
+	} else if (num_args == macro->num_args
+	 && (macro->flags & PP_MACRO_VAR_ARG)
+	 && num_args != 1
+	 && (uint32_t)args[num_args - 1].num_args == list->len) {
+		/* __VA_ARGS__ is not empty, COMMA ## __VA_ARGS__ should be expaned to COMMA */
+		pp_list_push(list, YY_WS);
 	}
 
 	pp_list_push(list, YY_EOF);
