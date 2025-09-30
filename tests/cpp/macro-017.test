@@ -1,0 +1,11 @@
+--TEST--
+Macro 017 - valid macros substitution
+--ARGS--
+-E -P
+--CODE--
+#define func(x) x
+#define bar func(
+#define foo bar foo
+foo )
+--EXPECT--
+foo
