@@ -1120,7 +1120,7 @@ static void pp_skip_until_eol(void)
 	} while (sym != YY_EOL);
 }
 
-static bool pp_eval_ifdef(bool ifdef)
+static bool pp_eval_ifdef(bool ifdef, bool start_of_include)
 {
 	yy_sym id, sym = yy_next();
 
@@ -1135,7 +1135,7 @@ static bool pp_eval_ifdef(bool ifdef)
 	}
 
 	id = sym;
-	pp_include_ifndef_macro = ((pp_include_ifndef_state & YY_INCLUDE_START) && !ifdef) ? id : 0;
+	pp_include_ifndef_macro = (start_of_include && !ifdef) ? id : 0;
 	sym = yy_next();
 	if (sym != YY_EOL) {
 		yy_warning_fmt("extra tokens at the end of #%s directive", ifdef ? "ifdef" : "ifndef");
@@ -2355,6 +2355,7 @@ void pp_parse_directive(void)
 	yy_sym sym;
 	bool skip, is_true;
 	uint32_t save_flags = yy_flags;
+	bool start_of_include = (pp_include_ifndef_state & YY_INCLUDE_START) != 0;
 
 	yy_flags &= ~YY_SKIP_EOL;
 	yy_flags |= YY_SKIP_WS | YY_NO_MACRO | YY_ACCEPT_PUNCTUATOR;
@@ -2364,7 +2365,7 @@ void pp_parse_directive(void)
 		switch (sym) {
 			case YY_IFNDEF:
 			case YY_IFDEF:
-				is_true = pp_eval_ifdef(sym == YY_IFDEF);
+				is_true = pp_eval_ifdef(sym == YY_IFDEF, start_of_include);
 				if (pp_ifdef_level >= IFDEF_STACK_SIZE) yy_error("too many nested #if directives");
 				pp_ifdef_stack[pp_ifdef_level++] = is_true ? IFDEF_HAD_TRUE : 0;
 				skip = !is_true;
@@ -2429,8 +2430,10 @@ void pp_parse_directive(void)
 				break;
 			case YY_INCLUDE:
 				yy_flags &= ~YY_NO_MACRO;
+				pp_include_ifndef_state = 0;
 				pp_parse_include();
-				break;
+				yy_flags = save_flags;
+				return;
 			case YY_DEFINE:
 				pp_parse_define();
 				break;
@@ -2461,7 +2464,7 @@ void pp_parse_directive(void)
 				break;
 		}
 
-		pp_include_ifndef_state = 0;
+		start_of_include = 0;
 		if (!skip) {
 			break;
 		}
