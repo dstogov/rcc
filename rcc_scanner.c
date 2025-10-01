@@ -323,7 +323,10 @@ float_mumber_cont:
 						if (yy_flags & YY_ACCEPT_PP_NUMBER) {
 							goto pp_number;
 						}
-						goto error;
+wrong_number:
+						pos++;
+						yy_error_fmt("invalid number %.*s", (int)((const char*)pos - yy_text), yy_text);
+						goto restart;
 					}
 					do {
 						ch = *++pos;
@@ -398,7 +401,7 @@ pp_number:
 					if (yy_flags & YY_ACCEPT_PP_NUMBER) {
 						goto pp_number;
 					}
-					goto error;
+					goto wrong_number;
 				}
 				do {
 					ch = *++pos;
@@ -420,7 +423,7 @@ hex_float:
 							if (yy_flags & YY_ACCEPT_PP_NUMBER) {
 								goto pp_number;
 							}
-							goto error;
+							goto wrong_number;
 						}
 						do {
 							ch = *++pos;
@@ -440,7 +443,7 @@ hex_float:
 					if (yy_flags & YY_ACCEPT_PP_NUMBER) {
 						goto pp_number;
 					}
-					goto error;
+					goto wrong_number;
 				}
 				do {
 					ch = *++pos;
@@ -452,11 +455,11 @@ hex_float:
 				while (ch >= '0' && ch <= '7') {
 					ch = *++pos;
 				}
-//				if (ch == '8' || ch == '9') goto decimal_mumber;
 				if (ch == '8' || ch == '9') {
-					do {
-						ch = *++pos;
-					} while (ch >= '0' && ch <= '9');
+					if (yy_flags & YY_ACCEPT_PP_NUMBER) {
+						goto pp_number;
+					}
+					goto wrong_number;
 				}
 				if (ch == '.' || ch == 'e' || ch ==  'E') goto float_number;
 				ret = YY_OCTAL_NUMBER;
@@ -479,7 +482,8 @@ character:
 				} else if (ch == '\'') {
 					break;
 				} else if (ch == '\r' || ch == '\n') {
-					goto error;
+					yy_error("unterminated character");
+					goto restart;
 				}
 			}
 			pos++;
@@ -502,7 +506,8 @@ string:
 				} else if (ch == '"') {
 					break;
 				} else if (ch == '\r' || ch == '\n') {
-					goto error;
+					yy_error("unterminated string");
+					goto restart;
 				}
 			}
 			pos++;
@@ -661,6 +666,7 @@ string:
 						yy_linepos = (const char*)pos + 1;
 						if (pos[1] == '\0') goto error;
 					} else if (ch == '\n') {
+						if (pos[1] == '\n') pos++;
 						yy_line++;
 						yy_linepos = (const char*)pos + 1;
 						if (pos[1] == '\0') goto error;
@@ -927,7 +933,7 @@ float_number:
 	}
 
 	if (!ret || p != end) {
-		yy_error("invalid number");
+		yy_error_fmt("invalid number %.*s", (int)len, str);
 	}
 
 	return ret;
