@@ -659,6 +659,7 @@ string:
 						if (pos[1] == '\n') pos++;
 						yy_line++;
 						yy_linepos = (const char*)pos + 1;
+						if (pos[1] == '\0') goto error;
 					} else if (ch == '\n') {
 						yy_line++;
 						yy_linepos = (const char*)pos + 1;
