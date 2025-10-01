@@ -1454,18 +1454,15 @@ read_file:
 	return resolved_name;
 }
 
-static void pp_parse_include(void)
+static bool pp_parse_include_filename(yy_dyn_str *name, bool *is_user)
 {
 	yy_sym sym;
-	yy_dyn_str name;
-	bool is_user;
 
 	while (1) {
 		sym = yy_next();
 		if (sym == YY_STRING) {
-			yy_dyn_str_init0(&name, yy_text + 1, yy_len - 2);
-			is_user = 1;
-			sym = yy_next();
+			yy_dyn_str_init0(name, yy_text + 1, yy_len - 2);
+			*is_user = 1;
 			break;
 		} else if (sym == YY__LESS) {
 			if (!pp_subst_level) {
@@ -1482,9 +1479,8 @@ static void pp_parse_include(void)
 					}
 				}
 				yy_len = yy_pos - yy_text;
-				yy_dyn_str_init0(&name, yy_text + 1, yy_len - 2);
-				is_user = 0;
-				sym = yy_next();
+				yy_dyn_str_init0(name, yy_text + 1, yy_len - 2);
+				*is_user = 0;
 				break;
 			} else {
 				pp_list list;
@@ -1507,7 +1503,7 @@ try_expand:
 					}
 				}
 
-				yy_dyn_str_init(&name, "", 0);
+				yy_dyn_str_init(name, "", 0);
 				tokens = list.syms;
 				while (*tokens) {
 					sym = *tokens;
@@ -1517,22 +1513,34 @@ try_expand:
 					} else {
 						yy_text = yy_sym2strl(sym, &yy_len);
 					}
-					yy_dyn_str_append(&name, yy_text, yy_len);
+					yy_dyn_str_append(name, yy_text, yy_len);
 				}
-				yy_dyn_str_append0(&name, "", 0);
+				yy_dyn_str_append0(name, "", 0);
 				pp_list_release(list.syms, list.size);
-
-				sym = yy_next();
-				is_user = 0;
+				*is_user = 0;
 				break;
 			}
 			break;
 		} else {
-			yy_error("#include expects \"FILENAME\" or <FILENAME>");
-			return;
+			return 0;
 		}
 	}
 
+	return 1;
+}
+
+static void pp_parse_include(void)
+{
+	yy_sym sym;
+	yy_dyn_str name;
+	bool is_user;
+
+	if (!pp_parse_include_filename(&name, &is_user)) {
+		yy_error("#include expects \"FILENAME\" or <FILENAME>");
+		return;
+	}
+
+	sym = yy_next();
 	if (sym != YY_EOL) {
 		yy_warning_fmt("extra tokens at the end of #%s directive", "include");
 		pp_skip_until_eol();
@@ -1568,52 +1576,13 @@ static bool pp_eval_has_include(void)
 
 	sym = yy_next();
 	if (sym != YY__LPAREN) yy_error("'(' expected");
-	while (1) {
-		sym = yy_next();
-		if (sym == YY_STRING) {
-			yy_dyn_str_init0(&name, yy_text + 1, yy_len - 2);
-			is_user = 1;
-			sym = yy_next();
-			break;
-		} else if (sym == YY__LESS) {
-			if (!pp_subst_level) {
-				while (1) {
-					char ch = *yy_pos++;
-					if (ch == '>') {
-						break;
-					} else if (ch == '\0' || ch == '\r' || ch == '\n') {
-						yy_error("missing terminating > character");
-					}
-				}
-				yy_len = yy_pos - yy_text;
-				yy_dyn_str_init0(&name, yy_text + 1, yy_len - 2);
-				is_user = 0;
-				sym = yy_next();
-				break;
-			} else {
-				yy_dyn_str_init(&name, "", 0);
-				while (1) {
-					sym = yy_next();
-					if (sym == YY__GREATER) {
-						yy_dyn_str_append0(&name, "", 0);
-						break;
-					} else if (sym == YY_EOL) {
-						yy_error("missing terminating > character");
-					} else {
-						yy_dyn_str_append(&name, yy_text, yy_len);
-					}
-				}
-				sym = yy_next();
-				is_user = 0;
-				break;
-			}
-			break;
-		} else {
-			yy_error("expected \"FILENAME\" or <FILENAME>");
-			return 0;
-		}
+
+	if (!pp_parse_include_filename(&name, &is_user)) {
+		yy_error("expected \"FILENAME\" or <FILENAME>");
+		return 0;
 	}
 
+	sym = yy_next();
 	if (sym != YY__RPAREN) yy_error("')' expected");
 
 	return pp_find_include(&name, is_user, NULL, NULL) != 0;
