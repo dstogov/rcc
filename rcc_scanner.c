@@ -769,7 +769,8 @@ string:
 				yy_len = yy_pos - yy_text;
 				pp_parse_directive();
 				pos = (const unsigned char*)yy_pos;
-				if (EXPECTED(!pp_subst_level)) goto restart; else goto restart_stream;
+				IR_ASSERT(pp_subst_level == 0);
+				goto restart;
 			} else {
 				ret = YY__HASH;
 			}

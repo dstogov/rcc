@@ -257,6 +257,7 @@ void pp_list_grow(pp_list *l, uint32_t size)
 static void pp_debug_tokens(FILE *f, yy_sym *tokens);
 static void pp_debug_include(const char *name, bool is_user);
 static void pp_debug_macro(yy_sym sym, yy_sym name, pp_macro *macro);
+static void pp_print_pragma(yy_sym sym);
 
 static bool pp_needs_space(yy_sym sym1, yy_sym sym2)
 {
@@ -2055,23 +2056,7 @@ static void pp_parse_pragma(void)
 			yy_warning_fmt("pragma pop_macro could not pop \"%s\"", yy_sym2str(name));
 		}
 	} else if (yy_flags & PP_PREPROCESS) {
-		pp_list tokens;
-
-		pp_list_init(&tokens);
-		pp_list_push(&tokens, YY_EOL);
-		pp_list_push(&tokens, YY__HASH);
-		pp_list_push(&tokens, YY_PRAGMA);
-		pp_list_push(&tokens, sym);
-		if (PP_HAS_VAL(sym)) pp_list_push_val(&tokens);
-		pp_list_push(&tokens, YY_EOF);
-
-		if (pp_subst_level >= PP_SUBST_STACK_SIZE) yy_error("too deep macro substitution level");
-		pp_subst_stack[pp_subst_level].macro = NULL;
-		pp_subst_stack[pp_subst_level].size = tokens.size;
-		pp_subst_stack[pp_subst_level].start = tokens.syms;
-		pp_subst_stack[pp_subst_level].tokens = tokens.syms;
-		pp_subst_stack[pp_subst_level].skip_eof = 1;
-		pp_subst_level++;
+		if (!(yy_flags & PP_NO_OUTPUT)) pp_print_pragma(sym);
 		return;
 	} else if (sym == YY_PACK) {
 		sym = yy_next();
@@ -2588,6 +2573,30 @@ static void pp_debug_macro(yy_sym sym, yy_sym name, pp_macro *macro)
 	} else if (sym == YY_UNDEF) {
 		fprintf(f, "#undef %s\n", yy_sym2str(name));
 	}
+}
+
+static void pp_print_pragma(yy_sym sym)
+{
+	FILE *f = out_file ? out_file : stdout;
+	yy_sym prev = YY_PRAGMA;
+
+	if (!(yy_flags & PP_NO_LINEMARKERS)) {
+		if (out_level != pp_include_level || out_file_name != yy_file_name || out_line != yy_line) {
+			yy_line--;
+			pp_debug_line(f);
+			out_line = ++yy_line;
+		}
+	}
+
+	fwrite("#pragma", sizeof("#pragma")-1, 1, f);
+
+	while (sym != YY_EOL) {
+		if (pp_needs_space(prev, sym)) fputc(' ', f);
+		fwrite(yy_text, yy_len, 1, f);
+		prev = sym;
+		sym = yy_next();
+	}
+	fputc('\n', f);
 }
 
 /* cpp -E */
