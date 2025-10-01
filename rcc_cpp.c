@@ -1117,7 +1117,7 @@ static void pp_skip_until_eol(void)
 
 	do {
 		sym = yy_next();
-	} while (sym != YY_EOL && sym != YY_EOF);
+	} while (sym != YY_EOL);
 }
 
 static bool pp_eval_ifdef(bool ifdef)
@@ -1125,7 +1125,7 @@ static bool pp_eval_ifdef(bool ifdef)
 	yy_sym id, sym = yy_next();
 
 	if (!PP_IS_ID(sym)) {
-		if (sym == YY_EOL || sym == YY_EOF) {
+		if (sym == YY_EOL) {
 			yy_error("mising macro name");
 		} else {
 			yy_error("macro name must be an identifier");
@@ -1137,7 +1137,7 @@ static bool pp_eval_ifdef(bool ifdef)
 	id = sym;
 	pp_include_ifndef_macro = ((pp_include_ifndef_state & YY_INCLUDE_START) && !ifdef) ? id : 0;
 	sym = yy_next();
-	if (sym != YY_EOL && sym != YY_EOF) {
+	if (sym != YY_EOL) {
 		yy_warning_fmt("extra tokens at the end of #%s directive", ifdef ? "ifdef" : "ifndef");
 		pp_skip_until_eol();
 	}
@@ -1497,7 +1497,7 @@ try_expand:
 					if (sym == YY__GREATER) {
 						pp_list_push(&list, YY_EOF);
 						break;
-					} else if (sym == YY_EOF || sym == YY_EOL) {
+					} else if (sym == YY_EOL) {
 						yy_error("missing terminating > character");
 					} else {
 						pp_list_push(&list, sym);
@@ -1533,7 +1533,7 @@ try_expand:
 		}
 	}
 
-	if (sym != YY_EOL && sym != YY_EOF) {
+	if (sym != YY_EOL) {
 		yy_warning_fmt("extra tokens at the end of #%s directive", "include");
 		pp_skip_until_eol();
 	}
@@ -1597,7 +1597,7 @@ static bool pp_eval_has_include(void)
 					if (sym == YY__GREATER) {
 						yy_dyn_str_append0(&name, "", 0);
 						break;
-					} else if (sym == YY_EOF || sym == YY_EOL) {
+					} else if (sym == YY_EOL) {
 						yy_error("missing terminating > character");
 					} else {
 						yy_dyn_str_append(&name, yy_text, yy_len);
@@ -1629,7 +1629,7 @@ static bool pp_eval_expr(void)
 	while (1) {
 		sym = yy_next();
 next:
-		if (sym == YY_EOL || sym == YY_EOF) {
+		if (sym == YY_EOL) {
 			break;
 		} else if (sym == YY_DEFINED) {
 			yy_sym id;
@@ -1765,12 +1765,10 @@ static void pp_parse_define(void)
 	sym = yy_next();
 	if (PP_IS_ID(sym)) {
 		end = yy_pos;
-	} else if (sym == YY_EOF || sym == YY_EOL) {
-		if (sym == YY_EOL) {
-			yy_linepos = define_linepos;
-			yy_pos = yy_text;
-			yy_line--;
-		}
+	} else if (sym == YY_EOL) {
+		yy_linepos = define_linepos;
+		yy_pos = yy_text;
+		yy_line--;
 		yy_error("no macro name given in #define directive");
 		return;
 	} else {
@@ -1796,12 +1794,10 @@ static void pp_parse_define(void)
 		sym = yy_next();
 		while (sym != YY__RPAREN && sym != YY__POINT_POINT_POINT ) {
 			if (!PP_IS_ID(sym)) {
-				if (sym == YY_EOL || sym == YY_EOF) {
-					if (sym == YY_EOL) {
-						yy_linepos = define_linepos;
-						yy_pos = yy_text;
-						yy_line--;
-					}
+				if (sym == YY_EOL) {
+					yy_linepos = define_linepos;
+					yy_pos = yy_text;
+					yy_line--;
 					yy_error("expected parameter name before end of line");
 				} else {
 					yy_error_fmt("expected parameter name, found \"%s\"", yy_sym2str(sym));
@@ -1851,12 +1847,10 @@ static void pp_parse_define(void)
 			sym = yy_next();
 		}
 		if (sym != YY__RPAREN) {
-			if (sym == YY_EOL || sym == YY_EOF) {
-				if (sym == YY_EOL) {
-					yy_linepos = define_linepos;
-					yy_pos = yy_text;
-					yy_line--;
-				}
+			if (sym == YY_EOL) {
+				yy_linepos = define_linepos;
+				yy_pos = yy_text;
+				yy_line--;
 				yy_error("expected ')' before end of line");
 			} else if (flags & PP_MACRO_VAR_ARG) {
 				yy_error("expected ')' after \"...\"");
@@ -1868,7 +1862,7 @@ static void pp_parse_define(void)
 	}
 
 	/* parse macro replacement tokens */
-	if (sym != YY_EOL && sym != YY_EOF) {
+	if (sym != YY_EOL) {
 		yy_sym prev = YY_EOF;
 
 		if (!num_args) {
@@ -1901,7 +1895,7 @@ static void pp_parse_define(void)
 				do {
 					sym = yy_next();
 				} while (sym == YY_WS || sym == YY__HASH_HASH);
-				if (sym == YY_EOL || sym == YY_EOF) yy_error("##' cannot appear at either end of a macro expansion");
+				if (sym == YY_EOL) yy_error("##' cannot appear at either end of a macro expansion");
 				flags |= PP_MACRO_HAS_JOIN;
 				pp_list_push(&tokens, YY_PP_JOIN);
 			} else if (sym == YY_WS && prev == YY_WS) {
@@ -1918,7 +1912,7 @@ static void pp_parse_define(void)
 			}
 skip:
 			sym = yy_next();
-		} while (sym != YY_EOL && sym != YY_EOF);
+		} while (sym != YY_EOL);
 		if (prev == YY_WS) {
 			tokens.len--;
 		}
@@ -1963,7 +1957,7 @@ static void pp_parse_undef(void)
 	yy_sym id, sym = yy_next();
 
 	if (!PP_IS_ID(sym)) {
-		if (sym == YY_EOL || sym == YY_EOF) {
+		if (sym == YY_EOL) {
 			yy_error("mising macro name");
 		} else {
 			yy_error("macro name must be an identifier");
@@ -1976,7 +1970,7 @@ static void pp_parse_undef(void)
 	if (id == YY_DEFINED) yy_error("\"defined\" cannot be used as a macro name");
 
 	sym = yy_next();
-	if (sym != YY_EOL && sym != YY_EOF) {
+	if (sym != YY_EOL) {
 		yy_warning_fmt("extra tokens at the end of #%s directive", "undef");
 		pp_skip_until_eol();
 	}
@@ -1991,13 +1985,13 @@ static void pp_parse_error(bool warning)
 	const char *msg, *end = yy_pos;
 
 	msg = yy_text;
-	if (sym != YY_EOL && sym != YY_EOF) {
+	if (sym != YY_EOL) {
 		uint32_t save_flags = yy_flags;
 
 		yy_flags &= ~YY_SKIP_WS;
 		while (1) {
 			sym = yy_next();
-			if (sym == YY_EOL || sym == YY_EOF) break;
+			if (sym == YY_EOL) break;
 			if (sym != YY_WS) end = yy_pos;
 		}
 		yy_flags = save_flags;
@@ -2029,7 +2023,7 @@ static void pp_parse_line(yy_sym sym)
 			yy_file_name = yy_hash_lookup(yy_text + 1, yy_len - 2);
 			sym = yy_next();
 		}
-		if (sym != YY_EOL && sym != YY_EOF) {
+		if (sym != YY_EOL) {
 			pp_skip_until_eol();
 		}
 	} else {
@@ -2151,7 +2145,7 @@ pack_set:
 			pp_pack = 0;
 		}
 		if (sym != YY__RPAREN) goto error;
-	} else if (sym == YY_EOL || sym == YY_EOF) {
+	} else if (sym == YY_EOL) {
 		yy_warning("ignoring \"#pragma\"");
 		return;
 	} else {
@@ -2161,7 +2155,7 @@ pack_set:
 	}
 
 	sym = yy_next();
-	if (sym != YY_EOL && sym != YY_EOF) {
+	if (sym != YY_EOL) {
 		yy_warning_fmt("extra tokens at the end of #%s directive", "pragma");
 		pp_skip_until_eol();
 	}
@@ -2278,8 +2272,6 @@ start:
 							ch = *++pos;
 							yy_line++;
 							yy_linepos = (const char*)pos;
-						} else if (ch == '\0') {
-							goto eof;
 						} else {
 							ch = *++pos;
 						}
@@ -2290,8 +2282,6 @@ start:
 						goto cr;
 					} else if (ch == '\n') {
 						goto lf;
-					} else if (ch == '\0') {
-						goto eof;
 					} else {
 						ch = *++pos;
 					}
@@ -2311,8 +2301,6 @@ start:
 							ch = *++pos;
 							yy_line++;
 							yy_linepos = (const char*)pos;
-						} else if (ch == '\0') {
-							goto eof;
 						} else {
 							ch = *++pos;
 						}
@@ -2323,8 +2311,6 @@ start:
 						goto cr;
 					} else if (ch == '\n') {
 						goto lf;
-					} else if (ch == '\0') {
-						goto eof;
 					} else {
 						ch = *++pos;
 					}
@@ -2340,8 +2326,6 @@ start:
 							goto cr;
 						} else if (ch == '\n') {
 							goto lf;
-						} else if (ch == '\0') {
-							goto eof;
 						} else {
 							ch = *++pos;
 						}
@@ -2364,8 +2348,7 @@ start:
 							ch = *++pos;
 							yy_line++;
 							yy_linepos = (const char*)pos;
-						} else if (ch == '\0') {
-							goto eof;
+							if (ch == '\0') goto eof;
 						} else {
 							ch = *++pos;
 						}
@@ -2383,8 +2366,6 @@ start:
 					ch = *++pos;
 					yy_line++;
 					yy_linepos = (const char*)pos;
-				} else if (ch == '\0') {
-					goto eof;
 				} else {
 					ch = *++pos;
 				}
@@ -2451,7 +2432,7 @@ void pp_parse_directive(void)
 				skip = (pp_ifdef_stack[pp_ifdef_level - 1] & IFDEF_HAD_TRUE) != 0;
 				pp_ifdef_stack[pp_ifdef_level - 1] |= IFDEF_HAD_ELSE;
 				sym = yy_next();
-				if (sym != YY_EOL && sym != YY_EOF) {
+				if (sym != YY_EOL) {
 					yy_warning("extra tokens at end of #else directive");
 					pp_skip_until_eol();
 				}
@@ -2463,7 +2444,7 @@ void pp_parse_directive(void)
 				if (pp_ifdef_level == pp_include_ifdef_level) yy_error("#endif without #if");
 				pp_ifdef_level--;
 				sym = yy_next();
-				if (sym != YY_EOL && sym != YY_EOF) {
+				if (sym != YY_EOL) {
 					yy_warning("extra tokens at end of #endif directive");
 					pp_skip_until_eol();
 				}

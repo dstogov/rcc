@@ -743,7 +743,8 @@ static int rcc_read(const char *file_name)
 	}
 	size = stat_buf.st_size;
 
-	buf = ir_mem_malloc(size + 1);
+	/* Allocate two additional bytes for "\n\0" */
+	buf = ir_mem_malloc(size + 2);
 	if (!buf) {
 		fprintf(stderr, "ERROR: Cannot allocate buffer to read file \"%s\"\n", file_name);
 		return 0;
@@ -758,6 +759,7 @@ static int rcc_read(const char *file_name)
 		return 0;
 	}
 
+	if (size && buf[size - 1] != '\n') buf[size++] = '\n';
 	buf[size] = '\0'; /* End marker */
 
 	yy_pos = yy_text = yy_linepos = yy_buf = buf;

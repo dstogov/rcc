@@ -475,12 +475,10 @@ character:
 					} else if (ch == '\n') {
 						yy_line++;
 						yy_linepos = (const char*)pos + 1;
-					} else if (ch == '\0') {
-						goto error;
 					}
 				} else if (ch == '\'') {
 					break;
-				} else if (ch == '\r' || ch == '\n' || ch == '\0') {
+				} else if (ch == '\r' || ch == '\n') {
 					goto error;
 				}
 			}
@@ -500,12 +498,10 @@ string:
 					} else if (ch == '\n') {
 						yy_line++;
 						yy_linepos = (const char*)pos + 1;
-					} else if (ch == '\0') {
-						goto error;
 					}
 				} else if (ch == '"') {
 					break;
-				} else if (ch == '\r' || ch == '\n' || ch == '\0') {
+				} else if (ch == '\r' || ch == '\n') {
 					goto error;
 				}
 			}
@@ -642,8 +638,6 @@ string:
 						yy_line++;
 						yy_linepos = (const char*)pos;
 						break;
-					} else if (ch == '\0') {
-						break;
 					}
 				}
 				if (yy_flags & YY_SKIP_COMMENTS) {
@@ -668,8 +662,7 @@ string:
 					} else if (ch == '\n') {
 						yy_line++;
 						yy_linepos = (const char*)pos + 1;
-					} else if (ch == '\0') {
-						goto error;
+						if (pos[1] == '\0') goto error;
 					}
 				}
 				if (yy_flags & YY_SKIP_COMMENTS) goto restart;
