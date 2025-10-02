@@ -655,9 +655,16 @@ static void pp_macro_subst_args(pp_macro *macro, pp_arg *args, pp_list *replacem
 			} else {
 				yy_sym *tokens = args[arg].tokens;
 
-				if (!(args[arg].flags & PP_MACRO_EXPANDED)
-				 && prev != YY_PP_JOIN
-				 && *macro_tokens != YY_PP_JOIN) {
+				if (prev == YY_PP_JOIN) {
+					if ((macro->flags & PP_MACRO_VAR_ARG) && prev2 == YY__COMMA && arg == macro->num_args - 1) {
+						/* GNU extension: remove ", ##" or replace it by "," */
+						if (*tokens == YY_EOF) {
+							replacement->len -= 2;
+						} else {
+							replacement->len -= 1;
+						}
+					}
+				} else if (*macro_tokens != YY_PP_JOIN && !(args[arg].flags & PP_MACRO_EXPANDED)) {
 					pp_list expansion;
 					uint32_t old_level = pp_subst_level;
 					pp_subst_stream *stream = &pp_subst_stack[pp_subst_level];
@@ -714,13 +721,6 @@ static void pp_macro_subst_args(pp_macro *macro, pp_arg *args, pp_list *replacem
 						args[arg].flags |= PP_MACRO_EXPANDED;
 						args[arg].size = expansion.size;
 						args[arg].tokens = tokens = expansion.syms;
-					}
-				} else if (prev == YY_PP_JOIN && prev2 == YY__COMMA) {
-					/* GNU extension: remove ", ##" or replace it by "," */
-					if (*tokens == YY_EOF || *tokens == YY_PP_PLACE_MARKER) {
-						replacement->len -= 2;
-					} else {
-						replacement->len -= 1;
 					}
 				}
 
@@ -832,7 +832,7 @@ static void pp_macro_read_args(pp_macro *macro, yy_sym name, pp_arg *args, pp_li
 	 && num_args != 1
 	 && (uint32_t)args[num_args - 1].num_args == list->len) {
 		/* __VA_ARGS__ is not empty, COMMA ## __VA_ARGS__ should be expaned to COMMA */
-		pp_list_push(list, YY_WS);
+		pp_list_push(list, YY_PP_PLACE_MARKER);
 	}
 
 	pp_list_push(list, YY_EOF);
