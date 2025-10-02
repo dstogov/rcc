@@ -812,7 +812,23 @@ static void pp_macro_read_args(pp_macro *macro, yy_sym name, pp_arg *args, pp_li
 
 	yy_flags = save_flags;
 
-	if (num_args < macro->num_args) {
+	if (num_args == macro->num_args) {
+		if ((macro->flags & PP_MACRO_VAR_ARG)
+		 && num_args != 1
+		 && (uint32_t)args[num_args - 1].num_args == list->len) {
+			/* __VA_ARGS__ is not empty, COMMA ## __VA_ARGS__ should be expaned to COMMA */
+			pp_list_push(list, YY_PP_PLACE_MARKER);
+		}
+	} else if (num_args > macro->num_args) {
+		if (!(macro->flags & PP_MACRO_VAR_ARG)) {
+			if (macro->num_args == 0 && num_args == 1 && list->len == 0) {
+				/* Function macro withiout parameters */
+			} else {
+				yy_error_fmt("macro \"%s\" passed %d arguments, but takes just %d",
+					yy_sym2str(name), num_args, macro->num_args);
+			}
+		}
+	} else {
 		if ((macro->flags & PP_MACRO_VAR_ARG) && num_args == macro->num_args - 1) {
 			/* empty variadic argument */
 			args[num_args].num_args = list->len;
@@ -820,19 +836,6 @@ static void pp_macro_read_args(pp_macro *macro, yy_sym name, pp_arg *args, pp_li
 			yy_error_fmt("macro \"%s\" requires %d arguments, but only %d given",
 				yy_sym2str(name), macro->num_args, num_args);
 		}
-	} else if (num_args > macro->num_args && (macro->flags & PP_MACRO_VAR_ARG) == 0) {
-		if (macro->num_args == 0 && num_args == 1 && list->len == 0) {
-			/* Function macro withiout parameters */
-		} else {
-			yy_error_fmt("macro \"%s\" passed %d arguments, but takes just %d",
-				yy_sym2str(name), num_args, macro->num_args);
-		}
-	} else if (num_args == macro->num_args
-	 && (macro->flags & PP_MACRO_VAR_ARG)
-	 && num_args != 1
-	 && (uint32_t)args[num_args - 1].num_args == list->len) {
-		/* __VA_ARGS__ is not empty, COMMA ## __VA_ARGS__ should be expaned to COMMA */
-		pp_list_push(list, YY_PP_PLACE_MARKER);
 	}
 
 	pp_list_push(list, YY_EOF);
