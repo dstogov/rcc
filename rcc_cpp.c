@@ -804,12 +804,6 @@ static void pp_macro_read_args(pp_macro *macro, yy_sym name, pp_arg *args, pp_li
 			break;
 		}
 		prev = sym;
-		if (PP_IS_ID(sym)
-		 && !(sym & PP_NOSUBST)
-		 && yy_hash.data[sym].macro
-		 && (yy_hash.data[sym].macro->flags & PP_MACRO_DISABLED)) {
-			sym |= PP_NOSUBST;
-		}
 		pp_list_push(list, sym);
 		if (PP_HAS_VAL(sym)) {
 			pp_list_push_val(list);

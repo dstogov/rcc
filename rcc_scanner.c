@@ -200,12 +200,14 @@ restart_stream:
 			if (PP_IS_ID(ret)) {
 				if (ret & PP_NOSUBST) {
 					if (!(yy_flags & YY_ACCEPT_NOSUBST)) ret &= ~PP_NOSUBST;
-				} else if (!(yy_flags & YY_NO_MACRO)) {
+				} else {
 					macro = yy_hash.data[ret].macro;
 					if (macro) {
 						if (!(macro->flags & PP_MACRO_DISABLED)) {
+							if (!(yy_flags & YY_NO_MACRO)) {
 try_expand_macro:
-							if (pp_macro_expand(macro, ret)) goto restart_stream;
+								if (pp_macro_expand(macro, ret)) goto restart_stream;
+							}
 						} else {
 							if (yy_flags & YY_ACCEPT_NOSUBST) ret |= PP_NOSUBST;
 						}
