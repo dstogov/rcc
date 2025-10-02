@@ -446,6 +446,9 @@ void yy_dyn_str_append0(yy_dyn_str *dyn_str, const char *str, size_t len);
 
 #define PP_NOSUBST           0x40000000
 
+#define PP_MACRO_ARG         0x40000000
+#define PP_STRINGIZE         0x20000000
+
 struct _pp_macro {
 	uint32_t                 flags;
 	int32_t                  num_args;

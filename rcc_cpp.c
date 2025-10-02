@@ -374,19 +374,6 @@ static void pp_debug_print_list(const char *hdr, yy_sym *tokens)
 }
 #endif
 
-static int pp_macro_find_arg(pp_macro *macro, yy_sym id)
-{
-	yy_sym *arg = macro->tokens;
-	int i;
-
-	for (i = 0; i < macro->num_args; arg++, i++) {
-		if (*arg == id) {
-			return i;
-		}
-	}
-	return -1;
-}
-
 static yy_sym pp_paste(yy_sym sym1, const char *s1, size_t len1, yy_sym sym2, const char *s2, size_t len2)
 {
 	yy_dyn_str dyn_str;
@@ -656,18 +643,16 @@ static void pp_macro_subst_args(pp_macro *macro, pp_arg *args, pp_list *replacem
 
 		if (sym == YY_EOF) {
 			break;
-		} else if (sym == YY__HASH) {
-			sym = *macro_tokens++;
-			PP_ASSERT(PP_IS_ID(sym), "'#' is not followed by a macro parameter");
-			arg = pp_macro_find_arg(macro, sym);
-			PP_ASSERT(arg >= 0, "'#' is not followed by a macro parameter");
+		} else if (sym & PP_MACRO_ARG) {
+			arg = sym & ~(PP_MACRO_ARG|PP_STRINGIZE);
 
-			pp_macro_stringize(args[arg].tokens);
-			pp_list_push(replacement, YY_STRING);
-			pp_list_push_val(replacement);
-		} else if (PP_IS_ID(sym)) {
-			arg = pp_macro_find_arg(macro, sym);
-			if (arg >= 0) {
+			IR_ASSERT(arg >= 0);
+			if (sym & PP_STRINGIZE) {
+				PP_ASSERT(arg >= 0, "'#' is not followed by a macro parameter");
+				pp_macro_stringize(args[arg].tokens);
+				pp_list_push(replacement, YY_STRING);
+				pp_list_push_val(replacement);
+			} else {
 				yy_sym *tokens = args[arg].tokens;
 
 				if (!(args[arg].flags & PP_MACRO_EXPANDED)
@@ -755,8 +740,6 @@ static void pp_macro_subst_args(pp_macro *macro, pp_arg *args, pp_list *replacem
 						pp_list_push_val(replacement);
 					}
 				}
-			} else {
-				pp_list_push(replacement, sym);
 			}
 		} else {
 			if (sym == YY_WS && prev == YY_WS) continue;
@@ -1689,20 +1672,14 @@ static bool pp_macro_same(pp_macro *macro, uint32_t flags, int32_t num_args, yy_
 	if (macro->flags != flags || macro->num_args != num_args) return 0;
 	if (macro->flags & PP_MACRO_EMPTY) return 1;
 
-	s1 = macro->tokens + num_args;
-	s2 = tokens + num_args;
+	/* compare names [0..num_args] and macro body ... */
+	s1 = macro->tokens;
+	s2 = tokens;
 	while (1) {
 		sym1 = *s1++;
 		sym2 = *s2++;
 		if (sym1 != sym2) {
-#if 0
-			//int n;
-			//if (!PP_IS_ID(sym1) || !PP_IS_ID(sym2)) return 0;
-			//n = pp_macro_find_arg(macro, sym1);
-			//if (n < 0 || tokens[n] != sym2) return 0;
-#else
 			return 0;
-#endif
 		} else if (sym1 == YY_EOF) {
 			return 1;
 		} else if (PP_HAS_VAL(sym1)) {
@@ -1838,24 +1815,43 @@ static void pp_parse_define(void)
 			pp_list_init(&tokens);
 		}
 		yy_flags &= ~YY_SKIP_WS;
-		do {
-			if (sym == YY__HASH) {
-				if (flags & PP_MACRO_FUNCTION) {
-					int j, arg = -1;
 
+		for (; sym != YY_EOL; sym = yy_next()) {
+next:
+			if (sym == YY_WS) {
+				if (prev != YY_WS) {
+					prev = sym;
 					pp_list_push(&tokens, sym);
+				}
+			} else if (PP_IS_ID(sym)) {
+				int j;
+
+				for (j = 0; j < num_args; j++) {
+					if (tokens.syms[j] == sym) {
+						sym = j | PP_MACRO_ARG;
+						break;
+					}
+				}
+				prev = sym;
+				pp_list_push(&tokens, sym);
+			} else if (sym == YY__HASH) {
+				if (flags & PP_MACRO_FUNCTION) {
+					int j;
+
 					do {
 						sym = yy_next();
 					} while (sym == YY_WS);
 					if (!PP_IS_ID(sym)) yy_error("'#' is not followed by a macro parameter");
 					for (j = 0; j < num_args; j++) {
 						if (tokens.syms[j] == sym) {
-							arg = j;
+							sym = j | PP_MACRO_ARG | PP_STRINGIZE;
 							break;
 						}
 					}
-					if (arg < 0) yy_error("'#' is not followed by a macro parameter");
+					if (j >= num_args) yy_error("'#' is not followed by a macro parameter");
 				}
+				prev = sym;
+				pp_list_push(&tokens, sym);
 			} else if (sym == YY__HASH_HASH) {
 				if (prev == YY_EOF) yy_error("##' cannot appear at either end of a macro expansion");
 				if (prev == YY_WS) {
@@ -1867,21 +1863,20 @@ static void pp_parse_define(void)
 				if (sym == YY_EOL) yy_error("##' cannot appear at either end of a macro expansion");
 				flags |= PP_MACRO_HAS_JOIN;
 				pp_list_push(&tokens, YY_PP_JOIN);
-			} else if (sym == YY_WS && prev == YY_WS) {
-				goto skip;
+				goto next;
+			} else {
+				prev = sym;
+				pp_list_push(&tokens, sym);
+				if (PP_HAS_VAL(sym)) {
+					yy_dyn_str dyn_str;
+					yy_dyn_str_init0(&dyn_str, yy_text, yy_len);
+					yy_text = dyn_str.str;
+					yy_len = dyn_str.len;
+					pp_list_push_val(&tokens);
+				}
 			}
-			prev = sym;
-			pp_list_push(&tokens, sym);
-			if (PP_HAS_VAL(sym)) {
-				yy_dyn_str dyn_str;
-				yy_dyn_str_init0(&dyn_str, yy_text, yy_len);
-				yy_text = dyn_str.str;
-				yy_len = dyn_str.len;
-				pp_list_push_val(&tokens);
-			}
-skip:
-			sym = yy_next();
-		} while (sym != YY_EOL);
+		}
+
 		if (prev == YY_WS) {
 			tokens.len--;
 		}
