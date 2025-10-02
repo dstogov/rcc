@@ -701,11 +701,13 @@ static void pp_macro_subst_args(pp_macro *macro, pp_arg *args, pp_list *replacem
 
 							if (macro) {
 								if (!(macro->flags & PP_MACRO_DISABLED)) {
-									if (pp_macro_expand(macro, sym)) {
-										stream = &pp_subst_stack[pp_subst_level - 1];
-										continue;
-									}
+									bool ok;
+
+									pp_recursion_level++;
+									ok = pp_macro_expand(macro, sym);
+									pp_recursion_level--;
 									stream = &pp_subst_stack[pp_subst_level - 1];
+									if (ok) continue;
 								} else {
 									if (pp_debug) {pp_debug_fprintf(stderr, "\"%s\" is disabled!\n", yy_sym2str(sym));}
 									sym |= PP_NOSUBST;
@@ -876,15 +878,14 @@ bool pp_macro_expand(pp_macro *macro, yy_sym name)
 	replacement.size = 0;
 	replacement.len = 0;
 
-	pp_recursion_level++;
 	if (macro->flags & PP_MACRO_FUNCTION) {
 		pp_list tmp;
 		pp_arg *args;
 		uint32_t ws = 0;
 
 		if (pp_debug) {
-			pp_debug_fprintf(stderr, "%*sExpand function macro: \"%s\" %d %d\n",
-				pp_recursion_level * 2, "", yy_sym2str(name), pp_recursion_level, pp_subst_level);
+			pp_debug_fprintf(stderr, "%*sExpand function macro: \"%s\"\n",
+				pp_recursion_level * 2, "", yy_sym2str(name));
 			pp_debug_print_context();
 		}
 
@@ -925,7 +926,6 @@ bool pp_macro_expand(pp_macro *macro, yy_sym name)
 
 			if (pp_debug) {pp_debug_fprintf(stderr, "%*s  Backtrack\n", pp_recursion_level * 2, "");}
 
-			pp_recursion_level--;
 			yy_flags = save_flags;
 			return 0;
 		}
@@ -939,7 +939,6 @@ bool pp_macro_expand(pp_macro *macro, yy_sym name)
 
 		if (macro->flags & PP_MACRO_EMPTY) {
 			pp_list_release(tmp.syms, tmp.size);
-			pp_recursion_level--;
 			yy_flags = save_flags;
 			return 1;
 		}
@@ -1047,13 +1046,15 @@ bool pp_macro_expand(pp_macro *macro, yy_sym name)
 			yy_error_fmt("bad builtin macro \"%.*s\"", yy_len, yy_text);
 		}
 	} else if (macro->flags & PP_MACRO_EMPTY) {
-		pp_recursion_level--;
 		yy_flags = save_flags;
 		return 1;
 	} else {
 		yy_sym *tokens = macro->tokens;
 
-		if (pp_debug) {pp_debug_fprintf(stderr, "%*sExpand object macro: \"%s\"\n", pp_recursion_level * 2, "", yy_sym2str(name));}
+		if (pp_debug) {
+			pp_debug_fprintf(stderr, "%*sExpand object macro: \"%s\"\n",
+				pp_recursion_level * 2, "", yy_sym2str(name));
+		}
 
 		if (macro->flags & PP_MACRO_HAS_JOIN) {
 			pp_list_init(&replacement);
@@ -1075,7 +1076,6 @@ bool pp_macro_expand(pp_macro *macro, yy_sym name)
 			pp_subst_stack[pp_subst_level].skip_eof = 1;
 			pp_subst_level++;
 
-			pp_recursion_level--;
 			yy_flags = save_flags;
 			return 1;
 		}
@@ -1107,7 +1107,6 @@ bool pp_macro_expand(pp_macro *macro, yy_sym name)
 		pp_list_release(replacement.syms, replacement.size);
 	}
 
-	pp_recursion_level--;
 	yy_flags = save_flags;
 	return 1;
 }
