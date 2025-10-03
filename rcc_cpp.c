@@ -938,6 +938,7 @@ bool pp_macro_expand(pp_macro *macro, yy_sym name)
 				n = pp_include_level;
 			} else {
 				IR_ASSERT(name == YY___LINE__);
+				n = yy_line;
 			}
 			do {
 				buf[--i] = '0' + n % 10;
