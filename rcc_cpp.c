@@ -1860,8 +1860,9 @@ next:
 				if (PP_HAS_VAL(sym)) {
 					char *s;
 
-					s = ir_arena_alloc(&yy_arena, yy_len);
+					s = ir_arena_alloc(&yy_arena, yy_len + 1);
 					memcpy(s, yy_text, yy_len);
+					s[yy_len] = 0; /* this trailing zero is only necessary for fp-number parsing */
 					yy_text = s;
 					pp_list_push_val(&tokens);
 				}
