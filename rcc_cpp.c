@@ -255,7 +255,7 @@ void pp_list_grow(pp_list *l, uint32_t size)
 
 /* C Preprocessor */
 static void pp_debug_tokens(FILE *f, yy_sym *tokens);
-static void pp_debug_include(const char *name, bool is_user);
+static void pp_debug_include(const char *name, size_t len, bool is_user);
 static void pp_debug_macro(yy_sym sym, yy_sym name, pp_macro *macro);
 static void pp_print_pragma(yy_sym sym);
 
@@ -1542,7 +1542,7 @@ static void pp_parse_include(void)
 	}
 
 	if (yy_flags & PP_DUMP_INCLUDES) {
-		pp_debug_include(name.str, is_user);
+		pp_debug_include(name.str, name.len, is_user);
 	}
 
 	pp_push_include(resolved_name, buf, size);
@@ -2455,6 +2455,36 @@ static uint32_t    out_level = 0;
 static int32_t     out_line = 0;
 static FILE       *out_file = NULL;
 
+#ifdef fwrite_unlocked
+# define fputc  putc_unlocked
+# define fwrite fwrite_unlocked
+# define fflush fflush_unlocked
+#endif
+
+static void pp_print_line(FILE *f, int line, yy_sym name)
+{
+	char buf[16], *s;
+	const char *str;
+	size_t len;
+
+	fwrite("# ", sizeof("# ")-1, 1, f);
+
+	s = buf + sizeof(buf);
+	len = 0;
+	do {
+		s--;
+		len++;
+		*s = '0' + line % 10;
+		line = line / 10;
+	} while (line != 0);
+	fwrite(s, len, 1, f);
+
+	fwrite(",\"", sizeof(",\"")-1, 1, f);
+	str = yy_sym2strl(name, &len);
+	fwrite(str, len, 1, f);
+	fwrite("\"\n", sizeof("\"\n")-1, 1, f);
+}
+
 static void pp_debug_line(FILE *f)
 {
 	if (out_level != pp_include_level || out_file_name != yy_file_name) {
@@ -2462,16 +2492,16 @@ static void pp_debug_line(FILE *f)
 
 		if (out_level < pp_include_level) {
 			for (i = out_level; i < pp_include_level; i++) {
-				fprintf(f, "# %d \"%s\"\n", pp_include_stack[i].line - 1, yy_sym2str(pp_include_stack[i].file_name));
+				pp_print_line(f, pp_include_stack[i].line - 1, pp_include_stack[i].file_name);
 			}
 		}
-		fprintf(f, "# %d \"%s\"\n", yy_line, yy_sym2str(yy_file_name));
+		pp_print_line(f, yy_line, yy_file_name);
 		out_file_name = yy_file_name;
 		out_level = pp_include_level;
 		out_line = yy_line;
 	} else if (out_line != yy_line) {
 		if (out_line > yy_line || yy_line - out_line > 4) {
-			fprintf(f, "# %d,\"%s\"\n", yy_line, yy_sym2str(yy_file_name));
+			pp_print_line(f, yy_line, yy_file_name);
 		} else {
 			uint32_t i = yy_line - out_line;
 			for (;i > 0; i--) fputc('\n', f);
@@ -2480,7 +2510,7 @@ static void pp_debug_line(FILE *f)
 	}
 }
 
-static void pp_debug_include(const char *name, bool is_user)
+static void pp_debug_include(const char *name, size_t len, bool is_user)
 {
 	FILE *f = out_file ? out_file : stdout;
 
@@ -2493,10 +2523,15 @@ static void pp_debug_include(const char *name, bool is_user)
 	}
 
 	if (is_user) {
-		fprintf(f, "#include \"%s\"\n", name);
+		fwrite("#include \"", sizeof("#include \"")-1, 1, f);
+		fwrite(name, len, 1, f);
+		fputc('"', f);
 	} else {
-		fprintf(f, "#include <%s>\n", name);
+		fwrite("#include \"", sizeof("#include <")-1, 1, f);
+		fwrite(name, len, 1, f);
+		fputc('>', f);
 	}
+	fputc('\n', f);
 	out_level++;
 }
 
@@ -2513,18 +2548,26 @@ static void pp_debug_tokens(FILE *f, yy_sym *tokens)
 			continue;
 		}
 		if (prev == YY_WS || pp_needs_space(prev, sym)) {
-			fprintf(f, " ");
+			fputc(' ', f);
 		}
 		prev = sym;
 		if (PP_HAS_VAL(sym)) {
 			p = pp_load_val(p);
-			fprintf(f, "%.*s", (int)yy_len, yy_text);
+			fwrite(yy_text, yy_len, 1, f);
 		} else {
+			size_t len;
+			const char *str;
+
 			if (sym & PP_NOSUBST) {
-				fprintf(f, "<NOSUBST>");
+				fwrite("<NOSUBST>", sizeof("<NOSUBST>")-1, 1, f);
 				sym &= ~PP_NOSUBST;
 			}
-			fprintf(f, "%s", yy_sym2str(sym));
+			str = yy_sym2strl(sym, &len);
+			if (len == 1) {
+				fputc(str[0], f);
+			} else {
+				fwrite(str, len, 1, f);
+			}
 		}
 	}
 }
@@ -2532,6 +2575,8 @@ static void pp_debug_tokens(FILE *f, yy_sym *tokens)
 static void pp_debug_macro(yy_sym sym, yy_sym name, pp_macro *macro)
 {
 	FILE *f = out_file ? out_file : stdout;
+	const char *str;
+	size_t len;
 
 	if (!(yy_flags & PP_NO_LINEMARKERS)) {
 		if (out_level != pp_include_level || out_file_name != yy_file_name || out_line != yy_line) {
@@ -2542,27 +2587,34 @@ static void pp_debug_macro(yy_sym sym, yy_sym name, pp_macro *macro)
 	}
 
 	if (sym == YY_DEFINE) {
-		fprintf(f, "#define %s", yy_sym2str(name));
+		fwrite("#define ", sizeof("#define ")-1, 1, f);
+		str = yy_sym2strl(name, &len);
+		fwrite(str, len, 1, f);
 		if (macro->flags & PP_MACRO_FUNCTION) {
 			bool first = 1;
 			int32_t i;
 
-			fprintf(f, "(");
+			fputc('(', f);
 			for (i = 0; i < macro->num_args; i++) {
-				fprintf(f, "%s%s", first ? "" : ",", yy_sym2str(macro->tokens[i]));
+				if (!first) fputc(',', f);
+				str = yy_sym2strl(macro->tokens[i], &len);
+				fwrite(str, len, 1, f);
 				first = 0;
 			}
 			if (macro->flags & PP_MACRO_VAR_ARG) {
-				fprintf(f, "...");
+				fwrite("...", sizeof("...")-1, 1, f);
 			}
-			fprintf(f, ")");
+			fputc(')', f);
 		}
 		if (!(macro->flags & PP_MACRO_EMPTY)) {
 			pp_debug_tokens(f, macro->tokens + macro->num_args);
 		}
-		fprintf(f, "\n");
+		fputc('\n', f);
 	} else if (sym == YY_UNDEF) {
-		fprintf(f, "#undef %s\n", yy_sym2str(name));
+		fwrite("#undef ", sizeof("#undef ")-1, 1, f);
+		str = yy_sym2strl(name, &len);
+		fwrite(str, len, 1, f);
+		fputc('\n', f);
 	}
 }
 
@@ -2658,7 +2710,11 @@ void pp_preprocess(FILE *f)
 			empty_line = 0;
 			prev = ((sym == YY_PP_NUMBER || sym == YY_HEXADECIMAL_NUMBER)
 				&& (yy_text[yy_len-1] == 'E' || yy_text[yy_len-1] == 'e')) ? YY_E : sym;
-			fwrite(yy_text, yy_len, 1, f);
+			if (yy_len == 1) {
+				fputc(yy_text[0], f);
+			} else {
+				fwrite(yy_text, yy_len, 1, f);
+			}
 		}
 	}
 
