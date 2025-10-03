@@ -517,13 +517,17 @@ static void pp_macro_join(yy_sym *tokens)
 			next = sym;
 			sym = pp_paste(*prev, s1, len1, next, s2, len2);
 			if (sym) {
-				*prev = sym;
-				dst = prev + 1;
-				if (PP_HAS_VAL(sym)) {
-					IR_ASSERT(PP_HAS_VAL(*prev) || PP_HAS_VAL(next));
-					dst = pp_save_val(dst);
-				}
 				if (PP_HAS_VAL(next)) src += (sizeof(void*) == sizeof(int32_t)) ? 2 : 3;
+				if (sym != YY_PP_PLACE_MARKER || *src == YY_PP_JOIN) {
+					*prev = sym;
+					dst = prev + 1;
+					if (PP_HAS_VAL(sym)) {
+						IR_ASSERT(PP_HAS_VAL(*prev) || PP_HAS_VAL(next));
+						dst = pp_save_val(dst);
+					}
+				} else {
+					dst = prev;
+				}
 				continue;
 			}
 			/* skip ## in case of error */
@@ -576,41 +580,38 @@ static void pp_macro_stringize(yy_sym *tokens)
 			yy_dyn_str_append(&dyn_str, " ", 1);
 			spaces--;
 		}
-		if (sym == YY_PP_PLACE_MARKER) {
-			continue;
-		} else {
-			if (PP_HAS_VAL(sym)) {
-				tokens = pp_load_val(tokens);
-				if (sym == YY_STRING || sym == YY_CHARACTER) {
-					const char *s = yy_text;
-					while (yy_len) {
-						char c = *s;
-					    if ((c < 32 && c != '\t') || c == '\"' || c == '\\') {
-							yy_dyn_str_append(&dyn_str, "\\", 1);
-					    }
-					    if (c >= 32 || c == '\t' /*&& c <= 126*/) {
-							yy_dyn_str_append(&dyn_str, s, 1);
-					    } else {
-					        if (c == '\n') {
-					            yy_dyn_str_append(&dyn_str, "n", 1);
-					        } else {
-								char buf[4];
 
-					            buf[0] = '0' + ((c >> 6) & 7);
-					            buf[1] = '0' + ((c >> 3) & 7);
-					            buf[2] = '0' + (c & 7);
-								yy_dyn_str_append(&dyn_str, buf, 3);
-					        }
-					    }
-						s++;
-						yy_len--;
-					}
+		if (PP_HAS_VAL(sym)) {
+			tokens = pp_load_val(tokens);
+			if (sym == YY_STRING || sym == YY_CHARACTER) {
+				const char *s = yy_text;
+				while (yy_len) {
+					char c = *s;
+				    if ((c < 32 && c != '\t') || c == '\"' || c == '\\') {
+						yy_dyn_str_append(&dyn_str, "\\", 1);
+				    }
+				    if (c >= 32 || c == '\t' /*&& c <= 126*/) {
+						yy_dyn_str_append(&dyn_str, s, 1);
+				    } else {
+				        if (c == '\n') {
+				            yy_dyn_str_append(&dyn_str, "n", 1);
+				        } else {
+							char buf[4];
+
+				            buf[0] = '0' + ((c >> 6) & 7);
+				            buf[1] = '0' + ((c >> 3) & 7);
+				            buf[2] = '0' + (c & 7);
+							yy_dyn_str_append(&dyn_str, buf, 3);
+				        }
+				    }
+					s++;
+					yy_len--;
 				}
-			} else {
-				yy_text = yy_sym2strl(sym & ~PP_NOSUBST, &yy_len);
 			}
-			yy_dyn_str_append(&dyn_str, yy_text, yy_len);
+		} else {
+			yy_text = yy_sym2strl(sym & ~PP_NOSUBST, &yy_len);
 		}
+		yy_dyn_str_append(&dyn_str, yy_text, yy_len);
 	}
 	if (dyn_str.str[dyn_str.len - 1] == '\\') {
 		int count = 0;
@@ -634,123 +635,233 @@ static void pp_macro_stringize(yy_sym *tokens)
 static void pp_macro_subst_args(pp_macro *macro, pp_arg *args, pp_list *replacement)
 {
 	int i;
-	yy_sym prev = 0, prev2 = 0;
 	yy_sym *macro_tokens = macro->tokens + macro->num_args;
 
-	while (1) {
-		int arg;
-		yy_sym sym = *macro_tokens++;
+	if (!(macro->flags & PP_MACRO_HAS_JOIN)) {
+		yy_sym prev = 0;
 
-		if (sym == YY_EOF) {
-			break;
-		} else if (sym & PP_MACRO_ARG) {
-			arg = sym & ~(PP_MACRO_ARG|PP_STRINGIZE);
+		while (1) {
+			int arg;
+			yy_sym sym = *macro_tokens++;
 
-			IR_ASSERT(arg >= 0);
-			if (sym & PP_STRINGIZE) {
-				PP_ASSERT(arg >= 0, "'#' is not followed by a macro parameter");
-				pp_macro_stringize(args[arg].tokens);
-				pp_list_push(replacement, YY_STRING);
-				pp_list_push_val(replacement);
-			} else {
-				yy_sym *tokens = args[arg].tokens;
+			if (sym == YY_EOF) {
+				break;
+			} else if (sym & PP_MACRO_ARG) {
+				arg = sym & ~(PP_MACRO_ARG|PP_STRINGIZE);
 
-				if (prev == YY_PP_JOIN) {
-					if ((macro->flags & PP_MACRO_VAR_ARG) && prev2 == YY__COMMA && arg == macro->num_args - 1) {
-						/* GNU extension: remove ", ##" or replace it by "," */
-						if (*tokens == YY_EOF) {
-							replacement->len -= 2;
-						} else {
-							replacement->len -= 1;
-						}
-					}
-				} else if (*macro_tokens != YY_PP_JOIN && !(args[arg].flags & PP_MACRO_EXPANDED)) {
-					pp_list expansion;
-					uint32_t old_level = pp_subst_level;
-					pp_subst_stream *stream = &pp_subst_stack[pp_subst_level];
+				IR_ASSERT(arg >= 0);
+				if (sym & PP_STRINGIZE) {
+					PP_ASSERT(arg >= 0, "'#' is not followed by a macro parameter");
+					pp_macro_stringize(args[arg].tokens);
+					pp_list_push(replacement, YY_STRING);
+					pp_list_push_val(replacement);
+				} else {
+					yy_sym *tokens = args[arg].tokens;
 
-					if (pp_subst_level >= PP_SUBST_STACK_SIZE) yy_error("too deep macro substitution level");
-					stream = &pp_subst_stack[pp_subst_level];
-					pp_subst_level++;
-					stream->macro = NULL;
-					stream->start = NULL;
-					stream->tokens = tokens;
-					stream->skip_eof = 0;
+					if (!(args[arg].flags & PP_MACRO_EXPANDED)) {
+						pp_list expansion;
+						uint32_t old_level = pp_subst_level;
+						pp_subst_stream *stream = &pp_subst_stack[pp_subst_level];
 
-					pp_list_init(&expansion);
-					while (1) {
-						sym = *stream->tokens++;
-						if (sym == YY_EOF) {
-							pp_subst_level--;
-							if (pp_subst_level == old_level) break;
-							if (stream->macro) stream->macro->flags &= ~PP_MACRO_DISABLED;
-							if (stream->start) pp_list_release(stream->start, stream->size);
-							stream = &pp_subst_stack[pp_subst_level - 1];
-							continue;
-						}
-						if (PP_IS_ID(sym) && !(sym & PP_NOSUBST)) {
-							pp_macro *macro = yy_hash.data[sym].macro;
+						if (pp_subst_level >= PP_SUBST_STACK_SIZE) yy_error("too deep macro substitution level");
+						stream = &pp_subst_stack[pp_subst_level];
+						pp_subst_level++;
+						stream->macro = NULL;
+						stream->start = NULL;
+						stream->tokens = tokens;
+						stream->skip_eof = 0;
 
-							if (macro) {
-								if (!(macro->flags & PP_MACRO_DISABLED)) {
-									bool ok;
+						pp_list_init(&expansion);
+						while (1) {
+							sym = *stream->tokens++;
+							if (sym == YY_EOF) {
+								pp_subst_level--;
+								if (pp_subst_level == old_level) break;
+								if (stream->macro) stream->macro->flags &= ~PP_MACRO_DISABLED;
+								if (stream->start) pp_list_release(stream->start, stream->size);
+								stream = &pp_subst_stack[pp_subst_level - 1];
+								continue;
+							}
+							if (PP_IS_ID(sym) && !(sym & PP_NOSUBST)) {
+								pp_macro *macro = yy_hash.data[sym].macro;
 
-									pp_recursion_level++;
-									ok = pp_macro_expand(macro, sym);
-									pp_recursion_level--;
-									stream = &pp_subst_stack[pp_subst_level - 1];
-									if (ok) continue;
-								} else {
-									if (pp_debug) {pp_debug_fprintf(stderr, "\"%s\" is disabled!\n", yy_sym2str(sym));}
-									sym |= PP_NOSUBST;
+								if (macro) {
+									if (!(macro->flags & PP_MACRO_DISABLED)) {
+										bool ok;
+
+										pp_recursion_level++;
+										ok = pp_macro_expand(macro, sym);
+										pp_recursion_level--;
+										stream = &pp_subst_stack[pp_subst_level - 1];
+										if (ok) continue;
+									} else {
+										if (pp_debug) {pp_debug_fprintf(stderr, "\"%s\" is disabled!\n", yy_sym2str(sym));}
+										sym |= PP_NOSUBST;
+									}
 								}
 							}
+							pp_list_push(&expansion, sym);
+							if (PP_HAS_VAL(sym)) {
+								stream->tokens = pp_load_val(stream->tokens);
+								pp_list_push_val(&expansion);
+							}
 						}
-						pp_list_push(&expansion, sym);
+						if (args[arg].flags & PP_MACRO_EXPANDED) {
+							pp_list_release(expansion.syms, expansion.size);
+						    tokens = args[arg].tokens;
+						} else {
+							pp_list_push(&expansion, YY_EOF);
+
+							args[arg].flags |= PP_MACRO_EXPANDED;
+							args[arg].size = expansion.size;
+							args[arg].tokens = tokens = expansion.syms;
+						}
+					}
+
+					while (1) {
+						sym = *tokens++;
+						if (sym == YY_EOF) break;
+						if (sym == YY_WS && prev == YY_WS) continue;
+						prev = sym;
+						pp_list_push(replacement, sym);
 						if (PP_HAS_VAL(sym)) {
-							stream->tokens = pp_load_val(stream->tokens);
-							pp_list_push_val(&expansion);
+							tokens = pp_load_val(tokens);
+							pp_list_push_val(replacement);
 						}
 					}
-					if (args[arg].flags & PP_MACRO_EXPANDED) {
-						pp_list_release(expansion.syms, expansion.size);
-					    tokens = args[arg].tokens;
-					} else {
-						pp_list_push(&expansion, YY_EOF);
-
-						args[arg].flags |= PP_MACRO_EXPANDED;
-						args[arg].size = expansion.size;
-						args[arg].tokens = tokens = expansion.syms;
-					}
 				}
-
-				if (*tokens == YY_EOF) {
-					/* empty arg - insert placemarker */
-					pp_list_push(replacement, YY_PP_PLACE_MARKER);
-				} else
-				while (1) {
-					sym = *tokens++;
-					if (sym == YY_EOF) break;
-					if (sym == YY_WS && prev == YY_WS) continue;
-					prev2 = prev;
-					prev = sym;
-					pp_list_push(replacement, sym);
-					if (PP_HAS_VAL(sym)) {
-						tokens = pp_load_val(tokens);
-						pp_list_push_val(replacement);
-					}
+			} else {
+				if (sym == YY_WS && prev == YY_WS) continue;
+				pp_list_push(replacement, sym);
+				if (PP_HAS_VAL(sym)) {
+					macro_tokens = pp_load_val(macro_tokens);
+					pp_list_push_val(replacement);
 				}
 			}
-		} else {
-			if (sym == YY_WS && prev == YY_WS) continue;
-			pp_list_push(replacement, sym);
-			if (PP_HAS_VAL(sym)) {
-				macro_tokens = pp_load_val(macro_tokens);
-				pp_list_push_val(replacement);
-			}
+			prev = sym;
 		}
-		prev2 = prev;
-		prev = sym;
+	} else {
+		yy_sym prev = 0, prev2 = 0;
+
+		while (1) {
+			int arg;
+			yy_sym sym = *macro_tokens++;
+
+			if (sym == YY_EOF) {
+				break;
+			} else if (sym & PP_MACRO_ARG) {
+				arg = sym & ~(PP_MACRO_ARG|PP_STRINGIZE);
+
+				IR_ASSERT(arg >= 0);
+				if (sym & PP_STRINGIZE) {
+					PP_ASSERT(arg >= 0, "'#' is not followed by a macro parameter");
+					pp_macro_stringize(args[arg].tokens);
+					pp_list_push(replacement, YY_STRING);
+					pp_list_push_val(replacement);
+				} else {
+					yy_sym *tokens = args[arg].tokens;
+
+					if (prev == YY_PP_JOIN) {
+						if ((macro->flags & PP_MACRO_VAR_ARG) && prev2 == YY__COMMA && arg == macro->num_args - 1) {
+							/* GNU extension: remove ", ##" or replace it by "," */
+							prev = prev2 = 0;
+							if (*tokens == YY_EOF) {
+								replacement->len -= 2;
+							} else {
+								replacement->len -= 1;
+							}
+						}
+					} else if (*macro_tokens != YY_PP_JOIN && !(args[arg].flags & PP_MACRO_EXPANDED)) {
+						pp_list expansion;
+						uint32_t old_level = pp_subst_level;
+						pp_subst_stream *stream = &pp_subst_stack[pp_subst_level];
+
+						if (pp_subst_level >= PP_SUBST_STACK_SIZE) yy_error("too deep macro substitution level");
+						stream = &pp_subst_stack[pp_subst_level];
+						pp_subst_level++;
+						stream->macro = NULL;
+						stream->start = NULL;
+						stream->tokens = tokens;
+						stream->skip_eof = 0;
+
+						pp_list_init(&expansion);
+						while (1) {
+							sym = *stream->tokens++;
+							if (sym == YY_EOF) {
+								pp_subst_level--;
+								if (pp_subst_level == old_level) break;
+								if (stream->macro) stream->macro->flags &= ~PP_MACRO_DISABLED;
+								if (stream->start) pp_list_release(stream->start, stream->size);
+								stream = &pp_subst_stack[pp_subst_level - 1];
+								continue;
+							}
+							if (PP_IS_ID(sym) && !(sym & PP_NOSUBST)) {
+								pp_macro *macro = yy_hash.data[sym].macro;
+
+								if (macro) {
+									if (!(macro->flags & PP_MACRO_DISABLED)) {
+										bool ok;
+
+										pp_recursion_level++;
+										ok = pp_macro_expand(macro, sym);
+										pp_recursion_level--;
+										stream = &pp_subst_stack[pp_subst_level - 1];
+										if (ok) continue;
+									} else {
+										if (pp_debug) {pp_debug_fprintf(stderr, "\"%s\" is disabled!\n", yy_sym2str(sym));}
+										sym |= PP_NOSUBST;
+									}
+								}
+							}
+							pp_list_push(&expansion, sym);
+							if (PP_HAS_VAL(sym)) {
+								stream->tokens = pp_load_val(stream->tokens);
+								pp_list_push_val(&expansion);
+							}
+						}
+						if (args[arg].flags & PP_MACRO_EXPANDED) {
+							pp_list_release(expansion.syms, expansion.size);
+						    tokens = args[arg].tokens;
+						} else {
+							pp_list_push(&expansion, YY_EOF);
+
+							args[arg].flags |= PP_MACRO_EXPANDED;
+							args[arg].size = expansion.size;
+							args[arg].tokens = tokens = expansion.syms;
+						}
+					}
+
+					if (*tokens == YY_EOF) {
+						/* empty arg - insert placemarker */
+						if (prev == YY_PP_JOIN || *macro_tokens == YY_PP_JOIN) {
+							pp_list_push(replacement, YY_PP_PLACE_MARKER);
+						}
+					} else {
+						while (1) {
+							sym = *tokens++;
+							if (sym == YY_EOF) break;
+							if (sym == YY_WS && prev == YY_WS) continue;
+							prev2 = prev;
+							prev = sym;
+							pp_list_push(replacement, sym);
+							if (PP_HAS_VAL(sym)) {
+								tokens = pp_load_val(tokens);
+								pp_list_push_val(replacement);
+							}
+						}
+					}
+				}
+			} else {
+				if (sym == YY_WS && prev == YY_WS) continue;
+				pp_list_push(replacement, sym);
+				if (PP_HAS_VAL(sym)) {
+					macro_tokens = pp_load_val(macro_tokens);
+					pp_list_push_val(replacement);
+				}
+			}
+			prev2 = prev;
+			prev = sym;
+		}
 	}
 
 	for (i = 0; i < macro->num_args; i++) {
@@ -775,7 +886,7 @@ static void pp_macro_read_args(pp_macro *macro, yy_sym name, pp_arg *args, pp_li
 	while (1) {
 		do {
 			sym = yy_next();
-		} while ((skip_ws && (sym == YY_WS || sym == YY_EOL)) || sym == YY_PP_PLACE_MARKER);
+		} while (skip_ws && (sym == YY_WS || sym == YY_EOL));
 		skip_ws = 0;
 		if (sym == YY_EOL) sym = YY_WS;
 		if (sym == YY_WS && prev == YY_WS) {
@@ -817,7 +928,7 @@ static void pp_macro_read_args(pp_macro *macro, yy_sym name, pp_arg *args, pp_li
 		 && num_args != 1
 		 && (uint32_t)args[num_args - 1].num_args == list->len) {
 			/* __VA_ARGS__ is not empty, COMMA ## __VA_ARGS__ should be expaned to COMMA */
-			pp_list_push(list, YY_PP_PLACE_MARKER);
+			pp_list_push(list, YY_WS); //???PP_PLACE_MARKER);
 		}
 	} else if (num_args > macro->num_args) {
 		if (!(macro->flags & PP_MACRO_VAR_ARG)) {
@@ -2677,8 +2788,6 @@ void pp_preprocess(FILE *f)
 			} else if (sym == YY_EOF) {
 				if (!empty_line) fputc('\n', f);
 				break;
-			} else if (sym == YY_PP_PLACE_MARKER) {
-				continue;
 			} else if (!PP_HAS_VAL(sym)) {
 				yy_text = yy_sym2strl(sym, &yy_len);
 			} 
