@@ -927,25 +927,27 @@ bool pp_macro_expand(pp_macro *macro, yy_sym name)
 		pp_macro_subst_args(macro, args, &replacement);
 		pp_list_release(tmp.syms, tmp.size);
 	} else if (macro->flags & PP_MACRO_BUILTIN) {
-		if (name == YY___COUNTER__ || name == YY___INCLUDE_LEVEL__) {
-			char buf[16];
+		if (name == YY___COUNTER__ || name == YY___INCLUDE_LEVEL__ || name == YY___LINE__) {
+			char buf[16], *s;
 			int i = sizeof(buf);
 			uint32_t n;
-			yy_dyn_str dyn_str;
 
 			if (name == YY___COUNTER__) {
 				n = pp_counter++;
-			} else {
+			} else if (name == YY___INCLUDE_LEVEL__) {
 				n = pp_include_level;
+			} else {
+				IR_ASSERT(name == YY___LINE__);
 			}
-			buf[--i] = 0;
 			do {
 				buf[--i] = '0' + n % 10;
 				n = n / 10;
 			} while (n != 0);
-			yy_dyn_str_init(&dyn_str, buf + i, sizeof(buf) - i);
-			yy_text = dyn_str.str;
-			yy_len = dyn_str.len - 1;
+
+			yy_len = sizeof(buf) - i ;
+			yy_text = s = ir_arena_alloc(&yy_arena, sizeof(buf) - i);
+			memcpy(s, buf + i, sizeof(buf) - i);
+
 			pp_list_init(&replacement);
 			pp_list_push(&replacement, YY_DECIMAL_NUMBER);
 			pp_list_push_val(&replacement);
@@ -953,8 +955,7 @@ bool pp_macro_expand(pp_macro *macro, yy_sym name)
 			time_t t;
 			struct tm *tm;
 			size_t len;
-			yy_dyn_str dyn_str;
-			char str[64];
+			char str[64], *s;
 
 			time(&t);
 			tm = localtime(&t);
@@ -963,16 +964,18 @@ bool pp_macro_expand(pp_macro *macro, yy_sym name)
 			} else {
 				len = strftime(str, sizeof(str), "\"%H:%M:%S\"", tm);
 			}
-			yy_dyn_str_init0(&dyn_str, str, len);
-			yy_text = dyn_str.str;
-			yy_len = dyn_str.len;
+
+			yy_len = len;
+			yy_text = s = ir_arena_alloc(&yy_arena, len);
+			memcpy(s, str, len);
+
 			pp_list_init(&replacement);
 			pp_list_push(&replacement, YY_STRING);
 			pp_list_push_val(&replacement);
 		} else if (name == YY___FILE__ || name == YY___BASE_FILE__) {
-			yy_dyn_str dyn_str;
 			size_t len;
 			const char *str;
+			char *s;
 
 			if (name == YY___FILE__ || pp_include_level == 0) {
 				str = yy_sym2strl(yy_file_name, &len);
@@ -981,46 +984,35 @@ bool pp_macro_expand(pp_macro *macro, yy_sym name)
 			}
 
 			// TODO: intern the quoted string ???
-			yy_dyn_str_init(&dyn_str, "\"", 1);
-			yy_dyn_str_append(&dyn_str, str, len);
-			yy_dyn_str_append0(&dyn_str, "\"", 1);
-			yy_text = dyn_str.str;
-			yy_len = dyn_str.len;
+			yy_len = len + 2;
+			yy_text = s = ir_arena_alloc(&yy_arena, len + 2);
+			s[0] = '"';
+			memcpy(s + 1, str, len);
+			s[len + 1] = '"';
+
 			pp_list_init(&replacement);
 			pp_list_push(&replacement, YY_STRING);
 			pp_list_push_val(&replacement);
 		} else if (name == YY___FUNCTION__ || name == YY___FUNC__) {
-			yy_dyn_str dyn_str;
 			yy_sym func_name = c_get_current_func_name();
 
-			yy_dyn_str_init(&dyn_str, "\"", 1);
 			if (func_name) {
 				size_t len;
 				const char *name = yy_sym2strl(func_name, &len);
-				yy_dyn_str_append(&dyn_str, name, len);
+				char *s;
+
+				yy_len = len + 2;
+				yy_text = s = ir_arena_alloc(&yy_arena, len + 2);
+				s[0] = '"';
+				memcpy(s + 1, name, len);
+				s[len + 1] = '"';
+			} else {
+				yy_text = "\"\"";
+				yy_len = 2;
 			}
-			yy_dyn_str_append0(&dyn_str, "\"", 1);
-			yy_text = dyn_str.str;
-			yy_len = dyn_str.len;
+
 			pp_list_init(&replacement);
 			pp_list_push(&replacement, YY_STRING);
-			pp_list_push_val(&replacement);
-		} else if (name == YY___LINE__) {
-			char buf[16];
-			int i = sizeof(buf);
-			uint32_t n = yy_line;
-			yy_dyn_str dyn_str;
-
-			buf[--i] = 0;
-			do {
-				buf[--i] = '0' + n % 10;
-				n = n / 10;
-			} while (n != 0);
-			yy_dyn_str_init(&dyn_str, buf + i, sizeof(buf) - i);
-			yy_text = dyn_str.str;
-			yy_len = dyn_str.len - 1;
-			pp_list_init(&replacement);
-			pp_list_push(&replacement, YY_DECIMAL_NUMBER);
 			pp_list_push_val(&replacement);
 		} else {
 			yy_error_fmt("bad builtin macro \"%.*s\"", yy_len, yy_text);
@@ -1865,10 +1857,11 @@ next:
 				prev = sym;
 				pp_list_push(&tokens, sym);
 				if (PP_HAS_VAL(sym)) {
-					yy_dyn_str dyn_str;
-					yy_dyn_str_init0(&dyn_str, yy_text, yy_len);
-					yy_text = dyn_str.str;
-					yy_len = dyn_str.len;
+					char *s;
+
+					s = ir_arena_alloc(&yy_arena, yy_len);
+					memcpy(s, yy_text, yy_len);
+					yy_text = s;
 					pp_list_push_val(&tokens);
 				}
 			}
