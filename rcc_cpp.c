@@ -873,52 +873,75 @@ static void pp_macro_subst_args(pp_macro *macro, pp_arg *args, pp_list *replacem
 
 static void pp_macro_read_args(pp_macro *macro, yy_sym name, pp_arg *args, pp_list *list)
 {
-	uint32_t level = 0;
 	int num_args = 0;
 	yy_sym sym, prev = 0;
-	bool skip_ws = 1;
 	uint32_t save_flags = yy_flags;
 
 	yy_flags |= YY_ACCEPT_PP_NUMBER | YY_ACCEPT_PUNCTUATOR | YY_NO_MACRO;
 	yy_flags &= ~YY_SKIP_WS;
 
 	args[0].num_args = 0;
+	do {
+		sym = yy_next();
+	} while (sym == YY_WS || sym == YY_EOL);
 	while (1) {
-		do {
-			sym = yy_next();
-		} while (skip_ws && (sym == YY_WS || sym == YY_EOL));
-		skip_ws = 0;
 		if (sym == YY_EOL) sym = YY_WS;
-		if (sym == YY_WS && prev == YY_WS) {
-			continue;
-		} else
-		if (sym == YY__RPAREN) {
-			if (level == 0) {
-				num_args++;
-				break;
-			}
-			level--;
-		} else if (sym == YY__COMMA && level == 0) {
+		if (sym == YY_WS) {
+			if (prev != YY_WS) pp_list_push(list, sym);
+		} else if (sym == YY__RPAREN) {
+			num_args++;
+			break;
+		} else if (sym == YY__COMMA) {
 			num_args++;
 			if (num_args < macro->num_args) {
 				pp_list_push(list, YY_EOF);
-				skip_ws = 1;
 				args[num_args].num_args = list->len;
-			} else if (macro->flags & PP_MACRO_VAR_ARG) {
-				pp_list_push(list, sym);
+				do {
+					sym = yy_next();
+				} while (sym == YY_WS || sym == YY_EOL);
+			} else {
+				if (macro->flags & PP_MACRO_VAR_ARG) pp_list_push(list, sym);
+				sym = yy_next();
 			}
 			continue;
 		} else if (sym == YY__LPAREN) {
-			level++;
+			uint32_t level = 1;
+
+			pp_list_push(list, sym);
+			while (1) {
+				prev = sym;
+				sym = yy_next();
+				if (sym == YY_EOL) sym = YY_WS;
+				if (sym == YY_WS) {
+					if (prev != YY_WS) pp_list_push(list, sym);
+				} else if (sym == YY__RPAREN) {
+					pp_list_push(list, sym);
+					level--;
+					if (level == 0) break;
+				} else if (sym == YY__LPAREN) {
+					level++;
+					pp_list_push(list, sym);
+				} else if (sym == YY_EOF) {
+					yy_error("unexpected <EOF>");
+					break;
+				} else {
+					pp_list_push(list, sym);
+					if (PP_HAS_VAL(sym)) {
+						pp_list_push_val(list);
+					}
+				}
+			}
 		} else if (sym == YY_EOF) {
 			yy_error("unexpected <EOF>");
 			break;
+		} else {
+			pp_list_push(list, sym);
+			if (PP_HAS_VAL(sym)) {
+				pp_list_push_val(list);
+			}
 		}
 		prev = sym;
-		pp_list_push(list, sym);
-		if (PP_HAS_VAL(sym)) {
-			pp_list_push_val(list);
-		}
+		sym = yy_next();
 	}
 
 	yy_flags = save_flags;
@@ -928,7 +951,7 @@ static void pp_macro_read_args(pp_macro *macro, yy_sym name, pp_arg *args, pp_li
 		 && num_args != 1
 		 && (uint32_t)args[num_args - 1].num_args == list->len) {
 			/* __VA_ARGS__ is not empty, COMMA ## __VA_ARGS__ should be expaned to COMMA */
-			pp_list_push(list, YY_WS); //???PP_PLACE_MARKER);
+			pp_list_push(list, YY_WS);
 		}
 	} else if (num_args > macro->num_args) {
 		if (!(macro->flags & PP_MACRO_VAR_ARG)) {
