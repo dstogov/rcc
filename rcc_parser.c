@@ -2531,7 +2531,7 @@ static uint32_t yy_read_unicode_character(const char *str, size_t len)
 	return n;
 }
 
-IR_ALWAYS_INLINE uint32_t yy_read_escape_sequence(char first_ch, const char **str_ptr)
+static uint32_t yy_read_escape_sequence(char first_ch, const char **str_ptr)
 {
 	uint32_t ch;
 	const char *p = *str_ptr;
