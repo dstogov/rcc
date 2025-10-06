@@ -3660,6 +3660,8 @@ void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 			yy_error_fmt("wrong level in %s() call", yy_sym2str(name));
 		}
 		c_value_set_rval(val, &c_type_ptr, IR_ADDR, ir_FRAME_ADDR());
+		c_type *t = (c_type*)active_func->value.type;
+		t->attr |= C_ATTR_NOINLINE;
 	} else if (name == YY___BUILTIN_CONSTANT_P) {
 		ir_val v;
 		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
