@@ -2505,7 +2505,7 @@ static void yy_read_fp(c_value *res, const char *p, size_t len)
 	c_value_set_const(res, ctype, type, val);
 }
 
-static uint32_t yy_unicode_character(const char *str, size_t len)
+static uint32_t yy_read_unicode_character(const char *str, size_t len)
 {
 	char ch;
 	const char *p = str;
@@ -2531,86 +2531,142 @@ static uint32_t yy_unicode_character(const char *str, size_t len)
 	return n;
 }
 
+IR_ALWAYS_INLINE uint32_t yy_read_escape_sequence(char first_ch, const char **str_ptr)
+{
+	uint32_t ch;
+	const char *p = *str_ptr;
+
+	ch = (unsigned char)first_ch;
+	switch (ch) {
+		case '\\': ch = '\\'; break;
+		case '\'': ch = '\''; break;
+		case '"':  ch = '"';  break;
+		case 'a':  ch = '\a'; break;
+		case 'b':  ch = '\b'; break;
+		case 'e':  ch = 27;   break; /* '\e'; */
+		case 'f':  ch = '\f'; break;
+		case 'n':  ch = '\n'; break;
+		case 'r':  ch = '\r'; break;
+		case 't':  ch = '\t'; break;
+		case 'v':  ch = '\v'; break;
+		case '?':  ch = 0x3f; break;
+		case '0':
+		case '1':
+		case '2':
+		case '3':
+		case '4':
+		case '5':
+		case '6':
+		case '7':
+			ch = ch - '0';
+			if (*p >= '0' && *p <= '7') {
+				ch = ch * 8 + (*p - '0');
+				p++;
+				if (*p >= '0' && *p <= '7') {
+					ch = ch * 8 + (*p - '0');
+					p++;
+				}
+			}
+			break;
+		case 'x':
+			ch = *p++;
+			if (ch >= '0' && ch <= '9') {
+				ch = ch - '0';
+			} else if (ch >= 'a' && ch <= 'f') {
+				ch = ch - 'a' + 10;
+			} else if (ch >= 'A' && ch <= 'F') {
+				ch = ch - 'A' + 10;
+			} else {
+				yy_error("unsupported escape sequence");
+			}
+			if (*p >= '0' && *p <= '9') {
+				ch = (ch << 4) + (*p - '0');
+				p++;
+			} else if (*p >= 'a' && *p <= 'f') {
+				ch = (ch << 4) + (*p - 'a' + 10);
+				p++;
+			} else if (*p >= 'A' && *p <= 'F') {
+				ch = (ch << 4) + (*p - 'A' + 10);
+				p++;
+			}
+			break;
+		case 'u':
+			ch = yy_read_unicode_character(p, 4);
+			p += 4;
+			break;
+		case 'U':
+			ch = yy_read_unicode_character(p, 8);
+			p += 8;
+			break;
+		default:
+			yy_error("unsupported escape sequence");
+			break;
+	}
+
+	*str_ptr = p;
+	return ch;
+}
+
 static uint32_t yy_read_multi_char(uint32_t res, const char *p)
 {
 	uint32_t ch;
 
 	while (*p != '\'') {
-		ch = (const unsigned char)*p++;
+		ch = (unsigned char)*p++;
 		if (ch == '\\') {
-			ch = (const unsigned char)*p++;
-			switch (ch) {
-				case '\\': ch = '\\'; break;
-				case '\'': ch = '\''; break;
-				case '"':  ch = '"';  break;
-				case 'a':  ch = '\a'; break;
-				case 'b':  ch = '\b'; break;
-				case 'e':  ch = 27;   break; /* '\e'; */
-				case 'f':  ch = '\f'; break;
-				case 'n':  ch = '\n'; break;
-				case 'r':  ch = '\r'; break;
-				case 't':  ch = '\t'; break;
-				case 'v':  ch = '\v'; break;
-				case '?':  ch = 0x3f; break;
-				case '0':
-				case '1':
-				case '2':
-				case '3':
-				case '4':
-				case '5':
-				case '6':
-				case '7':
-					ch = ch - '0';
-					if (*p >= '0' && *p <= '7') {
-						ch = ch * 8 + (*p - '0');
-						p++;
-						if (*p >= '0' && *p <= '7') {
-							ch = ch * 8 + (*p - '0');
-							p++;
-						}
-					}
-					break;
-				case 'x':
-					ch = *p++;
-					if (ch >= '0' && ch <= '9') {
-						ch = ch - '0';
-					} else if (ch >= 'a' && ch <= 'f') {
-						ch = ch - 'a' + 10;
-					} else if (ch >= 'A' && ch <= 'F') {
-						ch = ch - 'A' + 10;
-					} else {
-						yy_error("unsupported escape sequence");
-					}
-					if (*p >= '0' && *p <= '9') {
-						ch = (ch << 4) + (*p - '0');
-						p++;
-					} else if (*p >= 'a' && *p <= 'f') {
-						ch = (ch << 4) + (*p - 'a' + 10);
-						p++;
-					} else if (*p >= 'A' && *p <= 'F') {
-						ch = (ch << 4) + (*p - 'A' + 10);
-						p++;
-					}
-					break;
-				case 'u':
-					ch = yy_unicode_character(p, 4);
-					p += 4;
-					break;
-				case 'U':
-					ch = yy_unicode_character(p, 8);
-					p += 8;
-					break;
-				case '\n':
-					ch = *p++;
-					continue;
-				default:
-					yy_error("unsupported escape sequence");
-					break;
+			ch = (unsigned char)*p++;
+			if (ch == '\n') {
+				ch = (unsigned char)*p++;
+				continue;
 			}
+			ch = yy_read_escape_sequence(ch, &p);
 		}
 		res = (res << 8) + ch;
 	}
 	return res;
+}
+
+static uint32_t yy_read_utf8_char(char first_ch, const char **str_ptr)
+{
+	const char *p = *str_ptr;
+	uint32_t uc;
+	uint32_t c = (unsigned char)first_ch;
+
+	if (c < 0xc2) goto bad_utf8;
+	if (c < 0xe0) {
+		uc = ((c & 0x1f) << 6);
+		c = (unsigned char)*p++;
+		if (c < 0x80 || c > 0xbf) goto bad_utf8;
+		uc |= (c & 0x3f);
+		if (uc < 0x80) goto bad_utf8;
+	} else if (c < 0xf0) {
+		uc = ((c & 0x0f) << 12);
+		c = (unsigned char)*p++;
+		if (c < 0x80 || c > 0xbf) goto bad_utf8;
+		uc |= ((c & 0x3f) << 6);
+		c = (unsigned char)*p++;
+		if (c < 0x80 || c > 0xbf) goto bad_utf8;
+		uc |= (c & 0x3f);
+		if (uc < 0x800) goto bad_utf8;
+		if (uc >= 0xd800 && uc <= 0xdfff) goto bad_utf8; /* surrogate */
+	} else if (c < 0xf5) {
+		uc = ((c & 0x07) << 18);
+		c = (unsigned char)*p++;
+		if (c < 0x80 || c > 0xbf) goto bad_utf8;
+		uc |= ((c & 0x3f) << 12);
+		c = (unsigned char)*p++;
+		if (c < 0x80 || c > 0xbf) goto bad_utf8;
+		uc |= ((c & 0x3f) << 6);
+		c = (unsigned char)*p++;
+		if (c < 0x80 || c > 0xbf) goto bad_utf8;
+		uc |= (c & 0x3f);
+		if (uc < 0x10000 || uc > 0x10ffff) goto bad_utf8;
+	} else {
+bad_utf8:
+		yy_error("bad UTF-8 sequence");
+	}
+	*str_ptr = p;
+	return uc;
 }
 
 static void yy_read_char(c_value *res, const char *p, size_t len)
@@ -2618,125 +2674,27 @@ static void yy_read_char(c_value *res, const char *p, size_t len)
 	ir_val val;
 	char prefix = 0;
 	bool warn = 1;
-	uint32_t ch = (const unsigned char)*p++;
+	uint32_t ch = (unsigned char)*p++;
 
 	if (ch == 'L' || ch == 'u' || ch == 'U') {
 		prefix = ch;
-		ch = (const unsigned char)*p++;
+		ch = (unsigned char)*p++;
 	}
 
 	IR_ASSERT(ch == '\'');
 
-	ch = (const unsigned char)*p++;
+	ch = (unsigned char)*p++;
 	if (ch == '\'') yy_error("empty character constant");
 restart:
-	if (prefix && (unsigned char)ch > 0x7f) {
-		uint32_t uc;
-		unsigned char c = (unsigned char)ch;
-
-		if (c < 0xc2) goto bad_utf8;
-		if (c < 0xe0) {
-			uc = ((c & 0x1f) << 6);
-			c = (unsigned char)*p++;
-			if (c < 0x80 || c > 0xbf) goto bad_utf8;
-			uc |= (c & 0x3f);
-			if (uc < 0x80) goto bad_utf8;
-		} else if (c < 0xf0) {
-			uc = ((c & 0x0f) << 12);
-			c = (unsigned char)*p++;
-			if (c < 0x80 || c > 0xbf) goto bad_utf8;
-			uc |= ((c & 0x3f) << 6);
-			c = (unsigned char)*p++;
-			if (c < 0x80 || c > 0xbf) goto bad_utf8;
-			uc |= (c & 0x3f);
-			if (uc < 0x800) goto bad_utf8;
-			if (uc >= 0xd800 && uc <= 0xdfff) goto bad_utf8; /* surrogate */
-		} else if (c < 0xf5) {
-			uc = ((c & 0x07) << 18);
-			c = (unsigned char)*p++;
-			if (c < 0x80 || c > 0xbf) goto bad_utf8;
-			uc |= ((c & 0x3f) << 12);
-			c = (unsigned char)*p++;
-			if (c < 0x80 || c > 0xbf) goto bad_utf8;
-			uc |= ((c & 0x3f) << 6);
-			c = (unsigned char)*p++;
-			if (c < 0x80 || c > 0xbf) goto bad_utf8;
-			uc |= (c & 0x3f);
-			if (uc < 0x10000 || uc > 0x10ffff) goto bad_utf8;
-		} else {
-bad_utf8:	yy_error("bad UTF-8 sequence");
-		}
-		ch = uc;
+	if (prefix && ch > 0x7f) {
+		ch = yy_read_utf8_char(ch, &p);
 	} else if (ch == '\\') {
-		ch = (const unsigned char)*p++;
-		switch (ch) {
-			case '\\': ch = '\\'; break;
-			case '\'': ch = '\''; break;
-			case '"':  ch = '"';  break;
-			case 'a':  ch = '\a'; break;
-			case 'b':  ch = '\b'; break;
-			case 'e':  ch = 27;   break; /* '\e'; */
-			case 'f':  ch = '\f'; break;
-			case 'n':  ch = '\n'; break;
-			case 'r':  ch = '\r'; break;
-			case 't':  ch = '\t'; break;
-			case 'v':  ch = '\v'; break;
-			case '?':  ch = 0x3f; break;
-			case '0':
-			case '1':
-			case '2':
-			case '3':
-			case '4':
-			case '5':
-			case '6':
-			case '7':
-				ch = ch - '0';
-				if (*p >= '0' && *p <= '7') {
-					ch = ch * 8 + (*p - '0');
-					p++;
-					if (*p >= '0' && *p <= '7') {
-						ch = ch * 8 + (*p - '0');
-						p++;
-					}
-				}
-				break;
-			case 'x':
-				ch = *p++;
-				if (ch >= '0' && ch <= '9') {
-					ch = ch - '0';
-				} else if (ch >= 'a' && ch <= 'f') {
-					ch = ch - 'a' + 10;
-				} else if (ch >= 'A' && ch <= 'F') {
-					ch = ch - 'A' + 10;
-				} else {
-					yy_error("unsupported escape sequence");
-				}
-				if (*p >= '0' && *p <= '9') {
-					ch = (ch << 4) + (*p - '0');
-					p++;
-				} else if (*p >= 'a' && *p <= 'f') {
-					ch = (ch << 4) + (*p - 'a' + 10);
-					p++;
-				} else if (*p >= 'A' && *p <= 'F') {
-					ch = (ch << 4) + (*p - 'A' + 10);
-					p++;
-				}
-				break;
-			case 'u':
-				ch = yy_unicode_character(p, 4);
-				p += 4;
-				break;
-			case 'U':
-				ch = yy_unicode_character(p, 8);
-				p += 8;
-				break;
-			case '\n':
-				ch = *p++;
-				goto restart;
-			default:
-				yy_error("unsupported escape sequence");
-				break;
+		ch = (unsigned char)*p++;
+		if (ch == '\n') {
+			ch = *p++;
+			goto restart;
 		}
+		ch = yy_read_escape_sequence(ch, &p);
 	}
 	if (UNEXPECTED(*p != '\'')) {
 		if (warn) yy_warning("multi-character character constant");
@@ -2870,88 +2828,24 @@ static char yy_strings_append(yy_dyn_str *dyn_str, char prefix, const char *str,
 	ch = *p++;
 	if (!prefix) {
 		while (ch != '"') {
-			if (ch != '\\') {
-				ch = *p++;
-			} else {
+			if (ch == '\\') {
 				if (s != p - 1) yy_dyn_str_append(dyn_str, s, p - s - 1);
 				ch = *p++;
-				switch (ch) {
-					case '\\': ch = '\\'; break;
-					case '\'': ch = '\''; break;
-					case '"':  ch = '"';  break;
-					case 'a':  ch = '\a'; break;
-					case 'b':  ch = '\b'; break;
-					case 'e':  ch = 27;   break; /* '\e'; */
-					case 'f':  ch = '\f'; break;
-					case 'n':  ch = '\n'; break;
-					case 'r':  ch = '\r'; break;
-					case 't':  ch = '\t'; break;
-					case 'v':  ch = '\v'; break;
-					case '?':  ch = 0x3f; break;
-					case '0':
-					case '1':
-					case '2':
-					case '3':
-					case '4':
-					case '5':
-					case '6':
-					case '7':
-						ch = ch - '0';
-						if (*p >= '0' && *p <= '7') {
-							ch = ch * 8 + (*p - '0');
-							p++;
-							if (*p >= '0' && *p <= '7') {
-								ch = ch * 8 + (*p - '0');
-								p++;
-							}
-						}
-						break;
-					case 'x':
-						ch = *p++;
-						if (ch >= '0' && ch <= '9') {
-							ch = ch - '0';
-						} else if (ch >= 'a' && ch <= 'f') {
-							ch = ch - 'a' + 10;
-						} else if (ch >= 'A' && ch <= 'F') {
-							ch = ch - 'A' + 10;
-						} else {
-							yy_error("unsupported escape sequence");
-						}
-						if (*p >= '0' && *p <= '9') {
-							ch = (ch << 4) + (*p - '0');
-							p++;
-						} else if (*p >= 'a' && *p <= 'f') {
-							ch = (ch << 4) + (*p - 'a' + 10);
-							p++;
-						} else if (*p >= 'A' && *p <= 'F') {
-							ch = (ch << 4) + (*p - 'A' + 10);
-							p++;
-						}
-						break;
-					case '\n':
-						s = p;
-						ch = *p++;
-						continue;
-					case 'u':
-						uc = yy_unicode_character(p, 4);
-						yy_append_utf8(dyn_str, uc);
-						s = p + 4;
-						ch = *p++;
-						continue;
-					case 'U':
-						uc = yy_unicode_character(p, 8);
-						yy_append_utf8(dyn_str, uc);
-						s = p + 8;
-						ch = *p++;
-						continue;
-					default:
-						yy_error("unsupported escape sequence");
-						break;
+				if (ch == '\n') {
+					s = p;
+					ch = *p++;
+					continue;
 				}
-				yy_dyn_str_append(dyn_str, &ch, 1);
+				uc = yy_read_escape_sequence(ch, &p);
+				if (uc <= 0xff) {
+					ch = uc;
+					yy_dyn_str_append(dyn_str, &ch, 1);
+				} else {
+					yy_append_utf8(dyn_str, uc);
+				}
 				s = p;
-				ch = *p++;
 			}
+			ch = *p++;
 		}
 
 		if (s != p - 1) yy_dyn_str_append(dyn_str, s, p - s - 1);
@@ -2960,125 +2854,23 @@ static char yy_strings_append(yy_dyn_str *dyn_str, char prefix, const char *str,
 
 		while (ch != '"') {
 			if ((unsigned char)ch > 0x7f) {
-				unsigned char c = (unsigned char)ch;
 				if (s != p - 1) yy_append_unicode_str(dyn_str, prefix, s, p - s - 1);
-				if (c < 0xc2) goto bad_utf8;
-				if (c < 0xe0) {
-					uc = ((c & 0x1f) << 6);
-					c = (unsigned char)*p++;
-					if (c < 0x80 || c > 0xbf) goto bad_utf8;
-					uc |= (c & 0x3f);
-					if (uc < 0x80) goto bad_utf8;
-				} else if (c < 0xf0) {
-					uc = ((c & 0x0f) << 12);
-					c = (unsigned char)*p++;
-					if (c < 0x80 || c > 0xbf) goto bad_utf8;
-					uc |= ((c & 0x3f) << 6);
-					c = (unsigned char)*p++;
-					if (c < 0x80 || c > 0xbf) goto bad_utf8;
-					uc |= (c & 0x3f);
-					if (uc < 0x800) goto bad_utf8;
-					if (uc >= 0xd800 && uc <= 0xdfff) goto bad_utf8; /* surrogate */
-				} else if (c < 0xf5) {
-					uc = ((c & 0x07) << 18);
-					c = (unsigned char)*p++;
-					if (c < 0x80 || c > 0xbf) goto bad_utf8;
-					uc |= ((c & 0x3f) << 12);
-					c = (unsigned char)*p++;
-					if (c < 0x80 || c > 0xbf) goto bad_utf8;
-					uc |= ((c & 0x3f) << 6);
-					c = (unsigned char)*p++;
-					if (c < 0x80 || c > 0xbf) goto bad_utf8;
-					uc |= (c & 0x3f);
-					if (uc < 0x10000 || uc > 0x10ffff) goto bad_utf8;
-				} else {
-bad_utf8:			yy_error("bad UTF-8 sequence");
-				}
+				uc = yy_read_utf8_char(ch, &p);
 				yy_append_unicode_char(dyn_str, prefix, uc);
 				s = p;
-				ch = *p++;
-			} else if (ch != '\\') {
-				ch = *p++;
-			} else {
+			} else if (ch == '\\') {
 				if (s != p - 1) yy_append_unicode_str(dyn_str, prefix, s, p - s - 1);
 				ch = *p++;
-				switch (ch) {
-					case '\\': ch = '\\'; break;
-					case '\'': ch = '\''; break;
-					case '"':  ch = '"';  break;
-					case 'a':  ch = '\a'; break;
-					case 'b':  ch = '\b'; break;
-					case 'e':  ch = 27;   break; /* '\e'; */
-					case 'f':  ch = '\f'; break;
-					case 'n':  ch = '\n'; break;
-					case 'r':  ch = '\r'; break;
-					case 't':  ch = '\t'; break;
-					case 'v':  ch = '\v'; break;
-					case '?':  ch = 0x3f; break;
-					case '0':
-					case '1':
-					case '2':
-					case '3':
-					case '4':
-					case '5':
-					case '6':
-					case '7':
-						ch = ch - '0';
-						if (*p >= '0' && *p <= '7') {
-							ch = ch * 8 + (*p - '0');
-							p++;
-							if (*p >= '0' && *p <= '7') {
-								ch = ch * 8 + (*p - '0');
-								p++;
-							}
-						}
-						break;
-					case 'x':
-						ch = *p++;
-						if (ch >= '0' && ch <= '9') {
-							ch = ch - '0';
-						} else if (ch >= 'a' && ch <= 'f') {
-							ch = ch - 'a' + 10;
-						} else if (ch >= 'A' && ch <= 'F') {
-							ch = ch - 'A' + 10;
-						} else {
-							yy_error("unsupported escape sequence");
-						}
-						if (*p >= '0' && *p <= '9') {
-							ch = (ch << 4) + (*p - '0');
-							p++;
-						} else if (*p >= 'a' && *p <= 'f') {
-							ch = (ch << 4) + (*p - 'a' + 10);
-							p++;
-						} else if (*p >= 'A' && *p <= 'F') {
-							ch = (ch << 4) + (*p - 'A' + 10);
-							p++;
-						}
-						break;
-					case '\n':
-						s = p;
-						ch = *p++;
-						continue;
-					case 'u':
-						uc = yy_unicode_character(p, 4);
-						yy_append_unicode_char(dyn_str, prefix, uc);
-						s = p + 4;
-						ch = *p++;
-						continue;
-					case 'U':
-						uc = yy_unicode_character(p, 8);
-						yy_append_unicode_char(dyn_str, prefix, uc);
-						s = p + 8;
-						ch = *p++;
-						continue;
-					default:
-						yy_error("unsupported escape sequence");
-						break;
+				if (ch == '\n') {
+					s = p;
+					ch = *p++;
+					continue;
 				}
+				ch = yy_read_escape_sequence(ch, &p);
 				yy_append_unicode_char(dyn_str, prefix, (uint8_t)ch);
 				s = p;
-				ch = *p++;
 			}
+			ch = *p++;
 		}
 
 		if (s != p - 1) yy_append_unicode_str(dyn_str, prefix, s, p - s - 1);
