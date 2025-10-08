@@ -1,0 +1,16 @@
+--TEST--
+array argument 001:
+--ARGS--
+--run
+--CODE--
+extern int printf(const char *, ...);
+int test(int x[const]) {
+   return x[0] + x[1];
+}
+int main() {
+	int a[] = {1, 2};
+	printf("%d\n", test(a));
+	return 0;
+}
+--EXPECT--
+3

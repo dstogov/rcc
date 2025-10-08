@@ -1,0 +1,12 @@
+--TEST--
+VLA 003:
+--CODE--
+int main() {
+	int n = 5;
+	static int a[n];
+	return sizeof(a);
+}
+--EXPECT--
+./tests/rcc/vla-003.c:3:17: error: variable length array declaration cannot have "static" linkage
+
+exit code = 1

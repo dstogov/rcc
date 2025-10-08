@@ -1,0 +1,12 @@
+--TEST--
+VLA 004:
+--CODE--
+int main() {
+	int n = 5;
+	extern int a[n];
+	return sizeof(a);
+}
+--EXPECT--
+./tests/rcc/vla-004.c:3:17: error: variable length array declaration cannot have "extern" linkage
+
+exit code = 1

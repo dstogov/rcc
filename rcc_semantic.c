@@ -627,8 +627,8 @@ static bool c_compatible_types(const c_type *t1, const c_type *t2, bool unqualif
 
 	if (t1 == t2) return 1;
 
-	attr1 = t1->attr & ~(C_ATTR_ALIGN_MASK|C_ATTR_FLEXIBLE|0xfffe0000);
-	attr2 = t2->attr & ~(C_ATTR_ALIGN_MASK|C_ATTR_FLEXIBLE|0xfffe0000);
+	attr1 = t1->attr & ~((C_ATTR_ALIGN_MASK|C_ATTR_FLEXIBLE|C_FUNC_TYPE_ATTRS) - C_ATTR_VARIADIC);
+	attr2 = t2->attr & ~((C_ATTR_ALIGN_MASK|C_ATTR_FLEXIBLE|C_FUNC_TYPE_ATTRS) - C_ATTR_VARIADIC);
 	if (unqualified || func) {
 		attr1 &= ~(C_ATTR_CONST|C_ATTR_RESTRICT|C_ATTR_VOLATILE|C_ATTR_ATOMIC);
 		attr2 &= ~(C_ATTR_CONST|C_ATTR_RESTRICT|C_ATTR_VOLATILE|C_ATTR_ATOMIC);
@@ -749,7 +749,8 @@ static void c_do_end_flexible(c_sym *obj, size_t size)
 
 static ir_ref c_type_size(const c_type *type)
 {
-	if (type->kind == C_TYPE_ARRAY && (type->attr & C_ATTR_VLA)) {
+	if (type->attr & C_ATTR_VLA) {
+		IR_ASSERT(type->kind == C_TYPE_ARRAY);
 		return ir_MUL(IR_SIZE_T, type->array.length, c_type_size(type->array.type));
 	} else {
 		return ir_const_size_t(active_ctx, type->size);
@@ -758,7 +759,8 @@ static ir_ref c_type_size(const c_type *type)
 
 static ir_ref c_type_ssize(const c_type *type)
 {
-	if (type->kind == C_TYPE_ARRAY && (type->attr & C_ATTR_VLA)) {
+	if (type->attr & C_ATTR_VLA) {
+		IR_ASSERT(type->kind == C_TYPE_ARRAY);
 		return ir_BITCAST(IR_SSIZE_T,
 			ir_MUL(IR_SIZE_T, type->array.length, c_type_size(type->array.type)));
 	} else {
@@ -1091,6 +1093,14 @@ c_sym *c_declare(c_name name, c_dcl *d)
 	if (d->flags & C_DCL_TYPEDEF) {
 		IR_ASSERT((d->flags & (C_DCL_STORAGE_CLASS-C_DCL_TYPEDEF)) == 0);
 		sym->kind = C_SYM_TYPE;
+
+		if (!scope && UNEXPECTED(d->type->attr & (C_ATTR_VLA|C_ATTR_VMT))) {
+			if (d->type->attr & C_ATTR_VLA) {
+				yy_error("variable length array declaration not allowed in file scope");
+			} else {
+				yy_error("variable modified type declaration not allowed in file scope");
+			}
+		}
 	} else if (d->flags & C_DCL_ENUM_CONST) {
 		IR_ASSERT((d->flags & C_DCL_STORAGE_CLASS) == 0);
 		sym->kind = C_SYM_CONST;
@@ -1126,6 +1136,25 @@ c_sym *c_declare(c_name name, c_dcl *d)
 			sym->linkage = (d->flags & C_DCL_STATIC) ? C_LINK_INTERNAL : C_LINK_EXTERNAL;
 			sym->is_thread_local = (d->flags & C_DCL_THREAD_LOCAL) != 0;
 
+			if (UNEXPECTED(d->type->attr & (C_ATTR_VLA|C_ATTR_VMT))) {
+				if (d->type->attr & C_ATTR_VLA) {
+					if (d->flags & C_DCL_EXTERN) {
+						yy_error("variable length array declaration cannot have \"extern\" linkage");
+					} else if (d->flags & C_DCL_STATIC) {
+						yy_error("variable length array declaration cannot have \"static\" linkage");
+					} else {
+						yy_error("variable length array declaration not allowed in file scope");
+					}
+				} else {
+					if (d->flags & C_DCL_EXTERN) {
+						yy_error("variable modified type declaration cannot have \"extern\" linkage");
+					} else if (d->flags & C_DCL_STATIC) {
+						yy_error("variable modified type declaration cannot have \"static\" linkage");
+					} else {
+						yy_error("variable modified type declaration not allowed in file scope");
+					}
+				}
+			}
 			if ((d->flags & C_DCL_EXTERN) && (d->flags & C_DCL_DEFINITION)) {
 				yy_warning_fmt("\"%s\" initialized and declared \"extern\"", yy_sym2str(name));
 				d->flags &= ~C_DCL_EXTERN;
@@ -1312,6 +1341,9 @@ static c_type *c_create_pointer_type(const c_type *element_type)
 	type->kind = C_TYPE_POINTER;
 	type->flags = active_scope ? 0 : C_TYPE_GLOBAL;
 	type->attr = c_align2attr(_Alignof(void*));
+	if (element_type->attr & (C_ATTR_VLA|C_ATTR_VMT)) {
+		type->attr |= C_ATTR_VMT;
+	}
 	type->size = sizeof(void*);
 	type->pointer.type = element_type;
 	return type;
@@ -1372,7 +1404,12 @@ void c_make_array_type(c_dcl *d, c_dcl *dim, c_value *len, uint64_t attr, bool i
 			}
 		} else {
 			if (IR_IS_TYPE_SIGNED(len->u.type) && len->u.val.i64 < 0) yy_error("array size is negative");
-			length = len->u.val.u64;
+			if (d->type->attr & C_ATTR_VLA) {
+				attr |= C_ATTR_VLA;
+				length = ir_const_size_t(active_ctx, len->u.val.u64);
+			} else {
+				length = len->u.val.u64;
+			}
 		}
 	}
 
@@ -1386,6 +1423,7 @@ void c_make_array_type(c_dcl *d, c_dcl *dim, c_value *len, uint64_t attr, bool i
 		type->size = d->type->size;
 	} else {
 		type->size = d->type->size * length;
+		attr |= d->type->attr & C_ATTR_VMT;
 	}
 	type->attr = attr | (d->attr & C_ARRAY_ATTRS);
 	if ((d->type->attr & C_ATTR_ALIGN_MASK) > (type->attr & C_ATTR_ALIGN_MASK)) {
@@ -1592,6 +1630,13 @@ void c_declare_struct_field(c_type *type, c_name name, c_dcl *field, c_value *bi
 	c_finalize_type(field);
 	if (field->type->kind == C_TYPE_VOID) yy_error_fmt("field \"%s\" declared void", yy_sym2str(name));
 	if (field->type->kind == C_TYPE_FUNC) yy_error_fmt("field \"%s\" declared as a function", yy_sym2str(name));
+	if (field->type->attr & (C_ATTR_VLA|C_ATTR_VMT)) {
+		if (field->type->attr & C_ATTR_VLA) {
+			yy_error_fmt("field \"%s\" declared as a variable length array", yy_sym2str(name));
+		} else {
+			yy_error_fmt("field \"%s\" declared as a variable modified type", yy_sym2str(name));
+		}
+	}
 	if ((field->type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(field->type)) {
 		yy_error_fmt("field \"%s\" has incomplete type", yy_sym2str(name));
 	}
@@ -2047,8 +2092,14 @@ static void c_fix_nested_type(const c_type *t, c_type *nested)
 			if (nested->pointer.type == &c_type_char) {
 				nested->pointer.type = t;
 				c_validate_pointer_type(t);
+				if ((t->attr & (C_ATTR_VLA|C_ATTR_VMT)) && !(nested->attr & C_ATTR_VMT)) {
+					nested->attr |= C_ATTR_VMT;
+				}
 			} else {
 				c_fix_nested_type(t, (c_type*)nested->pointer.type);
+				if ((nested->pointer.type->attr & (C_ATTR_VLA|C_ATTR_VMT)) && !(nested->attr & C_ATTR_VMT)) {
+					nested->attr |= C_ATTR_VMT;
+				}
 			}
 			break;
 		case C_TYPE_ARRAY:
@@ -2056,11 +2107,30 @@ static void c_fix_nested_type(const c_type *t, c_type *nested)
 			if (nested->array.type == &c_type_char) {
 				nested->array.type = t;
 				c_validate_array_element_type(t);
+				if (t->attr & C_ATTR_VLA) {
+					if (!(nested->attr & C_ATTR_VLA)) {
+						nested->attr |= C_ATTR_VLA;
+						nested->array.length = ir_const_size_t(active_ctx, nested->array.length);
+					}
+				} else if ((t->attr & C_ATTR_VMT) && !(nested->attr & C_ATTR_VMT)) {
+					nested->attr |= C_ATTR_VMT;
+				}
 			} else {
 				c_fix_nested_type(t, (c_type*)nested->array.type);
+				if (nested->array.type->attr & C_ATTR_VLA) {
+					if (!(nested->attr & C_ATTR_VLA)) {
+						nested->attr |= C_ATTR_VLA;
+						nested->array.length = ir_const_size_t(active_ctx, nested->array.length);
+					}
+				} else if ((nested->array.type->attr & C_ATTR_VMT) && !(nested->attr & C_ATTR_VMT)) {
+					nested->attr |= C_ATTR_VMT;
+				}
 			}
-			IR_ASSERT(!(nested->attr & C_ATTR_VLA));
-			nested->size = nested->array.length * nested->array.type->size;
+			if (!(nested->attr & C_ATTR_VLA)) {
+				nested->size = nested->array.length * nested->array.type->size;
+			} else {
+				nested->size = nested->array.type->size;
+			}
 			nested->attr &= ~C_ATTR_ALIGN_MASK;
 			nested->attr |= nested->array.type->attr & C_ATTR_ALIGN_MASK;
 			break;
@@ -2214,7 +2284,8 @@ void c_sizeof_type(c_value *res, const c_type *type)
 
 	if ((type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(type)) {
 		yy_error_fmt("invalid application of \"%s\" to incomplete type", "sizeof");
-	} else if (type->kind == C_TYPE_ARRAY && (type->attr & C_ATTR_VLA)) {
+	} else if (type->attr & C_ATTR_VLA) {
+		IR_ASSERT(type->kind == C_TYPE_ARRAY);
 		c_value_set_rval(res, &c_type_size_t, IR_SIZE_T, c_type_size(type));
 		return;
 	}
@@ -2254,7 +2325,8 @@ void c_sizeof_expr(c_value *res, yy_sym op, c_value *expr, ir_ref old_control)
 			val.u64 = c_value_str_size(expr);
 		} else if (expr->type->attr & C_ATTR_FLEXIBLE) {
 			yy_error_fmt("invalid application of \"%s\" to incomplete type", "sizeof");
-		} else if (expr->type->kind == C_TYPE_ARRAY && (expr->type->attr & C_ATTR_VLA)) {
+		} else if (expr->type->attr & C_ATTR_VLA) {
+			IR_ASSERT(expr->type->kind == C_TYPE_ARRAY);
 			c_do_end_nocode(old_control);
 			c_value_set_rval(res, &c_type_size_t, IR_SIZE_T, c_type_size(expr->type));
 			return;
@@ -6147,7 +6219,8 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 		if (obj->kind == C_SYM_TYPE) yy_error("typedef is initialized");
 		IR_ASSERT(0);
 	}
-	if (obj->value.type->kind == C_TYPE_ARRAY && (obj->value.type->attr & C_ATTR_VLA)) {
+	if (obj->value.type->attr & C_ATTR_VLA) {
+		IR_ASSERT(obj->value.type->kind == C_TYPE_ARRAY);
 		yy_error("variable length array may not be initialized except with an empty initializer");
 	}
 	c_value_rval(val);
@@ -6353,7 +6426,8 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 	uint32_t i;
 	uint16_t bit_field = 0;
 
-	if (obj->value.type->kind == C_TYPE_ARRAY && (obj->value.type->attr & C_ATTR_VLA)) {
+	if (obj->value.type->attr & C_ATTR_VLA) {
+		IR_ASSERT(obj->value.type->kind == C_TYPE_ARRAY);
 		yy_error("variable length array may not be initialized except with an empty initializer");
 	}
 	while (1) {

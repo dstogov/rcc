@@ -1,0 +1,12 @@
+--TEST--
+VLA 002:
+--ARGS--
+--run
+--CODE--
+int main() {
+	int n = 5;
+	int a[n];
+	return sizeof(a);
+}
+--EXPECT--
+exit code = 20

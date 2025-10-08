@@ -1,0 +1,12 @@
+--TEST--
+VLA 008:
+--ARGS--
+--run
+--CODE--
+int main() {
+	int n = 5;
+	int (*p)[n];
+	return sizeof(*p);
+}
+--EXPECT--
+exit code = 20

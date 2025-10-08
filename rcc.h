@@ -534,28 +534,31 @@ void pp_list_grow(pp_list *l, uint32_t size);
 
 /* array type attributes */
 #define C_ATTR_FLEXIBLE          (1<<12) /* flexible (without defined length) array */
-#define C_ATTR_VLA               (1<<13)
+#define C_ATTR_VLA               (1<<13) /* variable length array */
+
+/* varable modified type (e.g. pointer to VLA) */
+#define C_ATTR_VMT               (1<<14)
 
 /* struct type attributes */
-#define C_ATTR_MS_STRUCT         (1<<14)
-#define C_ATTR_GCC_STRUCT        (1<<15)
+#define C_ATTR_MS_STRUCT         (1<<15)
+#define C_ATTR_GCC_STRUCT        (1<<16)
 
 /* function attributes */
-#define C_ATTR_VARIADIC          (1<<16)
-#define C_ATTR_INLINE            (1<<17)
-#define C_ATTR_NORETURN          (1<<18)
-#define C_ATTR_ALWAYS_INLINE     (1<<19)
-#define C_ATTR_NOINLINE          (1<<20)
-#define C_ATTR_NOTHROW           (1<<21)
-#define C_ATTR_LEAF              (1<<22)
-#define C_ATTR_PURE              (1<<23)
-#define C_ATTR_HOT               (1<<24)
-#define C_ATTR_COLD              (1<<25)
-#define C_ATTR_DEPRECATED        (1<<26)
-#define C_ATTR_CDECL             (1<<27)
-#define C_ATTR_FASTCALL          (1<<28)
-#define C_ATTR_UNUSED            (1<<29)
-#define C_ATTR_OLD_FUNC          (1<<30)
+#define C_ATTR_VARIADIC          (1<<17)
+#define C_ATTR_INLINE            (1<<18)
+#define C_ATTR_NORETURN          (1<<19)
+#define C_ATTR_ALWAYS_INLINE     (1<<20)
+#define C_ATTR_NOINLINE          (1<<21)
+#define C_ATTR_NOTHROW           (1<<22)
+#define C_ATTR_LEAF              (1<<23)
+#define C_ATTR_PURE              (1<<24)
+#define C_ATTR_HOT               (1<<25)
+#define C_ATTR_COLD              (1<<26)
+#define C_ATTR_DEPRECATED        (1<<27)
+#define C_ATTR_CDECL             (1<<28)
+#define C_ATTR_FASTCALL          (1<<29)
+#define C_ATTR_UNUSED            (1<<30)
+#define C_ATTR_OLD_FUNC          (1U<<31)
 
 /* statement attributes */
 #define C_ATTR_FALLTHROUGH       (1<<30)

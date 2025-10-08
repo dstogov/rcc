@@ -1,0 +1,14 @@
+--TEST--
+VLA 009:
+--ARGS--
+--run
+--CODE--
+int main() {
+	int n = 5;
+	static int (*p)[n];
+	return sizeof(*p);
+}
+--EXPECT--
+./tests/rcc/vla-009.c:3:20: error: variable modified type declaration cannot have "static" linkage
+
+exit code = 1

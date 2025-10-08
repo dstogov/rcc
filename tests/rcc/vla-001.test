@@ -1,0 +1,9 @@
+--TEST--
+VLA 001:
+--CODE--
+int n = 5;
+int a[n];
+--EXPECT--
+./tests/rcc/vla-001.c:2:9: error: array size must be a constant expression
+
+exit code = 1

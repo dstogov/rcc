@@ -1,5 +1,5 @@
 *.o
-rcc
+./rcc
 
 tests/**/*.c
 tests/**/*.diff
