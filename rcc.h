@@ -1045,6 +1045,7 @@ extern uint8_t               pp_pack;
 
 extern ir_arena             *c_arena;
 extern bool                  c_dead_code;
+extern ir_ref                c_prologue_end;
 extern ir_ctx               *active_ctx;
 extern ir_ctx               *global_ctx;
 

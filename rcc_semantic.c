@@ -91,6 +91,7 @@ static c_loop     *active_loop = NULL;
 static c_name      active_func_name = 0;
 static uint32_t    c_static_sym_num = 0;
 static uint32_t    c_static_str_num = 0;
+       ir_ref      c_prologue_end = IR_UNUSED;
 static ir_ref      c_last_expect_ref = IR_UNUSED;
 static bool        c_last_expect_val;
 static ir_strtab   c_strtab;
@@ -2471,10 +2472,24 @@ static void ir_memzero(ir_ctx *ctx, ir_ref dst, ir_ref size)
 ir_ref c_do_alloca(size_t size, bool zero)
 {
 	ir_ref size_ref = (size == (size_t)-1) ? IR_UNUSED : ir_const_size_t(active_ctx, size);
-	ir_ref ref = ir_ALLOCA(size_ref);
+	ir_ref ref;
+	ir_ref old_control = IR_UNUSED;
+
+	if (c_prologue_end) {
+		old_control = active_ctx->control;
+		active_ctx->control = active_ctx->ir_base[c_prologue_end].op1;
+	}
+
+	ref = ir_ALLOCA(size_ref);
 	if (zero) {
 		ir_memzero(active_ctx, ref, size_ref);
 	}
+
+	if (c_prologue_end) {
+		active_ctx->ir_base[c_prologue_end].op1 = active_ctx->control;
+		active_ctx->control = old_control;
+	}
+
 	return ref;
 }
 
@@ -6888,6 +6903,7 @@ void c_do_func_start(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 	IR_ASSERT(func);
 	active_func = func;
 	active_func_name = name;
+	c_prologue_end = IR_UNUSED;
 	c_last_expect_ref = IR_UNUSED;
 
 	c_push_scope(scope);
@@ -6989,6 +7005,9 @@ void c_do_func_start(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 			yy_warning("omitting the parameter name in a function definition");
 		}
 	}
+
+	ir_MARK();
+	c_prologue_end = active_ctx->control;
 }
 
 static bool c_is_dead_end(ir_insn *insn)

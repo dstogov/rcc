@@ -22,19 +22,20 @@ func @test1(int32_t): int32_t
 	bool c_2 = 0;
 	bool c_3 = 1;
 	int32_t c_4 = 100;
-	l_1 = START(l_13);
+	l_1 = START(l_14);
 	int32_t d_2 = PARAM(l_1, "c", 1);
 	int32_t d_3 = VAR(l_1, "c");
 	l_4 = VSTORE(l_1, d_3, d_2);
-	l_5 = IF(l_4, d_2);
-	l_6 = IF_TRUE(l_5);
-	l_7 = VSTORE(l_6, d_3, c_4);
-	l_8 = END(l_7);
-	l_9 = IF_FALSE(l_5);
-	l_10 = END(l_9);
-	l_11 = MERGE(l_8, l_10);
-	int32_t d_12, l_12 = VLOAD(l_11, d_3);
-	l_13 = RETURN(l_12, d_12);
+	l_5 = MARK(l_4);
+	l_6 = IF(l_5, d_2);
+	l_7 = IF_TRUE(l_6);
+	l_8 = VSTORE(l_7, d_3, c_4);
+	l_9 = END(l_8);
+	l_10 = IF_FALSE(l_6);
+	l_11 = END(l_10);
+	l_12 = MERGE(l_9, l_11);
+	int32_t d_13, l_13 = VLOAD(l_12, d_3);
+	l_14 = RETURN(l_13, d_13);
 }
 func @test2(int32_t): int32_t
 {
@@ -43,19 +44,20 @@ func @test2(int32_t): int32_t
 	bool c_3 = 1;
 	int32_t c_4 = 1;
 	int32_t c_5 = 42;
-	l_1 = START(l_15);
+	l_1 = START(l_16);
 	int32_t d_2 = PARAM(l_1, "c", 1);
 	int32_t d_3 = VAR(l_1, "c");
 	l_4 = VSTORE(l_1, d_3, d_2);
-	l_5 = IF(l_4, d_2);
-	l_6 = IF_TRUE(l_5);
-	int32_t d_7 = ADD(d_2, c_4);
-	l_8 = VSTORE(l_6, d_3, d_7);
-	l_9 = END(l_8);
-	l_10 = IF_FALSE(l_5);
-	l_11 = VSTORE(l_10, d_3, c_5);
-	l_12 = END(l_11);
-	l_13 = MERGE(l_9, l_12);
-	int32_t d_14, l_14 = VLOAD(l_13, d_3);
-	l_15 = RETURN(l_14, d_14);
+	l_5 = MARK(l_4);
+	l_6 = IF(l_5, d_2);
+	l_7 = IF_TRUE(l_6);
+	int32_t d_8 = ADD(d_2, c_4);
+	l_9 = VSTORE(l_7, d_3, d_8);
+	l_10 = END(l_9);
+	l_11 = IF_FALSE(l_6);
+	l_12 = VSTORE(l_11, d_3, c_5);
+	l_13 = END(l_12);
+	l_14 = MERGE(l_10, l_13);
+	int32_t d_15, l_15 = VLOAD(l_14, d_3);
+	l_16 = RETURN(l_15, d_15);
 }

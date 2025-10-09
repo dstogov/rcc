@@ -2,8 +2,6 @@
 tinycc 078: vla label
 --ARGS--
 --run
---XFAIL--
-VLA arrays are not implemented yet
 --CODE--
 #include <stdio.h>
 
