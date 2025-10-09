@@ -6429,6 +6429,10 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 
 void c_do_init_first(c_sym *obj, c_init *init, const c_type *type, size_t offset)
 {
+	if (obj->value.type->attr & C_ATTR_VLA) {
+		IR_ASSERT(obj->value.type->kind == C_TYPE_ARRAY);
+		yy_error("variable length array may not be initialized except with an empty initializer");
+	}
 	init->offset = offset;
 	init->level = 0;
 	init->stack[0].type = type;
@@ -6529,10 +6533,6 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 	uint32_t i;
 	uint16_t bit_field = 0;
 
-	if (obj->value.type->attr & C_ATTR_VLA) {
-		IR_ASSERT(obj->value.type->kind == C_TYPE_ARRAY);
-		yy_error("variable length array may not be initialized except with an empty initializer");
-	}
 	while (1) {
 		if (type == val->type) {
 			break;
@@ -6699,7 +6699,7 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 		if (!c_value_is_const(val) && !c_linker_fix_reloc(obj, offset, val)) {
 			yy_error("initializer element is not constant");
 		}
-		IR_ASSERT(obj->value.u.type == IR_ADDR && obj->value.u.val.ptr);
+		IR_ASSERT(/*obj->value.u.type == IR_ADDR &&*/ obj->value.u.val.ptr);
 		if (new_size > *size) {
 			c_do_grow_flexible(obj, *size, new_size);
 			*size = new_size;
@@ -6881,6 +6881,31 @@ void c_do_init_expr_end(c_value *v, c_sym *obj, size_t size)
 	c_do_init_end(obj, size);
 	if (c_value_is_const(&obj->value)) {
 		c_value_set_const(v, obj->value.type, c_type2ir(obj->value.type), obj->value.u.val);
+	} else if (!active_scope
+	 && obj->value.type->kind != C_TYPE_ARRAY
+	 && obj->value.type->kind != C_TYPE_STRUCT
+	 && obj->value.type->kind != C_TYPE_UNION) {
+		ir_type t = c_type2ir(obj->value.type);
+		ir_val val;
+
+		val.u64 = 0;
+		switch (t) {
+			case IR_BOOL:	val.b    = *(bool*)      obj->value.u.val.ptr; break;
+			case IR_U8:     val.u8   = *(uint8_t*)   obj->value.u.val.ptr; break;
+			case IR_U16:    val.u16  = *(uint16_t*)  obj->value.u.val.ptr; break;
+			case IR_U32:    val.u32  = *(uint32_t*)  obj->value.u.val.ptr; break;
+			case IR_U64:    val.u64  = *(uint64_t*)  obj->value.u.val.ptr; break;
+			case IR_ADDR:   val.addr = *(uintptr_t*) obj->value.u.val.ptr; break;
+			case IR_CHAR:   val.i64  = *(char*)      obj->value.u.val.ptr; break;
+			case IR_I8:     val.i64  = *(int8_t*)    obj->value.u.val.ptr; break;
+			case IR_I16:    val.i64  = *(int16_t*)   obj->value.u.val.ptr; break;
+			case IR_I32:    val.i64  = *(int32_t*)   obj->value.u.val.ptr; break;
+			case IR_I64:    val.i64  = *(int64_t*)   obj->value.u.val.ptr; break;
+			case IR_DOUBLE: val.d    = *(double*)    obj->value.u.val.ptr; break;
+			case IR_FLOAT:  val.f    = *(float*)     obj->value.u.val.ptr; break;
+			default: IR_ASSERT(0);
+		}
+		c_value_set_const(v, obj->value.type, t, val);
 	} else if (obj->value.type->kind != C_TYPE_ARRAY) {
 		c_value_set_lval(v, obj->value.type, c_type2ir(obj->value.type), obj->value.u.ref);
 		if (IR_IS_CONST_REF(obj->value.u.ref)) v->u.val.ptr = obj->value.u.val.ptr;
