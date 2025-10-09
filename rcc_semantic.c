@@ -180,7 +180,15 @@ static int c_abi_lower_struct(const c_type *t, ir_type *types)
 #else
 	// TODO: Full support for different ABIs is not implemented yet ???
 	if (t->size <= sizeof(void*)) {
-		types[0] = (t->size <= 4) ? IR_U32 : IR_U64;
+		if (t->size == 1) {
+			types[0] = IR_U8;
+		} else if (t->size == 2) {
+			types[0] = IR_U16;
+		} else if (t->size <= 4) {
+			types[0] = IR_U32;
+		} else {
+			types[0] = IR_U64;
+		}
 		return 1; /* return number of registers */
 	}
 	/* pass value on stack */
@@ -4229,7 +4237,11 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args)
 
 				if (n == 1) {
 					if (IR_IS_TYPE_INT(types[0])) {
-						if (ir_type_size[types[0]] <= 4) {
+						if (ir_type_size[types[0]] == 1) {
+							arg_refs[i + j] = ir_LOAD_U8(args[i].u.ref);
+						} else if (ir_type_size[types[0]] == 2) {
+							arg_refs[i + j] = ir_LOAD_U16(args[i].u.ref);
+						} else if (ir_type_size[types[0]] <= 4) {
 							arg_refs[i + j] = ir_LOAD_U32(args[i].u.ref);
 						} else {
 							arg_refs[i + j] = ir_LOAD_U64(args[i].u.ref);
