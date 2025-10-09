@@ -26,7 +26,7 @@ func @test1(int32_t): int32_t
 	int32_t d_2 = PARAM(l_1, "c", 1);
 	int32_t d_3 = VAR(l_1, "c");
 	l_4 = VSTORE(l_1, d_3, d_2);
-	l_5 = MARK(l_4);
+	uintptr_t d_5, l_5 = BLOCK_BEGIN(l_4);
 	l_6 = IF(l_5, d_2);
 	l_7 = IF_TRUE(l_6);
 	l_8 = VSTORE(l_7, d_3, c_4);
@@ -48,7 +48,7 @@ func @test2(int32_t): int32_t
 	int32_t d_2 = PARAM(l_1, "c", 1);
 	int32_t d_3 = VAR(l_1, "c");
 	l_4 = VSTORE(l_1, d_3, d_2);
-	l_5 = MARK(l_4);
+	uintptr_t d_5, l_5 = BLOCK_BEGIN(l_4);
 	l_6 = IF(l_5, d_2);
 	l_7 = IF_TRUE(l_6);
 	int32_t d_8 = ADD(d_2, c_4);

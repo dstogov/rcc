@@ -317,15 +317,19 @@ void c_push_scope(c_scope *scope)
 	scope->list.size = 0;
 	scope->list.len = 0;
 	scope->checkpoint = ir_arena_checkpoint(c_arena);
-	scope->block_begin = IR_UNUSED;
+	scope->vla_block = IR_UNUSED;
+	scope->last_vla_block = active_scope ? active_scope->last_vla_block : IR_UNUSED;
 	scope->prev = active_scope;
 	active_scope = scope;
 }
 
 void c_pop_scope(c_scope *scope)
 {
-	if (scope->block_begin) {
-		ir_BLOCK_END(scope->block_begin);
+	if (scope->vla_block
+	 && active_ctx->control
+	 && (active_ctx->ir_base[active_ctx->control].op != IR_BEGIN
+	  || active_ctx->ir_base[active_ctx->control].op1)) {
+		ir_BLOCK_END(scope->vla_block);
 	}
 	if (scope->list.syms) {
 		yy_sym id, *p = scope->list.syms;
@@ -366,6 +370,19 @@ void c_pop_scope(c_scope *scope)
 	if (scope == active_func_scope) {
 		active_func_scope = active_scope;
 	}
+}
+
+static void c_leave_scope(c_scope *to)
+{
+	ir_ref vla_block = IR_UNUSED;
+	c_scope *scope = active_scope;
+
+	while (scope != to) {
+		IR_ASSERT(scope);
+		if (scope->vla_block) vla_block = scope->vla_block;
+		scope = scope->prev;
+	}
+	if (vla_block) ir_BLOCK_END(vla_block);
 }
 
 const c_type *c_resolve_type_name(c_name name)
@@ -1214,8 +1231,15 @@ c_sym *c_declare(c_name name, c_dcl *d)
 			if (d->type->kind == C_TYPE_ARRAY) {
 				if (d->type->attr & C_ATTR_VLA) {
 					ir_ref size = c_type_size(d->type);
-					if (scope && scope != active_func_scope && !scope->block_begin) {
-						scope->block_begin = ir_BLOCK_BEGIN();
+
+					IR_ASSERT(scope);
+					if (!scope->vla_block) {
+						if (scope->last_vla_block) {
+							scope->last_vla_block = scope->vla_block = ir_BLOCK_BEGIN();
+						} else {
+							IR_ASSERT(c_prologue_end);
+							scope->last_vla_block = scope->vla_block = c_prologue_end;
+						}
 					}
 					ref = ir_ALLOCA(size);
 					if (d->flags & C_DCL_DEFINITION) {
@@ -2410,6 +2434,7 @@ static c_label *c_new_label(c_name name, c_scope *scope, c_label *label, bool lo
 	label->is_unused = 0;
 	label->dst = IR_UNUSED;
 	label->src_list = IR_UNUSED;
+	label->vla_block = IR_UNUSED;
 	label->scope = scope;
 	yy_hash.data[name].label = label;
 	return label;
@@ -5459,6 +5484,7 @@ void c_do_switch(c_loop *loop, c_value *cond)
 	loop->next = IR_UNUSED;
 	loop->break_list = IR_UNUSED;
 	loop->continue_list = IR_UNUSED;
+	loop->scope = active_scope;
 	loop->prev = active_loop;
 	loop->case_labels = NULL;
 	active_loop = loop;
@@ -5812,6 +5838,7 @@ void c_do_loop_start(c_loop *loop)
 	loop->next = IR_UNUSED;
 	loop->break_list = IR_UNUSED;
 	loop->continue_list = IR_UNUSED;
+	loop->scope = active_scope;
 	loop->prev = active_loop;
 	active_loop = loop;
 }
@@ -6005,10 +6032,7 @@ void c_do_continue(void)
 	c_loop *loop = c_find_loop();
 
 	if (!loop) yy_error("continue statement not within a loop");
-	if (active_scope->block_begin) {
-		ir_BLOCK_END(active_scope->block_begin);
-		active_scope->block_begin = IR_UNUSED;
-	}
+	c_leave_scope(loop->scope);
 	ir_END_list(loop->continue_list);
 	ir_BEGIN(IR_UNUSED);
 }
@@ -6016,10 +6040,7 @@ void c_do_continue(void)
 void c_do_break(void)
 {
 	if (!active_loop) yy_error("break statement not within loop or switch");
-	if (active_scope->block_begin) {
-		ir_BLOCK_END(active_scope->block_begin);
-		active_scope->block_begin = IR_UNUSED;
-	}
+	c_leave_scope(active_loop->scope);
 	ir_END_list(active_loop->break_list);
 	ir_BEGIN(IR_UNUSED);
 }
@@ -6027,6 +6048,7 @@ void c_do_break(void)
 void c_do_return(c_value *val)
 {
 	IR_ASSERT(active_func);
+	c_leave_scope(active_func_scope);
 	if (val && c_value_is_set(val) && val->type->kind != C_TYPE_VOID) {
 		if (!active_ctx->ret_type) {
 			yy_error("\"return\" with a value, in function returning void");
@@ -6065,10 +6087,40 @@ void c_do_goto(c_name name)
 	if (!label) {
 		label = c_new_label(name, active_func_scope, NULL, active_scope == active_func_scope);
 	}
-	if (active_scope->block_begin) {
-		ir_BLOCK_END(active_scope->block_begin);
-		active_scope->block_begin = IR_UNUSED;
+
+	if (active_scope->last_vla_block) {
+		ir_ref goto_vla_block = active_scope->last_vla_block;
+
+		if (!label->dst) {
+			/* Forward GOTO. Insert BLOCK_END that may be patched or removed later */
+			ir_BLOCK_END(goto_vla_block);
+		} else if (!label->vla_block) {
+			/* GOTO to label at non-VLA scope => free all VLA data */
+			IR_ASSERT(c_prologue_end);
+			ir_BLOCK_END(c_prologue_end);
+		} else if (goto_vla_block != label->vla_block) {
+			/* GOTO to label at the other VLA scope. ... */
+			ir_ref vla_block = goto_vla_block;
+			c_scope *scope = active_scope;
+
+			while (scope) {
+				if (scope->vla_block) {
+					if (scope->vla_block == label->vla_block) break;
+					vla_block = scope->vla_block;
+				}
+				scope = scope->prev;
+			}
+			if (!scope) {
+				yy_error_fmt("jump to label \"%s\" into scope with variable modified type", yy_sym2str(name));
+			} else {
+				/* GOTO to label at some enclosing VLA scope => free nested VLA */
+				ir_BLOCK_END(vla_block);
+			}
+		}
+	} else if (label->vla_block) {
+		yy_error_fmt("jump to label \"%s\" into scope with variable modified type", yy_sym2str(name));
 	}
+
 	ir_END_list(label->src_list);
 	ir_BEGIN(IR_UNUSED);
 }
@@ -6086,6 +6138,7 @@ c_label *c_do_set_label(c_name name)
 		return NULL;
 	}
 
+	label->vla_block = active_scope->last_vla_block;
 	if (label->src_list) {
 		ir_ref ref = label->src_list;
 		uint32_t n = 0;
@@ -6096,6 +6149,29 @@ c_label *c_do_set_label(c_name name)
 			ir_insn *insn = &active_ctx->ir_base[ref];
 
 			IR_ASSERT(insn->op == IR_END);
+			/* fix BLOCK_END instructions inseted by forward GOTO */
+			ir_insn *prev = &active_ctx->ir_base[insn->op1];
+			if (prev->op == IR_BLOCK_END) {
+				ir_ref goto_vla_block = prev->op2;
+
+				if (!label->vla_block) {
+					IR_ASSERT(c_prologue_end);
+					prev->op2 = c_prologue_end;
+				} else if (label->vla_block > goto_vla_block) {
+					/* label at a VLA scope started after the GOTO => error */
+					yy_error_fmt("jump to label \"%s\" into scope with variable modified type", yy_sym2str(name));
+				} else if (label->vla_block == goto_vla_block) {
+					/* label at the same VLA scope as GOTO => delete BLOCK_END */
+					insn->op1 = prev->op1;
+					prev->optx = IR_NOP;
+					prev->op1 = IR_UNUSED;
+				} else {
+					/* label at some VLA scope enclosing the GOTO => patch to free nested VLA */
+					prev->op2 = label->vla_block;
+				}
+			} else if (label->vla_block) {
+				yy_error_fmt("jump to label \"%s\" into scope with variable modified type", yy_sym2str(name));
+			}
 			ref = insn->op2;
 			n++;
 		} while (ref != IR_UNUSED);
@@ -6104,6 +6180,7 @@ c_label *c_do_set_label(c_name name)
 
 		ref = label->src_list;
 		n = 0;
+		srcs[n++] = ir_END();
 		do {
 			ir_insn *insn = &active_ctx->ir_base[ref];
 
@@ -6112,7 +6189,6 @@ c_label *c_do_set_label(c_name name)
 			ref = insn->op2;
 			n++;
 		} while (ref != IR_UNUSED);
-		srcs[n++] = ir_END();
 		srcs[n++] = IR_UNUSED;
 
 		ir_MERGE_N(n, srcs);
@@ -7006,7 +7082,7 @@ void c_do_func_start(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 		}
 	}
 
-	ir_MARK();
+	ir_BLOCK_BEGIN();
 	c_prologue_end = active_ctx->control;
 }
 

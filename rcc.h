@@ -774,21 +774,23 @@ struct _c_param {
 struct _c_scope {
 	pp_list   list;
 	void     *checkpoint;
-	ir_ref    block_begin;
+	ir_ref    vla_block;
+	ir_ref    last_vla_block;
 	c_scope  *prev;
 };
 
 typedef struct _c_case_labels c_case_labels;
 
 struct _c_loop {
-	bool      is_switch;
-	const c_type *switch_type;
-	ir_ref    start;
-	ir_ref    check;
-	ir_ref    next;
-	ir_ref    break_list;
-	ir_ref    continue_list;
-	c_loop   *prev;
+	bool           is_switch;
+	const c_type  *switch_type;
+	ir_ref         start;
+	ir_ref         check;
+	ir_ref         next;
+	ir_ref         break_list;
+	ir_ref         continue_list;
+	c_scope       *scope;
+	c_loop        *prev;
 	c_case_labels *case_labels;
 };
 
@@ -797,6 +799,7 @@ struct _c_label {
 	bool      is_unused;
 	ir_ref    dst;
 	ir_ref    src_list;
+	ir_ref    vla_block;
 	c_scope  *scope;
 };
 

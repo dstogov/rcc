@@ -258,21 +258,24 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym)
 	ir_build_def_use_lists(ctx);
 
 	if (c_prologue_end) {
-		/* remove MARK */
-		ir_insn *insn = &ctx->ir_base[c_prologue_end];
 		ir_use_list *use_list = &ctx->use_lists[c_prologue_end];
 
-		IR_ASSERT(insn->op == IR_MARK && use_list->count == 1);
+		if (use_list->count == 1) {
+			/* remove BLOCK_BEGIN mark */
+			ir_insn *insn = &ctx->ir_base[c_prologue_end];
 
-		ir_ref prev = insn->op1;
-		ir_ref next = ctx->use_edges[use_list->refs];
-		ctx->ir_base[next].op1 = prev;
-		ir_use_list_replace_one(ctx, prev, c_prologue_end, next);
+			IR_ASSERT(insn->op == IR_BLOCK_BEGIN);
 
-		insn->optx = IR_NOP;
-		insn->op1 = IR_UNUSED;
-		use_list->count = 0;
-		c_prologue_end = IR_UNUSED;
+			ir_ref prev = insn->op1;
+			ir_ref next = ctx->use_edges[use_list->refs];
+			ctx->ir_base[next].op1 = prev;
+			ir_use_list_replace_one(ctx, prev, c_prologue_end, next);
+
+			insn->optx = IR_NOP;
+			insn->op1 = IR_UNUSED;
+			use_list->count = 0;
+			c_prologue_end = IR_UNUSED;
+		}
 	}
 
 	if (c_flags & C_DUMP_IR_AFTER_USE_LISTS) {
