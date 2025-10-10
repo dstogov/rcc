@@ -232,6 +232,7 @@ static yy_sym parse_STRING(yy_sym sym);
 static int synpred_1(yy_sym sym);
 static int synpred__lparen(yy_sym sym);
 static int synpred__rbrace(yy_sym sym);
+static int synpred__colon(yy_sym sym);
 static int synpred__star(yy_sym sym);
 
 static int synpred_1(yy_sym sym) {
@@ -244,6 +245,10 @@ static int synpred__lparen(yy_sym sym) {
 
 static int synpred__rbrace(yy_sym sym) {
 	return sym == YY__RBRACE;
+}
+
+static int synpred__colon(yy_sym sym) {
+	return sym == YY__COLON;
 }
 
 static int synpred__star(yy_sym sym) {
@@ -749,9 +754,9 @@ static yy_sym parse_struct_or_union_specifier(yy_sym sym, c_dcl *d) {
 	if (C_IS_ID(sym)) {
 		sym = parse_ID(sym, &name);
 		if (sym == YY_TYPEDEF || sym == YY_EXTERN || sym == YY_STATIC || sym == YY_AUTO || sym == YY_REGISTER || sym == YY__THREAD_LOCAL || sym == YY_VOID || sym == YY_CHAR || sym == YY_SHORT || sym == YY_INT || sym == YY_LONG || sym == YY_FLOAT || sym == YY_DOUBLE || sym == YY_SIGNED || sym == YY___SIGNED || sym == YY___SIGNED__ || sym == YY_UNSIGNED || sym == YY__BOOL || sym == YY__COMPLEX || sym == YY___COMPLEX || sym == YY___COMPLEX__ || sym == YY__ATOMIC || sym == YY_TYPEOF || sym == YY___TYPEOF || sym == YY___TYPEOF__ || sym == YY_STRUCT || sym == YY_UNION || sym == YY_ENUM || C_IS_ID(sym) || sym == YY_CONST || sym == YY___CONST || sym == YY___CONST__ || sym == YY_RESTRICT || sym == YY___RESTRICT || sym == YY___RESTRICT__ || sym == YY_VOLATILE || sym == YY___VOLATILE || sym == YY___VOLATILE__ || sym == YY_INLINE || sym == YY___INLINE || sym == YY___INLINE__ || sym == YY__NORETURN || sym == YY__ALIGNAS || sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__ || sym == YY__STAR || sym == YY__LPAREN || sym == YY__SEMICOLON || sym == YY__LBRACK || sym == YY__COMMA || sym == YY__RPAREN || sym == YY__COLON) {
-			c_resolve_tag(name, d, 0);
+			c_resolve_tag(name, d, 0, NULL);
 		} else if (sym == YY__LBRACE) {
-			c_type *t = c_resolve_tag(name, d, 1);
+			c_type *t = c_resolve_tag(name, d, 1, NULL);
 			sym = parse_struct_contents(sym, t, d);
 		} else {
 			yy_error_sym("unexpected", sym);
@@ -863,6 +868,7 @@ static yy_sym parse_struct_declarator(yy_sym sym, c_type *t, c_dcl *field) {
 
 static yy_sym parse_enum_specifier(yy_sym sym, c_dcl *d) {
 	c_name name;
+	const c_type *base_type = NULL;
 	if (sym != YY_ENUM) {
 		yy_error_sym("'enum' expected, got", sym);
 	}
@@ -873,16 +879,32 @@ static yy_sym parse_enum_specifier(yy_sym sym, c_dcl *d) {
 	}
 	if (C_IS_ID(sym)) {
 		sym = parse_ID(sym, &name);
+		if ((sym == YY__COLON) && synpred__colon(sym)) {
+			c_dcl u = {0};
+			sym = get_sym();
+			do {
+				sym = parse_type_specifier_or_qualifier(sym, &u);
+			} while (sym == YY_VOID || sym == YY_CHAR || sym == YY_SHORT || sym == YY_INT || sym == YY_LONG || sym == YY_FLOAT || sym == YY_DOUBLE || sym == YY_SIGNED || sym == YY___SIGNED || sym == YY___SIGNED__ || sym == YY_UNSIGNED || sym == YY__BOOL || sym == YY__COMPLEX || sym == YY___COMPLEX || sym == YY___COMPLEX__ || sym == YY__ATOMIC || sym == YY_TYPEOF || sym == YY___TYPEOF || sym == YY___TYPEOF__ || sym == YY_STRUCT || sym == YY_UNION || sym == YY_ENUM || C_IS_ID(sym) || sym == YY_CONST || sym == YY___CONST || sym == YY___CONST__ || sym == YY_RESTRICT || sym == YY___RESTRICT || sym == YY___RESTRICT__ || sym == YY_VOLATILE || sym == YY___VOLATILE || sym == YY___VOLATILE__);
+			base_type = c_underlying_enum_type(&u);
+		}
 		if (sym == YY_TYPEDEF || sym == YY_EXTERN || sym == YY_STATIC || sym == YY_AUTO || sym == YY_REGISTER || sym == YY__THREAD_LOCAL || sym == YY_VOID || sym == YY_CHAR || sym == YY_SHORT || sym == YY_INT || sym == YY_LONG || sym == YY_FLOAT || sym == YY_DOUBLE || sym == YY_SIGNED || sym == YY___SIGNED || sym == YY___SIGNED__ || sym == YY_UNSIGNED || sym == YY__BOOL || sym == YY__COMPLEX || sym == YY___COMPLEX || sym == YY___COMPLEX__ || sym == YY__ATOMIC || sym == YY_TYPEOF || sym == YY___TYPEOF || sym == YY___TYPEOF__ || sym == YY_STRUCT || sym == YY_UNION || sym == YY_ENUM || C_IS_ID(sym) || sym == YY_CONST || sym == YY___CONST || sym == YY___CONST__ || sym == YY_RESTRICT || sym == YY___RESTRICT || sym == YY___RESTRICT__ || sym == YY_VOLATILE || sym == YY___VOLATILE || sym == YY___VOLATILE__ || sym == YY_INLINE || sym == YY___INLINE || sym == YY___INLINE__ || sym == YY__NORETURN || sym == YY__ALIGNAS || sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__ || sym == YY__STAR || sym == YY__LPAREN || sym == YY__SEMICOLON || sym == YY__LBRACK || sym == YY__COMMA || sym == YY__RPAREN || sym == YY__COLON) {
-			c_resolve_tag(name, d, 0);
+			c_resolve_tag(name, d, 0, base_type);
 		} else if (sym == YY__LBRACE) {
-			c_type *t = c_resolve_tag(name, d, 1);
+			c_type *t = c_resolve_tag(name, d, 1, base_type);
 			sym = parse_enum_contents(sym, t, d);
 		} else {
 			yy_error_sym("unexpected", sym);
 		}
-	} else if (sym == YY__LBRACE) {
-		c_type *t = c_make_enum_type(d, 0);
+	} else if (sym == YY__COLON || sym == YY__LBRACE) {
+		if (sym == YY__COLON) {
+			c_dcl u = {0};
+			sym = get_sym();
+			do {
+				sym = parse_type_specifier_or_qualifier(sym, &u);
+			} while (sym == YY_VOID || sym == YY_CHAR || sym == YY_SHORT || sym == YY_INT || sym == YY_LONG || sym == YY_FLOAT || sym == YY_DOUBLE || sym == YY_SIGNED || sym == YY___SIGNED || sym == YY___SIGNED__ || sym == YY_UNSIGNED || sym == YY__BOOL || sym == YY__COMPLEX || sym == YY___COMPLEX || sym == YY___COMPLEX__ || sym == YY__ATOMIC || sym == YY_TYPEOF || sym == YY___TYPEOF || sym == YY___TYPEOF__ || sym == YY_STRUCT || sym == YY_UNION || sym == YY_ENUM || C_IS_ID(sym) || sym == YY_CONST || sym == YY___CONST || sym == YY___CONST__ || sym == YY_RESTRICT || sym == YY___RESTRICT || sym == YY___RESTRICT__ || sym == YY_VOLATILE || sym == YY___VOLATILE || sym == YY___VOLATILE__);
+			base_type = c_underlying_enum_type(&u);
+		}
+		c_type *t = c_make_enum_type(d, 0, base_type);
 		sym = parse_enum_contents(sym, t, d);
 	} else {
 		yy_error_sym("unexpected", sym);

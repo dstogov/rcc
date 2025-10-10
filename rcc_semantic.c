@@ -1312,7 +1312,7 @@ static const char* c_tag2str(c_tag *tag)
 	return c_type_kind2str(tag->type->kind);
 }
 
-c_type *c_resolve_tag(c_name name, c_dcl *d, bool define)
+c_type *c_resolve_tag(c_name name, c_dcl *d, bool define, const c_type *underlying_type)
 {
 	c_type *type;
 	c_tag *tag;
@@ -1350,7 +1350,7 @@ c_type *c_resolve_tag(c_name name, c_dcl *d, bool define)
 	}
 
 	if (d->flags & C_TYPE_SPEC_ENUM) {
-		type = c_make_enum_type(d, name);
+		type = c_make_enum_type(d, name, underlying_type);
 	} else {
 		type = c_make_struct_type(d, name);
 	}
@@ -1472,7 +1472,14 @@ void c_make_array_type(c_dcl *d, c_dcl *dim, c_value *len, uint64_t attr, bool i
 	d->attr &= ~C_ARRAY_ATTRS;
 }
 
-c_type *c_make_enum_type(c_dcl *d, c_name tag)
+const c_type *c_underlying_enum_type(c_dcl *dcl)
+{
+	const c_type *t = c_resolve_type(dcl);
+    if (!C_IS_TYPE_INT(t)) yy_error("invalid \"enum\" underlying type");
+	return t;
+}
+
+c_type *c_make_enum_type(c_dcl *d, c_name tag, const c_type *underlying_type)
 {
 	c_type *type;
 	type = ir_arena_alloc(&c_arena, sizeof(c_type));
@@ -1481,7 +1488,14 @@ c_type *c_make_enum_type(c_dcl *d, c_name tag)
 	type->attr = (d->attr & C_ENUM_ATTRS);
 	type->size = 0;
 	type->enumeration.tag = tag;
-	type->enumeration.kind = C_TYPE_I64; /* this is going to be fixed in c_finish_enum_type(); */
+	if (underlying_type) {
+		IR_ASSERT(C_IS_TYPE_INT(underlying_type));
+		type->enumeration.kind = underlying_type->kind;
+		type->size = underlying_type->size;
+		type->attr |= underlying_type->attr & C_ATTR_ALIGN_MASK;
+	} else {
+		type->enumeration.kind = C_TYPE_VOID; /* this is going to be fixed in c_finish_enum_type(); */
+	}
 	type->enumeration.values = (c_name*)type; /* fake pointer for comparison only */
 
 	d->type = type;
@@ -1539,43 +1553,45 @@ void c_finish_enum_type(c_type *type, c_dcl *d, int64_t min, uint64_t max)
 {
 	IR_ASSERT(type && type->kind == C_TYPE_ENUM);
 	type->attr |= d->attr & C_ENUM_ATTRS;
-	if ((type->attr & C_ATTR_PACKED) && min >= -0x7FLL-1 && max <= 0x7FULL) {
-		type->enumeration.kind = C_TYPE_I8;
-		type->size = sizeof(int8_t);
-		type->attr |= c_align2attr(_Alignof(int8_t));
-	} else if ((type->attr & C_ATTR_PACKED) && min >= 0 && max <= 0xFFULL) {
-		type->enumeration.kind = C_TYPE_U8;
-		type->size = sizeof(uint8_t);
-		type->attr |= c_align2attr(_Alignof(uint8_t));
-	} else if ((type->attr & C_ATTR_PACKED) && min >= -0x7FFFLL-1 && max <= 0x7FFFULL) {
-		type->enumeration.kind = C_TYPE_I16;
-		type->size = sizeof(int16_t);
-		type->attr |= c_align2attr(_Alignof(int16_t));
-	} else if ((type->attr & C_ATTR_PACKED) && min >= 0 && max <= 0xFFFFULL) {
-		type->enumeration.kind = C_TYPE_U16;
-		type->size = sizeof(uint16_t);
-		type->attr |= c_align2attr(_Alignof(uint16_t));
-	} else if (min >= 0 && max <= 0xFFFFFFFFULL) {
-		type->enumeration.kind = C_TYPE_U32;
-		type->size = sizeof(uint32_t);
-		type->attr |= c_align2attr(_Alignof(uint32_t));
-	} else if (min >= 0) {
-		type->enumeration.kind = C_TYPE_U64;
-		type->size = sizeof(uint64_t);
-		type->attr |= c_align2attr(_Alignof(uint64_t));
-	} else if (min >= -0x7FFFFFFFLL-1 && max <= 0x7FFFFFFFULL) {
-		type->enumeration.kind = C_TYPE_I32;
-		type->size = sizeof(int32_t);
-		type->attr |= c_align2attr(_Alignof(int32_t));
-	} else if (max <= 0x7FFFFFFFFFFFFFFFULL) {
-		type->enumeration.kind = C_TYPE_I64;
-		type->size = sizeof(int64_t);
-		type->attr |= c_align2attr(_Alignof(int64_t));
-	} else {
-		yy_warning("enumeration values exceed range of largest integer");
-		type->enumeration.kind = C_TYPE_I64;
-		type->size = sizeof(int64_t);
-		type->attr |= c_align2attr(_Alignof(int64_t));
+	if (!type->enumeration.kind) {
+		if ((type->attr & C_ATTR_PACKED) && min >= -0x7FLL-1 && max <= 0x7FULL) {
+			type->enumeration.kind = C_TYPE_I8;
+			type->size = sizeof(int8_t);
+			type->attr |= c_align2attr(_Alignof(int8_t));
+		} else if ((type->attr & C_ATTR_PACKED) && min >= 0 && max <= 0xFFULL) {
+			type->enumeration.kind = C_TYPE_U8;
+			type->size = sizeof(uint8_t);
+			type->attr |= c_align2attr(_Alignof(uint8_t));
+		} else if ((type->attr & C_ATTR_PACKED) && min >= -0x7FFFLL-1 && max <= 0x7FFFULL) {
+			type->enumeration.kind = C_TYPE_I16;
+			type->size = sizeof(int16_t);
+			type->attr |= c_align2attr(_Alignof(int16_t));
+		} else if ((type->attr & C_ATTR_PACKED) && min >= 0 && max <= 0xFFFFULL) {
+			type->enumeration.kind = C_TYPE_U16;
+			type->size = sizeof(uint16_t);
+			type->attr |= c_align2attr(_Alignof(uint16_t));
+		} else if (min >= 0 && max <= 0xFFFFFFFFULL) {
+			type->enumeration.kind = C_TYPE_U32;
+			type->size = sizeof(uint32_t);
+			type->attr |= c_align2attr(_Alignof(uint32_t));
+		} else if (min >= 0) {
+			type->enumeration.kind = C_TYPE_U64;
+			type->size = sizeof(uint64_t);
+			type->attr |= c_align2attr(_Alignof(uint64_t));
+		} else if (min >= -0x7FFFFFFFLL-1 && max <= 0x7FFFFFFFULL) {
+			type->enumeration.kind = C_TYPE_I32;
+			type->size = sizeof(int32_t);
+			type->attr |= c_align2attr(_Alignof(int32_t));
+		} else if (max <= 0x7FFFFFFFFFFFFFFFULL) {
+			type->enumeration.kind = C_TYPE_I64;
+			type->size = sizeof(int64_t);
+			type->attr |= c_align2attr(_Alignof(int64_t));
+		} else {
+			yy_warning("enumeration values exceed range of largest integer");
+			type->enumeration.kind = C_TYPE_I64;
+			type->size = sizeof(int64_t);
+			type->attr |= c_align2attr(_Alignof(int64_t));
+		}
 	}
 
 	if ((d->attr & C_ATTR_ALIGN_MASK) > (type->attr & C_ATTR_ALIGN_MASK)) {

@@ -415,8 +415,8 @@ struct_or_union_specifier(c_dcl *d):                       {c_name name;}
 	)
 	attributes(d)?
 	(	ID(&name)
-		(   /* empty */                                    {c_resolve_tag(name, d, 0);}
-		|	                                               {c_type *t = c_resolve_tag(name, d, 1);}
+		(   /* empty */                                    {c_resolve_tag(name, d, 0, NULL);}
+		|	                                               {c_type *t = c_resolve_tag(name, d, 1, NULL);}
 			struct_contents(t, d)
 		)
 	|                                                      {c_type *t = c_make_struct_type(d, 0);}
@@ -462,14 +462,22 @@ struct_declarator(c_type *t, c_dcl *field):                {c_value v = {0};}
 ;
 
 enum_specifier(c_dcl *d):                                  {c_name name;}
+                                                           {const c_type *base_type = NULL;}
 	"enum"                                                 {d->flags |= C_TYPE_SPEC_ENUM;}
 	attributes(d)?
 	(	ID(&name)
-		(	/* empty */                                    {c_resolve_tag(name, d, 0);}
-		|                                                  {c_type *t = c_resolve_tag(name, d, 1);}
+		(	&":"                                           {c_dcl u = {0};}
+			":"
+			type_specifier_or_qualifier(&u)++              {base_type = c_underlying_enum_type(&u);}
+		)?
+		(	/* empty */                                    {c_resolve_tag(name, d, 0, base_type);}
+		|                                                  {c_type *t = c_resolve_tag(name, d, 1, base_type);}
 			enum_contents(t, d)
 		)
-	|                                                      {c_type *t = c_make_enum_type(d, 0);}
+	|	(                                                  {c_dcl u = {0};}
+			":"
+			type_specifier_or_qualifier(&u)+               {base_type = c_underlying_enum_type(&u);}
+		)?                                                 {c_type *t = c_make_enum_type(d, 0, base_type);}
 		enum_contents(t, d)
 	)
 ;
