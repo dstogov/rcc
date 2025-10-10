@@ -511,54 +511,54 @@ static yy_sym parse_storage_class_specifier(yy_sym sym, c_dcl *d) {
 static yy_sym parse_type_specifier_or_qualifier(yy_sym sym, c_dcl *d) {
 	c_name name;
 	if (sym == YY_VOID) {
-		if (d->flags & C_TYPE_SPEC_ANY) yy_error_sym("unexpected", sym);
+		if (d->flags & C_TYPE_SPEC_ANY) c_wrong_type_specifiers(d->flags, sym);
 		sym = get_sym();
 		d->flags |= C_TYPE_SPEC_VOID;
 	} else if (sym == YY_CHAR) {
-		if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_SIGNED|C_TYPE_SPEC_UNSIGNED))) yy_error_sym("unexpected", sym);
+		if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_SIGNED|C_TYPE_SPEC_UNSIGNED))) c_wrong_type_specifiers(d->flags, sym);
 		sym = get_sym();
 		d->flags |= C_TYPE_SPEC_CHAR;
 	} else if (sym == YY_SHORT) {
-		if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_SIGNED|C_TYPE_SPEC_UNSIGNED|C_TYPE_SPEC_INT))) yy_error_sym("unexpected", sym);
+		if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_SIGNED|C_TYPE_SPEC_UNSIGNED|C_TYPE_SPEC_INT))) c_wrong_type_specifiers(d->flags, sym);
 		sym = get_sym();
 		d->flags |= C_TYPE_SPEC_SHORT;
 	} else if (sym == YY_INT) {
-		if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_SIGNED|C_TYPE_SPEC_UNSIGNED|C_TYPE_SPEC_SHORT|C_TYPE_SPEC_LONG|C_TYPE_SPEC_LONG_LONG))) yy_error_sym("unexpected", sym);
+		if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_SIGNED|C_TYPE_SPEC_UNSIGNED|C_TYPE_SPEC_SHORT|C_TYPE_SPEC_LONG|C_TYPE_SPEC_LONG_LONG))) c_wrong_type_specifiers(d->flags, sym);
 		sym = get_sym();
 		d->flags |= C_TYPE_SPEC_INT;
 	} else if (sym == YY_LONG) {
-		if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_SIGNED|C_TYPE_SPEC_UNSIGNED|C_TYPE_SPEC_LONG|C_TYPE_SPEC_INT|C_TYPE_SPEC_DOUBLE|C_TYPE_SPEC_COMPLEX))) yy_error_sym("unexpected", sym);
+		if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_SIGNED|C_TYPE_SPEC_UNSIGNED|C_TYPE_SPEC_LONG|C_TYPE_SPEC_INT|C_TYPE_SPEC_DOUBLE|C_TYPE_SPEC_COMPLEX))) c_wrong_type_specifiers(d->flags, sym);
 		sym = get_sym();
 		d->flags |= (d->flags & C_TYPE_SPEC_LONG) ? C_TYPE_SPEC_LONG_LONG : C_TYPE_SPEC_LONG;
 	} else if (sym == YY_FLOAT) {
-		if (d->flags & (C_TYPE_SPEC_ANY-C_TYPE_SPEC_COMPLEX)) yy_error_sym("unexpected", sym);
+		if (d->flags & (C_TYPE_SPEC_ANY-C_TYPE_SPEC_COMPLEX)) c_wrong_type_specifiers(d->flags, sym);
 		sym = get_sym();
 		d->flags |= C_TYPE_SPEC_FLOAT;
 	} else if (sym == YY_DOUBLE) {
-		if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_LONG|C_TYPE_SPEC_COMPLEX))) yy_error_sym("unexpected", sym);
+		if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_LONG|C_TYPE_SPEC_COMPLEX))) c_wrong_type_specifiers(d->flags, sym);
 		sym = get_sym();
 		d->flags |= C_TYPE_SPEC_DOUBLE;
 	} else if (sym == YY_SIGNED || sym == YY___SIGNED || sym == YY___SIGNED__) {
-		if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_CHAR|C_TYPE_SPEC_SHORT|C_TYPE_SPEC_INT|C_TYPE_SPEC_LONG|C_TYPE_SPEC_LONG_LONG))) yy_error_sym("unexpected", sym);
+		if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_CHAR|C_TYPE_SPEC_SHORT|C_TYPE_SPEC_INT|C_TYPE_SPEC_LONG|C_TYPE_SPEC_LONG_LONG))) c_wrong_type_specifiers(d->flags, sym);
 		sym = get_sym();
 		d->flags |= C_TYPE_SPEC_SIGNED;
 	} else if (sym == YY_UNSIGNED) {
-		if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_CHAR|C_TYPE_SPEC_SHORT|C_TYPE_SPEC_INT|C_TYPE_SPEC_LONG|C_TYPE_SPEC_LONG_LONG))) yy_error_sym("unexpected", sym);
+		if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_CHAR|C_TYPE_SPEC_SHORT|C_TYPE_SPEC_INT|C_TYPE_SPEC_LONG|C_TYPE_SPEC_LONG_LONG))) c_wrong_type_specifiers(d->flags, sym);
 		sym = get_sym();
 		d->flags |= C_TYPE_SPEC_UNSIGNED;
 	} else if (sym == YY__BOOL) {
-		if (d->flags & C_TYPE_SPEC_ANY) yy_error_sym("unexpected", sym);
+		if (d->flags & C_TYPE_SPEC_ANY) c_wrong_type_specifiers(d->flags, sym);
 		sym = get_sym();
 		d->flags |= C_TYPE_SPEC_BOOL;
 	} else if (sym == YY__COMPLEX || sym == YY___COMPLEX || sym == YY___COMPLEX__) {
-		if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_FLOAT|C_TYPE_SPEC_DOUBLE|C_TYPE_SPEC_LONG))) yy_error_sym("unexpected", sym);
+		if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_FLOAT|C_TYPE_SPEC_DOUBLE|C_TYPE_SPEC_LONG))) c_wrong_type_specifiers(d->flags, sym);
 		sym = get_sym();
 		d->flags |= C_TYPE_SPEC_COMPLEX;
 	} else if (sym == YY__ATOMIC) {
 		sym = get_sym();
 		if ((sym == YY__LPAREN) && synpred__lparen(sym)) {
 			sym = get_sym();
-			if (d->flags & C_TYPE_SPEC_ANY) yy_error_sym("unexpected", sym);
+			if (d->flags & C_TYPE_SPEC_ANY) c_wrong_type_specifiers(d->flags, YY__ATOMIC);
 			d->flags |= C_TYPE_SPEC_ATOMIC;
 			sym = parse_type_name(sym, &d->type);
 			if (sym != YY__RPAREN) {
@@ -571,7 +571,7 @@ static yy_sym parse_type_specifier_or_qualifier(yy_sym sym, c_dcl *d) {
 			yy_error_sym("unexpected", sym);
 		}
 	} else if (sym == YY_TYPEOF || sym == YY___TYPEOF || sym == YY___TYPEOF__) {
-		if (d->flags & C_TYPE_SPEC_ANY) yy_error_sym("unexpected", sym);
+		if (d->flags & C_TYPE_SPEC_ANY) c_wrong_type_specifiers(d->flags, sym);
 		sym = get_sym();
 		d->flags |= C_TYPE_SPEC_TYPE;
 		if (sym != YY__LPAREN) {
@@ -593,13 +593,13 @@ static yy_sym parse_type_specifier_or_qualifier(yy_sym sym, c_dcl *d) {
 		}
 		sym = get_sym();
 	} else if (sym == YY_STRUCT || sym == YY_UNION) {
-		if (d->flags & C_TYPE_SPEC_ANY) yy_error_sym("unexpected", sym);
+		if (d->flags & C_TYPE_SPEC_ANY) c_wrong_type_specifiers(d->flags, sym);
 		sym = parse_struct_or_union_specifier(sym, d);
 	} else if (sym == YY_ENUM) {
-		if (d->flags & C_TYPE_SPEC_ANY) yy_error_sym("unexpected", sym);
+		if (d->flags & C_TYPE_SPEC_ANY) c_wrong_type_specifiers(d->flags, sym);
 		sym = parse_enum_specifier(sym, d);
 	} else if (C_IS_ID(sym)) {
-		if (d->flags & C_TYPE_SPEC_ANY) yy_error_sym("unexpected", sym);
+		if (d->flags & C_TYPE_SPEC_ANY) c_wrong_type_specifiers(d->flags, sym);
 		sym = parse_ID(sym, &name);
 		d->flags |= C_TYPE_SPEC_NAME;
 		d->type = c_resolve_type_name(name);

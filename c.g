@@ -308,36 +308,36 @@ storage_class_specifier(c_dcl *d):
 ;
 
 type_specifier_or_qualifier(c_dcl *d):                     {c_name name;}
-	(                                                      {if (d->flags & C_TYPE_SPEC_ANY) yy_error_sym("unexpected", sym);}
+	(                                                      {if (d->flags & C_TYPE_SPEC_ANY) c_wrong_type_specifiers(d->flags, sym);}
 		"void"                                             {d->flags |= C_TYPE_SPEC_VOID;}
-	|                                                      {if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_SIGNED|C_TYPE_SPEC_UNSIGNED))) yy_error_sym("unexpected", sym);}
+	|                                                      {if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_SIGNED|C_TYPE_SPEC_UNSIGNED))) c_wrong_type_specifiers(d->flags, sym);}
 		"char"                                             {d->flags |= C_TYPE_SPEC_CHAR;}
-	|                                                      {if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_SIGNED|C_TYPE_SPEC_UNSIGNED|C_TYPE_SPEC_INT))) yy_error_sym("unexpected", sym);}
+	|                                                      {if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_SIGNED|C_TYPE_SPEC_UNSIGNED|C_TYPE_SPEC_INT))) c_wrong_type_specifiers(d->flags, sym);}
 		"short"                                            {d->flags |= C_TYPE_SPEC_SHORT;}
-	|                                                      {if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_SIGNED|C_TYPE_SPEC_UNSIGNED|C_TYPE_SPEC_SHORT|C_TYPE_SPEC_LONG|C_TYPE_SPEC_LONG_LONG))) yy_error_sym("unexpected", sym);}
+	|                                                      {if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_SIGNED|C_TYPE_SPEC_UNSIGNED|C_TYPE_SPEC_SHORT|C_TYPE_SPEC_LONG|C_TYPE_SPEC_LONG_LONG))) c_wrong_type_specifiers(d->flags, sym);}
 		"int"                                              {d->flags |= C_TYPE_SPEC_INT;}
-	|                                                      {if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_SIGNED|C_TYPE_SPEC_UNSIGNED|C_TYPE_SPEC_LONG|C_TYPE_SPEC_INT|C_TYPE_SPEC_DOUBLE|C_TYPE_SPEC_COMPLEX))) yy_error_sym("unexpected", sym);}
+	|                                                      {if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_SIGNED|C_TYPE_SPEC_UNSIGNED|C_TYPE_SPEC_LONG|C_TYPE_SPEC_INT|C_TYPE_SPEC_DOUBLE|C_TYPE_SPEC_COMPLEX))) c_wrong_type_specifiers(d->flags, sym);}
 		"long"                                             {d->flags |= (d->flags & C_TYPE_SPEC_LONG) ? C_TYPE_SPEC_LONG_LONG : C_TYPE_SPEC_LONG;}
-	|                                                      {if (d->flags & (C_TYPE_SPEC_ANY-C_TYPE_SPEC_COMPLEX)) yy_error_sym("unexpected", sym);}
+	|                                                      {if (d->flags & (C_TYPE_SPEC_ANY-C_TYPE_SPEC_COMPLEX)) c_wrong_type_specifiers(d->flags, sym);}
 		"float"                                            {d->flags |= C_TYPE_SPEC_FLOAT;}
-	|                                                      {if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_LONG|C_TYPE_SPEC_COMPLEX))) yy_error_sym("unexpected", sym);}
+	|                                                      {if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_LONG|C_TYPE_SPEC_COMPLEX))) c_wrong_type_specifiers(d->flags, sym);}
 		"double"                                           {d->flags |= C_TYPE_SPEC_DOUBLE;}
-	|                                                      {if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_CHAR|C_TYPE_SPEC_SHORT|C_TYPE_SPEC_INT|C_TYPE_SPEC_LONG|C_TYPE_SPEC_LONG_LONG))) yy_error_sym("unexpected", sym);}
+	|                                                      {if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_CHAR|C_TYPE_SPEC_SHORT|C_TYPE_SPEC_INT|C_TYPE_SPEC_LONG|C_TYPE_SPEC_LONG_LONG))) c_wrong_type_specifiers(d->flags, sym);}
 		("signed"|"__signed"|"__signed__")                 {d->flags |= C_TYPE_SPEC_SIGNED;}
-	|                                                      {if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_CHAR|C_TYPE_SPEC_SHORT|C_TYPE_SPEC_INT|C_TYPE_SPEC_LONG|C_TYPE_SPEC_LONG_LONG))) yy_error_sym("unexpected", sym);}
+	|                                                      {if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_CHAR|C_TYPE_SPEC_SHORT|C_TYPE_SPEC_INT|C_TYPE_SPEC_LONG|C_TYPE_SPEC_LONG_LONG))) c_wrong_type_specifiers(d->flags, sym);}
 		"unsigned"                                         {d->flags |= C_TYPE_SPEC_UNSIGNED;}
-	|                                                      {if (d->flags & C_TYPE_SPEC_ANY) yy_error_sym("unexpected", sym);}
+	|                                                      {if (d->flags & C_TYPE_SPEC_ANY) c_wrong_type_specifiers(d->flags, sym);}
 		"_Bool"                                            {d->flags |= C_TYPE_SPEC_BOOL;}
-	|                                                      {if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_FLOAT|C_TYPE_SPEC_DOUBLE|C_TYPE_SPEC_LONG))) yy_error_sym("unexpected", sym);}
+	|                                                      {if (d->flags & (C_TYPE_SPEC_ANY-(C_TYPE_SPEC_FLOAT|C_TYPE_SPEC_DOUBLE|C_TYPE_SPEC_LONG))) c_wrong_type_specifiers(d->flags, sym);}
 		("_Complex"|"__complex"|"__complex__")             {d->flags |= C_TYPE_SPEC_COMPLEX;}
 	|	"_Atomic"
 		(	&"(" "("
-                                                           {if (d->flags & C_TYPE_SPEC_ANY) yy_error_sym("unexpected", sym);}
+                                                           {if (d->flags & C_TYPE_SPEC_ANY) c_wrong_type_specifiers(d->flags, YY__ATOMIC);}
                                                            {d->flags |= C_TYPE_SPEC_ATOMIC;}
 			type_name(&d->type) ")"
 		|	/* empty - _Atomic qualifier */                {d->attr |= C_ATTR_ATOMIC;}
 		)
-	|                                                      {if (d->flags & C_TYPE_SPEC_ANY) yy_error_sym("unexpected", sym);}
+	|                                                      {if (d->flags & C_TYPE_SPEC_ANY) c_wrong_type_specifiers(d->flags, sym);}
 		("typeof"|"__typeof"|"__typeof__")                 {d->flags |= C_TYPE_SPEC_TYPE;}
 		"("
 		(	?{!C_IS_ID(sym) || is_typedef_name(sym)}
@@ -347,11 +347,11 @@ type_specifier_or_qualifier(c_dcl *d):                     {c_name name;}
 			expression(&v)                                 {d->type = c_typeof_expr(&v, old);}
 		)
 		")"
-	|                                                      {if (d->flags & C_TYPE_SPEC_ANY) yy_error_sym("unexpected", sym);}
+	|                                                      {if (d->flags & C_TYPE_SPEC_ANY) c_wrong_type_specifiers(d->flags, sym);}
 		struct_or_union_specifier(d)
-	|                                                      {if (d->flags & C_TYPE_SPEC_ANY) yy_error_sym("unexpected", sym);}
+	|                                                      {if (d->flags & C_TYPE_SPEC_ANY) c_wrong_type_specifiers(d->flags, sym);}
 		enum_specifier(d)
-	|                                                      {if (d->flags & C_TYPE_SPEC_ANY) yy_error_sym("unexpected", sym);}
+	|                                                      {if (d->flags & C_TYPE_SPEC_ANY) c_wrong_type_specifiers(d->flags, sym);}
 		ID(&name) /* typedef name */                       {d->flags |= C_TYPE_SPEC_NAME;}
                                                            {d->type = c_resolve_type_name(name);}
 	/* type_qualifier: */

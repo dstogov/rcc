@@ -883,6 +883,7 @@ extern const c_type c_type_ptr;
 void c_push_scope(c_scope *scope);
 void c_pop_scope(c_scope *scope);
 
+void c_wrong_type_specifiers(uint32_t flags, yy_sym sym);
 const c_type *c_resolve_type(c_dcl *dcl);
 const c_type *c_resolve_type_name(c_name name);
 void c_resolve_sym_name(c_value *res, c_name name, yy_sym sym);

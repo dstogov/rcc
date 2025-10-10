@@ -470,6 +470,45 @@ void c_resolve_sym_name(c_value *res, c_name name, yy_sym sym)
 	}
 }
 
+void c_wrong_type_specifiers(uint32_t flags, yy_sym sym)
+{
+	if (sym) {
+		if (flags & C_TYPE_SPEC_COMPLEX) {
+			if (sym == YY_CHAR
+			 || sym == YY_SHORT
+			 || sym == YY_INT
+			 || sym == YY_LONG
+			 || sym == YY_SIGNED
+			 || sym == YY___SIGNED
+			 || sym == YY___SIGNED__
+			 || sym == YY_UNSIGNED) {
+				flags |= C_TYPE_SPEC_INT;
+			}
+		} else if (sym == YY__COMPLEX
+		 || sym == YY___COMPLEX
+		 || sym == YY___COMPLEX__) {
+			flags |= C_TYPE_SPEC_COMPLEX;
+		}
+	}
+
+	if ((flags & C_TYPE_SPEC_COMPLEX)
+	 && !(flags & (C_TYPE_SPEC_FLOAT|C_TYPE_SPEC_DOUBLE))
+	 && (flags & (C_TYPE_SPEC_CHAR|C_TYPE_SPEC_SHORT|C_TYPE_SPEC_INT|
+			C_TYPE_SPEC_LONG|C_TYPE_SPEC_LONG_LONG|C_TYPE_SPEC_SIGNED|C_TYPE_SPEC_UNSIGNED))) {
+		if (sym) {
+			yy_error_fmt("unexpected \"%s\", complex integer types are not supported", yy_sym2str(sym));
+		} else {
+			yy_error("complex integer types are not supported");
+		}
+	} else {
+		if (sym) {
+			yy_error_fmt("unexpected \"%s\", unsupported type specifier combination", yy_sym2str(sym));
+		} else {
+			yy_error("unsupported type specifier combination");
+		}
+	}
+}
+
 static void c_resolve_type_spec(c_dcl *d)
 {
 	IR_ASSERT(!d->type);
@@ -547,14 +586,13 @@ static void c_resolve_type_spec(c_dcl *d)
 		case C_TYPE_SPEC_DOUBLE|C_TYPE_SPEC_LONG|C_TYPE_SPEC_COMPLEX:
 			d->type = &c_type_long_double_complex;
 			break;
-			break;
 		default:
 			if ((d->flags & C_TYPE_SPEC_ANY) == 0) {
 				yy_warning("type defaults to \"int\"");
 				d->type = &c_type_i32;
 				break;
 			}
-			yy_error("unsupported type specifier combination");
+			c_wrong_type_specifiers(d->flags, 0);
 			break;
 	}
 	d->flags &= ~C_TYPE_SPEC_ANY;
