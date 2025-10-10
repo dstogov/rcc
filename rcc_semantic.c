@@ -2322,6 +2322,9 @@ void c_gcc_attribute(c_dcl *d, c_name attr, c_value *val)
 			if (val) yy_warning_fmt("attribute \"%s\" with unused value", yy_sym2str(attr));
 			d->attr |= C_ATTR_UNUSED;
 			break;
+		case YY_VECTOR_SIZE:
+		case YY___VECTOR_SIZE__:
+			yy_error_fmt("unsupported attribure \"%s\"", yy_sym2str(attr));
 		default:
 			yy_warning_fmt("unsupported attribure \"%s\"", yy_sym2str(attr));
 	}
