@@ -1019,6 +1019,12 @@ unary_expression(c_value *val):
 		|	"__builtin_memset"
 		|	"__builtin_expect"
 		|	"__builtin_unreachable"
+		|	"__builtin_huge_val"
+		|	"__builtin_huge_valf"
+		|	"__builtin_inf"
+		|	"__builtin_inff"
+		|	"__builtin_nan"
+		|	"__builtin_nanf"
 		)
 		"(" builtin_parameters(val, name) ")"
 	)

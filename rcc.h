@@ -188,8 +188,14 @@
 	_("__builtin_ctz",                 YY___BUILTIN_CTZ)               \
 	_("__builtin_ctzl",                YY___BUILTIN_CTZL)              \
 	_("__builtin_ctzll",               YY___BUILTIN_CTZLL)             \
+	_("__builtin_huge_val",            YY___BUILTIN_HUGE_VAL)          \
+	_("__builtin_huge_valf",           YY___BUILTIN_HUGE_VALF)         \
+	_("__builtin_inf",                 YY___BUILTIN_INF)               \
+	_("__builtin_inff",                YY___BUILTIN_INFF)              \
 	_("__builtin_memcpy",              YY___BUILTIN_MEMCPY)            \
 	_("__builtin_memset",              YY___BUILTIN_MEMSET)            \
+	_("__builtin_nan",                 YY___BUILTIN_NAN)               \
+	_("__builtin_nanf",                YY___BUILTIN_NANF)              \
 	_("__builtin_expect",              YY___BUILTIN_EXPECT)            \
 	_("__builtin_unreachable",         YY___BUILTIN_UNREACHABLE)       \
 

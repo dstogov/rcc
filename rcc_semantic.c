@@ -8,6 +8,8 @@
 #include <ir_private.h>
 #include <ir_builder.h>
 
+#include <math.h>
+
 #include "rcc.h"
 
 #undef _ir_CTX
@@ -3863,6 +3865,38 @@ void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 		} else {
 			yy_warning("second argument of __builtin_expect() must be an integer constant");
 		}
+	} else if (name == YY___BUILTIN_HUGE_VAL || name == YY___BUILTIN_INF) {
+		ir_val v;
+		if (num_args != 0) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+#ifdef INFINITY
+		v.d = INFINITY;
+#else
+		v.d = DBL_MAX;
+#endif
+		c_value_set_const(val, &c_type_double, IR_DOUBLE, v);
+	} else if (name == YY___BUILTIN_HUGE_VALF || name == YY___BUILTIN_INFF) {
+		ir_val v;
+		if (num_args != 0) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+#ifdef INFINITY
+		v.f = INFINITY;
+#else
+		v.f = FLT_MAX;
+#endif
+		v.u32_hi = 0;
+		c_value_set_const(val, &c_type_float, IR_FLOAT, v);
+	} else if (name == YY___BUILTIN_NAN) {
+		ir_val v;
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (args[0].type != &c_type_string) yy_error_fmt("wrong argument in %s() call", yy_sym2str(name));
+		v.d = nan((char*)args[0].u.val.ptr);
+		c_value_set_const(val, &c_type_double, IR_DOUBLE, v);
+	} else if (name == YY___BUILTIN_NANF) {
+		ir_val v;
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (args[0].type != &c_type_string) yy_error_fmt("wrong argument in %s() call", yy_sym2str(name));
+		v.f = nanf((char*)args[0].u.val.ptr);
+		v.u32_hi = 0;
+		c_value_set_const(val, &c_type_float, IR_FLOAT, v);
 	} else {
 		IR_ASSERT(0);
 	}
