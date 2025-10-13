@@ -3707,40 +3707,10 @@ c_value *c_do_grow_actual_parameters(c_value *args, int32_t num_args)
 void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 {
 	if (name == YY___BUILTIN_VA_START) {
-		if (num_args != 1) yy_error("wrong number of arguments in __builtin_va_start() call");
+		if (num_args != 1 && num_args != 2) yy_error("wrong number of arguments in __builtin_va_start() call");
 		// TODO: arg type check ???
 		ir_VA_START(c_value_ref(&args[0]));
 		c_value_set_rval(val, &c_type_void, IR_VOID, IR_UNUSED);
-	} else if (name == YY___BUILTIN_VA_ARG) {
-		const c_type *type;
-		ir_type t;
-		ir_ref ref;
-
-		if (num_args != 2) yy_error("wrong number of arguments in __builtin_va_arg() call");
-		type = args[1].type;
-		if (type->kind != C_TYPE_POINTER) yy_error("wrong type of 2nd argument of __builtin_va_arg() call");
-		type = type->pointer.type;
-		if (type->kind == C_TYPE_STRUCT || type->kind == C_TYPE_UNION) {
-			ir_ref alloca;
-			ir_type types[MAX_ABI_TYPES];
-			int n = c_abi_lower_struct_arg(type, types);
-
-			if (n == 1) {
-				t = types[0];
-				ref = ir_VA_ARG(c_value_ref(&args[0]), t);
-				alloca = ir_ALLOCA(ir_const_size_t(active_ctx, type->size));
-				ir_STORE(alloca, ref);
-				c_value_set_lval(val, type, IR_ADDR, alloca);
-			} else {
-				IR_ASSERT(n == 0);
-				ref = ir_VA_ARG_EX(c_value_ref(&args[0]), IR_ADDR, (type->size << 3) | (type->attr & 7));
-				c_value_set_lval(val, type, IR_ADDR, ref);
-			}
-		} else {
-			t = c_type2ir(type);
-			ref = ir_VA_ARG(c_value_ref(&args[0]), t);
-			c_value_set_rval(val, type, t, ref);
-		}
 	} else if (name == YY___BUILTIN_VA_END) {
 		if (num_args != 1) yy_error("wrong number of arguments in __builtin_va_end() call");
 		ir_VA_END(c_value_ref(&args[0]));
@@ -3901,6 +3871,39 @@ void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 		IR_ASSERT(0);
 	}
 	if (num_args > C_ALLOCA_PARAMS) ir_mem_free(args);
+}
+
+void c_do_builtin_va_arg(c_value *val, c_value *list, const c_type *type)
+{
+	ir_type t;
+	ir_ref ref;
+
+	if (type->kind == C_TYPE_STRUCT || type->kind == C_TYPE_UNION) {
+		ir_ref alloca;
+		ir_type types[MAX_ABI_TYPES];
+		int n;
+
+		if ((type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(type)) {
+			yy_error("second argument to \"__builtin_va_arg\" is of incomplete type");
+		}
+		n = c_abi_lower_struct_arg(type, types);
+		if (n == 1) {
+			t = types[0];
+			ref = ir_VA_ARG(c_value_ref(list), t);
+			alloca = ir_ALLOCA(ir_const_size_t(active_ctx, type->size));
+			ir_STORE(alloca, ref);
+			c_value_set_lval(val, type, IR_ADDR, alloca);
+		} else {
+			IR_ASSERT(n == 0);
+			ref = ir_VA_ARG_EX(c_value_ref(list), IR_ADDR, (type->size << 3) | (type->attr & 7));
+			c_value_set_lval(val, type, IR_ADDR, ref);
+		}
+	} else {
+		if (type->kind == C_TYPE_VOID) yy_error("second argument to \"__builtin_va_arg\" is of incomplete type \"void\"");
+		t = c_type2ir(type);
+		ref = ir_VA_ARG(c_value_ref(list), t);
+		c_value_set_rval(val, type, t, ref);
+	}
 }
 
 static ir_ref c_do_convert_builtin(c_value *func, int32_t num_args, ir_ref *arg_refs)

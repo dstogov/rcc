@@ -222,31 +222,35 @@ static const char c_boot[] =
 "#define __builtin_offsetof(t, f) ((__SIZE_TYPE__)&(((t*)0)->f))\n"
 "\n";
 
-static const char c_stdarg_h[] =
-"#ifndef __STDARG_H\n"
-"#define __STDARG_H\n"
-"\n"
-"#if defined(__i386__) || defined(__WIN32) || defined(__APPLE__)\n"
-"typedef char *va_list;\n"
-"#elif defined(__x86_64__)\n"
+static const char c_builtin[] =
+#if defined(__i386__) || defined(__WIN32) || defined(__APPLE__)
+"typedef char *__builtin_va_list;\n"
+#elif defined(__x86_64__)
 "typedef struct {\n"
 "  unsigned int gp_offset;\n"
 "  unsigned int fp_offset;\n"
 "  void *overflow_arg_area;\n"
 "  void *reg_save_area;\n"
-"} va_list[1];\n"
-"#elif defined(__aarch64__)\n"
+"} __builtin_va_list[1];\n"
+#elif defined(__aarch64__)
 "typedef struct {\n"
 "  void    *stack;\n"
 "  void    *gr_top;\n"
 "  void    *vr_top;\n"
 "  int      gr_offset;\n"
 "  int      vr_offset;\n"
-"} va_list[1];\n"
-"#endif\n"
+"} __builtin_va_list[1];\n"
+#endif
+"\n";
+
+static const char c_stdarg_h[] =
+"#ifndef __STDARG_H\n"
+"#define __STDARG_H\n"
 "\n"
-"#define va_start(ap, param) __builtin_va_start (ap)\n"
-"#define va_arg(ap, type) __builtin_va_arg(ap, (type *) 0)\n"
+"typedef __builtin_va_list va_list;\n"
+"\n"
+"#define va_start __builtin_va_start\n"
+"#define va_arg __builtin_va_arg\n"
 "#define va_end(ap) 0\n"
 "#define va_copy(dest, src) ((dest)[0] = (src)[0])\n"
 "\n"
@@ -374,6 +378,17 @@ void c_stdinc_init(void)
 	do {
 		sym = yy_next();
 	} while (sym != YY_EOF);
+}
+
+void c_stdinc_builtin(void)
+{
+	yy_file_name = yy_hash_lookup("builtin", sizeof("builtin") - 1);
+	yy_pos = yy_text = yy_linepos = yy_buf = c_builtin;
+	yy_len = 0;
+	yy_line = 1;
+	yy_end = yy_buf + sizeof(c_builtin) - 1;
+
+	rcc_parse();
 }
 
 const char *c_stdinc_find(yy_sym name, size_t *len)

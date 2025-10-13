@@ -1173,11 +1173,13 @@ static int rcc_preprocess(const char *file_name, FILE *f)
 
 static int rcc_compile(const char *file_name)
 {
+	memset(&c_codegen_list, 0, sizeof(ir_list));
+	c_do_compile_start();
+	c_stdinc_builtin();
+
 	if (!rcc_read(file_name)) {
 		return 0;
 	}
-	memset(&c_codegen_list, 0, sizeof(ir_list));
-	c_do_compile_start();
 	rcc_parse();
 	rcc_fix_flexible_data();
 	if (c_flags & C_DUMP_IR) {

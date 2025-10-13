@@ -989,7 +989,6 @@ unary_expression(c_value *val):
 	|	"&&" ID(&name)                                     {c_do_label_value(val, name);}
 	|                                                      {name = sym;}
 		(	"__builtin_va_start"
-		|	"__builtin_va_arg"
 		|	"__builtin_va_end"
 		|	"__builtin_va_copy"
 		|	"__builtin_alloca"
@@ -1027,6 +1026,12 @@ unary_expression(c_value *val):
 		|	"__builtin_nanf"
 		)
 		"(" builtin_parameters(val, name) ")"
+	|	"__builtin_va_arg"
+		"("
+		assignment_expression(&v)
+		","
+		type_name(&t)                                      {c_do_builtin_va_arg(val, &v, t);}
+		")"
 	)
 	(                                                      {c_value dim = {0};}
 		"[" expression(&dim) "]"                           {c_do_array_dim(val, &dim);}
