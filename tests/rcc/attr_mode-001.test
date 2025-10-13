@@ -1,0 +1,18 @@
+--TEST--
+__attribute__(__mode__) 001:
+--ARGS--
+--run
+--CODE--
+int printf(const char *, ...);
+int main() {
+	int i1 __attribute__((mode(QI))), i2 __attribute__((mode(HI))),
+		i3 __attribute__((mode(SI))), i4 __attribute__((mode(DI))),
+		i5 __attribute__((mode(byte)));
+	float f1 __attribute__((mode(SF))), f2 __attribute__((mode(DF)));
+	printf("%d %d %d %d %d %d %d\n",
+		(int)sizeof(i1), (int)sizeof(i2), (int)sizeof(i3), (int)sizeof(i4),
+		(int)sizeof(i5), (int)sizeof(f1), (int)sizeof(f2));
+	return 0;
+}
+--EXPECT--
+1 2 4 8 1 4 8

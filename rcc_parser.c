@@ -716,7 +716,7 @@ static yy_sym parse_attributes(yy_sym sym, c_dcl *d) {
 static yy_sym parse_attrib(yy_sym sym, c_dcl *d) {
 	c_name name = sym;
 	c_value v = {0};
-	if (sym == YY_ALIGNED || sym == YY___ALIGNED__ || sym == YY_ALWAYS_INLINE || sym == YY___ALWAYS_INLINE__ || sym == YY_CDECL || sym == YY___CDECL__ || sym == YY_COLD || sym == YY___COLD__ || sym == YY_CONST || sym == YY___CONST__ || sym == YY_DEPRECATED || sym == YY___DEPRECATED__ || sym == YY_FALLTHROUGH || sym == YY___FALLTHROUGH__ || sym == YY_FASTCALL || sym == YY___FASTCALL__ || sym == YY_GCC_STRUCT || sym == YY___GCC_STRUCT__ || sym == YY_HOT || sym == YY___HOT__ || sym == YY_LEAF || sym == YY___LEAF__ || sym == YY_MS_STRUCT || sym == YY___MS_STRUCT__ || sym == YY_MUSTTAIL || sym == YY___MUSTTAIL__ || sym == YY_NOINLINE || sym == YY___NOINLINE__ || sym == YY_NORETURN || sym == YY___NORETURN__ || sym == YY_NOTHROW || sym == YY___NOTHROW__ || sym == YY_PACKED || sym == YY___PACKED__ || sym == YY_PURE || sym == YY___PURE__ || sym == YY_UNUSED || sym == YY___UNUSED__ || sym == YY_VECTOR_SIZE || sym == YY___VECTOR_SIZE__ || C_IS_ID(sym)) {
+	if (sym == YY_ALIGNED || sym == YY___ALIGNED__ || sym == YY_ALWAYS_INLINE || sym == YY___ALWAYS_INLINE__ || sym == YY_CDECL || sym == YY___CDECL__ || sym == YY_COLD || sym == YY___COLD__ || sym == YY_CONST || sym == YY___CONST__ || sym == YY_DEPRECATED || sym == YY___DEPRECATED__ || sym == YY_FALLTHROUGH || sym == YY___FALLTHROUGH__ || sym == YY_FASTCALL || sym == YY___FASTCALL__ || sym == YY_GCC_STRUCT || sym == YY___GCC_STRUCT__ || sym == YY_HOT || sym == YY___HOT__ || sym == YY_LEAF || sym == YY___LEAF__ || sym == YY_MODE || sym == YY___MODE__ || sym == YY_MS_STRUCT || sym == YY___MS_STRUCT__ || sym == YY_MUSTTAIL || sym == YY___MUSTTAIL__ || sym == YY_NOINLINE || sym == YY___NOINLINE__ || sym == YY_NORETURN || sym == YY___NORETURN__ || sym == YY_NOTHROW || sym == YY___NOTHROW__ || sym == YY_PACKED || sym == YY___PACKED__ || sym == YY_PURE || sym == YY___PURE__ || sym == YY_UNUSED || sym == YY___UNUSED__ || sym == YY_VECTOR_SIZE || sym == YY___VECTOR_SIZE__ || C_IS_ID(sym)) {
 		if (sym == YY_ALIGNED || sym == YY___ALIGNED__) {
 			sym = get_sym();
 			if (sym == YY__LPAREN) {
@@ -766,6 +766,44 @@ static yy_sym parse_attrib(yy_sym sym, c_dcl *d) {
 		} else if (sym == YY_LEAF || sym == YY___LEAF__) {
 			sym = get_sym();
 			d->attr |= C_ATTR_LEAF;
+		} else if (sym == YY_MODE || sym == YY___MODE__) {
+			sym = get_sym();
+			if (sym != YY__LPAREN) {
+				yy_error_sym("'(' expected, got", sym);
+			}
+			sym = get_sym();
+			c_name mode;
+			if (sym == YY_QI || sym == YY___QI__ || sym == YY_BYTE || sym == YY___BYTE__) {
+				sym = get_sym();
+				d->flags = (d->flags & ~C_TYPE_SPEC_ANY_MODE) | C_TYPE_SPEC_CHAR;
+			} else if (sym == YY_HI || sym == YY___HI__) {
+				sym = get_sym();
+				d->flags = (d->flags & ~C_TYPE_SPEC_ANY_MODE) | C_TYPE_SPEC_SHORT;
+			} else if (sym == YY_SI || sym == YY___SI__) {
+				sym = get_sym();
+				d->flags = (d->flags & ~C_TYPE_SPEC_ANY_MODE) | C_TYPE_SPEC_INT;
+			} else if (sym == YY_WORD || sym == YY___WORD__) {
+				sym = get_sym();
+				d->flags = (d->flags & ~C_TYPE_SPEC_ANY_MODE) | C_TYPE_SPEC_LONG;
+			} else if (sym == YY_DI || sym == YY___DI__) {
+				sym = get_sym();
+				d->flags = (d->flags & ~C_TYPE_SPEC_ANY_MODE) | C_TYPE_SPEC_INT64;
+			} else if (sym == YY_SF || sym == YY___SF__) {
+				sym = get_sym();
+				d->flags = (d->flags & ~C_TYPE_SPEC_ANY_MODE) | C_TYPE_SPEC_FLOAT;
+			} else if (sym == YY_DF || sym == YY___DF__) {
+				sym = get_sym();
+				d->flags = (d->flags & ~C_TYPE_SPEC_ANY_MODE) | C_TYPE_SPEC_DOUBLE;
+			} else if (C_IS_ID(sym)) {
+				sym = parse_ID(sym, &mode);
+				yy_error_fmt("unsupported attribute \"%s(%s)\"", yy_sym2str(name), yy_sym2str(mode));
+			} else {
+				yy_error_sym("unexpected", sym);
+			}
+			if (sym != YY__RPAREN) {
+				yy_error_sym("')' expected, got", sym);
+			}
+			sym = get_sym();
 		} else if (sym == YY_MS_STRUCT || sym == YY___MS_STRUCT__) {
 			sym = get_sym();
 			d->attr |= C_ATTR_MS_STRUCT;
@@ -800,7 +838,7 @@ static yy_sym parse_attrib(yy_sym sym, c_dcl *d) {
 				}
 				sym = get_sym();
 			}
-			yy_error_fmt("unsupported attribure \"%s\"", yy_sym2str(name));
+			yy_error_fmt("unsupported attribute \"%s\"", yy_sym2str(name));
 		} else {
 			sym = parse_ID(sym, &name);
 			sym = c_gcc_attribute(d, name, sym);

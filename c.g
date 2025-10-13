@@ -382,7 +382,7 @@ function_specifier(c_dcl *d):
 alignment_specifier(c_dcl *d):                             {c_value v = {0};}
 	"_Alignas"                                             {if ((d->attr & C_ATTR_ALIGN_MASK) != 0) yy_warning("multiple alignments");}
 	"("
-	(   ?{!C_IS_ID(sym) || is_typedef_name(sym)}          {const c_type *t;}
+	(   ?{!C_IS_ID(sym) || is_typedef_name(sym)}           {const c_type *t;}
 		type_name(&t)                                      {d->attr |= t->attr & C_ATTR_ALIGN_MASK;}
 	|	constant_expression(&v)                            {c_alignas_expr(d, &v);}
 	)
@@ -416,6 +416,18 @@ attrib(c_dcl *d):                                          {c_name name = sym;}
 	|	("gcc_struct"|"__gcc_struct__")                    {d->attr |= C_ATTR_GCC_STRUCT;}
 	|	("hot"|"__hot__")                                  {d->attr |= C_ATTR_HOT;}
 	|	("leaf"|"__leaf__")                                {d->attr |= C_ATTR_LEAF;}
+	|	("mode"|"__mode__")
+		"("                                                {c_name mode;}
+		(	("QI"|"__QI__"|"byte"|"__byte__")              {d->flags = (d->flags & ~C_TYPE_SPEC_ANY_MODE) | C_TYPE_SPEC_CHAR;}
+		|	("HI"|"__HI__")                                {d->flags = (d->flags & ~C_TYPE_SPEC_ANY_MODE) | C_TYPE_SPEC_SHORT;}
+		|	("SI"|"__SI__")                                {d->flags = (d->flags & ~C_TYPE_SPEC_ANY_MODE) | C_TYPE_SPEC_INT;}
+		|	("word"|"__word__")                            {d->flags = (d->flags & ~C_TYPE_SPEC_ANY_MODE) | C_TYPE_SPEC_LONG;}
+		|	("DI"|"__DI__")                                {d->flags = (d->flags & ~C_TYPE_SPEC_ANY_MODE) | C_TYPE_SPEC_INT64;}
+		|	("SF"|"__SF__")                                {d->flags = (d->flags & ~C_TYPE_SPEC_ANY_MODE) | C_TYPE_SPEC_FLOAT;}
+		|	("DF"|"__DF__")                                {d->flags = (d->flags & ~C_TYPE_SPEC_ANY_MODE) | C_TYPE_SPEC_DOUBLE;}
+		|	ID(&mode)                                      {yy_error_fmt("unsupported attribute \"%s(%s)\"", yy_sym2str(name), yy_sym2str(mode));}
+		)
+		")"
 	|	("ms_struct"|"__ms_struct__")                      {d->attr |= C_ATTR_MS_STRUCT;}
 	|	("musttail"|"__musttail__")                        {d->attr |= C_ATTR_MUSTTAIL;}
 	|	("noinline"|"__noinline__")                        {d->attr |= C_ATTR_NOINLINE;}
@@ -425,7 +437,7 @@ attrib(c_dcl *d):                                          {c_name name = sym;}
 	|	("pure"|"__pure__")                                {d->attr |= C_ATTR_PURE;}
 	|	("unused"|"__unused__")                            {d->attr |= C_ATTR_UNUSED;}
 	|	("vector_size"|"__vector_size__")
-		( "(" constant_expression(&v) ")" )?               {yy_error_fmt("unsupported attribure \"%s\"", yy_sym2str(name));}
+		( "(" constant_expression(&v) ")" )?               {yy_error_fmt("unsupported attribute \"%s\"", yy_sym2str(name));}
 	|	ID(&name)                                          {sym = c_gcc_attribute(d, name, sym);}
 	)?
 ;

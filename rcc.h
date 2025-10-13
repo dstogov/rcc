@@ -319,6 +319,22 @@
 	_("__weak__",                      YY___WEAK__)             /*fv */\
 	_("weak_ref",                      YY_WEAK_REF)             /*f  */\
 	_("__weak_ref__",                  YY___WEAK_REF__)         /*f  */\
+	_("byte",                          YY_BYTE)                        \
+	_("__byte__",                      YY___BYTE__)                    \
+	_("word",                          YY_WORD)                        \
+	_("__word__",                      YY___WORD__)                    \
+	_("QI",                            YY_QI)                          \
+	_("__QI__",                        YY___QI__)                      \
+	_("HI",                            YY_HI)                          \
+	_("__HI__",                        YY___HI__)                      \
+	_("SI",                            YY_SI)                          \
+	_("__SI__",                        YY___SI__)                      \
+	_("DI",                            YY_DI)                          \
+	_("__DI__",                        YY___DI__)                      \
+	_("SF",                            YY_SF)                          \
+	_("__SF__",                        YY___SF__)                      \
+	_("DF",                            YY_DF)                          \
+	_("__DF__",                        YY___DF__)                      \
 	/* builtin functions */                                            \
 	_("abs",                           YY_ABS)                         \
 	_("labs",                          YY_LABS)                        \
@@ -506,6 +522,13 @@ void pp_list_grow(pp_list *l, uint32_t size);
 #define C_TYPE_SPEC_NAME         (1<<16)
 #define C_TYPE_SPEC_TYPE         (1<<17)
 
+#ifdef IR_64
+# define C_TYPE_SPEC_INT64       C_TYPE_SPEC_LONG
+#else
+# define C_TYPE_SPEC_INT64       C_TYPE_SPEC_LONG_LONG
+#endif
+
+#define C_TYPE_SPEC_ANY_MODE     (C_TYPE_SPEC_SIGNED-2)
 #define C_TYPE_SPEC_ANY          ((1<<18)-1)
 
 #define C_DCL_TYPEDEF            (1<<18)
