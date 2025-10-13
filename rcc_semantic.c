@@ -851,6 +851,8 @@ static void c_validate_redeclaration(c_name name, c_dcl *d, c_sym *sym)
 			yy_error_fmt("incompatible redeclaration of \"%s\"", yy_sym2str(name));
 		} else if (!c_compatible_types(d->type, sym->value.type, 0, 1)) {
 			yy_error_fmt("incompatible redeclaration of \"%s\"", yy_sym2str(name));
+		} else if ((d->flags & C_DCL_DEFINITION) && sym->is_implemented) {
+			yy_error_fmt("redefinition of \"%s\"", yy_sym2str(name));
 		} else if ((d->flags & C_DCL_STATIC) && sym->linkage != C_LINK_INTERNAL) {
 			yy_error_fmt("static declaration of \"%s\" follows non-static declaration", yy_sym2str(name));
 		} else {
@@ -860,9 +862,6 @@ static void c_validate_redeclaration(c_name name, c_dcl *d, c_sym *sym)
 				t->func.num_params = d->type->func.num_params;
 				t->func.params = d->type->func.params;
 			}
-		}
-		if ((d->flags & C_DCL_DEFINITION) && sym->is_implemented) {
-			yy_error_fmt("redefinition of \"%s\"", yy_sym2str(name));
 		}
 	} else {
 		if (sym->kind != C_SYM_VAR || !c_compatible_types(d->type, sym->value.type, 0, 0)) {
