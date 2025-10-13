@@ -522,7 +522,7 @@ bool c_linker_fix_reloc(c_sym *obj, size_t obj_offset, c_value *val)
 	ir_insn *addr_insn;
 	size_t offset = 0;
 
-	if ((val->type->kind == C_TYPE_STRUCT || val->type->kind == C_TYPE_UNION)
+	if ((val->type->kind == C_TYPE_STRUCT || val->type->kind == C_TYPE_UNION || val->type->kind == C_TYPE_ARRAY)
 	 && IR_IS_CONST_REF(val->u.ref)
 	 && val->u.val.ptr) {
 		/* Use a copy of struct/union value */

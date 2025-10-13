@@ -82,7 +82,7 @@ const c_type c_type_ptr = {
 
        ir_arena   *c_arena;
        bool        c_dead_code = 0;
-
+       bool        c_static_data = 0;
        ir_ctx     *active_ctx = NULL;
        ir_ctx     *global_ctx = NULL;
 
@@ -6340,6 +6340,7 @@ repeat:
 		case C_TYPE_FLOAT:    memcpy(addr, &val->u.val.f, type->size); break;
 		case C_TYPE_DOUBLE:   memcpy(addr, &val->u.val.d, type->size); break;
 		case C_TYPE_POINTER:  memcpy(addr, &val->u.val.addr, type->size); break;
+		case C_TYPE_ARRAY:
 		case C_TYPE_STRUCT:
 		case C_TYPE_UNION:    memcpy(addr, val->u.val.ptr, type->size); break;
 		case C_TYPE_ENUM:     kind = type->enumeration.kind; goto repeat;
@@ -6432,7 +6433,28 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 			}
 			return;
 		}
+
+		const c_type *val_type = val->type;
 		c_do_check_cvt(obj->value.type, val, -2);
+		if ((obj->value.type->attr & C_ATTR_FLEXIBLE) && !(val_type->attr & C_ATTR_FLEXIBLE)) {
+			size_t size = val_type->size;
+
+			if (obj->value.type->kind == C_TYPE_ARRAY) {
+				/* Convert "flexible" array to regular */
+				c_type *type = ir_arena_alloc(&c_arena, sizeof(c_type));
+
+				*type = *obj->value.type;
+				if (active_scope) type->flags |= C_TYPE_GLOBAL;
+				type->array.length = size / type->array.type->size;
+				type->size = size;
+				type->attr &= ~C_ATTR_FLEXIBLE;
+				val->type = obj->value.type = type;
+			}
+			if (!c_value_is_const(&obj->value)
+			 && (!c_value_is_ref(&obj->value) || !IR_IS_CONST_REF(obj->value.u.ref))) {
+				c_do_init_patch_flexible_alloca(obj->value.u.ref, size);
+			}
+		}
 	}
 	if (obj->linkage == C_LINK_EXTERNAL || obj->linkage == C_LINK_INTERNAL) {
 		IR_ASSERT((c_value_is_const(&obj->value)
@@ -6895,7 +6917,7 @@ void c_do_init_expr_start(c_sym *obj, const c_type *type)
 	}
 	memset(obj, 0, sizeof(c_sym));
 	obj->kind = C_SYM_VAR;
-	if (active_func) {
+	if (active_func && !c_static_data) {
 		ir_ref size = ir_const_size_t(active_ctx, type->size);
 		ir_ref addr = ir_ALLOCA(size);
 		ir_memzero(active_ctx, addr, size);
@@ -6932,7 +6954,7 @@ void c_do_init_expr_end(c_value *v, c_sym *obj, size_t size)
 	c_do_init_end(obj, size);
 	if (c_value_is_const(&obj->value)) {
 		c_value_set_const(v, obj->value.type, c_type2ir(obj->value.type), obj->value.u.val);
-	} else if (!active_scope
+	} else if ((!active_scope || c_static_data)
 	 && obj->value.type->kind != C_TYPE_ARRAY
 	 && obj->value.type->kind != C_TYPE_STRUCT
 	 && obj->value.type->kind != C_TYPE_UNION) {
@@ -7231,6 +7253,7 @@ yy_sym c_get_current_func_name(void)
 void c_do_compile_start(void)
 {
 	c_dead_code = 0;
+	c_static_data = 0;
 
 	active_func = NULL;
 	active_func_scope = NULL;

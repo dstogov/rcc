@@ -651,11 +651,13 @@ type_name(const c_type **t):                               {c_dcl d = {0};}
 	specifier_qualifier_list(&d) abstract_declarator(&d)   {*t = c_resolve_type(&d);}
 ;
 
-initializer(c_sym *obj):                                   {c_value v = {0};}
+initializer(c_sym *obj):                                   {c_static_data = (obj && obj->linkage);}
+	(                                                      {c_value v = {0};}
 		assignment_expression(&v)                          {c_do_init_obj(obj, &v);}
 	|	                                                   {size_t size = obj->value.type->size;}
 		initializer_contents(obj, obj->value.type, 0, &size)
 		                                                   {c_do_init_end(obj, size);}
+	)                                                      {c_static_data = 0;}
 ;
 
 nested_initializer(c_sym *obj, c_init *init, bool b, size_t *size):
