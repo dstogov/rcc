@@ -254,7 +254,7 @@ void pp_list_grow(pp_list *l, uint32_t size)
 }
 
 /* C Preprocessor */
-static void pp_debug_tokens(FILE *f, yy_sym *tokens);
+static void pp_debug_tokens(FILE *f, yy_sym *tokens, const pp_macro *macro);
 static void pp_debug_include(const char *name, size_t len, bool is_user);
 static void pp_debug_macro(yy_sym sym, yy_sym name, pp_macro *macro);
 static void pp_print_pragma(yy_sym sym);
@@ -346,7 +346,7 @@ static void pp_debug_print_context(void)
 	fprintf(stderr, "%*s  Context: ", pp_recursion_level * 2, "");
 	for (i = pp_subst_level; i > 0;) {
 		i--;
-		pp_debug_tokens(stderr, pp_subst_stack[i].tokens);
+		pp_debug_tokens(stderr, pp_subst_stack[i].tokens, pp_subst_stack[i].macro);
 		fprintf(stderr, "<EOF>");
 	}
 	fprintf(stderr, "\n");
@@ -361,7 +361,7 @@ static void pp_debug_print_args(pp_macro *macro, pp_arg *args)
 	for (i = 0; i < macro->num_args; i++) {
 		if (!first) fprintf(stderr, ",");
 		first = 0;
-		pp_debug_tokens(stderr, args[i].tokens);
+		pp_debug_tokens(stderr, args[i].tokens, NULL);
 	}
 	fprintf(stderr, ")\n");
 }
@@ -369,7 +369,7 @@ static void pp_debug_print_args(pp_macro *macro, pp_arg *args)
 static void pp_debug_print_list(const char *hdr, yy_sym *tokens)
 {
 	fprintf(stderr, "%*s  %s: ", pp_recursion_level * 2, "", hdr);
-	pp_debug_tokens(stderr, tokens);
+	pp_debug_tokens(stderr, tokens, NULL);
 	fprintf(stderr, "\n");
 }
 #endif
@@ -1766,7 +1766,7 @@ next:
 
 	if (pp_debug) {
 		pp_debug_fprintf(stderr, "Evaluate expression: ");
-		pp_debug_tokens(stderr, (yy_sym*)tokens.syms);
+		pp_debug_tokens(stderr, (yy_sym*)tokens.syms, NULL);
 		pp_debug_fprintf(stderr, "\n");
 	}
 
@@ -2664,7 +2664,7 @@ static void pp_debug_include(const char *name, size_t len, bool is_user)
 	out_level++;
 }
 
-static void pp_debug_tokens(FILE *f, yy_sym *tokens)
+static void pp_debug_tokens(FILE *f, yy_sym *tokens, const pp_macro *macro)
 {
 	yy_sym sym, *p = tokens;
 	yy_sym prev = YY_WS;
@@ -2687,7 +2687,14 @@ static void pp_debug_tokens(FILE *f, yy_sym *tokens)
 			size_t len;
 			const char *str;
 
-			if (sym & PP_NOSUBST) {
+			if (macro) {
+				if (sym & PP_MACRO_ARG) {
+					if (sym & PP_STRINGIZE) {
+						fputc('#', f);
+					}
+					sym = macro->tokens[sym & ~(PP_MACRO_ARG|PP_STRINGIZE)];
+				}
+			} else if (sym & PP_NOSUBST) {
 				fwrite("<NOSUBST>", sizeof("<NOSUBST>")-1, 1, f);
 				sym &= ~PP_NOSUBST;
 			}
@@ -2736,7 +2743,7 @@ static void pp_debug_macro(yy_sym sym, yy_sym name, pp_macro *macro)
 			fputc(')', f);
 		}
 		if (!(macro->flags & PP_MACRO_EMPTY)) {
-			pp_debug_tokens(f, macro->tokens + macro->num_args);
+			pp_debug_tokens(f, macro->tokens + macro->num_args, macro);
 		}
 		fputc('\n', f);
 	} else if (sym == YY_UNDEF) {
