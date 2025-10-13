@@ -459,8 +459,10 @@ void c_resolve_sym_name(c_value *res, c_name name, yy_sym sym)
 				}
 			} else if (s->value.type->kind != C_TYPE_ARRAY) {
 				c_value_set_lval(res, s->value.type, c_type2ir(s->value.type), ref);
+				res->u.val.ptr = c_value_is_const(&s->value) ? s->value.u.val.ptr : NULL;
 			} else {
 				c_value_set_rval(res, s->value.type, c_type2ir(s->value.type), ref);
+				res->u.val.ptr = NULL;
 			}
 		} else {
 			IR_ASSERT(0);
@@ -2671,6 +2673,35 @@ void c_value_rval(c_value *val)
 			val->u.ref = ir_VLOAD(val->u.type, val->u.ref);
 		} else if (val->type->kind != C_TYPE_STRUCT && val->type->kind != C_TYPE_UNION) {
 			if (!C_IS_BIT_FIELD(val->u.proto)) {
+				if ((val->type->attr & C_ATTR_CONST)
+				 && IR_IS_CONST_REF(val->u.ref)
+				 && active_ctx->ir_base[val->u.ref].op == IR_SYM
+				 && (C_IS_TYPE_INT(val->type) || C_IS_TYPE_FP(val->type))
+				 && val->u.val.ptr) {
+					const void *p = val->u.val.ptr;
+					ir_type t = c_type2ir(val->type);
+					ir_val v;
+
+					v.u64 = 0;
+					switch (t) {
+						case IR_BOOL:	v.b    = *(bool*)p;      break;
+						case IR_U8:     v.u8   = *(uint8_t*)p;   break;
+						case IR_U16:    v.u16  = *(uint16_t*)p;  break;
+						case IR_U32:    v.u32  = *(uint32_t*)p;  break;
+						case IR_U64:    v.u64  = *(uint64_t*)p;  break;
+						case IR_ADDR:   v.addr = *(uintptr_t*)p; break;
+						case IR_CHAR:   v.i64  = *(char*)p;      break;
+						case IR_I8:     v.i64  = *(int8_t*)p;    break;
+						case IR_I16:    v.i64  = *(int16_t*)p;   break;
+						case IR_I32:    v.i64  = *(int32_t*)p;   break;
+						case IR_I64:    v.i64  = *(int64_t*)p;   break;
+						case IR_DOUBLE: v.d    = *(double*)p;    break;
+						case IR_FLOAT:  v.f    = *(float*)p;     break;
+						default: IR_ASSERT(0);
+					}
+					c_value_set_const(val, val->type, t, v);
+					return;
+				}
 				val->u.ref = ir_LOAD(val->u.type, val->u.ref);
 			} else if (!C_IS_BIT_FIELD_PACKED(val->u.proto)) {
 				c_do_load_bit_field(val, C_BIT_FIELD_START(val->u.proto), C_BIT_FIELD_SIZE(val->u.proto));
@@ -3259,6 +3290,7 @@ check_qualifiers:
 	} else {
 		goto incompatible;
 	}
+	c_value_rval(val);
 	c_do_cvt(type, c_type2ir(type), val);
 }
 
