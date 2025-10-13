@@ -908,7 +908,9 @@ void c_declare_func_param_type(const c_type *type, c_name name, c_dcl *param);
 void c_declare_local_label(c_name name);
 void c_empty_declaration(c_dcl *d);
 
-void c_gcc_attribute(c_dcl *dcl, c_name name, c_value *v);
+void c_gcc_attribute_aligned(c_dcl *d, c_name attr, c_value *v);
+void c_gcc_attribute_packed(c_dcl *d, c_name attr);
+yy_sym c_gcc_attribute(c_dcl *dcl, c_name attr, yy_sym sym);
 
 void c_sizeof_type(c_value *res, const c_type *type);
 void c_sizeof_expr(c_value *res, yy_sym op, c_value *expr, ir_ref old_control);

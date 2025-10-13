@@ -401,11 +401,32 @@ attributes(c_dcl *d):
 	)++
 ;
 
-attrib(c_dcl *d):
-	(                                                      {c_name name = sym;}
-	                                                       {c_value v = {0};}
-		(ID(&name)|"const"|"__const__")
-		("(" expression(&v) ")")?                          {c_gcc_attribute(d, name, &v);}
+attrib(c_dcl *d):                                          {c_name name = sym;}
+                                                           {c_value v = {0};}
+	(	("aligned"|"__aligned__")
+		( "(" constant_expression(&v) ")" )?               {c_gcc_attribute_aligned(d, name, &v);}
+	|	("always_inline"|"__always_inline__")              {d->attr |= C_ATTR_ALWAYS_INLINE;}
+	|	("cdecl"|"__cdecl__")                              {d->attr |= C_ATTR_CDECL;}
+	|	("cold"|"__cold__")                                {d->attr |= C_ATTR_COLD;}
+	|	("const"|"__const__")                              {d->attr |= C_ATTR_CONST;}
+	|	("deprecated"|"__deprecated__")                    {d->attr |= C_ATTR_DEPRECATED;}
+		( "(" constant_expression(&v) ")" )?
+	|	("fallthrough"|"__fallthrough__")                  {d->attr |= C_ATTR_FALLTHROUGH;}
+	|	("fastcall"|"__fastcall__")                        {d->attr |= C_ATTR_FASTCALL;}
+	|	("gcc_struct"|"__gcc_struct__")                    {d->attr |= C_ATTR_GCC_STRUCT;}
+	|	("hot"|"__hot__")                                  {d->attr |= C_ATTR_HOT;}
+	|	("leaf"|"__leaf__")                                {d->attr |= C_ATTR_LEAF;}
+	|	("ms_struct"|"__ms_struct__")                      {d->attr |= C_ATTR_MS_STRUCT;}
+	|	("musttail"|"__musttail__")                        {d->attr |= C_ATTR_MUSTTAIL;}
+	|	("noinline"|"__noinline__")                        {d->attr |= C_ATTR_NOINLINE;}
+	|	("noreturn"|"__noreturn__")                        {if (!(d->flags & C_DCL_TYPEDEF) || !d->type) d->attr |= C_ATTR_NORETURN;}
+	|	("nothrow"|"__nothrow__")                          {d->attr |= C_ATTR_NOTHROW;}
+	|	("packed"|"__packed__")                            {c_gcc_attribute_packed(d, name);}
+	|	("pure"|"__pure__")                                {d->attr |= C_ATTR_PURE;}
+	|	("unused"|"__unused__")                            {d->attr |= C_ATTR_UNUSED;}
+	|	("vector_size"|"__vector_size__")
+		( "(" constant_expression(&v) ")" )?               {yy_error_fmt("unsupported attribure \"%s\"", yy_sym2str(name));}
+	|	ID(&name)                                          {sym = c_gcc_attribute(d, name, sym);}
 	)?
 ;
 

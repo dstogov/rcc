@@ -2243,129 +2243,55 @@ void c_make_nested_type(c_dcl *d, c_dcl *nested)
 	}
 }
 
-void c_gcc_attribute(c_dcl *d, c_name attr, c_value *val)
+void c_gcc_attribute_aligned(c_dcl *d, c_name attr, c_value *val)
 {
-	if (!c_value_is_set(val)) val = NULL;
-	switch (attr) {
-		case YY_ALIGNED:
-		case YY___ALIGNED__:
-			if (!val) {
-				// TODO: ???
-			} else if (!c_value_is_const(val) || !C_IS_TYPE_INT(val->type)) {
-				yy_warning("attribute \"aligned\" value must be an integer constant");
-			} else {
-				if (!c_valid_alignment(val)) {
-					yy_warning("attribute \"aligned\" value must be a power of two");
-				} else {
-					if ((d->attr & C_ATTR_ALIGN_MASK) != 0) yy_warning("multiple alignments");
-					d->attr |= c_align2attr(val->u.val.u64);
-				}
-			}
-			break;
-		case YY_PACKED:
-		case YY___PACKED__:
-			if (val) yy_warning_fmt("attribute \"%s\" with unused value", yy_sym2str(attr));
-			if ((d->flags & (C_TYPE_SPEC_ENUM|C_TYPE_SPEC_STRUCT|C_TYPE_SPEC_UNION))
-			 || ((d->flags & C_TYPE_SPEC_ANY) == C_TYPE_SPEC_TYPE
-			  && (d->type->kind == C_TYPE_ENUM || d->type->kind == C_TYPE_STRUCT || d->type->kind == C_TYPE_UNION)
-			  && (d->type->flags & C_TYPE_INCOMPLETE))) {
-				d->attr |= C_ATTR_PACKED;
-			} else {
-				yy_warning_fmt("\"%s\" attribure ignored", yy_sym2str(attr));
-			}
-			break;
-		case YY_GCC_STRUCT:
-		case YY___GCC_STRUCT__:
-			if (val) yy_warning_fmt("attribute \"%s\" with unused value", yy_sym2str(attr));
-			d->attr |= C_ATTR_GCC_STRUCT;
-			break;
-		case YY_MS_STRUCT:
-		case YY___MS_STRUCT__:
-			if (val) yy_warning_fmt("attribute \"%s\" with unused value", yy_sym2str(attr));
-			d->attr |= C_ATTR_MS_STRUCT;
-			break;
-		case YY_CONST:
-		case YY___CONST__:
-			if (val) yy_warning_fmt("attribute \"%s\" with unused value", yy_sym2str(attr));
-			d->attr |= C_ATTR_CONST;
-			break;
-		case YY_ALWAYS_INLINE:
-		case YY___ALWAYS_INLINE__:
-			if (val) yy_warning_fmt("attribute \"%s\" with unused value", yy_sym2str(attr));
-			d->attr |= C_ATTR_ALWAYS_INLINE;
-			break;
-		case YY_NOINLINE:
-		case YY___NOINLINE__:
-			if (val) yy_warning_fmt("attribute \"%s\" with unused value", yy_sym2str(attr));
-			d->attr |= C_ATTR_NOINLINE;
-			break;
-		case YY_NORETURN:
-		case YY___NORETURN__:
-			if (val) yy_warning_fmt("attribute \"%s\" with unused value", yy_sym2str(attr));
-			if (!(d->flags & C_DCL_TYPEDEF) || !d->type) d->attr |= C_ATTR_NORETURN;
-			break;
-		case YY_NOTHROW:
-		case YY___NOTHROW__:
-			if (val) yy_warning_fmt("attribute \"%s\" with unused value", yy_sym2str(attr));
-			d->attr |= C_ATTR_NOTHROW;
-			break;
-		case YY_LEAF:
-		case YY___LEAF__:
-			if (val) yy_warning_fmt("attribute \"%s\" with unused value", yy_sym2str(attr));
-			d->attr |= C_ATTR_LEAF;
-			break;
-		case YY_PURE:
-		case YY___PURE__:
-			if (val) yy_warning_fmt("attribute \"%s\" with unused value", yy_sym2str(attr));
-			d->attr |= C_ATTR_PURE;
-			break;
-		case YY_HOT:
-		case YY___HOT__:
-			if (val) yy_warning_fmt("attribute \"%s\" with unused value", yy_sym2str(attr));
-			d->attr |= C_ATTR_HOT;
-			break;
-		case YY_COLD:
-		case YY___COLD__:
-			if (val) yy_warning_fmt("attribute \"%s\" with unused value", yy_sym2str(attr));
-			d->attr |= C_ATTR_COLD;
-			break;
-		case YY_DEPRECATED:
-		case YY___DEPRECATED__:
-			if (val) yy_warning_fmt("attribute \"%s\" with unused value", yy_sym2str(attr));
-			d->attr |= C_ATTR_DEPRECATED;
-			break;
-		/* Statement Attributes */
-		case YY_FALLTHROUGH:
-		case YY___FALLTHROUGH__:
-			if (val) yy_warning_fmt("attribute \"%s\" with unused value", yy_sym2str(attr));
-			d->attr |= C_ATTR_FALLTHROUGH;
-			break;
-		case YY_MUSTTAIL:
-		case YY___MUSTTAIL__:
-			if (val) yy_warning_fmt("attribute \"%s\" with unused value", yy_sym2str(attr));
-			d->attr |= C_ATTR_MUSTTAIL;
-			break;
-		case YY_CDECL:
-		case YY___CDECL__:
-			if (val) yy_warning_fmt("attribute \"%s\" with unused value", yy_sym2str(attr));
-			d->attr |= C_ATTR_CDECL;
-			break;
-		case YY_FASTCALL:
-		case YY___FASTCALL__:
-			if (val) yy_warning_fmt("attribute \"%s\" with unused value", yy_sym2str(attr));
-			d->attr |= C_ATTR_FASTCALL;
-			break;
-		case YY_UNUSED:
-		case YY___UNUSED__:
-			if (val) yy_warning_fmt("attribute \"%s\" with unused value", yy_sym2str(attr));
-			d->attr |= C_ATTR_UNUSED;
-			break;
-		case YY_VECTOR_SIZE:
-		case YY___VECTOR_SIZE__:
-			yy_error_fmt("unsupported attribure \"%s\"", yy_sym2str(attr));
-		default:
-			yy_warning_fmt("unsupported attribure \"%s\"", yy_sym2str(attr));
+	if (!c_value_is_set(val)) {
+		// TODO: ???
+	} else if (!c_value_is_const(val) || !C_IS_TYPE_INT(val->type)) {
+		yy_warning("attribute \"aligned\" value must be an integer constant");
+	} else {
+		if (!c_valid_alignment(val)) {
+			yy_warning("attribute \"aligned\" value must be a power of two");
+		} else {
+			if ((d->attr & C_ATTR_ALIGN_MASK) != 0) yy_warning("multiple alignments");
+			d->attr |= c_align2attr(val->u.val.u64);
+		}
 	}
+}
+
+void c_gcc_attribute_packed(c_dcl *d, c_name attr)
+{
+	if ((d->flags & (C_TYPE_SPEC_ENUM|C_TYPE_SPEC_STRUCT|C_TYPE_SPEC_UNION))
+	 || ((d->flags & C_TYPE_SPEC_ANY) == C_TYPE_SPEC_TYPE
+	  && (d->type->kind == C_TYPE_ENUM || d->type->kind == C_TYPE_STRUCT || d->type->kind == C_TYPE_UNION)
+	  && (d->type->flags & C_TYPE_INCOMPLETE))) {
+		d->attr |= C_ATTR_PACKED;
+	} else {
+		yy_warning_fmt("\"%s\" attribure ignored", yy_sym2str(attr));
+	}
+}
+
+yy_sym c_gcc_attribute(c_dcl *d, c_name attr, yy_sym sym)
+{
+	yy_warning_fmt("unsupported attribure \"%s\"", yy_sym2str(attr));
+
+	if (sym == YY__LPAREN) {
+		int level = 0;
+
+		while (1) {
+			sym = yy_next();
+			if (sym == YY__RPAREN) {
+				if (level == 0) return yy_next();
+				level--;
+			} else if (sym == YY__LPAREN) {
+				level++;
+			} else if (sym == YY_EOF) {
+				yy_error("unexpected <EOF>");
+				return  YY_EOF;
+			}
+		}
+	}
+	return sym;
 }
 
 void c_sizeof_type(c_value *res, const c_type *type)
