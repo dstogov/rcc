@@ -3437,7 +3437,9 @@ void c_do_deref(c_value *v)
 		if (v->type->kind == C_TYPE_FUNC) return;
 		yy_error("invalid type argument of unary \"*\"");
 	} else if (v->type->pointer.type->kind == C_TYPE_VOID) {
-		yy_error("dereferencing \"void *\" pointer");
+		yy_warning("dereferencing \"void *\" pointer");
+		c_value_set_rval(v, &c_type_void, IR_VOID, IR_UNUSED);
+		return;
 	} else if ((v->type->pointer.type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(v->type->pointer.type)) {
 		yy_error_fmt("invalid use of undefined \"%s %s\"",
 			c_type_kind2str(v->type->pointer.type->kind), yy_sym2str(v->type->pointer.type->tag));
