@@ -2125,7 +2125,7 @@ void c_make_func_type(c_dcl *d, c_param *params, int32_t num_params, uint32_t at
 	type->flags = active_scope ? 0 : C_TYPE_GLOBAL;
 	type->size = sizeof(void*);
 	type->attr = d->attr & C_FUNC_TYPE_ATTRS;
-	type->attr |= attr;
+	type->attr |= attr & C_FUNC_TYPE_ATTRS;
 	type->func.ret_type = d->type;
 	type->func.num_params = num_params;
 	type->func.params = params;

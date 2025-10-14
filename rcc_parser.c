@@ -739,7 +739,7 @@ static yy_sym parse_attrib(yy_sym sym, c_dcl *d) {
 			d->attr |= C_ATTR_COLD;
 		} else if (sym == YY_CONST || sym == YY___CONST__) {
 			sym = get_sym();
-			d->attr |= C_ATTR_CONST;
+			d->attr |= C_ATTR_CONST_FUNC;
 		} else if (sym == YY_DEPRECATED || sym == YY___DEPRECATED__) {
 			sym = get_sym();
 			d->attr |= C_ATTR_DEPRECATED;

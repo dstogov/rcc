@@ -408,7 +408,7 @@ attrib(c_dcl *d):                                          {c_name name = sym;}
 	|	("always_inline"|"__always_inline__")              {d->attr |= C_ATTR_ALWAYS_INLINE;}
 	|	("cdecl"|"__cdecl__")                              {d->attr |= C_ATTR_CDECL;}
 	|	("cold"|"__cold__")                                {d->attr |= C_ATTR_COLD;}
-	|	("const"|"__const__")                              {d->attr |= C_ATTR_CONST;}
+	|	("const"|"__const__")                              {d->attr |= C_ATTR_CONST_FUNC;}
 	|	("deprecated"|"__deprecated__")                    {d->attr |= C_ATTR_DEPRECATED;}
 		( "(" constant_expression(&v) ")" )?
 	|	("fallthrough"|"__fallthrough__")                  {d->attr |= C_ATTR_FALLTHROUGH;}
