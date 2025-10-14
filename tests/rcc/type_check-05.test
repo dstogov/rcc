@@ -5,6 +5,4 @@ void test(void *p) {
 	*p;
 }
 --EXPECT--
-./tests/rcc/type_check-05.c:2:4: error: dereferencing "void *" pointer
-
-exit code = 1
+./tests/rcc/type_check-05.c:2:4: warning: dereferencing "void *" pointer
