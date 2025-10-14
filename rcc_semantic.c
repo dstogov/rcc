@@ -80,6 +80,21 @@ const c_type c_type_ptr = {
 	.pointer.type = &c_type_void,
 };
 
+const c_type c_type_const_void = {
+	.kind = C_TYPE_VOID,
+	.flags = C_TYPE_GLOBAL,
+	.size = 0,
+	.attr = 1 | C_ATTR_CONST
+};
+
+const c_type c_type_const_ptr = {
+	.kind = C_TYPE_POINTER,
+	.flags = C_TYPE_GLOBAL,
+	.size = sizeof(void*),
+	.attr = 3,
+	.pointer.type = &c_type_const_void,
+};
+
        ir_arena   *c_arena;
        bool        c_dead_code = 0;
        bool        c_static_data = 0;
@@ -3802,6 +3817,16 @@ void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 		ir_ref ref;
 
 		if (num_args != 3) yy_error("wrong number of arguments in __builtin_memcpy() call");
+		if ((args[0].type->kind != C_TYPE_POINTER && args[0].type->kind != C_TYPE_ARRAY)
+		 || (args[0].type->attr & C_ATTR_CONST)) {
+			c_do_check_cvt(&c_type_ptr, &args[0], 1);
+		}
+		if (args[1].type->kind != C_TYPE_POINTER && args[1].type->kind != C_TYPE_ARRAY) {
+			c_do_check_cvt(&c_type_const_ptr, &args[1], 2);
+		}
+		if (args[2].type->kind != C_TYPE_SIZE_T) {
+			c_do_check_cvt(&c_type_size_t, &args[2], 3);
+		}
 		ref = ir_CALL_3(IR_ADDR,
 			ir_const_func(active_ctx,
 				ir_strl(active_ctx, "memcpy", sizeof("memcpy")-1),
@@ -3812,43 +3837,139 @@ void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 		ir_ref ref;
 
 		if (num_args != 3) yy_error("wrong number of arguments in __builtin_memset() call");
+		if (args[0].type->kind != C_TYPE_POINTER && args[0].type->kind != C_TYPE_ARRAY) {
+			c_do_check_cvt(&c_type_ptr, &args[0], 1);
+		}
+		if (args[1].type->kind != C_TYPE_I32) {
+			c_do_check_cvt(&c_type_i32, &args[1], 2);
+		}
+		if (args[2].type->kind != C_TYPE_SIZE_T) {
+			c_do_check_cvt(&c_type_size_t, &args[2], 3);
+		}
 		ref = ir_CALL_3(IR_ADDR,
 			ir_const_func(active_ctx,
 				ir_strl(active_ctx, "memset", sizeof("memset")-1),
 				ir_proto_3(active_ctx, 0, IR_ADDR, IR_ADDR, IR_ADDR, IR_SIZE_T)),
 			c_value_ref(&args[0]), c_value_ref(&args[1]), c_value_ref(&args[2]));
 		c_value_set_rval(val, &c_type_ptr, IR_ADDR, ref);
-	} else if (name == YY___BUILTIN_ABS
-	 || name == YY___BUILTIN_LABS
-	 || name == YY___BUILTIN_LLABS
-	 || name == YY___BUILTIN_FABS
-	 || name == YY___BUILTIN_FABSF) {
+	} else if (name == YY___BUILTIN_ABS) {
+		ir_ref ref;
+
 		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
-		if (IR_IS_TYPE_UNSIGNED(args[0].u.type)) {
-			*val = args[0];
-		} else {
-			ir_ref ref = ir_ABS(args[0].u.type, c_value_ref(&args[0]));
-			c_value_set_rval(val, args[0].type, args[0].u.type, ref);
+		if (args[0].type->kind != C_TYPE_I32) {
+			c_do_check_cvt(&c_type_i32, &args[0], 1);
 		}
-	} else if (name == YY___BUILTIN_BSWAP16
-	 || name == YY___BUILTIN_BSWAP32
-	 || name == YY___BUILTIN_BSWAP64) {
+		ref = ir_ABS(args[0].u.type, c_value_ref(&args[0]));
+		c_value_set_rval(val, args[0].type, args[0].u.type, ref);
+	} else if (name == YY___BUILTIN_LABS) {
+		ir_ref ref;
+
 		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (args[0].type->kind != C_TYPE_IL) {
+			c_do_check_cvt(&c_type_il, &args[0], 1);
+		}
+		ref = ir_ABS(args[0].u.type, c_value_ref(&args[0]));
+		c_value_set_rval(val, args[0].type, args[0].u.type, ref);
+	} else if (name == YY___BUILTIN_LLABS) {
+		ir_ref ref;
+
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (args[0].type->kind != C_TYPE_ILL) {
+			c_do_check_cvt(&c_type_ill, &args[0], 1);
+		}
+		ref = ir_ABS(args[0].u.type, c_value_ref(&args[0]));
+		c_value_set_rval(val, args[0].type, args[0].u.type, ref);
+	} else if (name == YY___BUILTIN_FABS) {
+		ir_ref ref;
+
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (args[0].type->kind != C_TYPE_DOUBLE) {
+			c_do_check_cvt(&c_type_double, &args[0], 1);
+		}
+		ref = ir_ABS(args[0].u.type, c_value_ref(&args[0]));
+		c_value_set_rval(val, args[0].type, args[0].u.type, ref);
+	} else if (name == YY___BUILTIN_FABSF) {
+		ir_ref ref;
+
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (args[0].type->kind != C_TYPE_FLOAT) {
+			c_do_check_cvt(&c_type_float, &args[0], 1);
+		}
+		ref = ir_ABS(args[0].u.type, c_value_ref(&args[0]));
+		c_value_set_rval(val, args[0].type, args[0].u.type, ref);
+	} else if (name == YY___BUILTIN_BSWAP16) {
+		ir_val v;
+
+		if (args[0].type->kind != C_TYPE_U16 && args[0].type->kind != C_TYPE_I16) {
+			c_do_check_cvt(&c_type_u16, &args[0], 1);
+		}
+		v.u64 = 8;
+		c_value_set_rval(val, args[0].type, args[0].u.type,
+			ir_ROL(args[0].u.type, c_value_ref(&args[0]), ir_const(active_ctx, v, args[0].u.type)));
+	} else if (name == YY___BUILTIN_BSWAP32) {
+		if (args[0].type->kind != C_TYPE_U32 && args[0].type->kind != C_TYPE_I32) {
+			c_do_check_cvt(&c_type_u32, &args[0], 1);
+		}
 		c_value_set_rval(val, args[0].type, args[0].u.type, ir_BSWAP(args[0].u.type, c_value_ref(&args[0])));
-	} else if (name == YY___BUILTIN_POPCOUNT
-	 || name == YY___BUILTIN_POPCOUNTL
-	 || name == YY___BUILTIN_POPCOUNTLL) {
+	} else if (name == YY___BUILTIN_BSWAP64) {
 		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (args[0].type->kind != C_TYPE_U64 && args[0].type->kind != C_TYPE_I64) {
+			c_do_check_cvt(&c_type_u64, &args[0], 1);
+		}
+		c_value_set_rval(val, args[0].type, args[0].u.type, ir_BSWAP(args[0].u.type, c_value_ref(&args[0])));
+	} else if (name == YY___BUILTIN_POPCOUNT) {
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (args[0].type->kind != C_TYPE_I32) {
+			c_do_check_cvt(&c_type_i32, &args[0], 1);
+		}
 		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTPOP(args[0].u.type, c_value_ref(&args[0])));
-	} else if (name == YY___BUILTIN_CLZ
-	 || name == YY___BUILTIN_CLZL
-	 || name == YY___BUILTIN_CLZLL) {
+	} else if (name == YY___BUILTIN_POPCOUNTL) {
 		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (args[0].type->kind != C_TYPE_IL) {
+			c_do_check_cvt(&c_type_il, &args[0], 1);
+		}
+		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTPOP(args[0].u.type, c_value_ref(&args[0])));
+	} else if (name == YY___BUILTIN_POPCOUNTLL) {
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (args[0].type->kind != C_TYPE_ILL) {
+			c_do_check_cvt(&c_type_ill, &args[0], 1);
+		}
+		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTPOP(args[0].u.type, c_value_ref(&args[0])));
+	} else if (name == YY___BUILTIN_CLZ) {
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (args[0].type->kind != C_TYPE_I32) {
+			c_do_check_cvt(&c_type_i32, &args[0], 1);
+		}
 		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTLZ(args[0].u.type, c_value_ref(&args[0])));
-	} else if (name == YY___BUILTIN_CTZ
-	 || name == YY___BUILTIN_CTZL
-	 || name == YY___BUILTIN_CTZLL) {
+	} else if (name == YY___BUILTIN_CLZL) {
 		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (args[0].type->kind != C_TYPE_IL) {
+			c_do_check_cvt(&c_type_il, &args[0], 1);
+		}
+		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTLZ(args[0].u.type, c_value_ref(&args[0])));
+	} else if (name == YY___BUILTIN_CLZLL) {
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (args[0].type->kind != C_TYPE_ILL) {
+			c_do_check_cvt(&c_type_ill, &args[0], 1);
+		}
+		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTLZ(args[0].u.type, c_value_ref(&args[0])));
+	} else if (name == YY___BUILTIN_CTZ) {
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (args[0].type->kind != C_TYPE_I32) {
+			c_do_check_cvt(&c_type_i32, &args[0], 1);
+		}
+		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTTZ(args[0].u.type, c_value_ref(&args[0])));
+	} else if (name == YY___BUILTIN_CTZL) {
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (args[0].type->kind != C_TYPE_IL) {
+			c_do_check_cvt(&c_type_il, &args[0], 1);
+		}
+		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTTZ(args[0].u.type, c_value_ref(&args[0])));
+	} else if (name == YY___BUILTIN_CTZLL) {
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (args[0].type->kind != C_TYPE_ILL) {
+			c_do_check_cvt(&c_type_ill, &args[0], 1);
+		}
 		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTTZ(args[0].u.type, c_value_ref(&args[0])));
 	} else if (name == YY___BUILTIN_EXPECT) {
 		if (num_args != 2) yy_error("wrong number of arguments in __builtin_expect() call");

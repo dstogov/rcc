@@ -688,20 +688,6 @@ void rcc_init(void)
 	c_linker_arena = ir_arena_create(4096);
 
 	c_type *type;
-
-	c_type *c_type_ptr_const_void = ir_arena_alloc(&c_arena, sizeof(c_type));
-	if (!c_type_ptr_const_void) yy_error("out of memory");
-	memset(c_type_ptr_const_void, 0, sizeof(c_type));
-	c_type_ptr_const_void->kind = C_TYPE_POINTER;
-	c_type_ptr_const_void->size = sizeof(void*);
-	//c_type_ptr_const_void->attr = C_ATTR_RESTRICT;
-	type = ir_arena_alloc(&c_arena, sizeof(c_type));
-	if (!type) yy_error("out of memory");
-	memset(type, 0, sizeof(c_type));
-	type->kind = C_TYPE_VOID;
-	type->attr = C_ATTR_CONST;
-	c_type_ptr_const_void->pointer.type = type;
-
 	c_dcl dcl;
 	memset(&dcl, 0, sizeof(dcl));
 	dcl.flags = C_DCL_EXTERN | C_TYPE_SPEC_TYPE;
@@ -716,7 +702,7 @@ void rcc_init(void)
 	type->func.params[0].name = 0;
 	type->func.params[0].type = &c_type_ptr;
 	type->func.params[1].name = 0;
-	type->func.params[1].type = c_type_ptr_const_void;
+	type->func.params[1].type = &c_type_const_ptr;
 	type->func.params[2].name = 0;
 	type->func.params[2].type = &c_type_size_t;
 	dcl.type = type;
