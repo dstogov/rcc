@@ -257,7 +257,7 @@ static const char c_stdarg_h[] =
 "\n"
 "#define va_start __builtin_va_start\n"
 "#define va_arg __builtin_va_arg\n"
-"#define va_end(ap) 0\n"
+"#define va_end(ap) (void)(ap)\n"
 "#define va_copy(dest, src) ((dest)[0] = (src)[0])\n"
 "\n"
 "#ifndef __GNUC_VA_LIST\n"
