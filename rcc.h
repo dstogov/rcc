@@ -222,6 +222,7 @@
 	_("__DATE__",                      YY___DATE__)                    \
 	_("__FILE__",                      YY___FILE__)                    \
 	_("__FUNCTION__",                  YY___FUNCTION__)                \
+	_("__PRETTY_FUNCTION__",           YY___PRETTY_FUNCTION__)         \
 	_("__func__",                      YY___FUNC__)                    \
 	_("__LINE__",                      YY___LINE__)                    \
 	_("__TIME__",                      YY___TIME__)                    \

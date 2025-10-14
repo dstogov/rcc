@@ -1128,7 +1128,7 @@ bool pp_macro_expand(pp_macro *macro, yy_sym name)
 			pp_list_init(&replacement);
 			pp_list_push(&replacement, YY_STRING);
 			pp_list_push_val(&replacement);
-		} else if (name == YY___FUNCTION__ || name == YY___FUNC__) {
+		} else if (name == YY___FUNCTION__ || name == YY___FUNC__ || name == YY___PRETTY_FUNCTION__) {
 			yy_sym func_name = c_get_current_func_name();
 
 			if (func_name) {
