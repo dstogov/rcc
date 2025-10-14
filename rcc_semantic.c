@@ -3891,6 +3891,13 @@ void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 		v.f = nanf((char*)args[0].u.val.ptr);
 		v.u32_hi = 0;
 		c_value_set_const(val, &c_type_float, IR_FLOAT, v);
+	} else if (name == YY___BUILTIN_ISUNORDERED) {
+		ir_ref ref;
+
+		if (num_args != 2) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (!C_IS_TYPE_FP(args[0].type) || !C_IS_TYPE_FP(args[1].type)) yy_error_fmt("wrong arguments in %s() call", yy_sym2str(name));
+		ref = ir_fold2(active_ctx, IR_OPT(IR_UNORDERED, IR_BOOL), c_value_ref(&args[0]), c_value_ref(&args[1]));
+		c_value_set_rval(val, &c_type_bool, IR_BOOL, ref);
 	} else {
 		IR_ASSERT(0);
 	}

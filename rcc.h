@@ -193,6 +193,7 @@
 	_("__builtin_huge_valf",           YY___BUILTIN_HUGE_VALF)         \
 	_("__builtin_inf",                 YY___BUILTIN_INF)               \
 	_("__builtin_inff",                YY___BUILTIN_INFF)              \
+	_("__builtin_isunordered",         YY___BUILTIN_ISUNORDERED)       \
 	_("__builtin_memcpy",              YY___BUILTIN_MEMCPY)            \
 	_("__builtin_memset",              YY___BUILTIN_MEMSET)            \
 	_("__builtin_nan",                 YY___BUILTIN_NAN)               \

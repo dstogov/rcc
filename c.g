@@ -1023,6 +1023,7 @@ unary_expression(c_value *val):
 		|	"__builtin_huge_valf"
 		|	"__builtin_inf"
 		|	"__builtin_inff"
+		|	"__builtin_isunordered"
 		|	"__builtin_nan"
 		|	"__builtin_nanf"
 		)
