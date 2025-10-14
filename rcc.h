@@ -151,6 +151,7 @@
 	_("__const__",                     YY___CONST__)                   \
 	_("__complex",                     YY___COMPLEX)                   \
 	_("__complex__",                   YY___COMPLEX__)                 \
+	_("__declspec",                    YY___DECLSPEC)                  \
 	_("__extension__",                 YY___EXTENSION__)               \
 	_("__inline",                      YY___INLINE)                    \
 	_("__inline__",                    YY___INLINE__)                  \
@@ -941,6 +942,7 @@ void c_empty_declaration(c_dcl *d);
 void c_gcc_attribute_aligned(c_dcl *d, c_name attr, c_value *v);
 void c_gcc_attribute_packed(c_dcl *d, c_name attr);
 yy_sym c_gcc_attribute(c_dcl *dcl, c_name attr, yy_sym sym);
+yy_sym c_declspec(c_dcl *dcl, c_name attr, yy_sym sym);
 
 void c_sizeof_type(c_value *res, const c_type *type);
 void c_sizeof_expr(c_value *res, yy_sym op, c_value *expr, ir_ref old_control);

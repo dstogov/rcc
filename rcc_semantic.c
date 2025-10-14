@@ -2297,6 +2297,29 @@ yy_sym c_gcc_attribute(c_dcl *d, c_name attr, yy_sym sym)
 	return sym;
 }
 
+yy_sym c_declspec(c_dcl *d, c_name attr, yy_sym sym)
+{
+	yy_warning_fmt("unsupported \"__declspec(%s)\"", yy_sym2str(attr));
+
+	if (sym == YY__LPAREN) {
+		int level = 0;
+
+		while (1) {
+			sym = yy_next();
+			if (sym == YY__RPAREN) {
+				if (level == 0) return yy_next();
+				level--;
+			} else if (sym == YY__LPAREN) {
+				level++;
+			} else if (sym == YY_EOF) {
+				yy_error("unexpected <EOF>");
+				return  YY_EOF;
+			}
+		}
+	}
+	return sym;
+}
+
 void c_sizeof_type(c_value *res, const c_type *type)
 {
 	ir_val val;

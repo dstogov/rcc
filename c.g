@@ -210,6 +210,7 @@ declaration(uint32_t flags):                               {c_dcl d0 = {0};}
 		    declarator(&d, &name, 1)
 			(   &(	"__attribute__"
 				|	"__attribute"
+				|	"__declspec"
 				|	"__asm__"
 				|	"__asm"
 				|	"asm"
@@ -392,12 +393,10 @@ alignment_specifier(c_dcl *d):                             {c_value v = {0};}
 attributes(c_dcl *d):
 	(	("__attribute"|"__attribute__")
 		"(" "(" attrib(d) ( "," attrib(d) )* ")" ")"
-//	|	"__declspec" "("
-//		ID
-//		(
-//			"(" assignment_expression(NULL) ")"
-//		)?
-//		")"
+	|	                                                   {c_name name;}
+		"__declspec" "("
+		ID(&name)                                          {sym = c_declspec(d, name, sym);}
+		")"
 	)++
 ;
 
