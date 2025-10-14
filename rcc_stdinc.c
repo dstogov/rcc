@@ -220,6 +220,12 @@ static const char c_boot[] =
 "#define static_assert            _Static_assert\n"
 
 "#define __builtin_offsetof(t, f) ((__SIZE_TYPE__)&(((t*)0)->f))\n"
+
+"#define __builtin_isless(x, y)         ((x) < (y))\n"
+"#define __builtin_islessequal(x, y)    ((x) <= (y))\n"
+"#define __builtin_isgreater(x, y)      ((x) > (y))\n"
+"#define __builtin_isgreaterequal(x, y) ((x) >= (y))\n"
+"#define __builtin_islessgreater(x, y)  (((x) != (y)) && !__builtin_isunordered(x, y))\n"
 "\n";
 
 static const char c_builtin[] =
