@@ -6482,8 +6482,10 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 				type->attr &= ~C_ATTR_FLEXIBLE;
 				val->type = obj->value.type = type;
 			}
-			if (!c_value_is_const(&obj->value)
-			 && (!c_value_is_ref(&obj->value) || !IR_IS_CONST_REF(obj->value.u.ref))) {
+			if (c_value_is_const(&obj->value)
+			 || (c_value_is_ref(&obj->value) && IR_IS_CONST_REF(obj->value.u.ref))) {
+				c_do_grow_flexible(obj, 0, obj->value.type->size);
+			} else {
 				c_do_init_patch_flexible_alloca(obj->value.u.ref, size);
 			}
 		}
