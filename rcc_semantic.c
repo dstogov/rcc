@@ -630,8 +630,10 @@ static void c_validate_dcl(c_dcl *d)
 			if (d->type->kind == C_TYPE_FUNC) yy_error("\"_Atomic\"-qualified function type");
 		}
 		if (d->attr & C_ATTR_ALIGN_MASK) {
-			if (d->type->kind == C_TYPE_FUNC) yy_error("invalid use of \"_Alignas\" for a function");
-			if (d->flags & C_DCL_TYPEDEF) yy_error("invalid use of \"_Alignas\" with \"typedef\"");
+// TODO: __Alignas() is prohibited, but __attribute__((aligned()))) is allowed ???
+//			if (d->type->kind == C_TYPE_FUNC) yy_error("invalid use of \"_Alignas\" for a function");
+// TODO: __Alignas() is prohibited, but __attribute__((aligned()))) is allowed ???
+//			if (d->flags & C_DCL_TYPEDEF) yy_error("invalid use of \"_Alignas\" with \"typedef\"");
 			if (d->flags & C_DCL_REGISTER) yy_error("invalid use of \"_Alignas\" with \"register\"");
 		}
 	}
