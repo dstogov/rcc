@@ -1472,9 +1472,12 @@ void c_make_array_type(c_dcl *d, c_dcl *dim, c_value *len, uint64_t attr, bool i
 {
 	c_type *type;
 	size_t length;
+	uint32_t align_attr = d->attr & C_ATTR_ALIGN_MASK;
 
+	d->attr &= ~C_ATTR_ALIGN_MASK;
 	c_finalize_type(d);
 	c_validate_array_element_type(d->type);
+	d->attr |= align_attr;
 
 	length = 0;
 	if (!(attr & (C_ATTR_FLEXIBLE|C_ATTR_VLA)) && len && c_value_is_set(len)) {
