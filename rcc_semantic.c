@@ -3344,6 +3344,25 @@ void c_do_cast(const c_type *t, c_value *v)
 	} else if (t->kind == C_TYPE_VOID) {
 		c_value_set_rval(v, &c_type_void, IR_VOID, IR_NULL);
 	} else if (!C_IS_TYPE_SCALAR_OR_PTR(t)) {
+		if (t->kind == C_TYPE_UNION) {
+			int32_t i;
+			c_field *f;
+
+			for (i = 0, f = t->record.fields; i < t->record.num_fields; f++, i++) {
+				if (f->type == v->type
+				 || c_compatible_types(f->type, v->type, 1, 0)) {
+					ir_ref addr = c_do_alloca(t->size, 0);
+					if (C_IS_TYPE_SCALAR_OR_PTR(v->type)) {
+						ir_STORE(addr, c_value_ref(v));
+					} else {
+						IR_ASSERT(v->type->size);
+						ir_memcpy(active_ctx, addr, c_value_ref(v), ir_const_size_t(active_ctx, v->type->size));
+					}
+					c_value_set_rval(v, t, IR_ADDR, addr);
+					return;
+				}
+			}
+		}
 		yy_error("conversion to non-scalar type requested");
 	} else if (t->flags & C_TYPE_INCOMPLETE) {
 		yy_error("conversion to incomplete type");
