@@ -4047,7 +4047,7 @@ void c_do_builtin_va_arg(c_value *val, c_value *list, const c_type *type)
 		if (n == 1) {
 			t = types[0];
 			ref = ir_VA_ARG(c_value_ref(list), t);
-			alloca = ir_ALLOCA(ir_const_size_t(active_ctx, type->size));
+			alloca = c_do_alloca(type->size, 0);
 			ir_STORE(alloca, ref);
 			c_value_set_lval(val, type, IR_ADDR, alloca);
 		} else {
@@ -4426,12 +4426,12 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args)
 
 		if (n == 1) {
 			_ret_type = types[0];
-			ret_struct = ir_ALLOCA(ir_const_size_t(active_ctx, ret_type->size));
+			ret_struct = c_do_alloca(ret_type->size, 0);
 		} else {
 			IR_ASSERT(n == 0);
 			_ret_type = IR_ADDR;
 			j = 1;
-			ret_struct = ir_ALLOCA(ir_const_size_t(active_ctx, ret_type->size));
+			ret_struct = c_do_alloca(ret_type->size, 0);
 		}
 	} else {
 		_ret_type = c_type2ir(ret_type);
@@ -7083,7 +7083,7 @@ void c_do_init_expr_start(c_sym *obj, const c_type *type)
 	obj->kind = C_SYM_VAR;
 	if (active_func && !c_static_data) {
 		ir_ref size = ir_const_size_t(active_ctx, type->size);
-		ir_ref addr = ir_ALLOCA(size);
+		ir_ref addr = c_do_alloca(type->size, 0);
 		ir_memzero(active_ctx, addr, size);
 		c_value_set_rval(&obj->value, type, IR_ADDR, addr);
 	} else {
