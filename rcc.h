@@ -766,7 +766,7 @@ struct _c_sym {
 	bool                   is_implemented: 1;  /* only for C_SYM_VAR and C_SYM_FUNC */
 	bool                   is_string: 1;
 	bool                   is_thunk: 1;        /* TODO: replace thunks with relocs ??? */
-	bool                   has_code: 1;
+	uint8_t                has_code: 2;        /* Code generation state (see C_CODE_...) */
 	bool                   tmp_data: 1;        /* temporary growable data area */
 	c_scope               *scope;
 	c_value                value;              /* type is part of the value */
@@ -780,6 +780,12 @@ struct _c_tag {
 	const c_type          *type;
 	c_scope               *scope;
 };
+
+/* c_sym.has_code values */
+#define C_CODE_NONE        0
+#define C_CODE_SCHEDULED   1
+#define C_CODE_STARTED     2
+#define C_CODE_DONE        3
 
 #define C_IS_BIT_FIELD(bit_field)     ((bit_field) != 0)
 #define C_BIT_FIELD(start, lenght)    ((1 << 12) | ((start) << 6) | (lenght))

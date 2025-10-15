@@ -128,6 +128,9 @@ static void rcc_ir_codegen(c_name name, ir_ctx *ctx, c_sym *sym)
 {
 	c_value *func = &sym->value;
 
+	IR_ASSERT(sym->has_code < C_CODE_STARTED);
+	sym->has_code = C_CODE_STARTED;
+
 	if (c_native) {
 		ir_match(ctx);
 	}
@@ -239,6 +242,8 @@ static void rcc_ir_codegen(c_name name, ir_ctx *ctx, c_sym *sym)
 		func->u.type = IR_ADDR;
 		func->u.val.ptr = entry;
 	}
+
+	sym->has_code = C_CODE_DONE;
 }
 
 void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym)
@@ -351,11 +356,10 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym)
 	if (!RCC_DELAY_CODE_GEN) {
 		rcc_ir_codegen(name, ctx, sym);
 		ir_free(ctx);
-		sym->has_code = 1;
 	} else {
 		if (((c_flags & C_SINGLE_FILE) ? name == YY_MAIN : sym->linkage == C_LINK_EXTERNAL)
 		 && !sym->has_code) {
-			sym->has_code = 1;
+			sym->has_code = C_CODE_SCHEDULED;
 			if (!ir_list_capasity(&c_codegen_list)) ir_list_init(&c_codegen_list, 32);
 			ir_list_push(&c_codegen_list, name);
 		}
@@ -388,10 +392,9 @@ static void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, uint
 
 		if (!sym->ctx) {
 			/* pass */
-		} else if (protected) {
+		} else if (protected && (sym->has_code < C_CODE_STARTED)) {
 			/* Generate code early to avoid linking through thunk */
 			rcc_ir_codegen(id, sym->ctx, sym);
-			sym->has_code = 1;
 			if (c_value_is_const(&sym->value)) {
 				return sym->value.u.val.ptr;
 			}
@@ -443,7 +446,7 @@ add_thunk:
 				ir_disasm_add_symbol(name, (uint64_t)(uintptr_t)addr, size);
 			}
 			if ((RCC_DELAY_CODE_GEN || sym->ctx) && !sym->has_code) {
-				sym->has_code = 1;
+				sym->has_code = C_CODE_SCHEDULED;
 				if (!ir_list_capasity(&c_codegen_list)) ir_list_init(&c_codegen_list, 32);
 				ir_list_push(&c_codegen_list, id);
 			}
@@ -561,7 +564,7 @@ bool c_linker_fix_reloc(c_sym *obj, size_t obj_offset, c_value *val)
 		} else {
 			val->u.val.addr = 0;
 			if (sym->kind == C_SYM_FUNC && !sym->has_code) {
-				sym->has_code = 1;
+				sym->has_code = C_CODE_SCHEDULED;
 				if (!ir_list_capasity(&c_codegen_list)) ir_list_init(&c_codegen_list, 32);
 				ir_list_push(&c_codegen_list, n);
 			}
