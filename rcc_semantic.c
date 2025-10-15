@@ -4046,8 +4046,12 @@ void c_do_builtin_va_arg(c_value *val, c_value *list, const c_type *type)
 			ir_STORE(alloca, ref);
 			c_value_set_lval(val, type, IR_ADDR, alloca);
 		} else {
+			uint32_t align = c_attr2align(type->attr);
+
 			IR_ASSERT(n == 0);
-			ref = ir_VA_ARG_EX(c_value_ref(list), IR_ADDR, (type->size << 3) | (type->attr & 7));
+			if (align < sizeof(void*)) align = sizeof(void*);
+			if (align > 128) yy_error("algnment must be >= 128");
+			ref = ir_VA_ARG_EX(c_value_ref(list), IR_ADDR, (type->size << 3) | ir_ntzl(align));
 			c_value_set_lval(val, type, IR_ADDR, ref);
 		}
 	} else {
