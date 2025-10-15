@@ -3995,6 +3995,87 @@ void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 			c_do_check_cvt(&c_type_ill, &args[0], 1);
 		}
 		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTTZ(args[0].u.type, c_value_ref(&args[0])));
+	} else if (name >= YY___BUILTIN_ADD_OVERFLOW && name <= YY___BUILTIN_UMULLL_OVERFLOW) {
+		ir_ref ref, overflow;
+		const c_type *t;
+
+		if (num_args != 3) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (name == YY___BUILTIN_ADD_OVERFLOW || name == YY___BUILTIN_SUB_OVERFLOW || name == YY___BUILTIN_MUL_OVERFLOW) {
+			if (args[2].type->kind != C_TYPE_POINTER || !C_IS_TYPE_INT(args[2].type->pointer.type)) {
+				yy_error_fmt("incompatible types of arguments in %s() call", yy_sym2str(name));
+			}
+			t = args[2].type->pointer.type;
+//			if (t->size < 4) t = &c_type_i32;
+//			t = c_common_type(YY__STAR, &args[0], &args[1]);
+		} else if (name == YY___BUILTIN_ADD_OVERFLOW_P || name == YY___BUILTIN_SUB_OVERFLOW_P || name == YY___BUILTIN_MUL_OVERFLOW_P) {
+			if (!C_IS_TYPE_INT(args[2].type)) {
+				yy_error_fmt("incompatible types of arguments in %s() call", yy_sym2str(name));
+			}
+			t = args[2].type;
+//			if (t->size < 4) t = &c_type_i32;
+//			t = c_common_type(YY__STAR, &args[0], &args[1]);
+		} else {
+			if (name == YY___BUILTIN_SADD_OVERFLOW || name == YY___BUILTIN_SSUB_OVERFLOW || name == YY___BUILTIN_SMUL_OVERFLOW) {
+				t = &c_type_i32;
+			} else if (name == YY___BUILTIN_SADDL_OVERFLOW || name == YY___BUILTIN_SSUBL_OVERFLOW || name == YY___BUILTIN_SMULL_OVERFLOW) {
+				t = &c_type_il;
+			} else if (name == YY___BUILTIN_SADDLL_OVERFLOW || name == YY___BUILTIN_SSUBLL_OVERFLOW || name == YY___BUILTIN_SMULLL_OVERFLOW) {
+				t = &c_type_ill;
+			} else if (name == YY___BUILTIN_UADD_OVERFLOW || name == YY___BUILTIN_USUB_OVERFLOW || name == YY___BUILTIN_UMUL_OVERFLOW) {
+				t = &c_type_u32;
+			} else if (name == YY___BUILTIN_UADDL_OVERFLOW || name == YY___BUILTIN_USUBL_OVERFLOW || name == YY___BUILTIN_UMULL_OVERFLOW) {
+				t = &c_type_ul;
+			} else if (name == YY___BUILTIN_UADDLL_OVERFLOW || name == YY___BUILTIN_USUBLL_OVERFLOW || name == YY___BUILTIN_UMULLL_OVERFLOW) {
+				t = &c_type_ull;
+			} else {
+				IR_ASSERT(0);
+				t = NULL;
+			}
+			if (args[2].type->kind != C_TYPE_POINTER || args[2].type->pointer.type->kind != t->kind) {
+				yy_error_fmt("incompatible types of arguments in %s() call", yy_sym2str(name));
+			}
+		}
+
+		if (args[0].type->kind != t->kind) {
+			c_do_check_cvt(t, &args[0], 1);
+		}
+		if (args[1].type->kind != t->kind) {
+			c_do_check_cvt(t, &args[1], 2);
+		}
+
+		if (name >= YY___BUILTIN_ADD_OVERFLOW && name <= YY___BUILTIN_UADDLL_OVERFLOW) {
+			ref = ir_ADD_OV(args[0].u.type, c_value_ref(&args[0]), c_value_ref(&args[1]));
+		} else if (name >= YY___BUILTIN_SUB_OVERFLOW && name <= YY___BUILTIN_USUBLL_OVERFLOW) {
+			ref = ir_SUB_OV(args[0].u.type, c_value_ref(&args[0]), c_value_ref(&args[1]));
+		} else {
+			IR_ASSERT(name >= YY___BUILTIN_MUL_OVERFLOW && name <= YY___BUILTIN_UMULLL_OVERFLOW);
+			ref = ir_MUL_OV(args[0].u.type, c_value_ref(&args[0]), c_value_ref(&args[1]));
+		}
+		overflow = ir_OVERFLOW(ref);
+
+		if (name != YY___BUILTIN_ADD_OVERFLOW_P && name != YY___BUILTIN_SUB_OVERFLOW_P && name != YY___BUILTIN_MUL_OVERFLOW_P) {
+			if (t->kind != args[2].type->pointer.type->kind) {
+				if (t->size > args[2].type->pointer.type->size) {
+					ref = ir_TRUNC(c_type2ir(args[2].type->pointer.type), ref);
+				} else if (t->size == args[2].type->pointer.type->size) {
+					ref = ir_BITCAST(c_type2ir(args[2].type->pointer.type), ref);
+				} else if (C_IS_TYPE_SIGNED(t)) {
+					ref = ir_SEXT(c_type2ir(args[2].type->pointer.type), ref);
+				} else {
+					ref = ir_ZEXT(c_type2ir(args[2].type->pointer.type), ref);
+				}
+			}
+
+			if (c_value_is_var(&args[2])) {
+				ir_VSTORE(args[2].u.ref, ref);
+			} else if (c_value_is_ref(&args[2]) && active_ctx->ir_base[args[2].u.ref].op == IR_VADDR) {
+				ir_VSTORE(active_ctx->ir_base[args[2].u.ref].op1, ref);
+			} else {
+				ir_STORE(args[2].u.ref, ref);
+			}
+		}
+
+		c_value_set_rval(val, &c_type_bool, IR_BOOL, overflow);
 	} else if (name == YY___BUILTIN_EXPECT) {
 		if (num_args != 2) yy_error("wrong number of arguments in __builtin_expect() call");
 		c_value_set_rval(val, args[0].type, args[0].u.type, c_value_ref(&args[0]));

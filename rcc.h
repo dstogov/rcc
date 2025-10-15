@@ -198,6 +198,30 @@
 	_("__builtin_memset",              YY___BUILTIN_MEMSET)            \
 	_("__builtin_nan",                 YY___BUILTIN_NAN)               \
 	_("__builtin_nanf",                YY___BUILTIN_NANF)              \
+	_("__builtin_add_overflow",        YY___BUILTIN_ADD_OVERFLOW)      \
+	_("__builtin_add_overflow_p",      YY___BUILTIN_ADD_OVERFLOW_P)    \
+	_("__builtin_sadd_overflow",       YY___BUILTIN_SADD_OVERFLOW)     \
+	_("__builtin_saddl_overflow",      YY___BUILTIN_SADDL_OVERFLOW)    \
+	_("__builtin_saddll_overflow",     YY___BUILTIN_SADDLL_OVERFLOW)   \
+	_("__builtin_uadd_overflow",       YY___BUILTIN_UADD_OVERFLOW)     \
+	_("__builtin_uaddl_overflow",      YY___BUILTIN_UADDL_OVERFLOW)    \
+	_("__builtin_uaddll_overflow",     YY___BUILTIN_UADDLL_OVERFLOW)   \
+	_("__builtin_sub_overflow",        YY___BUILTIN_SUB_OVERFLOW)      \
+	_("__builtin_sub_overflow_p",      YY___BUILTIN_SUB_OVERFLOW_P)    \
+	_("__builtin_ssub_overflow",       YY___BUILTIN_SSUB_OVERFLOW)     \
+	_("__builtin_ssubl_overflow",      YY___BUILTIN_SSUBL_OVERFLOW)    \
+	_("__builtin_ssubll_overflow",     YY___BUILTIN_SSUBLL_OVERFLOW)   \
+	_("__builtin_usub_overflow",       YY___BUILTIN_USUB_OVERFLOW)     \
+	_("__builtin_usubl_overflow",      YY___BUILTIN_USUBL_OVERFLOW)    \
+	_("__builtin_usubll_overflow",     YY___BUILTIN_USUBLL_OVERFLOW)   \
+	_("__builtin_mul_overflow",        YY___BUILTIN_MUL_OVERFLOW)      \
+	_("__builtin_mul_overflow_p",      YY___BUILTIN_MUL_OVERFLOW_P)    \
+	_("__builtin_smul_overflow",       YY___BUILTIN_SMUL_OVERFLOW)     \
+	_("__builtin_smull_overflow",      YY___BUILTIN_SMULL_OVERFLOW)    \
+	_("__builtin_smulll_overflow",     YY___BUILTIN_SMULLL_OVERFLOW)   \
+	_("__builtin_umul_overflow",       YY___BUILTIN_UMUL_OVERFLOW)     \
+	_("__builtin_umull_overflow",      YY___BUILTIN_UMULL_OVERFLOW)    \
+	_("__builtin_umulll_overflow",     YY___BUILTIN_UMULLL_OVERFLOW)   \
 	_("__builtin_expect",              YY___BUILTIN_EXPECT)            \
 	_("__builtin_unreachable",         YY___BUILTIN_UNREACHABLE)       \
 
