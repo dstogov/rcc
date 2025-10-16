@@ -4151,7 +4151,11 @@ void c_do_builtin_va_arg(c_value *val, c_value *list, const c_type *type)
 
 			IR_ASSERT(n == 0);
 			if (align < sizeof(void*)) align = sizeof(void*);
-			if (align > 128) yy_error("algnment must be >= 128");
+			if (align > 128) yy_error("algnment must be less than 128");
+			if (align > 16) {
+				yy_warning("passing structure with alignnment greater than 16 is not implemented yet");
+				align = 16;
+			}
 			ref = ir_VA_ARG_EX(c_value_ref(list), IR_ADDR, (type->size << 3) | ir_ntzl(align));
 			c_value_set_lval(val, type, IR_ADDR, ref);
 		}
@@ -4599,9 +4603,16 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args)
 						arg_refs[i + j] = ir_LOAD(types[0], args[i].u.ref);
 					}
 				} else {
+					uint32_t align;
+
 					IR_ASSERT(n == 0);
+					align = c_attr2align(args[i].type->attr);
+					if (align > 16) {
+						yy_warning("passing structure with alignnment greater than 16 is not implemented yet");
+						align = 16;
+					}
 					arg_refs[i + j] = ir_emit3(active_ctx, IR_OPT(IR_ARGVAL, IR_ADDR), args[i].u.ref,
-						args[i].type->size, c_attr2align(args[i].type->attr));
+						args[i].type->size, align);
 				}
 			} else {
 				arg_refs[i + j] = c_value_ref(&args[i]);
