@@ -4005,15 +4005,13 @@ void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 				yy_error_fmt("incompatible types of arguments in %s() call", yy_sym2str(name));
 			}
 			t = args[2].type->pointer.type;
-//			if (t->size < 4) t = &c_type_i32;
-//			t = c_common_type(YY__STAR, &args[0], &args[1]);
+			// TODO: support for cases when operands and/or result have different size and/or signess ???
 		} else if (name == YY___BUILTIN_ADD_OVERFLOW_P || name == YY___BUILTIN_SUB_OVERFLOW_P || name == YY___BUILTIN_MUL_OVERFLOW_P) {
 			if (!C_IS_TYPE_INT(args[2].type)) {
 				yy_error_fmt("incompatible types of arguments in %s() call", yy_sym2str(name));
 			}
 			t = args[2].type;
-//			if (t->size < 4) t = &c_type_i32;
-//			t = c_common_type(YY__STAR, &args[0], &args[1]);
+			// TODO: support for cases when operands and/or result have different size and/or signess ???
 		} else {
 			if (name == YY___BUILTIN_SADD_OVERFLOW || name == YY___BUILTIN_SSUB_OVERFLOW || name == YY___BUILTIN_SMUL_OVERFLOW) {
 				t = &c_type_i32;
@@ -4066,12 +4064,10 @@ void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 				}
 			}
 
-			if (c_value_is_var(&args[2])) {
-				ir_VSTORE(args[2].u.ref, ref);
-			} else if (c_value_is_ref(&args[2]) && active_ctx->ir_base[args[2].u.ref].op == IR_VADDR) {
+			if (c_value_is_ref(&args[2]) && active_ctx->ir_base[args[2].u.ref].op == IR_VADDR) {
 				ir_VSTORE(active_ctx->ir_base[args[2].u.ref].op1, ref);
 			} else {
-				ir_STORE(args[2].u.ref, ref);
+				ir_STORE(c_value_ref(&args[2]), ref);
 			}
 		}
 
