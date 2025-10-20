@@ -161,6 +161,7 @@ static void yy_read_hex(c_value *res, const char *p, size_t len);
 static void yy_read_bin(c_value *res, const char *p, size_t len);
 static void yy_read_fp(c_value *res, const char *p, size_t len);
 static void yy_read_char(c_value *res, const char *p, size_t len);
+static yy_sym parse_vla_param(yy_sym sym, c_value *len);
 
 #define YY_IN_SET(sym, set, bitset) \
 	(bitset[sym>>3] & (1 << (sym & 0x7)))
@@ -1216,6 +1217,7 @@ static yy_sym parse_array_declarator(yy_sym sym, c_dcl *d, bool is_param) {
 	} else if (sym == YY__RBRACK) {
 		attr |= C_ATTR_FLEXIBLE;
 	} else if (sym == YY__LPAREN || C_IS_ID(sym) || sym == YY_DECIMAL_NUMBER || sym == YY_OCTAL_NUMBER || sym == YY_HEXADECIMAL_NUMBER || sym == YY_BINARY_NUMBER || sym == YY_FLOATING_NUMBER || sym == YY_HEXADECIMAL_FLOATING_NUMBER || sym == YY_CHARACTER || sym == YY_STRING || sym == YY__GENERIC || sym == YY___EXTENSION__ || sym == YY__PLUS_PLUS || sym == YY__MINUS_MINUS || sym == YY__AND || sym == YY__STAR || sym == YY__PLUS || sym == YY__MINUS || sym == YY__TILDE || sym == YY__BANG || sym == YY_SIZEOF || sym == YY__ALIGNOF || sym == YY___ALIGNOF__ || sym == YY___ALIGNOF || sym == YY__AND_AND || sym == YY___BUILTIN_VA_START || sym == YY___BUILTIN_VA_END || sym == YY___BUILTIN_VA_COPY || sym == YY___BUILTIN_ALLOCA || sym == YY___BUILTIN_ABORT || sym == YY___BUILTIN_TRAP || sym == YY___BUILTIN_DEBUGTRAP || sym == YY___BUILTIN_FRAME_ADDRESS || sym == YY___BUILTIN_CONSTANT_P || sym == YY___BUILTIN_ABS || sym == YY___BUILTIN_LABS || sym == YY___BUILTIN_LLABS || sym == YY___BUILTIN_FABS || sym == YY___BUILTIN_FABSF || sym == YY___BUILTIN_BSWAP16 || sym == YY___BUILTIN_BSWAP32 || sym == YY___BUILTIN_BSWAP64 || sym == YY___BUILTIN_POPCOUNT || sym == YY___BUILTIN_POPCOUNTL || sym == YY___BUILTIN_POPCOUNTLL || sym == YY___BUILTIN_CLZ || sym == YY___BUILTIN_CLZL || sym == YY___BUILTIN_CLZLL || sym == YY___BUILTIN_CTZ || sym == YY___BUILTIN_CTZL || sym == YY___BUILTIN_CTZLL || sym == YY___BUILTIN_MEMCPY || sym == YY___BUILTIN_MEMSET || sym == YY___BUILTIN_EXPECT || sym == YY___BUILTIN_UNREACHABLE || sym == YY___BUILTIN_HUGE_VAL || sym == YY___BUILTIN_HUGE_VALF || sym == YY___BUILTIN_INF || sym == YY___BUILTIN_INFF || sym == YY___BUILTIN_ISUNORDERED || sym == YY___BUILTIN_NAN || sym == YY___BUILTIN_NANF || sym == YY___BUILTIN_ADD_OVERFLOW || sym == YY___BUILTIN_ADD_OVERFLOW_P || sym == YY___BUILTIN_SADD_OVERFLOW || sym == YY___BUILTIN_SADDL_OVERFLOW || sym == YY___BUILTIN_SADDLL_OVERFLOW || sym == YY___BUILTIN_UADD_OVERFLOW || sym == YY___BUILTIN_UADDL_OVERFLOW || sym == YY___BUILTIN_UADDLL_OVERFLOW || sym == YY___BUILTIN_SUB_OVERFLOW || sym == YY___BUILTIN_SUB_OVERFLOW_P || sym == YY___BUILTIN_SSUB_OVERFLOW || sym == YY___BUILTIN_SSUBL_OVERFLOW || sym == YY___BUILTIN_SSUBLL_OVERFLOW || sym == YY___BUILTIN_USUB_OVERFLOW || sym == YY___BUILTIN_USUBL_OVERFLOW || sym == YY___BUILTIN_USUBLL_OVERFLOW || sym == YY___BUILTIN_MUL_OVERFLOW || sym == YY___BUILTIN_MUL_OVERFLOW_P || sym == YY___BUILTIN_SMUL_OVERFLOW || sym == YY___BUILTIN_SMULL_OVERFLOW || sym == YY___BUILTIN_SMULLL_OVERFLOW || sym == YY___BUILTIN_UMUL_OVERFLOW || sym == YY___BUILTIN_UMULL_OVERFLOW || sym == YY___BUILTIN_UMULLL_OVERFLOW || sym == YY___BUILTIN_VA_ARG) {
+		if (!is_param || (sym = parse_vla_param(sym, &len)) != YY__RBRACK)
 		sym = parse_assignment_expression(sym, &len);
 	} else if (sym == YY_CONST || sym == YY___CONST || sym == YY___CONST__ || sym == YY_RESTRICT || sym == YY___RESTRICT || sym == YY___RESTRICT__ || sym == YY_VOLATILE || sym == YY___VOLATILE || sym == YY___VOLATILE__ || sym == YY__ATOMIC || sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__ || sym == YY___DECLSPEC) {
 		sym = parse_type_qualifier_list(sym, &dim);
@@ -1230,6 +1232,7 @@ static yy_sym parse_array_declarator(yy_sym sym, c_dcl *d, bool is_param) {
 			if (sym == YY_STATIC) {
 				sym = get_sym();
 			}
+			if (!is_param || (sym = parse_vla_param(sym, &len)) != YY__RBRACK)
 			sym = parse_assignment_expression(sym, &len);
 		} else {
 			yy_error_sym("unexpected", sym);
@@ -1240,6 +1243,7 @@ static yy_sym parse_array_declarator(yy_sym sym, c_dcl *d, bool is_param) {
 		if (sym == YY_CONST || sym == YY___CONST || sym == YY___CONST__ || sym == YY_RESTRICT || sym == YY___RESTRICT || sym == YY___RESTRICT__ || sym == YY_VOLATILE || sym == YY___VOLATILE || sym == YY___VOLATILE__ || sym == YY__ATOMIC || sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__ || sym == YY___DECLSPEC) {
 			sym = parse_type_qualifier_list(sym, &dim);
 		}
+		if (!is_param || (sym = parse_vla_param(sym, &len)) != YY__RBRACK)
 		sym = parse_assignment_expression(sym, &len);
 	} else {
 		yy_error_sym("unexpected", sym);
@@ -1259,14 +1263,18 @@ static yy_sym parse_parameters(yy_sym sym, c_dcl *d, bool allow_old_func) {
 	uint32_t attr = 0;
 	int32_t num_params = 0;
 	c_param *params = alloca(sizeof(c_param) * C_ALLOCA_PARAMS);
+	c_scope scope;
 	if (sym != YY__LPAREN) {
 		yy_error_sym("'(' expected, got", sym);
 	}
 	sym = get_sym();
 	if ((C_IS_ID(sym)) && (allow_old_func && !is_typedef_name(sym))) {
+		c_push_scope(&scope);
 		sym = parse_identifier_list(sym, &params, &num_params);
 		attr |= C_ATTR_OLD_FUNC;
+		c_pop_scope_light(&scope);
 	} else if (sym == YY_TYPEDEF || sym == YY_EXTERN || sym == YY_STATIC || sym == YY_AUTO || sym == YY_REGISTER || sym == YY__THREAD_LOCAL || sym == YY_VOID || sym == YY_CHAR || sym == YY_SHORT || sym == YY_INT || sym == YY_LONG || sym == YY_FLOAT || sym == YY_DOUBLE || sym == YY_SIGNED || sym == YY___SIGNED || sym == YY___SIGNED__ || sym == YY_UNSIGNED || sym == YY__BOOL || sym == YY__COMPLEX || sym == YY___COMPLEX || sym == YY___COMPLEX__ || sym == YY__ATOMIC || sym == YY_TYPEOF || sym == YY___TYPEOF || sym == YY___TYPEOF__ || sym == YY_STRUCT || sym == YY_UNION || sym == YY_ENUM || C_IS_ID(sym) || sym == YY_CONST || sym == YY___CONST || sym == YY___CONST__ || sym == YY_RESTRICT || sym == YY___RESTRICT || sym == YY___RESTRICT__ || sym == YY_VOLATILE || sym == YY___VOLATILE || sym == YY___VOLATILE__ || sym == YY_INLINE || sym == YY___INLINE || sym == YY___INLINE__ || sym == YY__NORETURN || sym == YY__ALIGNAS || sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__ || sym == YY___DECLSPEC) {
+		c_push_scope(&scope);
 		sym = parse_parameter_declaration(sym, &params, &num_params);
 		while (sym == YY__COMMA) {
 			sym = get_sym();
@@ -1280,6 +1288,7 @@ static yy_sym parse_parameters(yy_sym sym, c_dcl *d, bool allow_old_func) {
 				yy_error_sym("unexpected", sym);
 			}
 		}
+		c_pop_scope_light(&scope);
 	} else if (sym == YY__POINT_POINT_POINT) {
 		sym = get_sym();
 		attr |= C_ATTR_VARIADIC;
@@ -3069,6 +3078,92 @@ static void yy_strings(c_value *res, str_list *first, str_list *last)
 	}
 
 	c_value_set_const_str(res, type, IR_ADDR, dyn_str.str, dyn_str.len);
+}
+
+static yy_sym parse_vla_param(yy_sym sym, c_value *val)
+{
+	yy_sym first = sym;
+	const char *text = yy_text;
+	size_t len = yy_len;
+	pp_list tokens;
+	int level = 0;
+	uint32_t skip;
+
+	pp_list_init(&tokens);
+	pp_list_push(&tokens, sym);
+	if (PP_HAS_VAL(sym)) {
+		pp_list_push_val(&tokens);
+	} else if (sym == YY__LBRACK) {
+		level++;
+	}
+
+	skip = tokens.len;
+	while (1) {
+		sym = yy_next();
+		if (sym == YY__RBRACK) {
+			if (level == 0) {
+				break;
+			}
+			pp_list_push(&tokens, sym);
+			level--;
+		} else if (sym == YY__LBRACK) {
+			pp_list_push(&tokens, sym);
+			level++;
+		} else if (C_IS_ID(sym)) {
+			pp_list_push(&tokens, sym | PP_NOSUBST);
+		} else {
+			pp_list_push(&tokens, sym);
+			if (PP_HAS_VAL(sym)) {
+				pp_list_push_val(&tokens);
+			}
+		}
+	}
+
+	pp_list_push(&tokens, YY__RBRACK);
+	if (pp_subst_level >= PP_SUBST_STACK_SIZE) yy_error("too deep macro substitution level");
+	pp_subst_stack[pp_subst_level].macro = NULL;
+	pp_subst_stack[pp_subst_level].start = NULL;
+	pp_subst_stack[pp_subst_level].tokens = tokens.syms + skip;
+	pp_subst_stack[pp_subst_level].skip_eof = 0;
+	pp_subst_level++;
+
+	sym = first;
+	yy_text = text;
+	yy_len = len;
+
+	sym = parse_assignment_expression(sym, val);
+
+	IR_ASSERT(sym == YY__RBRACK);
+	pp_subst_level--;
+
+	if (!c_value_is_const(val)) {
+		val->u.val.ptr = ir_arena_alloc(&c_arena, sizeof(yy_sym) * tokens.len);
+		memcpy(val->u.val.ptr, tokens.syms, sizeof(yy_sym) * tokens.len);
+	}
+	pp_list_release(tokens.syms, tokens.size);
+
+	return YY__RBRACK;
+}
+
+void parse_vla_param_again(yy_sym *vla_tokens, c_value *val)
+{
+	yy_sym sym = *vla_tokens++;
+
+	if (PP_HAS_VAL(sym)) {
+		vla_tokens = pp_load_val(vla_tokens);
+	}
+
+	if (pp_subst_level >= PP_SUBST_STACK_SIZE) yy_error("too deep macro substitution level");
+	pp_subst_stack[pp_subst_level].macro = NULL;
+	pp_subst_stack[pp_subst_level].start = NULL;
+	pp_subst_stack[pp_subst_level].tokens = vla_tokens;
+	pp_subst_stack[pp_subst_level].skip_eof = 0;
+	pp_subst_level++;
+
+	sym = parse_assignment_expression(sym, val);
+
+	IR_ASSERT(sym == YY__RBRACK);
+	pp_subst_level--;
 }
 
 /* CPP helper */

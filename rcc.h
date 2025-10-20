@@ -715,6 +715,7 @@ struct _c_type {
 		struct {
 			const c_type  *type;
 			int32_t        length;
+			yy_sym        *vla_tokens;
 		} array;
 		struct {
 			const c_type  *type;
@@ -758,6 +759,7 @@ typedef enum {
 	C_SYM_FUNC,
 	C_SYM_CONST,
 	C_SYM_VAR,
+	C_SYM_PARAM = C_SYM_VAR,
 } c_sym_kind;
 
 typedef enum {
@@ -948,6 +950,7 @@ extern const c_type c_type_const_ptr;
 
 void c_push_scope(c_scope *scope);
 void c_pop_scope(c_scope *scope);
+void c_pop_scope_light(c_scope *scope);
 
 void c_wrong_type_specifiers(uint32_t flags, yy_sym sym);
 const c_type *c_resolve_type(c_dcl *dcl);
@@ -1076,6 +1079,7 @@ void c_do_compile_end(void);
 
 /* C Parser */
 bool parse_pp_expr(void);
+void parse_vla_param_again(yy_sym *vla_tokens, c_value *val);
 void rcc_parse(void);
 
 /* Error Reporting */

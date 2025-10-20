@@ -340,6 +340,36 @@ void c_push_scope(c_scope *scope)
 	active_scope = scope;
 }
 
+void c_pop_scope_light(c_scope *scope)
+{
+	if (scope->list.syms) {
+		yy_sym id, *p = scope->list.syms;
+		uint32_t n = scope->list.len;
+		void *ptr;
+		uintptr_t kind;
+
+		while (n) {
+			id = *p++;
+			n -= 1 + sizeof(void*)/sizeof(uint32_t);
+			p = pp_load_ptr(p, &ptr);
+			kind = ((uintptr_t)ptr) & C_POP_MASK;
+			ptr = (void*)(((uintptr_t)ptr) & ~C_POP_MASK);
+			switch (kind) {
+				case C_POP_SYM:
+					yy_hash.data[id].sym = ptr;
+					break;
+				case C_POP_TAG:
+					yy_hash.data[id].tag = ptr;
+					break;
+				default:
+					IR_ASSERT(0);
+			}
+		}
+		pp_list_release(scope->list.syms, scope->list.size);
+	}
+	active_scope = scope->prev;
+}
+
 void c_pop_scope(c_scope *scope)
 {
 	if (scope->vla_block
@@ -712,8 +742,8 @@ static bool c_compatible_types(const c_type *t1, const c_type *t2, bool unqualif
 
 	if (t1 == t2) return 1;
 
-	attr1 = t1->attr & ~((C_ATTR_ALIGN_MASK|C_ATTR_FLEXIBLE|C_FUNC_TYPE_ATTRS) - C_ATTR_VARIADIC);
-	attr2 = t2->attr & ~((C_ATTR_ALIGN_MASK|C_ATTR_FLEXIBLE|C_FUNC_TYPE_ATTRS) - C_ATTR_VARIADIC);
+	attr1 = t1->attr & ~((C_ATTR_ALIGN_MASK|C_ATTR_FLEXIBLE|C_ATTR_VLA|C_FUNC_TYPE_ATTRS) - C_ATTR_VARIADIC);
+	attr2 = t2->attr & ~((C_ATTR_ALIGN_MASK|C_ATTR_FLEXIBLE|C_ATTR_VLA|C_FUNC_TYPE_ATTRS) - C_ATTR_VARIADIC);
 	if (unqualified || func) {
 		attr1 &= ~(C_ATTR_CONST|C_ATTR_RESTRICT|C_ATTR_VOLATILE|C_ATTR_ATOMIC);
 		attr2 &= ~(C_ATTR_CONST|C_ATTR_RESTRICT|C_ATTR_VOLATILE|C_ATTR_ATOMIC);
@@ -1473,6 +1503,7 @@ void c_make_array_type(c_dcl *d, c_dcl *dim, c_value *len, uint64_t attr, bool i
 	c_type *type;
 	size_t length;
 	uint32_t align_attr = d->attr & C_ATTR_ALIGN_MASK;
+	yy_sym *vla_tokens = NULL;
 
 	d->attr &= ~C_ATTR_ALIGN_MASK;
 	c_finalize_type(d);
@@ -1486,13 +1517,15 @@ void c_make_array_type(c_dcl *d, c_dcl *dim, c_value *len, uint64_t attr, bool i
 		} else if (!c_value_is_const(len)) {
 			if (!active_scope) {
 				yy_error("array size must be a constant expression");
-			} else if (is_param) {
-				yy_error("variable length arrays parameters are not supported yet"); //???
 			} else {
 				attr |= C_ATTR_VLA;
-				c_value_ref(len);
-				if (len->type->kind != c_type_size_t.kind) {
-					c_do_cvt(&c_type_size_t, IR_SIZE_T, len);
+				if (!is_param) {
+					c_value_ref(len);
+					if (len->type->kind != c_type_size_t.kind) {
+						c_do_cvt(&c_type_size_t, IR_SIZE_T, len);
+					}
+				} else {
+					vla_tokens = len->u.val.ptr;
 				}
 				length = len->u.ref;
 			}
@@ -1515,8 +1548,11 @@ void c_make_array_type(c_dcl *d, c_dcl *dim, c_value *len, uint64_t attr, bool i
 	}
 	if (attr & C_ATTR_VLA) {
 		type->size = d->type->size;
+		type->array.length = length;
+		type->array.vla_tokens = vla_tokens;
 	} else {
 		type->size = d->type->size * length;
+		type->array.length = length;
 		attr |= d->type->attr & C_ATTR_VMT;
 	}
 	type->attr = attr | (d->attr & C_ARRAY_ATTRS);
@@ -1525,7 +1561,6 @@ void c_make_array_type(c_dcl *d, c_dcl *dim, c_value *len, uint64_t attr, bool i
 		type->attr |= d->type->attr & C_ATTR_ALIGN_MASK;
 	}
 	type->array.type = d->type;
-	type->array.length = length;
 
 	d->type = type;
 	d->flags &= ~C_TYPE_SPEC_ANY;
@@ -2074,17 +2109,31 @@ void c_declare_func_param(c_param **params, int32_t *num_params, c_name name, c_
 		type->pointer.type = param->type;
 		param->type = type;
 	} else if (param->type->kind == C_TYPE_ARRAY) {
-		param->type = c_create_pointer_type(param->type->array.type);
+		c_type *t = c_create_pointer_type(param->type->array.type);
+		t->attr |= (param->type->attr & C_ATTR_VLA);
+		t->array.length = param->type->array.length;
+		t->array.vla_tokens = param->type->array.vla_tokens;
+		param->type = t;
 	}
 
 	if (name) {
-		int32_t i;
+		c_sym *sym;
 
-		for (i = 0; i < *num_params; i++) {
-			if ((*params)[i].name == name) {
-				yy_error_fmt("redefinition of parameter \"%s\"", yy_sym2str(name));
-			}
+		sym = yy_hash.data[name].sym;
+		if (sym && sym->scope == active_scope && sym->kind == C_SYM_PARAM) {
+			yy_error_fmt("redefinition of parameter \"%s\"", yy_sym2str(name));
 		}
+
+		if (!active_scope->list.syms) pp_list_init(&active_scope->list);
+		pp_list_push(&active_scope->list, name);
+		pp_list_push_ptr(&active_scope->list, (void*)(((uintptr_t)sym) | C_POP_SYM));
+
+		sym = ir_arena_alloc(&c_arena, sizeof(c_sym));
+		memset(sym, 0, sizeof(c_sym));
+		sym->kind = C_SYM_PARAM;
+		sym->scope = active_scope;
+		c_value_set_lval(&sym->value, param->type, c_type2ir(param->type), *num_params + 1);
+		yy_hash.data[name].sym = sym;
 	}
 
 	if (*num_params >= C_ALLOCA_PARAMS) c_grow_func_params(params, num_params);
@@ -2096,14 +2145,23 @@ void c_declare_func_param(c_param **params, int32_t *num_params, c_name name, c_
 
 void c_declare_func_param_name(c_param **params, int32_t *num_params, c_name name)
 {
-	int32_t i;
+	c_sym *sym;
 
 	IR_ASSERT(name);
-	for (i = 0; i < *num_params; i++) {
-		if ((*params)[i].name == name) {
-			yy_error_fmt("multiple parameters named \"%s\"", yy_sym2str(name));
-		}
+	sym = yy_hash.data[name].sym;
+	if (sym && sym->scope == active_scope && sym->kind == C_SYM_PARAM) {
+		yy_error_fmt("multiple parameters named \"%s\"", yy_sym2str(name));
 	}
+
+	if (!active_scope->list.syms) pp_list_init(&active_scope->list);
+	pp_list_push(&active_scope->list, name);
+	pp_list_push_ptr(&active_scope->list, (void*)(((uintptr_t)sym) | C_POP_SYM));
+
+	sym = ir_arena_alloc(&c_arena, sizeof(c_sym));
+	memset(sym, 0, sizeof(c_sym));
+	sym->kind = C_SYM_PARAM;
+	sym->scope = active_scope;
+	yy_hash.data[name].sym = sym;
 
 	if (*num_params >= C_ALLOCA_PARAMS) c_grow_func_params(params, num_params);
 
@@ -7336,6 +7394,33 @@ void c_do_generic_end(c_value *res, c_generic *g)
 	c_do_end_nocode(g->old_control);
 }
 
+static void c_check_incomplete_vmt(const c_type *t)
+{
+	while (1) {
+		if (t->kind == C_TYPE_ARRAY || t->kind == C_TYPE_POINTER) {
+			t = t->pointer.type;
+		} else {
+			IR_ASSERT(0);
+			return;
+		}
+		if (!(t->attr & (C_ATTR_VLA|C_ATTR_VMT))) return;
+		if (t->attr & C_ATTR_VLA) {
+			c_value val;
+
+			IR_ASSERT(t->kind == C_TYPE_ARRAY);
+			if (!t->array.length) yy_error("[*] not allowed in other than function prototype scope");
+			if (t->array.vla_tokens) {
+				parse_vla_param_again(t->array.vla_tokens, &val);
+				c_value_ref(&val);
+				if (val.type->kind != c_type_size_t.kind) {
+					c_do_cvt(&c_type_size_t, IR_SIZE_T, &val);
+				}
+				((c_type*)t)->array.length = val.u.ref;
+			}
+		}
+	}
+}
+
 void c_do_func_start(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 {
 	c_sym *func;
@@ -7420,6 +7505,21 @@ void c_do_func_start(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 	for (i = 0; i < type->func.num_params; i++) {
 		c_param *p = &type->func.params[i];
 		const c_type *t = p->type;
+
+		if (t->attr & C_ATTR_VLA) {
+			c_value val;
+
+			IR_ASSERT(t->kind == C_TYPE_POINTER);
+			if (!t->array.length) yy_error("[*] not allowed in other than function prototype scope");
+			((c_type*)t)->attr &= ~C_ATTR_VLA;
+			if (t->array.vla_tokens) {
+				parse_vla_param_again(t->array.vla_tokens, &val);
+			}
+		}
+
+		if (t->attr & C_ATTR_VMT) {
+			c_check_incomplete_vmt(t);
+		}
 
 		if (p->name) {
 			c_name name = p->name;

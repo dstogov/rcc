@@ -25,7 +25,7 @@ static const char c_boot[] =
 "#define __STDC_NO_ATOMICS__      1\n"
 "#define __STDC_NO_COMPLEX__      1\n"
 "#define __STDC_NO_THREADS__      1\n"
-"#define __STDC_NO_VLA__          1\n"
+//"#define __STDC_NO_VLA__          1\n"
 /* allow GCC extensions: __attribute__ */
 //"#define __GNUC__                 3\n"
 //"#define __GNUC_MINOR__           2\n"
