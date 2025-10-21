@@ -115,7 +115,7 @@ static ir_strtab   c_strtab;
 
 static ir_ref c_value_ref(c_value *val);
 static void c_do_cvt(const c_type *t, ir_type type, c_value *v);
-static void ir_memzero(ir_ctx *ctx, ir_ref dst, ir_ref size);
+static void ir_memzero(ir_ctx *ctx, ir_ref dst, ir_ref size, uint32_t align);
 
 static bool c_valid_alignment(c_value *val)
 {
@@ -1331,12 +1331,12 @@ c_sym *c_declare(c_name name, c_dcl *d)
 					}
 					ref = ir_ALLOCA(size);
 					if (d->flags & C_DCL_DEFINITION) {
-						ir_memzero(active_ctx, ref, size);
+						ir_memzero(active_ctx, ref, size, c_attr2align(d->type->attr));
 					}
 					c_value_set_rval(&sym->value, d->type, c_type2ir(d->type), ref);
 				} else {
 					size_t size = (d->type->attr & C_ATTR_FLEXIBLE) ? (size_t)-1 : d->type->size;
-					ref = c_do_alloca(size, (d->flags & C_DCL_DEFINITION) != 0);
+					ref = c_do_alloca(size, c_attr2align(d->type->attr), (d->flags & C_DCL_DEFINITION) != 0);
 					c_value_set_rval(&sym->value, d->type, c_type2ir(d->type), ref);
 				}
 			} else if (d->type->kind == C_TYPE_STRUCT || d->type->kind == C_TYPE_UNION) {
@@ -1345,14 +1345,14 @@ c_sym *c_declare(c_name name, c_dcl *d)
 					int n = c_abi_lower_struct_arg(d->type, types);
 
 					if (n == 1) {
-						ref = c_do_alloca(d->type->size, (d->flags & C_DCL_DEFINITION) != 0);
+						ref = c_do_alloca(d->type->size, c_attr2align(d->type->attr), (d->flags & C_DCL_DEFINITION) != 0);
 						c_value_set_lval(&sym->value, d->type, types[0], ref);
 					} else {
 						IR_ASSERT(n == 0);
 						c_value_set_lval(&sym->value, d->type, IR_ADDR, IR_UNUSED);
 					}
 				} else {
-					ref = c_do_alloca(d->type->size, (d->flags & C_DCL_DEFINITION) != 0);
+					ref = c_do_alloca(d->type->size, c_attr2align(d->type->attr), (d->flags & C_DCL_DEFINITION) != 0);
 					c_value_set_lval(&sym->value, d->type, c_type2ir(d->type), ref);
 				}
 			} else {
@@ -2563,8 +2563,33 @@ static const c_type *c_type_by_kind(c_type_kind kind)
 	}
 }
 
-static void ir_memcpy(ir_ctx *ctx, ir_ref dst, ir_ref src, ir_ref size)
+static void ir_memcpy(ir_ctx *ctx, ir_ref dst, ir_ref src, ir_ref size, uint32_t align)
 {
+	if (IR_IS_CONST_REF(size)) {
+		ir_insn *size_insn = &active_ctx->ir_base[size];
+
+		if (!IR_IS_SYM_CONST(size_insn->op)) {
+			if (size_insn->val.u64 == 1) {
+				ir_STORE(dst, ir_LOAD_U8(src));
+				return;
+			} else if (size_insn->val.u64 == 2) {
+				if (align >= 2) {
+					ir_STORE(dst, ir_LOAD_U16(src));
+					return;
+				}
+			} else if (size_insn->val.u64 == 4) {
+				if (align >= 4) {
+					ir_STORE(dst, ir_LOAD_U32(src));
+					return;
+				}
+			} else if (size_insn->val.u64 == 8) {
+				if (align >= 8) {
+					ir_STORE(dst, ir_LOAD_U64(src));
+					return;
+				}
+			}
+		}
+	}
 	ir_CALL_3(IR_VOID,
 		ir_const_func(active_ctx,
 			ir_strl(active_ctx, "memcpy", sizeof("memcpy")-1),
@@ -2572,8 +2597,33 @@ static void ir_memcpy(ir_ctx *ctx, ir_ref dst, ir_ref src, ir_ref size)
 		dst, src, size);
 }
 
-static void ir_memzero(ir_ctx *ctx, ir_ref dst, ir_ref size)
+static void ir_memzero(ir_ctx *ctx, ir_ref dst, ir_ref size, uint32_t align)
 {
+	if (IR_IS_CONST_REF(size)) {
+		ir_insn *size_insn = &active_ctx->ir_base[size];
+
+		if (!IR_IS_SYM_CONST(size_insn->op)) {
+			if (size_insn->val.u64 == 1) {
+				ir_STORE(dst, ir_const_u8(active_ctx, 0));
+				return;
+			} else if (size_insn->val.u64 == 2) {
+				if (align >= 2) {
+					ir_STORE(dst, ir_const_u16(active_ctx, 0));
+					return;
+				}
+			} else if (size_insn->val.u64 == 4) {
+				if (align >= 4) {
+					ir_STORE(dst, ir_const_u32(active_ctx, 0));
+					return;
+				}
+			} else if (size_insn->val.u64 == 8) {
+				if (align >= 8) {
+					ir_STORE(dst, ir_const_u64(active_ctx, 0));
+					return;
+				}
+			}
+		}
+	}
 	ir_CALL_3(IR_VOID,
 		ir_const_func(active_ctx,
 			ir_strl(active_ctx, "memset", sizeof("memset")-1),
@@ -2581,7 +2631,7 @@ static void ir_memzero(ir_ctx *ctx, ir_ref dst, ir_ref size)
 		dst, ir_const_i32(active_ctx, 0), size);
 }
 
-ir_ref c_do_alloca(size_t size, bool zero)
+ir_ref c_do_alloca(size_t size, uint32_t align, bool zero)
 {
 	ir_ref size_ref = (size == (size_t)-1) ? IR_UNUSED : ir_const_size_t(active_ctx, size);
 	ir_ref ref;
@@ -2594,7 +2644,7 @@ ir_ref c_do_alloca(size_t size, bool zero)
 
 	ref = ir_ALLOCA(size_ref);
 	if (zero) {
-		ir_memzero(active_ctx, ref, size_ref);
+		ir_memzero(active_ctx, ref, size_ref, align);
 	}
 
 	if (c_prologue_end) {
@@ -3409,12 +3459,13 @@ void c_do_cast(const c_type *t, c_value *v)
 			for (i = 0, f = t->record.fields; i < t->record.num_fields; f++, i++) {
 				if (f->type == v->type
 				 || c_compatible_types(f->type, v->type, 1, 0)) {
-					ir_ref addr = c_do_alloca(t->size, 0);
+					ir_ref addr = c_do_alloca(t->size, c_attr2align(t->attr), 0);
 					if (C_IS_TYPE_SCALAR_OR_PTR(v->type)) {
 						ir_STORE(addr, c_value_ref(v));
 					} else {
 						IR_ASSERT(v->type->size);
-						ir_memcpy(active_ctx, addr, c_value_ref(v), ir_const_size_t(active_ctx, v->type->size));
+						ir_memcpy(active_ctx, addr, c_value_ref(v),
+							ir_const_size_t(active_ctx, v->type->size), c_attr2align(v->type->attr));
 					}
 					c_value_set_rval(v, t, IR_ADDR, addr);
 					return;
@@ -4201,7 +4252,7 @@ void c_do_builtin_va_arg(c_value *val, c_value *list, const c_type *type)
 		if (n == 1) {
 			t = types[0];
 			ref = ir_VA_ARG(c_value_ref(list), t);
-			alloca = c_do_alloca(type->size, 0);
+			alloca = c_do_alloca(type->size, c_attr2align(type->attr), 0);
 			ir_STORE(alloca, ref);
 			c_value_set_lval(val, type, IR_ADDR, alloca);
 		} else {
@@ -4358,7 +4409,7 @@ static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, i
 				int size = ir_const_size_t(ctx, arg_insn->op2);
 				ir_ref dst = ir_ALLOCA(size);
 				ir_ref src = arg_insn->op1;
-				ir_memcpy(ctx, dst, src, size);
+				ir_memcpy(ctx, dst, src, size, arg_insn->op3);
 				MAKE_NOP(arg_insn);
 				xlat2[i] = xlat[i] = dst;
 				xlat2[1] = xlat[1] = ctx->control;
@@ -4584,12 +4635,12 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args)
 
 		if (n == 1) {
 			_ret_type = types[0];
-			ret_struct = c_do_alloca(ret_type->size, 0);
+			ret_struct = c_do_alloca(ret_type->size, c_attr2align(ret_type->attr), 0);
 		} else {
 			IR_ASSERT(n == 0);
 			_ret_type = IR_ADDR;
 			j = 1;
-			ret_struct = c_do_alloca(ret_type->size, 0);
+			ret_struct = c_do_alloca(ret_type->size, c_attr2align(ret_type->attr), 0);
 		}
 	} else {
 		_ret_type = c_type2ir(ret_type);
@@ -5576,7 +5627,8 @@ void c_do_assign_op(yy_sym sym, c_value *op1, c_value *op2)
 	} else {
 		IR_ASSERT(op1->type->size == op2->type->size);
 		if (op1->type->size) {
-			ir_memcpy(active_ctx, op1->u.ref, c_value_ref(op2), ir_const_size_t(active_ctx, op2->type->size));
+			ir_memcpy(active_ctx, op1->u.ref, c_value_ref(op2),
+				ir_const_size_t(active_ctx, op2->type->size), c_attr2align(op2->type->attr));
 		}
 	}
 }
@@ -6442,7 +6494,8 @@ void c_do_return(c_value *val)
 			} else {
 				IR_ASSERT(n == 0);
 				ir_ref ret_param = 2; /* 2 - reference to the first IR_PARAM */
-				ir_memcpy(active_ctx, ret_param, val->u.ref, ir_const_size_t(active_ctx, val->type->size));
+				ir_memcpy(active_ctx, ret_param, val->u.ref,
+					ir_const_size_t(active_ctx, val->type->size), c_attr2align(val->type->attr));
 				ir_RETURN(ret_param);
 			}
 		} else {
@@ -6756,7 +6809,8 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 				ir_memcpy(active_ctx,
 					obj->value.u.ref,
 					c_create_str_sym(val),
-					ir_const_size_t(active_ctx, len));
+					ir_const_size_t(active_ctx, len),
+					c_attr2align(obj->value.type->attr));
 			}
 			return;
 		}
@@ -6821,7 +6875,8 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 			ir_memcpy(active_ctx,
 				obj->value.u.ref,
 				c_value_ref(val),
-				ir_const_size_t(active_ctx, val->type->size));
+				ir_const_size_t(active_ctx, val->type->size),
+				c_attr2align(val->type->attr));
 		}
 	}
 	if (obj->tmp_data) {
@@ -7066,7 +7121,8 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 				ir_memcpy(active_ctx,
 					ir_ADD_A(obj->value.u.ref, ir_const_size_t(active_ctx, offset)),
 					c_create_str_sym(val),
-					ir_const_size_t(active_ctx, len));
+					ir_const_size_t(active_ctx, len),
+					c_attr2align(type->attr));
 			}
 			return;
 		}
@@ -7144,7 +7200,8 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 				ir_memcpy(active_ctx,
 					ir_ADD_A(obj->value.u.ref, ir_const_size_t(active_ctx, offset)),
 					c_value_ref(val),
-					ir_const_size_t(active_ctx, type->size));
+					ir_const_size_t(active_ctx, type->size),
+					c_attr2align(type->attr));
 			}
 		} else if (active_ctx->ir_base[obj->value.u.ref].op == IR_VAR) {
 			IR_ASSERT(!C_IS_BIT_FIELD(bit_field));
@@ -7248,8 +7305,8 @@ void c_do_init_expr_start(c_sym *obj, const c_type *type)
 	obj->kind = C_SYM_VAR;
 	if (active_func && !c_static_data) {
 		ir_ref size = ir_const_size_t(active_ctx, type->size);
-		ir_ref addr = c_do_alloca(type->size, 0);
-		ir_memzero(active_ctx, addr, size);
+		ir_ref addr = c_do_alloca(type->size, c_attr2align(type->attr), 0);
+		ir_memzero(active_ctx, addr, size, c_attr2align(type->attr));
 		c_value_set_rval(&obj->value, type, IR_ADDR, addr);
 	} else {
 		c_dcl d = {.type = type, .flags = C_DCL_DEFINITION, .attr = 0};

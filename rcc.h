@@ -1002,7 +1002,7 @@ void c_value_rval(c_value *val);
 
 ir_ref c_do_nocode(void);
 void c_do_end_nocode(ir_ref old_control);
-ir_ref c_do_alloca(size_t size, bool zero);
+ir_ref c_do_alloca(size_t size, uint32_t align, bool zero);
 void c_do_cast(const c_type *t, c_value *v);
 void c_do_post_op(yy_sym sym, c_value *v);
 void c_do_pre_op(yy_sym sym, c_value *v);
