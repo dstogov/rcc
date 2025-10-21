@@ -1,7 +1,7 @@
 --TEST--
 tinycc 120: alias
 --ARGS--
---run
+./tests/tinycc/tests2/inc/120_alias.c --run
 --XFAIL--
 asm support not implemented yet
 --CODE--

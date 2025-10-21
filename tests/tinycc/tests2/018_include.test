@@ -46,7 +46,7 @@ int main()
 
 #include "inc/018_include2.h"
 #include "./inc/018_include2.h"
-#include "../tinycc/inc/018_include2.h"
+#include "../tests2/inc/018_include2.h"
 
    return 0;
 }
