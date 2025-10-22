@@ -2522,7 +2522,7 @@ static int8_t c_parse_reg_var(const char *str)
 			if (reg > 15) goto error;
 			s++;
 		}
-		reg += 16;
+		reg += IR_REG_FP_FIRST;
 	} else if (*s == 'e') {
 		s++;
 		if (s[0] == 's' && s[1] == 'p') {
@@ -2591,6 +2591,121 @@ static int8_t c_parse_reg_var(const char *str)
 	if (*s != 0) goto error;
 
 	if (reg == 4) yy_error_fmt("cannot use register \"%s\" for variable", s);
+
+	return reg;
+
+error:
+#elif defined(IR_TARGET_X86)
+	if (*s == '%') s++;
+	if (*s == 'r' && s[1] >= '0' && s[1] <= '9')) {
+		reg = s[1] - '0';
+		s += 2;
+		if (reg > 7) goto error;
+	} else if (s[0] == 'x' && s[1] == 'm' && s[2] == 'm' && s[3] >= '0' && s[3] <= '9') {
+		reg = s[3] - '0';
+		s += 4;
+		if (reg > 7) goto error;
+		reg += IR_REG_FP_FIRST;
+	} else if (*s == 'e') {
+		s++;
+		if (s[0] == 's' && s[1] == 'p') {
+			reg = 4;
+			s += 2;
+		} else if (s[0] == 'a' && s[1] == 'x') {
+			reg = 0;
+			s += 2;
+		} else if (s[0] == 'c' && s[1] == 'x') {
+			reg = 1;
+			s += 2;
+		} else if (s[0] == 'd' && s[1] == 'x') {
+			reg = 2;
+			s += 2;
+		} else if (s[0] == 'b' && s[1] == 'x') {
+			reg = 3;
+			s += 2;
+		} else if (s[0] == 'b' && s[1] == 'p') {
+			reg = 5;
+			s += 2;
+		} else if (s[0] == 's' && s[1] == 'i') {
+			reg = 6;
+			s += 2;
+		} else if (s[0] == 'd' && s[1] == 'i') {
+			reg = 7;
+			s += 2;
+		} else {
+			goto error;
+		}
+	} else if (s[0] == 'a' && s[1] == 'x') {
+		reg = 0;
+		s += 2;
+	} else if (s[0] == 'c' && s[1] == 'x') {
+		reg = 1;
+		s += 2;
+	} else if (s[0] == 'd' && s[1] == 'x') {
+		reg = 2;
+		s += 2;
+	} else if (s[0] == 'b' && s[1] == 'x') {
+		reg = 3;
+		s += 2;
+	} else if (s[0] == 'b' && s[1] == 'p') {
+		reg = 5;
+		s += 2;
+	} else if (s[0] == 's' && s[1] == 'i') {
+		reg = 6;
+		s += 2;
+	} else if (s[0] == 'd' && s[1] == 'i') {
+		reg = 7;
+		s += 2;
+	} else if (s[0] == 'a' && s[1] == 'l') {
+		reg = 0;
+		s += 2;
+	} else if (s[0] == 'c' && s[1] == 'l') {
+		reg = 1;
+		s += 2;
+	} else if (s[0] == 'd' && s[1] == 'l') {
+		reg = 2;
+		s += 2;
+	} else if (s[0] == 'b' && s[1] == 'l') {
+		reg = 3;
+		s += 2;
+	} else {
+		goto error;
+	}
+	if (*s != 0) goto error;
+
+	if (reg == 4) yy_error_fmt("cannot use register \"%s\" for variable", s);
+
+	return reg;
+
+error:
+#elif defined(IR_TARGET_AARCH64)
+	if ((s[0] == 'x' || s[0] == 'w')  && s[1] >= '0' && s[1] <= '9') {
+		reg = s[1] - '0';
+		s += 2;
+		if (*s >= '0' && *s <= '9') {
+			reg = reg * 10 + (*s - '0');
+			if (reg > 31) goto error;
+			s++;
+		}
+	} else if ((s[0] == 'd' || s[0] == 's' || s[0] == 'h' || s[0] == 'b')  && s[1] >= '0' && s[1] <= '9') {
+		reg = s[1] - '0';
+		s += 2;
+		if (*s >= '0' && *s <= '9') {
+			reg = reg * 10 + (*s - '0');
+			if (reg > 31) goto error;
+			s++;
+		}
+		reg += IR_REG_FP_FIRST;
+	} else {
+		goto error;
+	}
+	if (*s != 0) goto error;
+
+	if (reg == IR_REG_INT_TMP
+	 || reg == IR_REG_X18
+	 || (reg >= IR_REG_X29 && reg <= IR_REG_X31)) {
+		yy_error_fmt("cannot use register \"%s\" for variable", s);
+	}
 
 	return reg;
 

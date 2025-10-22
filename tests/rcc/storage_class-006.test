@@ -1,6 +1,13 @@
 --TEST--
 Storage-class specifiers 006
 --CODE--
-register int x6 __asm__("r0");
+#if defined(__i386__) || defined(__x86_64__)
+# define REG __asm__("r0")
+#elif defined(__aarch64__)
+# define REG __asm__("x0")
+#else
+# define REG
+#endif
+register int x6 REG;
 --EXPECT--
-./tests/rcc/storage_class-006.c:1:30: warning: call-clobbered register used for global register variable "x6"
+./tests/rcc/storage_class-006.c:8:20: warning: call-clobbered register used for global register variable "x6"
