@@ -5,6 +5,15 @@
  */
 
 #include <ir.h>
+
+#if defined(IR_TARGET_X86) || defined(IR_TARGET_X64)
+# include "ir_x86.h"
+#elif defined(IR_TARGET_AARCH64)
+# include "ir_aarch64.h"
+#else
+# error "Unknown IR target"
+#endif
+
 #include <ir_private.h>
 #include <ir_builder.h>
 
@@ -1374,6 +1383,28 @@ c_sym *c_declare(c_name name, c_dcl *d)
 					ref = c_do_alloca(d->type->size, c_attr2align(d->type->attr), (d->flags & C_DCL_DEFINITION) != 0);
 					c_value_set_lval(&sym->value, d->type, c_type2ir(d->type), ref);
 				}
+			} else if (d->flags & C_DCL_REG_VAR) {
+				/* local register variables */
+				if (C_IS_TYPE_INT_OR_PTR(d->type)) {
+					if (d->reg >= IR_REG_FP_FIRST) yy_error_fmt("data type of \"%s\" is not suitable for a floating point register", yy_sym2str(name));
+				} else if (C_IS_TYPE_FP(d->type)) {
+					if (d->reg < IR_REG_FP_FIRST) yy_error_fmt("data type of \"%s\" is not suitable for a general purpose register", yy_sym2str(name));
+				} else {
+					yy_error_fmt("data type of \"%s\" is not suitable for a register", yy_sym2str(name));
+				}
+				if (IR_REGSET_IN(IR_REGSET_PRESERVED, d->reg)) {
+					if (active_ctx->fixed_regset & (1ULL << d->reg)) {
+						yy_error_fmt("register \"%s\" is already used", ir_reg_name(d->reg, c_type2ir(d->type)));
+					}
+					active_ctx->fixed_regset |= 1ULL << d->reg;
+					active_ctx->fixed_save_regset |= 1ULL << d->reg;
+				} else {
+					if (active_ctx->fixed_regset & (1ULL << d->reg)) {
+						yy_error_fmt("register \"%s\" is already used", ir_reg_name(d->reg, c_type2ir(d->type)));
+					}
+					active_ctx->fixed_regset |= 1ULL << d->reg;
+				}
+				c_value_set_reg(&sym->value, d->type, c_type2ir(d->type), d->reg);
 			} else {
 				ref = ir_var(active_ctx, c_type2ir(d->type), 1, yy_sym2str(name));
 				c_value_set_var(&sym->value, d->type, c_type2ir(d->type), ref);
@@ -2418,6 +2449,137 @@ void c_gcc_attribute_alias(c_dcl *d, c_name attr, c_value *val)
 	}
 }
 
+static int8_t c_parse_reg_var(const char *str)
+{
+	int8_t reg = 0;
+	const char *s = str;
+
+#if defined(IR_TARGET_X64)
+	if (*s == '%') s++;
+	if (*s == 'r') {
+		s++;
+		if (*s >= '0' && *s <= '9') {
+			reg = *s - '0';
+			s++;
+			if (*s >= '0' && *s <= '9') {
+				reg = reg * 10 + (*s - '0');
+				if (reg > 15) goto error;
+				s++;
+				if (*s == 'd' || *s == 'w' || *s == 'b') s++;
+			}
+		} else if (s[0] == 's' && s[1] == 'p') {
+			reg = 4;
+			s += 2;
+		} else if (s[0] == 'a' && s[1] == 'x') {
+			reg = 0;
+			s += 2;
+		} else if (s[0] == 'c' && s[1] == 'x') {
+			reg = 1;
+			s += 2;
+		} else if (s[0] == 'd' && s[1] == 'x') {
+			reg = 2;
+			s += 2;
+		} else if (s[0] == 'b' && s[1] == 'x') {
+			reg = 3;
+			s += 2;
+		} else if (s[0] == 'b' && s[1] == 'p') {
+			reg = 5;
+			s += 2;
+		} else if (s[0] == 's' && s[1] == 'i') {
+			reg = 6;
+			s += 2;
+		} else if (s[0] == 'd' && s[1] == 'i') {
+			reg = 7;
+			s += 2;
+		} else {
+			goto error;
+		}
+	} else if (s[0] == 'x' && s[1] == 'm' && s[2] == 'm' && s[3] >= '0' && s[3] <= '9') {
+		reg = s[3] - '0';
+		s += 4;
+		if (*s >= '0' && *s <= '9') {
+			reg = reg * 10 + (*s - '0');
+			if (reg > 15) goto error;
+			s++;
+		}
+		reg += 16;
+	} else if (*s == 'e') {
+		s++;
+		if (s[0] == 's' && s[1] == 'p') {
+			reg = 4;
+			s += 2;
+		} else if (s[0] == 'a' && s[1] == 'x') {
+			reg = 0;
+			s += 2;
+		} else if (s[0] == 'c' && s[1] == 'x') {
+			reg = 1;
+			s += 2;
+		} else if (s[0] == 'd' && s[1] == 'x') {
+			reg = 2;
+			s += 2;
+		} else if (s[0] == 'b' && s[1] == 'x') {
+			reg = 3;
+			s += 2;
+		} else if (s[0] == 'b' && s[1] == 'p') {
+			reg = 5;
+			s += 2;
+		} else if (s[0] == 's' && s[1] == 'i') {
+			reg = 6;
+			s += 2;
+		} else if (s[0] == 'd' && s[1] == 'i') {
+			reg = 7;
+			s += 2;
+		} else {
+			goto error;
+		}
+	} else if (s[0] == 'a' && s[1] == 'x') {
+		reg = 0;
+		s += 2;
+	} else if (s[0] == 'c' && s[1] == 'x') {
+		reg = 1;
+		s += 2;
+	} else if (s[0] == 'd' && s[1] == 'x') {
+		reg = 2;
+		s += 2;
+	} else if (s[0] == 'b' && s[1] == 'x') {
+		reg = 3;
+		s += 2;
+	} else if (s[0] == 'b' && s[1] == 'p') {
+		reg = 5;
+		s += 2;
+	} else if (s[0] == 's' && s[1] == 'i') {
+		reg = 6;
+		s += 2;
+	} else if (s[0] == 'd' && s[1] == 'i') {
+		reg = 7;
+		s += 2;
+	} else if (s[0] == 'a' && s[1] == 'l') {
+		reg = 0;
+		s += 2;
+	} else if (s[0] == 'c' && s[1] == 'l') {
+		reg = 1;
+		s += 2;
+	} else if (s[0] == 'd' && s[1] == 'l') {
+		reg = 2;
+		s += 2;
+	} else if (s[0] == 'b' && s[1] == 'l') {
+		reg = 3;
+		s += 2;
+	} else {
+		goto error;
+	}
+	if (*s != 0) goto error;
+
+	if (reg == 4) yy_error_fmt("cannot use register \"%s\" for variable", s);
+
+	return reg;
+
+error:
+#endif
+	yy_error_fmt("invalid register \"%s\"", s);
+	return IR_REG_NONE;
+}
+
 void c_asm_alias(c_dcl *d, c_value *val)
 {
 	if (d->alias) {
@@ -2432,7 +2594,8 @@ void c_asm_alias(c_dcl *d, c_value *val)
 		d->alias = id;
 	} else if ((d->flags & C_DCL_STORAGE_CLASS) == C_DCL_REGISTER) {
 		if (active_scope) {
-			yy_error("local register variables are not supported yet");
+			d->flags |= C_DCL_REG_VAR;
+			d->reg = c_parse_reg_var((const char*)val->u.val.ptr);
 		} else {
 			yy_error("global register variables are not supported yet");
 		}
@@ -2889,6 +3052,8 @@ void c_value_rval(c_value *val)
 		IR_ASSERT(val->type->kind != C_TYPE_ARRAY && val->type->kind != C_TYPE_FUNC);
 		if (c_value_is_var(val)) {
 			val->u.ref = ir_VLOAD(val->u.type, val->u.ref);
+		} else if (c_value_is_reg(val)) {
+			val->u.ref = ir_RLOAD(val->u.type, val->u.ref);
 		} else if (val->type->kind != C_TYPE_STRUCT && val->type->kind != C_TYPE_UNION) {
 			if (!C_IS_BIT_FIELD(val->u.proto)) {
 				if ((val->type->attr & C_ATTR_CONST)
@@ -2927,7 +3092,7 @@ void c_value_rval(c_value *val)
 				c_do_load_bit_field_packed(val, C_BIT_FIELD_START(val->u.proto), C_BIT_FIELD_SIZE(val->u.proto));
 			}
 		}
-		val->u.op &= ~(C_VAL_LVAL|C_VAL_VAR);
+		val->u.op &= ~(C_VAL_LVAL|C_VAL_VAR|C_VAL_REG);
 	}
 }
 
@@ -3217,6 +3382,8 @@ void c_do_addr(c_value *v)
 	if (c_value_is_ref(v)) {
 		if (c_value_is_var(v)) {
 			ref = ir_VADDR(v->u.ref);
+		} else if (c_value_is_reg(v)) {
+			yy_error("cannot take address of register variable");
 		} else {
 			ref = v->u.ref;
 		}
@@ -3378,6 +3545,8 @@ static ir_ref c_do_store(c_value *addr, c_value *val)
 		ref = c_value_ref(val);
 		if (c_value_is_var(addr)) {
 			ir_VSTORE(addr->u.ref, ref);
+		} else if (c_value_is_reg(addr)) {
+			ir_RSTORE(addr->u.ref, ref);
 		} else {
 			ir_STORE(addr->u.ref, ref);
 		}
@@ -4797,7 +4966,9 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args)
 		arg_refs = alloca(sizeof(ir_ref));
 		arg_refs[0] = ret_struct;
 	}
-	if (func->u.op & inlining) {
+	if ((func->u.op & inlining)
+	 && active_ctx->fixed_regset == ((ir_ctx*)func->u.val.ptr)->fixed_regset
+	 && active_ctx->fixed_save_regset == ((ir_ctx*)func->u.val.ptr)->fixed_save_regset) {
 		ref = ir_inline_call(active_ctx, (ir_ctx*)func->u.val.ptr, num_args + j, arg_refs);
 	} else if (!(func->u.op & C_VAL_BUILTIN)) {
 		ref = ir_CALL_N(_ret_type, c_value_ref(func), num_args + j, arg_refs);

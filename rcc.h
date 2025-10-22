@@ -574,6 +574,7 @@ void pp_list_grow(pp_list *l, uint32_t size);
 #define C_DCL_DEFINITION         (1<<25) /* used internally */
 #define C_DCL_PARAM              (1<<26) /* used internally */
 #define C_DCL_FOR                (1<<27) /* used internally */
+#define C_DCL_REG_VAR            (1<<28) /* used internally */
 
 #define C_DCL_STORAGE_CLASS      (C_DCL_TYPEDEF|C_DCL_EXTERN|C_DCL_STATIC|C_DCL_AUTO|C_DCL_REGISTER|C_DCL_THREAD_LOCAL)
 
@@ -739,9 +740,10 @@ struct _c_type {
 #define C_VAL_CONST    (1<<1)
 #define C_VAL_LVAL     (1<<2)
 #define C_VAL_VAR      (1<<3)
-#define C_VAL_BUILTIN  (1<<4)
-#define C_VAL_INLINE   (1<<5)
-#define C_VAL_STR      (1<<6)
+#define C_VAL_REG      (1<<4)
+#define C_VAL_BUILTIN  (1<<5)
+#define C_VAL_INLINE   (1<<6)
+#define C_VAL_STR      (1<<7)
 
 typedef struct {
 	const c_type  *type;
@@ -753,6 +755,7 @@ struct _c_dcl {
 	uint32_t               attr;
 	const c_type          *type;
 	c_name                 alias;
+	int8_t                 reg;
 };
 
 typedef enum {
@@ -1265,6 +1268,13 @@ IR_ALWAYS_INLINE void c_value_set_var(c_value *res, const c_type *type, ir_type 
 	res->u.ref = ref;
 }
 
+IR_ALWAYS_INLINE void c_value_set_reg(c_value *res, const c_type *type, ir_type t, int8_t reg)
+{
+	res->type = type;
+	res->u.optx = IR_OPT(C_VAL_REF | C_VAL_LVAL | C_VAL_REG, t);
+	res->u.ref = reg;
+}
+
 IR_ALWAYS_INLINE void c_value_set_const(c_value *res, const c_type *type, ir_type t, ir_val val)
 {
 	res->type = type;
@@ -1299,6 +1309,11 @@ IR_ALWAYS_INLINE bool c_value_is_lval(c_value *v)
 IR_ALWAYS_INLINE bool c_value_is_var(c_value *v)
 {
 	return (v->u.op & C_VAL_VAR) != 0;
+}
+
+IR_ALWAYS_INLINE bool c_value_is_reg(c_value *v)
+{
+	return (v->u.op & C_VAL_REG) != 0;
 }
 
 IR_ALWAYS_INLINE bool c_value_is_set(c_value *v)
