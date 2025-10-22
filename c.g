@@ -189,13 +189,9 @@ static yy_sym parse_vla_param(yy_sym sym, c_value *len);
 %}
 
 translation_unit:
-	(	simple_asm_expr ";"
+	(	("asm"|"__asm"|"__asm__") "(" STRING+ ")" ";"      {/*???*/yy_error("asm support not implemented yet");}
 	|	"__extension__"? declaration(0)
 	)*
-;
-
-simple_asm_expr:
-	("asm"|"__asm"|"__asm__") "(" STRING+ ")"              {/*???*/yy_error("asm support not implemented yet");}
 ;
 
 /* Declarations */
@@ -218,7 +214,7 @@ declaration(uint32_t flags):                               {c_dcl d0 = {0};}
 				|	"="
 				|	","
 				|	";")
-				simple_asm_expr?
+				asm_name(&d)?
 				attributes(&d)?                            {if (sym == YY__EQUAL) d.flags |= C_DCL_DEFINITION;}
 				                                           {obj = c_declare(name, &d);}
 				("=" initializer(obj))?
@@ -226,7 +222,7 @@ declaration(uint32_t flags):                               {c_dcl d0 = {0};}
 					","                                    {d = d0;}
 					attributes(&d)?
 					declarator(&d, &name, 0)
-					simple_asm_expr?
+					asm_name(&d)?
 					attributes(&d)?                        {if (sym == YY__EQUAL) d.flags |= C_DCL_DEFINITION;}
 					                                       {obj = c_declare(name, &d);}
 					("=" initializer(obj))?
@@ -251,7 +247,7 @@ old_style_param_declaration(const c_type *t):              {c_dcl d0 = {0};}
                                                            {c_name name;}
 	declaration_specifiers(&d0)                            {c_dcl d = d0;}
 	declarator(&d, &name, 0)
-	simple_asm_expr?
+	asm_name(&d)?
 	attributes(&d)?                                        {c_declare_func_param_type(t, name, &d);}
 	(	"="                                                {yy_error_fmt("parameter \"%s\" is initialized", yy_sym2str(name));}
 		initializer(NULL)
@@ -259,7 +255,7 @@ old_style_param_declaration(const c_type *t):              {c_dcl d0 = {0};}
 	(
 		","                                                {d = d0;}
 		declarator(&d, &name, 0)
-		simple_asm_expr?
+		asm_name(&d)?
 		attributes(&d)?                                    {c_declare_func_param_type(t, name, &d);}
 		(	"="                                            {yy_error_fmt("parameter \"%s\" is initialized", yy_sym2str(name));}
 			initializer(NULL)
@@ -436,10 +432,16 @@ attrib(c_dcl *d):                                          {c_name name = sym;}
 	|	("packed"|"__packed__")                            {c_gcc_attribute_packed(d, name);}
 	|	("pure"|"__pure__")                                {d->attr |= C_ATTR_PURE;}
 	|	("unused"|"__unused__")                            {d->attr |= C_ATTR_UNUSED;}
+	|	("alias"|"__alias__")
+		( "(" strings(&v) ")" )?                           {c_gcc_attribute_alias(d, name, &v);}
 	|	("vector_size"|"__vector_size__")
 		( "(" constant_expression(&v) ")" )?               {yy_error_fmt("unsupported attribute \"%s\"", yy_sym2str(name));}
 	|	ID(&name)                                          {sym = c_gcc_attribute(d, name, sym);}
 	)?
+;
+
+asm_name(c_dcl *d):                                        {c_value val;}
+	("asm"|"__asm"|"__asm__") "(" strings(&val) ")"        {c_asm_alias(d, &val);}
 ;
 
 struct_or_union_specifier(c_dcl *d):                       {c_name name;}

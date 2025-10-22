@@ -1,0 +1,19 @@
+--TEST--
+Alias 002:
+--ARGS--
+--run
+--CODE--
+int printf(const char *, ...);
+const char x[] = "OK\n";
+extern const char y[] __attribute__((alias("x")));
+extern const char z[] __asm__("x");
+int main() {
+	printf(x);
+	printf(y);
+	printf(z);
+	return 0;
+}
+--EXPECT--
+OK
+OK
+OK

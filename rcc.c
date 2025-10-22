@@ -1047,6 +1047,7 @@ static void rcc_emit_ir(FILE *f)
 
 	for (i = YY_LAST_KEYWORD + 1, p = yy_hash.data + i; i < yy_hash.count; p++, i++) {
 		if (p->sym && p->sym->kind == C_SYM_FUNC) {
+			if ((p->sym->is_external || !p->sym->ctx) && p->sym->alias) continue;
 			rcc_dump_func_proto(i, 1, f);
 		}
 	}
@@ -1058,6 +1059,7 @@ static void rcc_emit_ir(FILE *f)
 			if (p->sym->linkage == C_LINK_INTERNAL) {
 				fprintf(f, "static ");
 			} else if (p->sym->is_external || !c_value_is_set(&p->sym->value)) {
+				if (p->sym->alias) continue;
 				fprintf(f, "extern %s @%s;\n",
 					(p->sym->is_string || c_is_type_const(p->sym->value.type)) ? "const" : "var",
 					yy_sym2str(i));
@@ -1066,7 +1068,7 @@ static void rcc_emit_ir(FILE *f)
 			size = p->sym->is_string ? (size_t)p->sym->value.u.ref : p->sym->value.type->size;
 			fprintf(f, "%s @%s[%" PRIuPTR "]%s",
 				(p->sym->is_string || c_is_type_const(p->sym->value.type)) ? "const" : "var",
-				yy_sym2str(i),
+				yy_sym2str(p->sym->alias ? p->sym->alias : i),
 				size,
 				p->sym->is_implemented ?
 					((p->sym->is_string && p->sym->value.type->array.type->size == 1) ? " = \"" : " = {\n") : ";\n");
@@ -1122,6 +1124,7 @@ static void rcc_emit_llvm(FILE *f)
 
 	for (i = YY_LAST_KEYWORD + 1, p = yy_hash.data + i; i < yy_hash.count; p++, i++) {
 		if (p->sym && p->sym->kind == C_SYM_FUNC && !p->sym->ctx) {
+			if ((p->sym->is_external || !p->sym->ctx) && p->sym->alias) continue;
 			rcc_emit_llvm_proto(p->str, p->sym, f);
 		}
 	}
@@ -1129,6 +1132,7 @@ static void rcc_emit_llvm(FILE *f)
 	for (i = YY_LAST_KEYWORD + 1, p = yy_hash.data + i; i < yy_hash.count; p++, i++) {
 		if (p->sym && p->sym->kind == C_SYM_VAR) {
 			uint32_t flags = 0;
+			const char *str;
 
 			if (p->sym->linkage == C_LINK_INTERNAL) {
 				flags |= IR_STATIC;
@@ -1138,8 +1142,13 @@ static void rcc_emit_llvm(FILE *f)
 			if (c_is_type_const(p->sym->value.type)) {
 				flags |= IR_CONST;
 			}
+			if (p->sym->alias) {
+				str = yy_hash.data[p->sym->alias].str;
+			} else {
+				str = p->str;
+			}
 			//TODO: type ???
-			ir_emit_llvm_sym_decl(p->str, flags, f);
+			ir_emit_llvm_sym_decl(str, flags, f);
 			//TODO: initializer ???
 		}
 	}
@@ -1332,6 +1341,16 @@ static void rcc_update_link(yy_hash_bucket *p)
 {
 	c_sym *sym = p->sym;
 
+	if (!sym->value.u.val.ptr) {
+		if (!sym->alias) return;
+		if (yy_hash.data[sym->alias].link) {
+			p->link = yy_hash.data[sym->alias].link;
+			return;
+		}
+		sym = yy_hash.data[sym->alias].sym;
+		if (!sym || !sym->value.u.val.ptr) return;
+	}
+
 	if (p->link) {
 		if (sym->is_thunk) {
 			if (!p->link->is_thunk || sym->value.u.val.ptr != p->link->addr) {
@@ -1347,7 +1366,6 @@ static void rcc_update_link(yy_hash_bucket *p)
 	} else {
 		c_linker_sym *link = ir_arena_alloc(&yy_arena, sizeof(c_linker_sym));
 
-		IR_ASSERT(!p->link);
 		link->addr = sym->value.u.val.ptr;
 		link->reloc = sym->reloc;
 		link->is_thunk = sym->is_thunk;

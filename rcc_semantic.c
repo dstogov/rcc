@@ -484,7 +484,7 @@ void c_resolve_sym_name(c_value *res, c_name name, yy_sym sym)
 			size_t name_len;
 			ir_ref ref;
 
-			name_str = yy_sym2strl(name, &name_len);
+			name_str = yy_sym2strl(s->alias ? s->alias : name, &name_len);
 			if (s->kind == C_SYM_FUNC) {
 				ref = ir_const_func(active_ctx, ir_strl(active_ctx, name_str, name_len),
 					c_type2proto(s->value.type, s->linkage));
@@ -906,6 +906,13 @@ static void c_validate_redeclaration(c_name name, c_dcl *d, c_sym *sym)
 			if (d->flags & C_DCL_DEFINITION) {
 				sym->is_implemented = 1;
 			}
+			if (d->alias) {
+				if (!sym->alias) {
+					if (d->alias != name) sym->alias = d->alias;
+				} else if (d->alias != sym->alias) {
+					yy_error_fmt("incompatible redeclaration of \"%s\"", yy_sym2str(name));
+				}
+			}
 			if ((sym->value.type->attr & C_ATTR_OLD_FUNC) && !(d->type->attr & C_ATTR_OLD_FUNC)) {
 				c_type *t = (c_type*)sym->value.type;
 				t->attr &= ~C_ATTR_OLD_FUNC;
@@ -939,6 +946,13 @@ static void c_validate_redeclaration(c_name name, c_dcl *d, c_sym *sym)
 		}
 		if (d->flags & C_DCL_DEFINITION) {
 			sym->is_implemented = 1;
+		}
+		if (d->alias) {
+			if (!sym->alias) {
+				if (d->alias != name) sym->alias = d->alias;
+			} else if (d->alias != sym->alias) {
+				yy_error_fmt("incompatible redeclaration of \"%s\"", yy_sym2str(name));
+			}
 		}
 		if (!c_value_is_const(&sym->value)
 		 && !(d->flags & C_DCL_EXTERN)
@@ -1235,6 +1249,7 @@ c_sym *c_declare(c_name name, c_dcl *d)
 			sym->linkage = C_LINK_BUILTIN;
 		} else {
 			sym->linkage = (d->flags & C_DCL_STATIC) ? C_LINK_INTERNAL : C_LINK_EXTERNAL;
+			if (d->alias != name)  sym->alias = d->alias;
 		}
 		sym->is_thread_local = 0;
 		sym->is_implemented = (d->flags & C_DCL_DEFINITION) != 0;
@@ -1251,6 +1266,7 @@ c_sym *c_declare(c_name name, c_dcl *d)
 		sym->kind = C_SYM_VAR;
 		if ((d->flags & (C_DCL_STATIC|C_DCL_EXTERN)) || !scope) {
 			sym->linkage = (d->flags & C_DCL_STATIC) ? C_LINK_INTERNAL : C_LINK_EXTERNAL;
+			if (d->alias != name) sym->alias = d->alias;
 			sym->is_thread_local = (d->flags & C_DCL_THREAD_LOCAL) != 0;
 
 			if (UNEXPECTED(d->type->attr & (C_ATTR_VLA|C_ATTR_VMT))) {
@@ -1292,7 +1308,7 @@ c_sym *c_declare(c_name name, c_dcl *d)
 					sym->value.u.val.ptr = addr;
 					sym->value.u.ref = name; /* keep name in addition to address */
 				} else {
-					c_name sym_name = c_create_static_var(name, d);
+					c_name sym_name = sym->alias ? sym->alias : c_create_static_var(name, d);
 					size_t len;
 					const char *str = yy_sym2strl(sym_name, &len);
 					ir_ref ref;
@@ -2376,6 +2392,53 @@ yy_sym c_gcc_attribute(c_dcl *d, c_name attr, yy_sym sym)
 		}
 	}
 	return sym;
+}
+
+void c_gcc_attribute_alias(c_dcl *d, c_name attr, c_value *val)
+{
+	if (d->alias) {
+		yy_error("duplicate __attribure__((alias())) or __asm__() specifiers");
+	}
+
+	if ((d->flags & C_DCL_STORAGE_CLASS) == C_DCL_EXTERN
+	 || (!(d->flags & C_DCL_STORAGE_CLASS) && d->type && d->type->kind == C_TYPE_FUNC)) {
+		c_name id = yy_hash_find((const char*)val->u.val.ptr, val->u.op1 - 1);
+
+		if (!id
+		 || !yy_hash.data[id].sym
+		 || (yy_hash.data[id].sym->kind != C_SYM_FUNC && yy_hash.data[id].sym->kind != C_SYM_VAR)
+		 || (yy_hash.data[id].sym->linkage != C_LINK_EXTERNAL && yy_hash.data[id].sym->linkage != C_LINK_INTERNAL)) {
+			yy_error_fmt("alias to undefined symbol \"%s\"", (const char*)val->u.val.ptr);
+		} else if (!yy_hash.data[id].sym->is_implemented) {
+			yy_error("alias must point to a variable or function defined in the same file");
+		}
+		d->alias = yy_hash.data[id].sym->alias ? yy_hash.data[id].sym->alias : id;
+	} else {
+		yy_warning_fmt("ignoring __attribute__((%s(\"%s\")))", yy_sym2str(attr), (const char*)val->u.val.ptr);
+	}
+}
+
+void c_asm_alias(c_dcl *d, c_value *val)
+{
+	if (d->alias) {
+		yy_error("duplicate __attribure__((alias())) or __asm__() specifiers");
+	}
+
+	if ((d->flags & (C_DCL_EXTERN|C_DCL_STATIC))
+	 || !active_scope
+	 || (d->type && d->type->kind == C_TYPE_FUNC)) {
+		c_name id = yy_hash_lookup((const char*)val->u.val.ptr, val->u.op1 - 1);
+
+		d->alias = id;
+	} else if ((d->flags & C_DCL_STORAGE_CLASS) == C_DCL_REGISTER) {
+		if (active_scope) {
+			yy_error("local register variables are not supported yet");
+		} else {
+			yy_error("global register variables are not supported yet");
+		}
+	} else {
+		yy_warning_fmt("ignoring __asm__(\"%s\") specifier for non-static local variable", (const char*)val->u.val.ptr);
+	}
 }
 
 yy_sym c_declspec(c_dcl *d, c_name attr, yy_sym sym)

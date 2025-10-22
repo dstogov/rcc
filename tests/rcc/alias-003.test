@@ -1,0 +1,20 @@
+--TEST--
+Alias 003:
+--ARGS--
+--run
+--CODE--
+int printf(const char *, ...);
+int x = 42;
+int y __attribute__((alias("x")));
+int z __asm__("x");
+int main() {
+	printf("%d\n", x);
+	printf("%d\n", y);
+	printf("%d\n", z);
+	return 0;
+}
+--EXPECT--
+./tests/rcc/alias-003.c:3:32: warning: ignoring __attribute__((alias("x")))
+42
+0
+42

@@ -1,0 +1,15 @@
+--TEST--
+Alias 005:
+--ARGS--
+--run
+--CODE--
+int printf(const char *, ...);
+int x(const char *, ...) __attribute__((alias("printf")));
+int main() {
+	x("FAIL\n");
+	return 1;
+}
+--EXPECT--
+./tests/rcc/alias-005.c:2:56: error: alias must point to a variable or function defined in the same file
+
+exit code = 1

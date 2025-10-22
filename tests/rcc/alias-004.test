@@ -1,0 +1,14 @@
+--TEST--
+Alias 004:
+--ARGS--
+--run
+--CODE--
+int x(const char *, ...) __attribute__((alias("printf")));
+int main() {
+	x("FAIL\n");
+	return 1;
+}
+--EXPECT--
+./tests/rcc/alias-004.c:1:56: error: alias to undefined symbol "printf"
+
+exit code = 1

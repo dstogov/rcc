@@ -1,0 +1,15 @@
+--TEST--
+Alias 008:
+--ARGS--
+--run
+--XFAIL--
+asm linkage is not implemented
+--CODE--
+int printf(const char *, ...);
+int x __asm__("y") = 42;
+int main() {
+	printf("%d\n", x);
+	return 0;
+}
+--EXPECT--
+42

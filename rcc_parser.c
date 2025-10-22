@@ -167,7 +167,6 @@ static yy_sym parse_vla_param(yy_sym sym, c_value *len);
 	(bitset[sym>>3] & (1 << (sym & 0x7)))
 
 static yy_sym parse_translation_unit(yy_sym sym);
-static yy_sym parse_simple_asm_expr(yy_sym sym);
 static yy_sym parse_declaration(yy_sym sym, uint32_t flags);
 static yy_sym parse_old_style_param_declaration(yy_sym sym, const c_type *t);
 static yy_sym parse_declaration_specifiers(yy_sym sym, c_dcl *d);
@@ -180,6 +179,7 @@ static yy_sym parse_function_specifier(yy_sym sym, c_dcl *d);
 static yy_sym parse_alignment_specifier(yy_sym sym, c_dcl *d);
 static yy_sym parse_attributes(yy_sym sym, c_dcl *d);
 static yy_sym parse_attrib(yy_sym sym, c_dcl *d);
+static yy_sym parse_asm_name(yy_sym sym, c_dcl *d);
 static yy_sym parse_struct_or_union_specifier(yy_sym sym, c_dcl *d);
 static yy_sym parse_struct_contents(yy_sym sym, c_type *t, c_dcl *d);
 static yy_sym parse_struct_declaration(yy_sym sym, c_type *t);
@@ -259,11 +259,23 @@ static int synpred__star(yy_sym sym) {
 static yy_sym parse_translation_unit(yy_sym sym) {
 	while (sym == YY_ASM || sym == YY___ASM || sym == YY___ASM__ || sym == YY___EXTENSION__ || sym == YY__STATIC_ASSERT || sym == YY_TYPEDEF || sym == YY_EXTERN || sym == YY_STATIC || sym == YY_AUTO || sym == YY_REGISTER || sym == YY__THREAD_LOCAL || sym == YY_VOID || sym == YY_CHAR || sym == YY_SHORT || sym == YY_INT || sym == YY_LONG || sym == YY_FLOAT || sym == YY_DOUBLE || sym == YY_SIGNED || sym == YY___SIGNED || sym == YY___SIGNED__ || sym == YY_UNSIGNED || sym == YY__BOOL || sym == YY__COMPLEX || sym == YY___COMPLEX || sym == YY___COMPLEX__ || sym == YY__ATOMIC || sym == YY_TYPEOF || sym == YY___TYPEOF || sym == YY___TYPEOF__ || sym == YY_STRUCT || sym == YY_UNION || sym == YY_ENUM || C_IS_ID(sym) || sym == YY_CONST || sym == YY___CONST || sym == YY___CONST__ || sym == YY_RESTRICT || sym == YY___RESTRICT || sym == YY___RESTRICT__ || sym == YY_VOLATILE || sym == YY___VOLATILE || sym == YY___VOLATILE__ || sym == YY_INLINE || sym == YY___INLINE || sym == YY___INLINE__ || sym == YY__NORETURN || sym == YY__ALIGNAS || sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__ || sym == YY___DECLSPEC || sym == YY__STAR || sym == YY__LPAREN || sym == YY__SEMICOLON) {
 		if (sym == YY_ASM || sym == YY___ASM || sym == YY___ASM__) {
-			sym = parse_simple_asm_expr(sym);
+			sym = get_sym();
+			if (sym != YY__LPAREN) {
+				yy_error_sym("'(' expected, got", sym);
+			}
+			sym = get_sym();
+			do {
+				sym = parse_STRING(sym);
+			} while (sym == YY_STRING);
+			if (sym != YY__RPAREN) {
+				yy_error_sym("')' expected, got", sym);
+			}
+			sym = get_sym();
 			if (sym != YY__SEMICOLON) {
 				yy_error_sym("';' expected, got", sym);
 			}
 			sym = get_sym();
+			/*???*/yy_error("asm support not implemented yet");
 		} else {
 			if (sym == YY___EXTENSION__) {
 				sym = get_sym();
@@ -271,31 +283,6 @@ static yy_sym parse_translation_unit(yy_sym sym) {
 			sym = parse_declaration(sym, 0);
 		}
 	}
-	return sym;
-}
-
-static yy_sym parse_simple_asm_expr(yy_sym sym) {
-	if (sym == YY_ASM) {
-		sym = get_sym();
-	} else if (sym == YY___ASM) {
-		sym = get_sym();
-	} else if (sym == YY___ASM__) {
-		sym = get_sym();
-	} else {
-		yy_error_sym("unexpected", sym);
-	}
-	if (sym != YY__LPAREN) {
-		yy_error_sym("'(' expected, got", sym);
-	}
-	sym = get_sym();
-	do {
-		sym = parse_STRING(sym);
-	} while (sym == YY_STRING);
-	if (sym != YY__RPAREN) {
-		yy_error_sym("')' expected, got", sym);
-	}
-	sym = get_sym();
-	/*???*/yy_error("asm support not implemented yet");
 	return sym;
 }
 
@@ -319,7 +306,7 @@ static yy_sym parse_declaration(yy_sym sym, uint32_t flags) {
 			sym = parse_declarator(sym, &d, &name, 1);
 			if ((sym == YY_ASM || sym == YY___ASM || sym == YY___ASM__ || sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__ || sym == YY___DECLSPEC || sym == YY__EQUAL || sym == YY__COMMA || sym == YY__SEMICOLON) && synpred_1(sym)) {
 				if (sym == YY_ASM || sym == YY___ASM || sym == YY___ASM__) {
-					sym = parse_simple_asm_expr(sym);
+					sym = parse_asm_name(sym, &d);
 				}
 				if (sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__ || sym == YY___DECLSPEC) {
 					sym = parse_attributes(sym, &d);
@@ -338,7 +325,7 @@ static yy_sym parse_declaration(yy_sym sym, uint32_t flags) {
 					}
 					sym = parse_declarator(sym, &d, &name, 0);
 					if (sym == YY_ASM || sym == YY___ASM || sym == YY___ASM__) {
-						sym = parse_simple_asm_expr(sym);
+						sym = parse_asm_name(sym, &d);
 					}
 					if (sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__ || sym == YY___DECLSPEC) {
 						sym = parse_attributes(sym, &d);
@@ -398,7 +385,7 @@ static yy_sym parse_old_style_param_declaration(yy_sym sym, const c_type *t) {
 	c_dcl d = d0;
 	sym = parse_declarator(sym, &d, &name, 0);
 	if (sym == YY_ASM || sym == YY___ASM || sym == YY___ASM__) {
-		sym = parse_simple_asm_expr(sym);
+		sym = parse_asm_name(sym, &d);
 	}
 	if (sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__ || sym == YY___DECLSPEC) {
 		sym = parse_attributes(sym, &d);
@@ -414,7 +401,7 @@ static yy_sym parse_old_style_param_declaration(yy_sym sym, const c_type *t) {
 		d = d0;
 		sym = parse_declarator(sym, &d, &name, 0);
 		if (sym == YY_ASM || sym == YY___ASM || sym == YY___ASM__) {
-			sym = parse_simple_asm_expr(sym);
+			sym = parse_asm_name(sym, &d);
 		}
 		if (sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__ || sym == YY___DECLSPEC) {
 			sym = parse_attributes(sym, &d);
@@ -728,7 +715,7 @@ static yy_sym parse_attributes(yy_sym sym, c_dcl *d) {
 static yy_sym parse_attrib(yy_sym sym, c_dcl *d) {
 	c_name name = sym;
 	c_value v = {0};
-	if (sym == YY_ALIGNED || sym == YY___ALIGNED__ || sym == YY_ALWAYS_INLINE || sym == YY___ALWAYS_INLINE__ || sym == YY_CDECL || sym == YY___CDECL__ || sym == YY_COLD || sym == YY___COLD__ || sym == YY_CONST || sym == YY___CONST__ || sym == YY_DEPRECATED || sym == YY___DEPRECATED__ || sym == YY_FALLTHROUGH || sym == YY___FALLTHROUGH__ || sym == YY_FASTCALL || sym == YY___FASTCALL__ || sym == YY_GCC_STRUCT || sym == YY___GCC_STRUCT__ || sym == YY_HOT || sym == YY___HOT__ || sym == YY_LEAF || sym == YY___LEAF__ || sym == YY_MODE || sym == YY___MODE__ || sym == YY_MS_STRUCT || sym == YY___MS_STRUCT__ || sym == YY_MUSTTAIL || sym == YY___MUSTTAIL__ || sym == YY_NOINLINE || sym == YY___NOINLINE__ || sym == YY_NORETURN || sym == YY___NORETURN__ || sym == YY_NOTHROW || sym == YY___NOTHROW__ || sym == YY_PACKED || sym == YY___PACKED__ || sym == YY_PURE || sym == YY___PURE__ || sym == YY_UNUSED || sym == YY___UNUSED__ || sym == YY_VECTOR_SIZE || sym == YY___VECTOR_SIZE__ || C_IS_ID(sym)) {
+	if (sym == YY_ALIGNED || sym == YY___ALIGNED__ || sym == YY_ALWAYS_INLINE || sym == YY___ALWAYS_INLINE__ || sym == YY_CDECL || sym == YY___CDECL__ || sym == YY_COLD || sym == YY___COLD__ || sym == YY_CONST || sym == YY___CONST__ || sym == YY_DEPRECATED || sym == YY___DEPRECATED__ || sym == YY_FALLTHROUGH || sym == YY___FALLTHROUGH__ || sym == YY_FASTCALL || sym == YY___FASTCALL__ || sym == YY_GCC_STRUCT || sym == YY___GCC_STRUCT__ || sym == YY_HOT || sym == YY___HOT__ || sym == YY_LEAF || sym == YY___LEAF__ || sym == YY_MODE || sym == YY___MODE__ || sym == YY_MS_STRUCT || sym == YY___MS_STRUCT__ || sym == YY_MUSTTAIL || sym == YY___MUSTTAIL__ || sym == YY_NOINLINE || sym == YY___NOINLINE__ || sym == YY_NORETURN || sym == YY___NORETURN__ || sym == YY_NOTHROW || sym == YY___NOTHROW__ || sym == YY_PACKED || sym == YY___PACKED__ || sym == YY_PURE || sym == YY___PURE__ || sym == YY_UNUSED || sym == YY___UNUSED__ || sym == YY_ALIAS || sym == YY___ALIAS__ || sym == YY_VECTOR_SIZE || sym == YY___VECTOR_SIZE__ || C_IS_ID(sym)) {
 		if (sym == YY_ALIGNED || sym == YY___ALIGNED__) {
 			sym = get_sym();
 			if (sym == YY__LPAREN) {
@@ -840,6 +827,17 @@ static yy_sym parse_attrib(yy_sym sym, c_dcl *d) {
 		} else if (sym == YY_UNUSED || sym == YY___UNUSED__) {
 			sym = get_sym();
 			d->attr |= C_ATTR_UNUSED;
+		} else if (sym == YY_ALIAS || sym == YY___ALIAS__) {
+			sym = get_sym();
+			if (sym == YY__LPAREN) {
+				sym = get_sym();
+				sym = parse_strings(sym, &v);
+				if (sym != YY__RPAREN) {
+					yy_error_sym("')' expected, got", sym);
+				}
+				sym = get_sym();
+			}
+			c_gcc_attribute_alias(d, name, &v);
 		} else if (sym == YY_VECTOR_SIZE || sym == YY___VECTOR_SIZE__) {
 			sym = get_sym();
 			if (sym == YY__LPAREN) {
@@ -856,6 +854,30 @@ static yy_sym parse_attrib(yy_sym sym, c_dcl *d) {
 			sym = c_gcc_attribute(d, name, sym);
 		}
 	}
+	return sym;
+}
+
+static yy_sym parse_asm_name(yy_sym sym, c_dcl *d) {
+	c_value val;
+	if (sym == YY_ASM) {
+		sym = get_sym();
+	} else if (sym == YY___ASM) {
+		sym = get_sym();
+	} else if (sym == YY___ASM__) {
+		sym = get_sym();
+	} else {
+		yy_error_sym("unexpected", sym);
+	}
+	if (sym != YY__LPAREN) {
+		yy_error_sym("'(' expected, got", sym);
+	}
+	sym = get_sym();
+	sym = parse_strings(sym, &val);
+	if (sym != YY__RPAREN) {
+		yy_error_sym("')' expected, got", sym);
+	}
+	sym = get_sym();
+	c_asm_alias(d, &val);
 	return sym;
 }
 

@@ -1,0 +1,21 @@
+--TEST--
+Alias 001:
+--ARGS--
+--run
+--CODE--
+int printf(const char *, ...);
+void x(void) {
+	printf("OK\n");
+}
+void y(void) __attribute__((alias("x")));
+void z(void) __asm__("x");
+int main() {
+	x();
+	y();
+	z();
+	return 0;
+}
+--EXPECT--
+OK
+OK
+OK

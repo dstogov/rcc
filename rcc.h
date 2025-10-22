@@ -752,6 +752,7 @@ struct _c_dcl {
 	uint32_t               flags;
 	uint32_t               attr;
 	const c_type          *type;
+	c_name                 alias;
 };
 
 typedef enum {
@@ -794,6 +795,7 @@ struct _c_sym {
 	bool                   is_thunk: 1;        /* TODO: replace thunks with relocs ??? */
 	uint8_t                has_code: 2;        /* Code generation state (see C_CODE_...) */
 	bool                   tmp_data: 1;        /* temporary growable data area */
+	c_name                 alias;
 	c_scope               *scope;
 	c_value                value;              /* type is part of the value */
 	union {
@@ -980,6 +982,8 @@ void c_empty_declaration(c_dcl *d);
 void c_gcc_attribute_aligned(c_dcl *d, c_name attr, c_value *v);
 void c_gcc_attribute_packed(c_dcl *d, c_name attr);
 yy_sym c_gcc_attribute(c_dcl *dcl, c_name attr, yy_sym sym);
+void c_gcc_attribute_alias(c_dcl *d, c_name attr, c_value *v);
+void c_asm_alias(c_dcl *d, c_value *v);
 yy_sym c_declspec(c_dcl *dcl, c_name attr, yy_sym sym);
 
 void c_sizeof_type(c_value *res, const c_type *type);

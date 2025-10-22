@@ -2,8 +2,6 @@
 tinycc 120: alias
 --ARGS--
 ./tests/tinycc/tests2/inc/120_alias.c --run
---XFAIL--
-asm support not implemented yet
 --CODE--
 /* Check semantics of various constructs to generate renamed symbols.  */
 extern int printf (const char *, ...);
