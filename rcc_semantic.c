@@ -903,6 +903,9 @@ static void c_validate_redeclaration(c_name name, c_dcl *d, c_sym *sym)
 		} else if ((d->flags & C_DCL_STATIC) && sym->linkage != C_LINK_INTERNAL) {
 			yy_error_fmt("static declaration of \"%s\" follows non-static declaration", yy_sym2str(name));
 		} else {
+			if (d->flags & C_DCL_DEFINITION) {
+				sym->is_implemented = 1;
+			}
 			if ((sym->value.type->attr & C_ATTR_OLD_FUNC) && !(d->type->attr & C_ATTR_OLD_FUNC)) {
 				c_type *t = (c_type*)sym->value.type;
 				t->attr &= ~C_ATTR_OLD_FUNC;
