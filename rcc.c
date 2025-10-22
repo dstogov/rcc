@@ -1330,25 +1330,27 @@ static void rcc_remember_state(void)
 
 static void rcc_update_link(yy_hash_bucket *p)
 {
+	c_sym *sym = p->sym;
+
 	if (p->link) {
-		if (p->sym->is_thunk) {
-			if (!p->link->is_thunk || p->sym->value.u.val.ptr != p->link->addr) {
-				ir_fix_thunk((void*)p->sym->value.u.val.ptr, (void*)p->link->addr);
+		if (sym->is_thunk) {
+			if (!p->link->is_thunk || sym->value.u.val.ptr != p->link->addr) {
+				ir_fix_thunk((void*)sym->value.u.val.ptr, (void*)p->link->addr);
 			}
 		} else if (p->link->is_thunk) {
-			ir_fix_thunk((void*)p->link->addr, (void*)p->sym->value.u.val.ptr);
-			p->link->addr = p->sym->value.u.val.ptr;
+			ir_fix_thunk((void*)p->link->addr, (void*)sym->value.u.val.ptr);
+			p->link->addr = sym->value.u.val.ptr;
 			p->link->is_thunk = 0;
-		} else if (p->sym->value.u.val.ptr != p->link->addr) {
+		} else if (sym->value.u.val.ptr != p->link->addr) {
 			yy_error_fmt("redefined symbol \"%s\"", p->str);
 		}
 	} else {
 		c_linker_sym *link = ir_arena_alloc(&yy_arena, sizeof(c_linker_sym));
 
 		IR_ASSERT(!p->link);
-		link->addr = p->sym->value.u.val.ptr;
-		link->reloc = p->sym->reloc;
-		link->is_thunk = p->sym->is_thunk;
+		link->addr = sym->value.u.val.ptr;
+		link->reloc = sym->reloc;
+		link->is_thunk = sym->is_thunk;
 		p->link = link;
 	}
 }
