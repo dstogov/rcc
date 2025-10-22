@@ -1,8 +1,6 @@
 --TEST--
 Storage-class specifiers 006
 --CODE--
-register int x6;
+register int x6 __asm__("r0");
 --EXPECT--
-./tests/rcc/storage_class-006.c:1:16: error: global register variables are not implemented yet
-
-exit code = 1
+./tests/rcc/storage_class-006.c:1:30: warning: call-clobbered register used for global register variable "x6"

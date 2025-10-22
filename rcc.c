@@ -623,7 +623,7 @@ void rcc_ir_init(ir_ctx *ctx, uint32_t flags)
 	flags |= ir_flags;
 	ir_init(ctx, flags, 256, 1024);
 	ctx->mflags = ir_mflags;
-	ctx->fixed_regset = ~ir_debug_regset;
+	ctx->fixed_regset = ~ir_debug_regset | c_fixed_regset;
 	ctx->loader = &c_linker;
 }
 

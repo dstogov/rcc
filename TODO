@@ -13,9 +13,7 @@
 - full support for "\"
 - calling conventions
 - nested functions
-- local register variables
-- global register variables
-- asm names
+? asm names
 
 - inline asm
 

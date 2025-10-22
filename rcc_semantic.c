@@ -121,6 +121,7 @@ static uint32_t    c_static_str_num = 0;
 static ir_ref      c_last_expect_ref = IR_UNUSED;
 static bool        c_last_expect_val;
 static ir_strtab   c_strtab;
+       uint64_t    c_fixed_regset = 0;
 
 static ir_ref c_value_ref(c_value *val);
 static void c_do_cvt(const c_type *t, ir_type type, c_value *v);
@@ -1265,7 +1266,6 @@ c_sym *c_declare(c_name name, c_dcl *d)
 	} else {
 		if (!scope) {
 			if (d->flags & C_DCL_AUTO) yy_error_fmt("file-scope declaration of \"%s\" specifies \"auto\"", yy_sym2str(name));
-			if (d->flags & C_DCL_REGISTER) yy_error("global register variables are not implemented yet"); //???
 		} else {
 			if ((d->flags & (C_DCL_THREAD_LOCAL|C_DCL_STATIC|C_DCL_EXTERN)) == C_DCL_THREAD_LOCAL) {
 				yy_error_fmt("function-scope \"%s\" declared \"_Thread_local\"", yy_sym2str(name));
@@ -1273,7 +1273,27 @@ c_sym *c_declare(c_name name, c_dcl *d)
 		}
 		IR_ASSERT((d->flags & (C_DCL_STORAGE_CLASS-(C_DCL_EXTERN|C_DCL_STATIC|C_DCL_THREAD_LOCAL|C_DCL_AUTO|C_DCL_REGISTER))) == 0);
 		sym->kind = C_SYM_VAR;
-		if ((d->flags & (C_DCL_STATIC|C_DCL_EXTERN)) || !scope) {
+		if (!scope && (d->flags & C_DCL_REGISTER)) {
+			/* global register variable */
+			if (!(d->flags & C_DCL_REG_VAR)) yy_error_fmt("register name not specified for global register variable \"%s\"", yy_sym2str(name));
+			if (C_IS_TYPE_INT_OR_PTR(d->type)) {
+				if (d->reg >= IR_REG_FP_FIRST) yy_error_fmt("data type of \"%s\" is not suitable for a floating point register", yy_sym2str(name));
+			} else if (C_IS_TYPE_FP(d->type)) {
+				if (d->reg < IR_REG_FP_FIRST) yy_error_fmt("data type of \"%s\" is not suitable for a general purpose register", yy_sym2str(name));
+			} else {
+				yy_error_fmt("data type of \"%s\" is not suitable for a register", yy_sym2str(name));
+			}
+			if (!IR_REGSET_IN(IR_REGSET_PRESERVED, d->reg)) {
+				yy_warning_fmt("call-clobbered register used for global register variable \"%s\"", yy_sym2str(name));
+			}
+			if (c_fixed_regset & (1ULL << d->reg)) {
+				yy_error_fmt("register \"%s\" is already used", ir_reg_name(d->reg, c_type2ir(d->type)));
+			}
+			c_fixed_regset |= 1ULL << d->reg;
+			c_value_set_reg(&sym->value, d->type, c_type2ir(d->type), d->reg);
+			sym->linkage = C_LINK_NONE;
+			sym->is_implemented = 1;
+		} else if (!scope || (d->flags & (C_DCL_STATIC|C_DCL_EXTERN))) {
 			sym->linkage = (d->flags & C_DCL_STATIC) ? C_LINK_INTERNAL : C_LINK_EXTERNAL;
 			if (d->alias != name) sym->alias = d->alias;
 			sym->is_thread_local = (d->flags & C_DCL_THREAD_LOCAL) != 0;
@@ -2586,19 +2606,15 @@ void c_asm_alias(c_dcl *d, c_value *val)
 		yy_error("duplicate __attribure__((alias())) or __asm__() specifiers");
 	}
 
-	if ((d->flags & (C_DCL_EXTERN|C_DCL_STATIC))
+	if ((d->flags & C_DCL_STORAGE_CLASS) == C_DCL_REGISTER) {
+		d->flags |= C_DCL_REG_VAR;
+		d->reg = c_parse_reg_var((const char*)val->u.val.ptr);
+	} else if ((d->flags & (C_DCL_EXTERN|C_DCL_STATIC))
 	 || !active_scope
 	 || (d->type && d->type->kind == C_TYPE_FUNC)) {
 		c_name id = yy_hash_lookup((const char*)val->u.val.ptr, val->u.op1 - 1);
 
 		d->alias = id;
-	} else if ((d->flags & C_DCL_STORAGE_CLASS) == C_DCL_REGISTER) {
-		if (active_scope) {
-			d->flags |= C_DCL_REG_VAR;
-			d->reg = c_parse_reg_var((const char*)val->u.val.ptr);
-		} else {
-			yy_error("global register variables are not supported yet");
-		}
 	} else {
 		yy_warning_fmt("ignoring __asm__(\"%s\") specifier for non-static local variable", (const char*)val->u.val.ptr);
 	}
@@ -7927,6 +7943,7 @@ void c_do_compile_start(void)
 	active_func_name = 0;
 	c_static_sym_num = 0;
 	c_static_str_num = 0;
+	c_fixed_regset = 0;
 
 	ir_strtab_init(&c_strtab, 256, 0);
 }
