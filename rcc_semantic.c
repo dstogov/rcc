@@ -473,7 +473,7 @@ void c_resolve_sym_name(c_value *res, c_name name, yy_sym sym)
 			type->flags = 0;
 			type->attr = C_ATTR_OLD_FUNC;
 			type->size = sizeof(void*);
-			type->func.ret_type = &c_type_i32;
+			type->func.ret_type = (name == YY_ALLOCA) ? &c_type_ptr : &c_type_i32;
 			type->func.num_params = 0;
 			type->func.params = NULL;
 			dcl.type = type;
@@ -4661,16 +4661,30 @@ static ir_ref c_do_convert_builtin(c_value *func, int32_t num_args, ir_ref *arg_
 		size_t name_len;
 		const char *name = ir_get_strl(active_ctx, func_insn->val.name, &name_len);
 		c_name sym_name = yy_hash_find(name, name_len);
-		if (sym_name == YY_ABS) {
-			return ir_ABS_I32(arg_refs[0]);
+		if (sym_name == YY_ALLOCA) {
+			if (num_args == 1) {
+				return ir_ALLOCA(arg_refs[0]);
+			}
+		} else if (sym_name == YY_ABS) {
+			if (num_args == 1) {
+				return ir_ABS_I32(arg_refs[0]);
+			}
 		} else if (sym_name == YY_LABS) {
-			return ir_ABS(IR_LONG, arg_refs[0]);
+			if (num_args == 1) {
+				return ir_ABS(IR_LONG, arg_refs[0]);
+			}
 		} else if (sym_name == YY_LLABS) {
-			return ir_ABS_I64(arg_refs[0]);
+			if (num_args == 1) {
+				return ir_ABS_I64(arg_refs[0]);
+			}
 		} else if (sym_name == YY_FABS) {
-			return ir_ABS_D(arg_refs[0]);
+			if (num_args == 1) {
+				return ir_ABS_D(arg_refs[0]);
+			}
 		} else if (sym_name == YY_FABSF) {
-			return ir_ABS_F(arg_refs[0]);
+			if (num_args == 1) {
+				return ir_ABS_F(arg_refs[0]);
+			}
 		}
 	}
 

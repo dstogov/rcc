@@ -377,6 +377,7 @@
 	_("DF",                            YY_DF)                          \
 	_("__DF__",                        YY___DF__)                      \
 	/* builtin functions */                                            \
+	_("alloca",                        YY_ALLOCA)                      \
 	_("abs",                           YY_ABS)                         \
 	_("labs",                          YY_LABS)                        \
 	_("llabs",                         YY_LLABS)                       \
@@ -402,7 +403,7 @@ _YY_KEYWORDS(_YY_SYM)
 _YY_DIRECTIVES(_YY_SYM)
 _YY_NAMES(_YY_SYM)
 YY_LAST_NAME,
-YY_BUILTIN_FIRST = YY_ABS,
+YY_BUILTIN_FIRST = YY_ALLOCA,
 #if defined(IR_TARGET_X64) || defined(IR_TARGET_X86)
 YY_BUILTIN_LAST = YY_TRUNCF,
 #else
