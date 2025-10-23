@@ -343,7 +343,44 @@ static const char c_float_h[] =
 static const char c_alloca_h[] =
 "#define alloca(size) __builtin_alloca(size)\n";
 
-#define STDINC_COUNT 5
+static const char c_limits_h[] =
+"#ifndef _RCC_LIMITS_H\n"
+"#define _RCC_LINITS_H\n"
+"\n"
+"#define CHAR_BIT   8\n"
+"#define SCHAR_MIN  (-128)\n"
+"#define SCHAR_MAX  127\n"
+"#define UCHAR_MAX  255\n"
+#if defined(IR_TARGET_X64) || defined(IR_TARGET_X86)
+"#define CHAR_MIN   (-128)\n"
+"#define CHAR_MAX   127\n"
+#else
+"#define CHAR_MIN   0\n"
+"#define CHAR_MAX   255\n"
+#endif
+"#define MB_LEN_MAX 16\n"
+"#define SHRT_MIN   (-32768)\n"
+"#define SHRT_MAX   32767\n"
+"#define USHRT_MAX  65535\n"
+"#define INT_MIN    (-INT_MAX-1)\n"
+"#define INT_MAX    2147483647\n"
+"#define UINT_MAX   4294967295U\n"
+#if defined(IR_TARGET_X64) || defined(IR_TARGET_AARCH64)
+"#define LONG_MIN   (-LONG_MAX-1L)\n"
+"#define LONG_MAX   9223372036854775807L\n"
+"#define ULONG_MAX  18446744073709551615UL\n"
+#else
+"#define LONG_MIN   (-LONG_MAX-1)\n"
+"#define LONG_MAX   2147483647\n"
+"#define ULONG_MAX  4294967295U\n"
+#endif
+"#define LLONG_MIN  (-LLONG_MAX-1LL)\n"
+"#define LLONG_MAX  9223372036854775807LL\n"
+"#define ULLONG_MAX 18446744073709551615ULL\n"
+"\n"
+"#endif /* #ifndef _RCC_LIMITS_H */\n";
+
+#define STDINC_COUNT 6
 
 static struct {
 	yy_sym      name;
@@ -374,6 +411,10 @@ void c_stdinc_init(void)
 	c_stdinc[4].name = yy_hash_lookup("alloca.h", sizeof("alloca.h") - 1);
 	c_stdinc[4].content = c_alloca_h;
 	c_stdinc[4].content_len = sizeof(c_alloca_h) - 1;
+
+	c_stdinc[5].name = yy_hash_lookup("limits.h", sizeof("limits.h") - 1);
+	c_stdinc[5].content = c_limits_h;
+	c_stdinc[5].content_len = sizeof(c_limits_h) - 1;
 
 	yy_file_name = yy_hash_lookup("builtin", sizeof("builtin") - 1);
 	yy_pos = yy_text = yy_linepos = yy_buf = c_boot;
