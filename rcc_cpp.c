@@ -1155,6 +1155,40 @@ bool pp_macro_expand(pp_macro *macro, yy_sym name)
 			pp_list_init(&replacement);
 			pp_list_push(&replacement, YY_STRING);
 			pp_list_push_val(&replacement);
+		} else if (name == YY___HAS_ATTRIBUTE) {
+			bool b;
+
+			sym = yy_next();
+			yy_flags &= ~YY_ACCEPT_NOSUBST;
+			if (sym != YY__LPAREN) yy_error("'(' expected");
+			sym = yy_next();
+			if (!PP_IS_ID(sym)) yy_error("<ID> expected");
+			b = YY_HAS_ATTRIBUTE(sym);
+			sym = yy_next();
+			if (sym != YY__RPAREN) yy_error("')' expected");
+
+			yy_text = b ? "1" : "0";
+			yy_len = 1;
+			pp_list_init(&replacement);
+			pp_list_push(&replacement, YY_DECIMAL_NUMBER);
+			pp_list_push_val(&replacement);
+		} else if (name == YY___HAS_BUILTIN) {
+			bool b;
+
+			sym = yy_next();
+			yy_flags &= ~YY_ACCEPT_NOSUBST;
+			if (sym != YY__LPAREN) yy_error("'(' expected");
+			sym = yy_next();
+			if (!PP_IS_ID(sym)) yy_error("<ID> expected");
+			b = YY_HAS_BUILTIN(sym);
+			sym = yy_next();
+			if (sym != YY__RPAREN) yy_error("')' expected");
+
+			yy_text = b ? "1" : "0";
+			yy_len = 1;
+			pp_list_init(&replacement);
+			pp_list_push(&replacement, YY_DECIMAL_NUMBER);
+			pp_list_push_val(&replacement);
 		} else {
 			yy_error_fmt("bad builtin macro \"%.*s\"", yy_len, yy_text);
 		}

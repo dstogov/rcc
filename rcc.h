@@ -243,6 +243,8 @@
 	_("warning",                       YY_WARNING)                     \
 	_("__has_include",                 YY___HAS_INCLUDE)               \
 	_("__has_include_next",            YY___HAS_INCLUDE_NEXT)          \
+	_("__has_attribute",               YY___HAS_ATTRIBUTE)             \
+	_("__has_builtin",                 YY___HAS_BUILTIN)               \
 
 #define _YY_NAMES(_) \
 	_("__COUNTER__",                   YY___COUNTER__)                 \
@@ -409,6 +411,9 @@ YY_BUILTIN_LAST = YY_FABSF,
 YY_LAST = 0x7fffffff,
 #undef _YY_SYM
 } yy_sym;
+
+#define YY_HAS_ATTRIBUTE(id) (((id) >= YY_ALIAS && (id) <= YY___WEAKREF__) || (id) == YY_CONST || (id) == YY___CONST__)
+#define YY_HAS_BUILTIN(id)   ((id) >= YY___BUILTIN_VA_START && (id) <= YY___BUILTIN_UNREACHABLE)
 
 /* yy_flags bits */
 #define YY_SKIP_WS           (1<<0)
