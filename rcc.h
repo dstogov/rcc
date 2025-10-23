@@ -1036,6 +1036,7 @@ void c_do_struct_field(c_value *v, c_name field);
 void c_do_struct_field_deref(c_value *v, c_name field);
 c_value *c_do_grow_actual_parameters(c_value *args, int32_t num_args);
 void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args);
+void c_do_builtin_constant_p(c_value *val, c_value *arg);
 void c_do_builtin_va_arg(c_value *val, c_value *list, const c_type *type);
 void c_do_call(c_value *func, int32_t num_args, c_value *args);
 void c_do_binary_op(yy_sym sym, c_value *v, c_value *op2);

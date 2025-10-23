@@ -1006,7 +1006,6 @@ unary_expression(c_value *val):
 		|	"__builtin_trap"
 		|	"__builtin_debugtrap"
 		|	"__builtin_frame_address"
-		|	"__builtin_constant_p"
 		|	"__builtin_abs"
 		|	"__builtin_labs"
 		|	"__builtin_llabs"
@@ -1061,6 +1060,11 @@ unary_expression(c_value *val):
 		|	"__builtin_umulll_overflow"
 		)
 		"(" builtin_parameters(val, name) ")"
+	|	                                                   {ir_ref old = c_do_nocode();}
+		"__builtin_constant_p"
+		"("
+		assignment_expression(&v)                          {c_do_end_nocode(old);}
+		")"                                                {c_do_builtin_constant_p(val, &v);}
 	|	"__builtin_va_arg"
 		"("
 		assignment_expression(&v)

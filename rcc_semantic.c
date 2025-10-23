@@ -4317,11 +4317,6 @@ void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 		c_value_set_rval(val, &c_type_ptr, IR_ADDR, ir_FRAME_ADDR());
 		c_type *t = (c_type*)active_func->value.type;
 		t->attr |= C_ATTR_NOINLINE;
-	} else if (name == YY___BUILTIN_CONSTANT_P) {
-		ir_val v;
-		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
-		v.u64 = c_value_is_const(&args[0]) ? 1 : 0;
-		c_value_set_const(val, &c_type_i32, IR_I32, v);
 	} else if (name == YY___BUILTIN_MEMCPY) {
 		ir_ref ref;
 
@@ -4609,6 +4604,13 @@ void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 		IR_ASSERT(0);
 	}
 	if (num_args > C_ALLOCA_PARAMS) ir_mem_free(args);
+}
+
+void c_do_builtin_constant_p(c_value *val, c_value *arg)
+{
+	ir_val v;
+	v.u64 = c_value_is_const(arg) ? 1 : 0;
+	c_value_set_const(val, &c_type_i32, IR_I32, v);
 }
 
 void c_do_builtin_va_arg(c_value *val, c_value *list, const c_type *type)
