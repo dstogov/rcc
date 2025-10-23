@@ -2424,7 +2424,17 @@ void c_gcc_attribute_packed(c_dcl *d, c_name attr)
 
 yy_sym c_gcc_attribute(c_dcl *d, c_name attr, yy_sym sym)
 {
-	yy_warning_fmt("unsupported attribure \"%s\"", yy_sym2str(attr));
+	if (attr == YY_FORMAT
+	 || attr == YY___FORMAT__
+	 || attr == YY_MALLOC
+	 || attr == YY___MALLOC__
+	 || attr == YY_NONNULL
+	 || attr == YY___NONNULL__
+	) {
+		/* silently ignore some known attributes */
+	} else {
+		yy_warning_fmt("unsupported attribure \"%s\"", yy_sym2str(attr));
+	}
 
 	if (sym == YY__LPAREN) {
 		int level = 0;

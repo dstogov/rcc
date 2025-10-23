@@ -399,7 +399,9 @@ attributes(c_dcl *d):
 
 attrib(c_dcl *d):                                          {c_name name = sym;}
                                                            {c_value v = {0};}
-	(	("aligned"|"__aligned__")
+	(	("alias"|"__alias__")
+		( "(" strings(&v) ")" )?                           {c_gcc_attribute_alias(d, name, &v);}
+	|	("aligned"|"__aligned__")
 		( "(" constant_expression(&v) ")" )?               {c_gcc_attribute_aligned(d, name, &v);}
 	|	("always_inline"|"__always_inline__")              {d->attr |= C_ATTR_ALWAYS_INLINE;}
 	|	("cdecl"|"__cdecl__")                              {d->attr |= C_ATTR_CDECL;}
@@ -432,8 +434,6 @@ attrib(c_dcl *d):                                          {c_name name = sym;}
 	|	("packed"|"__packed__")                            {c_gcc_attribute_packed(d, name);}
 	|	("pure"|"__pure__")                                {d->attr |= C_ATTR_PURE;}
 	|	("unused"|"__unused__")                            {d->attr |= C_ATTR_UNUSED;}
-	|	("alias"|"__alias__")
-		( "(" strings(&v) ")" )?                           {c_gcc_attribute_alias(d, name, &v);}
 	|	("vector_size"|"__vector_size__")
 		( "(" constant_expression(&v) ")" )?               {yy_error_fmt("unsupported attribute \"%s\"", yy_sym2str(name));}
 	|	ID(&name)                                          {sym = c_gcc_attribute(d, name, sym);}

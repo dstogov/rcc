@@ -275,9 +275,9 @@
 	_("cdecl",                         YY_CDECL)                /*f  */\
 	_("__cdecl__",                     YY___CDECL__)            /*f  */\
 	_("cleanup",                       YY_CLEANUP)              /* v */\
+	_("__cleanup__",                   YY___CLEANUP__)          /* v */\
 	_("cold",                          YY_COLD)                 /*f  */\
 	_("__cold__",                      YY___COLD__)             /*f  */\
-	_("__cleanup__",                   YY___CLEANUP__)          /* v */\
 	/*_("const",                       YY_CONST)*/              /*f  */\
 	/*_("__const__",                   YY___CONST__)*/          /*f  */\
 	_("constructor",                   YY_CONSTRUCTOR)          /*f  */\
@@ -294,12 +294,16 @@
 	_("__fallthrough__",               YY___FALLTHROUGH__)      /*  s*/\
 	_("fastcall",                      YY_FASTCALL)             /*f  */\
 	_("__fastcall__",                  YY___FASTCALL__)         /*f  */\
+	_("format",                        YY_FORMAT)               /*f  */\
+	_("__format__",                    YY___FORMAT__)           /*f  */\
 	_("gcc_struct",                    YY_GCC_STRUCT)           /*  t*/\
 	_("__gcc_struct__",                YY___GCC_STRUCT__)       /*  t*/\
 	_("hot",                           YY_HOT)                  /*f  */\
 	_("__hot__",                       YY___HOT__)              /*f  */\
 	_("leaf",                          YY_LEAF)                 /*f  */\
 	_("__leaf__",                      YY___LEAF__)             /*f  */\
+	_("malloc",                        YY_MALLOC)               /*f  */\
+	_("__malloc__",                    YY___MALLOC__)           /*f  */\
 	_("may_alias",                     YY_MAY_ALIAS)            /*  t*/\
 	_("__may_alias__",                 YY___MAY_ALIAS__)        /*  t*/\
 	_("mode",                          YY_MODE)                 /* v */\
@@ -350,8 +354,8 @@
 	_("__visibility__",                YY___VISIBILITY__)       /*f  */\
 	_("weak",                          YY_WEAK)                 /*fv */\
 	_("__weak__",                      YY___WEAK__)             /*fv */\
-	_("weak_ref",                      YY_WEAK_REF)             /*f  */\
-	_("__weak_ref__",                  YY___WEAK_REF__)         /*f  */\
+	_("weakref",                       YY_WEAKREF)              /*f  */\
+	_("__weakref__",                   YY___WEAKREF__ )         /*f  */\
 	_("byte",                          YY_BYTE)                        \
 	_("__byte__",                      YY___BYTE__)                    \
 	_("word",                          YY_WORD)                        \
