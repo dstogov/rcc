@@ -2656,7 +2656,7 @@ static void pp_debug_include(const char *name, size_t len, bool is_user)
 		fwrite(name, len, 1, f);
 		fputc('"', f);
 	} else {
-		fwrite("#include \"", sizeof("#include <")-1, 1, f);
+		fwrite("#include <", sizeof("#include <")-1, 1, f);
 		fwrite(name, len, 1, f);
 		fputc('>', f);
 	}
