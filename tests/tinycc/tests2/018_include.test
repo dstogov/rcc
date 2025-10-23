@@ -2,8 +2,6 @@
 tinycc 018: include
 --ARGS--
 --run
---XFAIL--
-__has_include_next() is not implemented yet
 --CODE--
 #include <stdio.h>
 

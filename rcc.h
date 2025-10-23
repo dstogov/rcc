@@ -230,6 +230,7 @@
 #define _YY_DIRECTIVES(_) \
 	_("define",                        YY_DEFINE)                      \
 	_("include",                       YY_INCLUDE)                     \
+	_("include_next",                  YY_INCLUDE_NEXT)                \
 	_("ifdef",                         YY_IFDEF)                       \
 	_("ifndef",                        YY_IFNDEF)                      \
 	_("elif",                          YY_ELIF)                        \
@@ -241,6 +242,7 @@
 	_("pragma",                        YY_PRAGMA)                      \
 	_("warning",                       YY_WARNING)                     \
 	_("__has_include",                 YY___HAS_INCLUDE)               \
+	_("__has_include_next",            YY___HAS_INCLUDE_NEXT)          \
 
 #define _YY_NAMES(_) \
 	_("__COUNTER__",                   YY___COUNTER__)                 \
@@ -529,6 +531,7 @@ typedef struct {
 } pp_list;
 
 bool pp_add_include_dir(const char *path);
+void pp_add_sys_include_dirs(void);
 
 void pp_start(void);
 void pp_dtor(void);

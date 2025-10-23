@@ -7,7 +7,6 @@
 - long double
 - _Complex
 - _Imaginary
-- #include_next and __has_include_next()
 - trigraphs
 - Unicode characters in identifiers (\uXXXX \UXXXXXXXX)
 - full support for "\"

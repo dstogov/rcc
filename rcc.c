@@ -1763,6 +1763,8 @@ int main(int argc, const char **argv)
 		}
 	}
 
+	pp_add_sys_include_dirs();
+
 	if (c_flags & C_SYNTAX_ONLY) {
 		if (c_flags & (C_DUMP_SIZE|C_DUMP_ASM|C_RUN)) {
 			fprintf(stderr, "ERROR: -fsyntax-only is not compatible with native compilation flags (-S, --run, --dump-size)\n");

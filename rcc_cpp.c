@@ -54,6 +54,7 @@ typedef struct {
 	uint32_t                 if_level;
 	uint32_t                 state;
 	yy_sym                   macro;
+	int                      next_dir;
 } pp_include_state;
 
 typedef pp_macro pp_arg;
@@ -81,6 +82,9 @@ static ir_hashtab           *pp_include_hash = NULL;  /* map include file-name -
        uint8_t               pp_pack = 0;
 static uint8_t               pp_pack_stack_pos = 0;
 static uint8_t               pp_pack_stack[PACK_STACK_SIZE];
+
+static int                   pp_last_search_dir = 0;
+static int                   pp_next_search_dir = 0;
 
 #if PP_DEBUG
 # define pp_debug 1
@@ -126,26 +130,26 @@ const char *pp_include_paths[PP_MAX_INCLUDE_PATHS + 1] = {
 	NULL
 };
 
-const char *pp_sys_include_paths[] = {
-	"/usr/local/include",
-	"/usr/include",
-#ifdef __linux__
-# if defined(IR_TARGET_X64)
-	"/usr/include/x86_64-linux-gnu",
-# elif defined(IR_TARGET_X86)
-	"/usr/include/x86-linux-gnu",
-# elif defined(IR_TARGET_AARCH64)
-	"/usr/include/aarch64-linux-gnu",
-# endif
-#endif
-	NULL
-};
-
 bool pp_add_include_dir(const char *path)
 {
 	if (pp_include_paths_count >= PP_MAX_INCLUDE_PATHS) return 0;
 	pp_include_paths[pp_include_paths_count++] = path;
 	return 1;
+}
+
+void pp_add_sys_include_dirs(void)
+{
+	pp_add_include_dir("/usr/local/include");
+	pp_add_include_dir("/usr/include");
+#ifdef __linux__
+# if defined(IR_TARGET_X64)
+	pp_add_include_dir("/usr/include/x86_64-linux-gnu");
+# elif defined(IR_TARGET_X86)
+	pp_add_include_dir("/usr/include/x86-linux-gnu");
+# elif defined(IR_TARGET_AARCH64)
+	pp_add_include_dir("/usr/include/aarch64-linux-gnu");
+# endif
+#endif
 }
 
 void pp_start(void)
@@ -161,6 +165,8 @@ void pp_start(void)
 	pp_subst_level = 0;
 	pp_pack = 0;
 	pp_pack_stack_pos = 0;
+	pp_last_search_dir = 0;
+	pp_next_search_dir = 0;
 }
 
 void pp_dtor(void)
@@ -255,7 +261,7 @@ void pp_list_grow(pp_list *l, uint32_t size)
 
 /* C Preprocessor */
 static void pp_debug_tokens(FILE *f, yy_sym *tokens, const pp_macro *macro);
-static void pp_debug_include(const char *name, size_t len, bool is_user);
+static void pp_debug_include(yy_sym inc_sym, const char *name, size_t len, bool is_user);
 static void pp_debug_macro(yy_sym sym, yy_sym name, pp_macro *macro);
 static void pp_print_pragma(yy_sym sym);
 
@@ -1249,7 +1255,9 @@ static bool pp_eval_ifdef(bool ifdef, bool start_of_include)
 		pp_skip_until_eol();
 	}
 
-	return !(ifdef ^ (pp_macro_is_defined(id) || id == YY___HAS_INCLUDE));
+	return !(ifdef ^ (pp_macro_is_defined(id)
+		|| id == YY___HAS_INCLUDE
+		|| id == YY___HAS_INCLUDE_NEXT));
 }
 
 static void pp_push_include(yy_sym file_name, const char *buf, size_t size)
@@ -1266,6 +1274,7 @@ static void pp_push_include(yy_sym file_name, const char *buf, size_t size)
 	pp_include_stack[pp_include_level].if_level  = pp_include_ifdef_level;
 	pp_include_stack[pp_include_level].state     = pp_include_ifndef_state;
 	pp_include_stack[pp_include_level].macro     = pp_include_ifndef_macro;
+	pp_include_stack[pp_include_level].next_dir  = pp_next_search_dir;
 	pp_include_level++;
 
 	yy_pos = yy_text = yy_linepos = yy_buf = buf;
@@ -1277,6 +1286,8 @@ static void pp_push_include(yy_sym file_name, const char *buf, size_t size)
 	pp_include_ifdef_level = pp_ifdef_level;
 	pp_include_ifndef_state = YY_INCLUDE_START;
 	pp_include_ifndef_macro = 0;
+
+	pp_next_search_dir = pp_last_search_dir + 1;
 }
 
 void pp_pop_include(void)
@@ -1319,6 +1330,7 @@ void pp_pop_include(void)
 	pp_include_ifdef_level  = pp_include_stack[pp_include_level].if_level;
 	pp_include_ifndef_state = pp_include_stack[pp_include_level].state;
 	pp_include_ifndef_macro = pp_include_stack[pp_include_level].macro;
+	pp_next_search_dir      = pp_include_stack[pp_include_level].next_dir;
 }
 
 static const char *pp_read_file(yy_sym file_name, int fd, size_t *size_ptr)
@@ -1399,7 +1411,7 @@ static bool pp_find_included_realpath(const char *name)
 	return 0;
 }
 
-static yy_sym pp_find_include(yy_dyn_str *name, bool is_user, const char **buf_ptr, size_t *size_ptr)
+static yy_sym pp_find_include(yy_dyn_str *name, int start_search_dir, const char **buf_ptr, size_t *size_ptr)
 {
 	int fd;
 	int i;
@@ -1424,7 +1436,7 @@ static yy_sym pp_find_include(yy_dyn_str *name, bool is_user, const char **buf_p
 			goto read_file;
 		}
 	} else {
-		if (is_user) {
+		if (!start_search_dir) {
 			size_t len, j;
 			const char *file_name = yy_sym2strl(yy_file_name, &len);
 
@@ -1437,12 +1449,14 @@ static yy_sym pp_find_include(yy_dyn_str *name, bool is_user, const char **buf_p
 				if (pp_include_hash) {
 					resolved_name = pp_find_included(name->str, name->len);
 					if (resolved_name) {
+						pp_last_search_dir = 0;
 						if (buf_ptr) *buf_ptr = NULL;
 						return resolved_name;
 					}
 				}
 				fd = open(name->str, O_RDONLY | O_BINARY);
 				if (fd >= 0) {
+					pp_last_search_dir = 0;
 					resolved_name = yy_hash_lookup(name->str, name->len);
 					if (pp_include_hash && pp_find_included_realpath(name->str)) {
 						close(fd);
@@ -1459,12 +1473,14 @@ static yy_sym pp_find_include(yy_dyn_str *name, bool is_user, const char **buf_p
 				if (pp_include_hash) {
 					resolved_name = pp_find_included(buf.str, buf.len);
 					if (resolved_name) {
+						pp_last_search_dir = 0;
 						if (buf_ptr) *buf_ptr = NULL;
 						return resolved_name;
 					}
 				}
 				fd = open(buf.str, O_RDONLY | O_BINARY);
 				if (fd >= 0) {
+					pp_last_search_dir = 0;
 					resolved_name = yy_hash_lookup(buf.str, buf.len);
 					if (pp_include_hash && pp_find_included_realpath(buf.str)) {
 						close(fd);
@@ -1477,12 +1493,41 @@ static yy_sym pp_find_include(yy_dyn_str *name, bool is_user, const char **buf_p
 			}
 		}
 
+		for (i = start_search_dir ? start_search_dir - 1 : 0; i < pp_include_paths_count; i++) {
+			yy_dyn_str buf;
+			void *checkpoint = ir_arena_checkpoint(yy_arena);
+			yy_dyn_str_init(&buf, pp_include_paths[i], strlen(pp_include_paths[i]));
+			yy_dyn_str_append(&buf, "/", 1);
+			yy_dyn_str_append0(&buf, name->str, name->len);
+			if (pp_include_hash) {
+				resolved_name = pp_find_included(buf.str, buf.len);
+				if (resolved_name) {
+					pp_last_search_dir = i + 1;
+					if (buf_ptr) *buf_ptr = NULL;
+					return resolved_name;
+				}
+			}
+			fd = open(buf.str, O_RDONLY | O_BINARY);
+			if (fd >= 0) {
+				pp_last_search_dir = i + 1;
+				resolved_name = yy_hash_lookup(buf.str, buf.len);
+				if (pp_include_hash && pp_find_included_realpath(buf.str)) {
+					close(fd);
+					if (buf_ptr) *buf_ptr = NULL;
+					return resolved_name;
+				}
+				goto read_file;
+			}
+			ir_arena_release(&yy_arena, checkpoint);
+		}
+
 		resolved_name = yy_hash_find(name->str, name->len);
 		if (resolved_name) {
 			size_t len;
 			const char *content = c_stdinc_find(resolved_name, &len);
 
 			if (content) {
+				pp_last_search_dir = 1 + pp_include_paths_count;
 				if (pp_include_hash) {
 					if (pp_find_included_ex(resolved_name)) {
 						if (buf_ptr) *buf_ptr = NULL;
@@ -1497,58 +1542,6 @@ static yy_sym pp_find_include(yy_dyn_str *name, bool is_user, const char **buf_p
 				}
 				return resolved_name;
 			}
-		}
-
-		for (i = 0; pp_include_paths[i]; i++) {
-			yy_dyn_str buf;
-			void *checkpoint = ir_arena_checkpoint(yy_arena);
-			yy_dyn_str_init(&buf, pp_include_paths[i], strlen(pp_include_paths[i]));
-			yy_dyn_str_append(&buf, "/", 1);
-			yy_dyn_str_append0(&buf, name->str, name->len);
-			if (pp_include_hash) {
-				resolved_name = pp_find_included(buf.str, buf.len);
-				if (resolved_name) {
-					if (buf_ptr) *buf_ptr = NULL;
-					return resolved_name;
-				}
-			}
-			fd = open(buf.str, O_RDONLY | O_BINARY);
-			if (fd >= 0) {
-				resolved_name = yy_hash_lookup(buf.str, buf.len);
-				if (pp_include_hash && pp_find_included_realpath(buf.str)) {
-					close(fd);
-					if (buf_ptr) *buf_ptr = NULL;
-					return resolved_name;
-				}
-				goto read_file;
-			}
-			ir_arena_release(&yy_arena, checkpoint);
-		}
-
-		for (i = 0; pp_sys_include_paths[i]; i++ ) {
-			yy_dyn_str buf;
-			void *checkpoint = ir_arena_checkpoint(yy_arena);
-			yy_dyn_str_init(&buf, pp_sys_include_paths[i], strlen(pp_sys_include_paths[i]));
-			yy_dyn_str_append(&buf, "/", 1);
-			yy_dyn_str_append0(&buf, name->str, name->len);
-			if (pp_include_hash) {
-				resolved_name = pp_find_included(buf.str, buf.len);
-				if (resolved_name) {
-					if (buf_ptr) *buf_ptr = NULL;
-					return resolved_name;
-				}
-			}
-			fd = open(buf.str, O_RDONLY | O_BINARY);
-			if (fd >= 0) {
-				resolved_name = yy_hash_lookup(buf.str, buf.len);
-				if (pp_include_hash && pp_find_included_realpath(buf.str)) {
-					close(fd);
-					if (buf_ptr) *buf_ptr = NULL;
-					return resolved_name;
-				}
-				goto read_file;
-			}
-			ir_arena_release(&yy_arena, checkpoint);
 		}
 	}
 
@@ -1636,11 +1629,14 @@ try_expand:
 	return 1;
 }
 
-static void pp_parse_include(void)
+static void pp_parse_include(yy_sym inc_sym)
 {
 	yy_sym sym;
 	yy_dyn_str name;
 	bool is_user;
+	int start_search_dir;
+	const char *buf;
+	size_t size;
 
 	if (!pp_parse_include_filename(&name, &is_user)) {
 		yy_error("#include expects \"FILENAME\" or <FILENAME>");
@@ -1653,12 +1649,17 @@ static void pp_parse_include(void)
 		pp_skip_until_eol();
 	}
 
+	if (inc_sym == YY_INCLUDE_NEXT) {
+		start_search_dir = pp_next_search_dir;
+	} else if (is_user) {
+		start_search_dir = 0;
+	} else {
+		start_search_dir = 1;
+	}
+
 	if (pp_include_level >= INCLUDE_STACK_SIZE) yy_error("too deep include level");
 
-	const char *buf;
-	size_t size;
-
-	yy_sym resolved_name = pp_find_include(&name, is_user, &buf, &size);
+	yy_sym resolved_name = pp_find_include(&name, start_search_dir, &buf, &size);
 
 	if (!resolved_name) {
 		yy_error_fmt("%.*s: No such file or directory", (int)name.len, name.str);
@@ -1669,17 +1670,18 @@ static void pp_parse_include(void)
 	}
 
 	if (yy_flags & PP_DUMP_INCLUDES) {
-		pp_debug_include(name.str, name.len, is_user);
+		pp_debug_include(inc_sym, name.str, name.len, is_user);
 	}
 
 	pp_push_include(resolved_name, buf, size);
 }
 
-static bool pp_eval_has_include(void)
+static bool pp_eval_has_include(yy_sym inc_sym)
 {
 	yy_sym sym;
 	yy_dyn_str name;
 	bool is_user;
+	int start_search_dir;
 
 	sym = yy_next();
 	if (sym != YY__LPAREN) yy_error("'(' expected");
@@ -1692,7 +1694,15 @@ static bool pp_eval_has_include(void)
 	sym = yy_next();
 	if (sym != YY__RPAREN) yy_error("')' expected");
 
-	return pp_find_include(&name, is_user, NULL, NULL) != 0;
+	if (inc_sym == YY___HAS_INCLUDE_NEXT) {
+		start_search_dir = pp_next_search_dir;
+	} else if (is_user) {
+		start_search_dir = 0;
+	} else {
+		start_search_dir = 1;
+	}
+
+	return pp_find_include(&name, start_search_dir, NULL, NULL) != 0;
 }
 
 static bool pp_eval_expr(void)
@@ -1722,16 +1732,18 @@ next:
 				yy_error("??");
 			}
 			yy_flags = save_flags;
-			yy_text = (pp_macro_is_defined(id) || id == YY___HAS_INCLUDE) ? "1" : "0";
+			yy_text = (pp_macro_is_defined(id)
+				|| id == YY___HAS_INCLUDE
+				|| id == YY___HAS_INCLUDE_NEXT) ? "1" : "0";
 			yy_len = 1;
 			pp_list_push(&tokens, YY_DECIMAL_NUMBER);
 			pp_list_push_val(&tokens);
-		} else if (sym == YY___HAS_INCLUDE) {
+		} else if (sym == YY___HAS_INCLUDE || sym == YY___HAS_INCLUDE_NEXT) {
 			uint32_t save_flags = yy_flags;
 			bool ret;
 
 			yy_flags |= YY_ACCEPT_PP_NUMBER | YY_ACCEPT_PUNCTUATOR;
-			ret = pp_eval_has_include();
+			ret = pp_eval_has_include(sym);
 			yy_flags = save_flags;
 			yy_text = ret ? "1" : "0";
 			yy_len = 1;
@@ -2534,9 +2546,10 @@ void pp_parse_directive(void)
 				pp_parse_error(sym == YY_WARNING);
 				break;
 			case YY_INCLUDE:
+			case YY_INCLUDE_NEXT:
 				yy_flags &= ~YY_NO_MACRO;
 				pp_include_ifndef_state = 0;
-				pp_parse_include();
+				pp_parse_include(sym);
 				yy_flags = save_flags;
 				return;
 			case YY_DEFINE:
@@ -2639,9 +2652,11 @@ static void pp_debug_line(FILE *f)
 	}
 }
 
-static void pp_debug_include(const char *name, size_t len, bool is_user)
+static void pp_debug_include(yy_sym inc_sym, const char *name, size_t name_len, bool is_user)
 {
 	FILE *f = out_file ? out_file : stdout;
+	const char *str;
+	size_t len;
 
 	if (!(yy_flags & PP_NO_LINEMARKERS)) {
 		if (out_level != pp_include_level || out_file_name != yy_file_name || out_line != yy_line) {
@@ -2651,13 +2666,17 @@ static void pp_debug_include(const char *name, size_t len, bool is_user)
 		}
 	}
 
+	fputc('#', f);
+	str = yy_sym2strl(inc_sym, &len);
+	fwrite(str, len, 1, f);
+	fputc(' ', f);
 	if (is_user) {
-		fwrite("#include \"", sizeof("#include \"")-1, 1, f);
-		fwrite(name, len, 1, f);
+		fputc('"', f);
+		fwrite(name, name_len, 1, f);
 		fputc('"', f);
 	} else {
-		fwrite("#include <", sizeof("#include <")-1, 1, f);
-		fwrite(name, len, 1, f);
+		fputc('<', f);
+		fwrite(name, name_len, 1, f);
 		fputc('>', f);
 	}
 	fputc('\n', f);

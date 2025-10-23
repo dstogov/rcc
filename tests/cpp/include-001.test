@@ -1,0 +1,15 @@
+--TEST--
+include 001 - include in proper order
+--ARGS--
+-E -P -I./tests/cpp/inc1 -I./tests/cpp/inc2
+--CODE--
+#include "include-001.h"
+#ifdef INCLUDE_001_INC2
+# error "invalid include order"
+#endif
+#ifndef INCLUDE_001_INC1
+# error "invalid include order"
+#endif
+OK
+--EXPECT--
+OK
