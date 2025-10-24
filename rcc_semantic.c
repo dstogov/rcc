@@ -1153,6 +1153,9 @@ c_sym *c_declare(c_name name, c_dcl *d)
 		if (d->attr & C_ATTR_NORETURN) {
 			if (d->type->kind != C_TYPE_FUNC) yy_error("invalid use of \"_Noreturn\"");
 		}
+		if (d->type->kind == C_TYPE_FUNC) {
+			((c_type*)d->type)->attr |= d->attr & C_FUNC_TYPE_ATTRS;
+		}
 	}
 	IR_ASSERT(name);
 
@@ -5126,6 +5129,7 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args)
 		arg_refs[0] = ret_struct;
 	}
 	if ((func->u.op & inlining)
+	 && (!(func->type->attr & C_ATTR_NORETURN) || func->type->func.ret_type->kind == C_TYPE_VOID)
 	 && active_ctx->fixed_regset == ((ir_ctx*)func->u.val.ptr)->fixed_regset
 	 && active_ctx->fixed_save_regset == ((ir_ctx*)func->u.val.ptr)->fixed_save_regset) {
 		ref = ir_inline_call(active_ctx, (ir_ctx*)func->u.val.ptr, num_args + j, arg_refs);
