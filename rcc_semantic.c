@@ -6247,6 +6247,7 @@ void c_do_statement_expression(c_scope *scope, c_value *val)
 {
 	if (!active_func_scope) yy_error("statement expression allowed only inside a function");
 	c_push_scope(scope);
+	scope->checkpoint = NULL; /* we must not free type of result value */
 	c_value_set_rval(val, &c_type_void, IR_VOID, IR_UNUSED);
 }
 
