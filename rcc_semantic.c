@@ -4576,6 +4576,9 @@ void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 		} else {
 			yy_warning("second argument of __builtin_expect() must be an integer constant");
 		}
+	} else if (name == YY___BUILTIN_PREFETCH) {
+		// TODO: IR misses PREFETCH instruction(s) ???
+		c_value_set_rval(val, &c_type_void, IR_VOID, IR_UNUSED);
 	} else if (name == YY___BUILTIN_HUGE_VAL || name == YY___BUILTIN_INF) {
 		ir_val v;
 		if (num_args != 0) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));

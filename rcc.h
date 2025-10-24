@@ -223,6 +223,7 @@
 	_("__builtin_umull_overflow",      YY___BUILTIN_UMULL_OVERFLOW)    \
 	_("__builtin_umulll_overflow",     YY___BUILTIN_UMULLL_OVERFLOW)   \
 	_("__builtin_expect",              YY___BUILTIN_EXPECT)            \
+	_("__builtin_prefetch",            YY___BUILTIN_PREFETCH)          \
 	_("__builtin_unreachable",         YY___BUILTIN_UNREACHABLE)       \
 
 #define YY_LAST_KEYWORD                YY___BUILTIN_UNREACHABLE
@@ -801,6 +802,7 @@ struct _c_linker_sym {
 	const void *addr;
 	c_reloc    *reloc;
 	bool        is_thunk;
+	bool        is_asm_name;
 };
 
 struct _c_sym {

@@ -1049,6 +1049,7 @@ unary_expression(c_value *val):
 		|	"__builtin_memcpy"
 		|	"__builtin_memset"
 		|	"__builtin_expect"
+		|	"__builtin_prefetch"
 		|	"__builtin_unreachable"
 		|	"__builtin_huge_val"
 		|	"__builtin_huge_valf"
