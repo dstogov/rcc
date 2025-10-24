@@ -235,7 +235,7 @@ declaration(uint32_t flags):                               {c_dcl d0 = {0};}
 					old_style_param_declaration(d.type)+   {c_validate_func_params(name, &d);}
 				)?                                         {c_do_func_start(name, &d, &scope, &ctx);}
 				"{"
-				compound_statement(NULL)                   {c_do_func_end(name, &d, &scope, &ctx);}
+				compound_statement                         {c_do_func_end(name, &d, &scope, &ctx);}
                 "}"                                        {active_ctx = old_ctx;}
 			)
 		|	";"                                            {c_empty_declaration(&d0);}
@@ -714,7 +714,7 @@ static_assert_declaration:                                 {c_value cond = {0}, 
 ;
 
 /* Statements */
-compound_statement(c_value *val):
+compound_statement:                                        {c_value val;}
 	(                                                      {c_name name;}
 		"__label__" ID(&name)                              {c_declare_local_label(name);}
 			(
@@ -722,20 +722,46 @@ compound_statement(c_value *val):
 			ID(&name)                                      {c_declare_local_label(name);}
 		)* ";"
 	)*
-	(	?{!C_IS_ID(sym) || is_label(sym)}
+	(	c_statement
+	|	?{!C_IS_ID(sym) || is_label(sym)}
 		labels
-	|	?{!C_IS_ID(sym) || !is_typedef_name(sym)}
-		statement2(val)
-	|	declaration(0)
+	|                                                      {if (sym == YY___EXTENSION__) sym = yy_next();}
+		(	?{!C_IS_ID(sym) || !is_typedef_name(sym)}
+			expression(&val) ";"
+		|	declaration(0)
+		)
 	)*
 ;
 
+expression_statement(c_value *val):
+	(                                                      {c_name name;}
+		"__label__" ID(&name)                              {c_declare_local_label(name);}
+			(
+			","
+			ID(&name)                                      {c_declare_local_label(name);}
+		)* ";"
+	)*
+	(                                                      {c_value_clear(val);}
+		(	c_statement
+		|	?{!C_IS_ID(sym) || is_label(sym)}
+			labels
+		|                                                  {if (sym == YY___EXTENSION__) sym = yy_next();}
+			(	?{!C_IS_ID(sym) || !is_typedef_name(sym)}
+				expression(val) ";"
+			|	declaration(0)
+			)
+		)
+	)*
+;
 
-statement(c_value *last_val):
+statement:                                                 {c_value val;}
 	(	?{!C_IS_ID(sym) || is_label(sym)}
 		labels
 	)?
-	statement2(last_val)
+	(	c_statement
+	|	expression(&val) ";"
+	|	";"
+	)
 ;
 
 labels:
@@ -757,37 +783,36 @@ labels:
 	)++
 ;
 
-statement2(c_value *last_val):                             {c_value val = {0};}
+c_statement:                                               {c_value val = {0};}
                                                            {c_name name;}
                                                            {c_scope scope;}
-                                                           {if (last_val) c_value_clear(last_val);}
 	(	"{"                                                {c_push_scope(&scope);}
-		compound_statement(NULL)                           {c_pop_scope(&scope);}
+		compound_statement                                 {c_pop_scope(&scope);}
         "}"
 	|                                                      {ir_ref check;}
 	                                                       {bool orig_dead_code = c_dead_code;}
 														   {c_push_scope(&scope);}
 		"if" "("expression(&val) ")"                       {check = c_do_if(&val);}
-		statement(NULL)
+		statement
 		(   "else"                                         {c_do_if_else(check, orig_dead_code);}
-			statement(NULL)
+			statement
 		)?+                                                {c_do_if_end(check, orig_dead_code);}
 		                                                   {c_pop_scope(&scope);}
 	|                                                      {c_loop loop;}
 														   {c_push_scope(&scope);}
 		"switch" "(" expression(&val) ")"                  {c_do_switch(&loop, &val);}
-		statement(NULL)                                    {c_do_switch_end(&loop);}
+		statement                                          {c_do_switch_end(&loop);}
 		                                                   {c_pop_scope(&scope);}
 	|                                                      {c_loop loop;}
 	                                                       {c_push_scope(&scope);}
 		"while"                                            {c_do_loop_start(&loop);}
 		"(" expression(&val) ")"                           {c_do_loop_check(&loop, &val);}
-		statement(NULL)                                    {c_do_loop_end(&loop);}
+		statement                                          {c_do_loop_end(&loop);}
 		                                                   {c_pop_scope(&scope);}
 	|                                                      {c_loop loop;}
 	                                                       {c_push_scope(&scope);}
 		"do"                                               {c_do_loop_start(&loop);}
-		statement(NULL)                                    {c_do_loop_continue_label(&loop);}
+		statement                                          {c_do_loop_continue_label(&loop);}
 		"while" "(" expression(&val) ")"                   {c_do_loop_check(&loop, &val);}
 		";"                                                {c_do_loop_end(&loop);}
 														   {c_pop_scope(&scope);}
@@ -805,7 +830,7 @@ statement2(c_value *last_val):                             {c_value val = {0};}
 			expression(&val)                               {c_do_for_next_end(&loop);}
 		)?
 		")"
-		statement(NULL)                                    {c_do_for_end(&loop);}
+		statement                                          {c_do_for_end(&loop);}
 			                                               {c_pop_scope(&scope);}
 	|	"goto"
 		(	ID(&name)                                      {c_do_goto(name);}
@@ -815,8 +840,6 @@ statement2(c_value *last_val):                             {c_value val = {0};}
 	|	"continue" ";"                                     {c_do_continue();}
 	|	"break" ";"                                        {c_do_break();}
 	|	"return" expression(&val)? ";"                     {c_do_return(&val);}
-	|	expression(last_val ? last_val : &val)?
-		";"
 //???	|	attributes ";"
 	|	("asm"|"__asm"|"__asm__")                          {/*???*/yy_error("asm support not implemented yet");}
 		("volatile"|"inline"|"goto")*
@@ -922,7 +945,7 @@ unary_expression(c_value *val):
 		|   expression(val) ")"
 		|                                                  {c_scope scope;}
 			"{"                                            {c_do_statement_expression(&scope, val);}
-			compound_statement(val)                        {c_pop_scope(&scope);}
+			expression_statement(val)                      {c_pop_scope(&scope);}
 			"}" ")"
 		)
 	|	ID(&name)                                          {c_resolve_sym_name(val, name, sym);}
@@ -969,7 +992,7 @@ unary_expression(c_value *val):
 				")"
 			|                                              {c_scope scope;}
 				"{"                                        {c_do_statement_expression(&scope, val);}
-				compound_statement(val)                    {c_pop_scope(&scope);}
+				expression_statement(val)                  {c_pop_scope(&scope);}
 				"}"
 				")"
 			)
@@ -989,7 +1012,7 @@ unary_expression(c_value *val):
 				")"
 			|                                              {c_scope scope;}
 				"{"                                        {c_do_statement_expression(&scope, val);}
-				compound_statement(val)                    {c_pop_scope(&scope);}
+				expression_statement(val)                  {c_pop_scope(&scope);}
 				"}"
 				")"
 			)
