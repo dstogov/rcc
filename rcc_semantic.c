@@ -2426,6 +2426,8 @@ yy_sym c_gcc_attribute(c_dcl *d, c_name attr, yy_sym sym)
 {
 	if (attr == YY_FORMAT
 	 || attr == YY___FORMAT__
+	 || attr == YY_FORMAT_ARG
+	 || attr == YY___FORMAT_ARG__
 	 || attr == YY_MALLOC
 	 || attr == YY___MALLOC__
 	 || attr == YY_NONNULL

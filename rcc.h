@@ -300,6 +300,8 @@
 	_("__fastcall__",                  YY___FASTCALL__)         /*f  */\
 	_("format",                        YY_FORMAT)               /*f  */\
 	_("__format__",                    YY___FORMAT__)           /*f  */\
+	_("format_arg",                    YY_FORMAT_ARG)           /*f  */\
+	_("__format_arg__",                YY___FORMAT_ARG__)       /*f  */\
 	_("gcc_struct",                    YY_GCC_STRUCT)           /*  t*/\
 	_("__gcc_struct__",                YY___GCC_STRUCT__)       /*  t*/\
 	_("hot",                           YY_HOT)                  /*f  */\
