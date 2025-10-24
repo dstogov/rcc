@@ -2745,6 +2745,16 @@ void c_asm_alias(c_dcl *d, c_value *val)
 		c_name id = yy_hash_lookup((const char*)val->u.val.ptr, val->u.op1 - 1);
 
 		d->alias = id;
+		if (yy_hash.data[id].link) {
+			yy_hash.data[id].link->is_asm_name = 1;
+		} else {
+			c_linker_sym *link = ir_arena_alloc(&yy_arena, sizeof(c_linker_sym));
+			link->addr = NULL;
+			link->reloc = NULL;
+			link->is_thunk = 0;
+			link->is_asm_name = 1;
+			yy_hash.data[id].link = link;
+		}
 	} else {
 		yy_warning_fmt("ignoring __asm__(\"%s\") specifier for non-static local variable", (const char*)val->u.val.ptr);
 	}

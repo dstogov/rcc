@@ -2,8 +2,6 @@
 Alias 006:
 --ARGS--
 --run
---XFAIL--
-asm linkage is not implemented
 --CODE--
 int x(const char *, ...) __asm__("printf");
 int main() {

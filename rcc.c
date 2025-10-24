@@ -452,7 +452,21 @@ add_thunk:
 			}
 			return addr;
 		}
+	} else if (yy_hash.data[id].link && yy_hash.data[id].link->is_asm_name) {
+		void *addr = (void*)yy_hash.data[id].link->addr;
+
+		if (addr) return addr;
+
+		addr = ir_resolve_sym_name(name);
+		if (addr) {
+			if (c_flags & C_DUMP_ASM) {
+				ir_disasm_add_symbol(name, (uint64_t)(uintptr_t)addr, IR_UNKNOWN_SIZE);
+			}
+			yy_hash.data[id].link->addr = addr;
+			return addr;
+		}
 	}
+
 	if (!(flags & IR_RESOLVE_SYM_SILENT)) {
 		yy_error_fmt("undefined symbol \"%s\"", name);
 	}
@@ -1302,6 +1316,7 @@ static void rcc_link(void)
 					link->addr = addr;
 					link->reloc = NULL;
 					link->is_thunk = 0;
+					link->is_asm_name = 0;
 					q->link = link;
 				} else if (!link->addr || link->is_thunk) {
 					addr = ir_resolve_sym_name(q->str);
@@ -1354,7 +1369,10 @@ static void rcc_update_link(yy_hash_bucket *p)
 	}
 
 	if (p->link) {
-		if (sym->is_thunk) {
+		if (!p->link->addr) {
+			p->link->addr = sym->value.u.val.ptr;
+			p->link->is_thunk = sym->is_thunk;
+		} else if (sym->is_thunk) {
 			if (!p->link->is_thunk || sym->value.u.val.ptr != p->link->addr) {
 				ir_fix_thunk((void*)sym->value.u.val.ptr, (void*)p->link->addr);
 			}
@@ -1371,6 +1389,7 @@ static void rcc_update_link(yy_hash_bucket *p)
 		link->addr = sym->value.u.val.ptr;
 		link->reloc = sym->reloc;
 		link->is_thunk = sym->is_thunk;
+		link->is_asm_name = 0;
 		p->link = link;
 	}
 }
