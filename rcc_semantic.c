@@ -5700,12 +5700,13 @@ static void c_do_shl(const c_type *type, c_value *op1, c_value *op2)
 {
 	if (c_value_is_const(op1) && c_value_is_const(op2)) {
 		ir_val val;
+		uint32_t mask = (op2->type->size == 8) ? 63 : 31;
 
 		switch (op1->u.type) {
-			case IR_I32: val.i64 = (int32_t)(op1->u.val.u32 << op2->u.val.u32); break;
-			case IR_U32: val.u64 = op1->u.val.u32 << op2->u.val.u32; break;
+			case IR_I32: val.i64 = (int32_t)(op1->u.val.u32 << (op2->u.val.u32 & mask)); break;
+			case IR_U32: val.u64 = op1->u.val.u32 << (op2->u.val.u32 & mask); break;
 			case IR_I64:
-			case IR_U64: val.u64 = op1->u.val.u64 << op2->u.val.u64; break;
+			case IR_U64: val.u64 = op1->u.val.u64 << (op2->u.val.u64 & mask); break;
 			default: IR_ASSERT(0); return;
 		}
 		c_value_set_const(op1, type, c_type2ir(type), val);
@@ -5717,14 +5718,15 @@ static void c_do_shl(const c_type *type, c_value *op1, c_value *op2)
 
 static void c_do_shr(const c_type *type, c_value *op1, c_value *op2)
 {
-	if (c_value_is_const(op1) && c_value_is_const(op2)) {
+	if (c_value_is_const(op1) && c_value_is_const(op2) && op2->u.val.u64 <= ir_type_size[op1->u.type] * 8) {
 		ir_val val;
+		uint32_t mask = (op2->type->size == 8) ? 63 : 31;
 
 		switch (op1->u.type) {
-			case IR_I32: val.i64 = op1->u.val.i32 >> op2->u.val.i32; break;
-			case IR_U32: val.u64 = op1->u.val.u32 >> op2->u.val.u32; break;
-			case IR_I64: val.i64 = op1->u.val.i64 >> op2->u.val.i64; break;
-			case IR_U64: val.u64 = op1->u.val.u64 >> op2->u.val.u64; break;
+			case IR_I32: val.i64 = op1->u.val.i32 >> (op2->u.val.i32 & mask); break;
+			case IR_U32: val.u64 = op1->u.val.u32 >> (op2->u.val.u32 & mask); break;
+			case IR_I64: val.i64 = op1->u.val.i64 >> (op2->u.val.i64 & mask); break;
+			case IR_U64: val.u64 = op1->u.val.u64 >> (op2->u.val.u64 & mask); break;
 			default: IR_ASSERT(0); return;
 		}
 		c_value_set_const(op1, type, c_type2ir(type), val);
