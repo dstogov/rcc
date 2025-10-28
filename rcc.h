@@ -850,8 +850,9 @@ struct _c_field {
 	const c_type          *type;
 };
 
-#define C_ALLOCA_PARAMS 16
-#define C_ALLOCA_FIELDS 16
+#define C_ALLOCA_PARAMS  16
+#define C_ALLOCA_FIELDS  16
+#define C_ALLOCA_STRINGS 16
 
 struct _c_param {
 	c_name                 name;

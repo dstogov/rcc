@@ -145,16 +145,15 @@ static bool is_nested_declarator(yy_sym id)
 	return ret;
 }
 
-typedef struct _yy_str_list str_list;
-
-struct _yy_str_list {
+typedef struct _yy_str {
 	const char *str;
 	size_t      len;
-	str_list   *next;
-};
+} yy_str;
 
 /* Scanner actions */
-static void yy_strings(c_value *res, str_list *first, str_list *last);
+static void yy_read_string(c_value *res, const char *p, size_t len);
+static void yy_read_strings(c_value *res, yy_str *strings, uint32_t num_strings);
+static yy_str *yy_grow_strings(yy_str *strings, uint32_t num_strings);
 static void yy_read_oct(c_value *res, const char *p, size_t len);
 static void yy_read_dec(c_value *res, const char *p, size_t len);
 static void yy_read_hex(c_value *res, const char *p, size_t len);
@@ -212,7 +211,6 @@ static yy_sym parse_asm_operand(yy_sym sym);
 static yy_sym parse_asm_clobbers(yy_sym sym);
 static yy_sym parse_asm_goto_operands(yy_sym sym);
 static yy_sym parse_strings(yy_sym sym, c_value *val);
-static yy_sym parse_strings_tail(yy_sym sym, c_value *val, str_list *first, str_list *last);
 static yy_sym parse_actual_parameters(yy_sym sym, c_value *func);
 static yy_sym parse_builtin_parameters(yy_sym sym, c_value *val, c_name name);
 static yy_sym parse_dummy_value(yy_sym sym, const c_type *t);
@@ -1927,26 +1925,22 @@ static yy_sym parse_asm_goto_operands(yy_sym sym) {
 }
 
 static yy_sym parse_strings(yy_sym sym, c_value *val) {
-	str_list list;
-	list.str = yy_text;
-	list.len = yy_len;
-	list.next = NULL;
+	const char *str = yy_text;
+	size_t len = yy_len;
 	sym = parse_STRING(sym);
-	sym = parse_strings_tail(sym, val, &list, &list);
-	return sym;
-}
-
-static yy_sym parse_strings_tail(yy_sym sym, c_value *val, str_list *first, str_list *last) {
-	if (sym == YY_STRING) {
-		str_list list;
-		list.str = yy_text;
-		list.len = yy_len;
-		list.next = NULL;
-		last->next = &list;
-		sym = parse_STRING(sym);
-		sym = parse_strings_tail(sym, val, first, &list);
-	} else if (sym == YY__RPAREN || sym == YY__LBRACK || sym == YY__LPAREN || sym == YY__POINT || sym == YY__MINUS_GREATER || sym == YY__PLUS_PLUS || sym == YY__MINUS_MINUS || sym == YY__BAR_BAR || sym == YY__AND_AND || sym == YY__BAR || sym == YY__UPARROW || sym == YY__AND || sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL || sym == YY__LESS || sym == YY__GREATER || sym == YY__LESS_EQUAL || sym == YY__GREATER_EQUAL || sym == YY__LESS_LESS || sym == YY__GREATER_GREATER || sym == YY__PLUS || sym == YY__MINUS || sym == YY__STAR || sym == YY__SLASH || sym == YY__PERCENT || sym == YY__QUERY || sym == YY__EQUAL || sym == YY__STAR_EQUAL || sym == YY__SLASH_EQUAL || sym == YY__PERCENT_EQUAL || sym == YY__PLUS_EQUAL || sym == YY__MINUS_EQUAL || sym == YY__LESS_LESS_EQUAL || sym == YY__GREATER_GREATER_EQUAL || sym == YY__AND_EQUAL || sym == YY__UPARROW_EQUAL || sym == YY__BAR_EQUAL || sym == YY__RBRACK || sym == YY__COMMA || sym == YY__SEMICOLON || sym == YY__RBRACE || sym == YY__COLON || sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__ || sym == YY___DECLSPEC || sym == YY__POINT_POINT_POINT) {
-		yy_strings(val, first, last);
+	if (sym == YY__RPAREN || sym == YY__LBRACK || sym == YY__LPAREN || sym == YY__POINT || sym == YY__MINUS_GREATER || sym == YY__PLUS_PLUS || sym == YY__MINUS_MINUS || sym == YY__BAR_BAR || sym == YY__AND_AND || sym == YY__BAR || sym == YY__UPARROW || sym == YY__AND || sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL || sym == YY__LESS || sym == YY__GREATER || sym == YY__LESS_EQUAL || sym == YY__GREATER_EQUAL || sym == YY__LESS_LESS || sym == YY__GREATER_GREATER || sym == YY__PLUS || sym == YY__MINUS || sym == YY__STAR || sym == YY__SLASH || sym == YY__PERCENT || sym == YY__QUERY || sym == YY__EQUAL || sym == YY__STAR_EQUAL || sym == YY__SLASH_EQUAL || sym == YY__PERCENT_EQUAL || sym == YY__PLUS_EQUAL || sym == YY__MINUS_EQUAL || sym == YY__LESS_LESS_EQUAL || sym == YY__GREATER_GREATER_EQUAL || sym == YY__AND_EQUAL || sym == YY__UPARROW_EQUAL || sym == YY__BAR_EQUAL || sym == YY__RBRACK || sym == YY__COMMA || sym == YY__SEMICOLON || sym == YY__RBRACE || sym == YY__COLON || sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__ || sym == YY___DECLSPEC || sym == YY__POINT_POINT_POINT) {
+		yy_read_string(val, str, len);
+	} else if (sym == YY_STRING) {
+		uint32_t num_strings = 1;
+		yy_str *strings = alloca(sizeof(yy_str) * C_ALLOCA_STRINGS);
+		strings[0].str = str; strings[0].len = len;
+		do {
+			if (num_strings % C_ALLOCA_STRINGS == 0) strings = yy_grow_strings(strings, num_strings);
+			strings[num_strings].str = yy_text; strings[num_strings].len = yy_len;
+			num_strings++;
+			sym = parse_STRING(sym);
+		} while (sym == YY_STRING);
+		yy_read_strings(val, strings, num_strings);
 	} else {
 		yy_error_sym("unexpected", sym);
 	}
@@ -3139,17 +3133,14 @@ static char yy_strings_append(yy_dyn_str *dyn_str, char prefix, const char *str,
 	return prefix;
 }
 
-static void yy_strings(c_value *res, str_list *first, str_list *last)
+static void yy_read_string(c_value *res, const char *str, size_t len)
 {
 	yy_dyn_str dyn_str;
 	char prefix = 0;
 	const c_type *type;
 
 	yy_dyn_str_init(&dyn_str, "", 0);
-	do {
-		prefix = yy_strings_append(&dyn_str, prefix, first->str, first->len);
-		first = first->next;
-	} while(first);
+	prefix = yy_strings_append(&dyn_str, prefix, str, len);
 
 	if (!prefix) {
 		yy_dyn_str_append(&dyn_str, "\0", 1);
@@ -3167,6 +3158,57 @@ static void yy_strings(c_value *res, str_list *first, str_list *last)
 	}
 
 	c_value_set_const_str(res, type, IR_ADDR, dyn_str.str, dyn_str.len);
+}
+
+
+static void yy_read_strings(c_value *res, yy_str *strings, uint32_t num_strings)
+{
+	yy_dyn_str dyn_str;
+	char prefix = 0;
+	const c_type *type;
+	uint32_t i;
+
+	yy_dyn_str_init(&dyn_str, "", 0);
+	for (i = 0; i < num_strings; i++) {
+		prefix = yy_strings_append(&dyn_str, prefix, strings[i].str, strings[i].len);
+	}
+
+	if (!prefix) {
+		yy_dyn_str_append(&dyn_str, "\0", 1);
+		type = &c_type_string;
+	} else if (prefix == 'L') {
+		yy_dyn_str_append(&dyn_str, "\0\0\0\0", 4);
+		type = &c_type_lstring;
+	} else if (prefix == 'u') {
+		yy_dyn_str_append(&dyn_str, "\0\0", 2);
+		type = &c_type_string_u16;
+	} else {
+		IR_ASSERT(prefix == 'U');
+		yy_dyn_str_append(&dyn_str, "\0\0\0\0", 4);
+		type = &c_type_string_u32;
+	}
+
+	c_value_set_const_str(res, type, IR_ADDR, dyn_str.str, dyn_str.len);
+
+	if (num_strings > C_ALLOCA_STRINGS) ir_mem_free(strings);
+}
+
+static yy_str *yy_grow_strings(yy_str *strings, uint32_t num_strings)
+{
+	if (num_strings == C_ALLOCA_STRINGS) {
+		yy_str *new_strings = ir_mem_malloc(C_ALLOCA_STRINGS * 2 * sizeof(yy_str));
+		memcpy(new_strings, strings, C_ALLOCA_STRINGS * sizeof(yy_str));
+		return new_strings;
+	} else {
+		IR_ASSERT(num_strings % C_ALLOCA_STRINGS == 0);
+		if ((num_strings + C_ALLOCA_STRINGS) * sizeof(yy_str) <= 4096) {
+			return ir_mem_realloc(strings, (num_strings + C_ALLOCA_STRINGS) * sizeof(yy_str));
+		} else if ((num_strings * sizeof(yy_str)) % 4096 == 0) {
+			return ir_mem_realloc(strings, (num_strings * sizeof(yy_str)) + 4096);
+		} else {
+			return strings;
+		}
+	}
 }
 
 static yy_sym parse_vla_param(yy_sym sym, c_value *val)

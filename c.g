@@ -168,16 +168,15 @@ static bool is_nested_declarator(yy_sym id)
 	return ret;
 }
 
-typedef struct _yy_str_list str_list;
-
-struct _yy_str_list {
+typedef struct _yy_str {
 	const char *str;
 	size_t      len;
-	str_list   *next;
-};
+} yy_str;
 
 /* Scanner actions */
-static void yy_strings(c_value *res, str_list *first, str_list *last);
+static void yy_read_string(c_value *res, const char *p, size_t len);
+static void yy_read_strings(c_value *res, yy_str *strings, uint32_t num_strings);
+static yy_str *yy_grow_strings(yy_str *strings, uint32_t num_strings);
 static void yy_read_oct(c_value *res, const char *p, size_t len);
 static void yy_read_dec(c_value *res, const char *p, size_t len);
 static void yy_read_hex(c_value *res, const char *p, size_t len);
@@ -880,21 +879,18 @@ asm_goto_operands:                                         {c_name name;}
 ;
 
 /* Expressions */
-strings(c_value *val):                                     {str_list list;}
-	                                                       {list.str = yy_text;}
-														   {list.len = yy_len;}
-														   {list.next = NULL;}
-	STRING strings_tail(val, &list, &list)
-;
-
-strings_tail(c_value *val, str_list *first, str_list *last):
-	(	                                                   {str_list list;}
-	                                                       {list.str = yy_text;}
-														   {list.len = yy_len;}
-														   {list.next = NULL;}
-														   {last->next = &list;}
-		STRING strings_tail(val, first, &list)
-	|   /* *empty */                                       {yy_strings(val, first, last);}
+strings(c_value *val):                                     {const char *str = yy_text;}
+                                                           {size_t len = yy_len;}
+	STRING
+	(	/* empty */                                        {yy_read_string(val, str, len);}
+	|                                                      {uint32_t num_strings = 1;}
+		                                                   {yy_str *strings = alloca(sizeof(yy_str) * C_ALLOCA_STRINGS);}
+														   {strings[0].str = str; strings[0].len = len;}
+		(                                                  {if (num_strings % C_ALLOCA_STRINGS == 0) strings = yy_grow_strings(strings, num_strings);}
+		                                                   {strings[num_strings].str = yy_text; strings[num_strings].len = yy_len;}
+														   {num_strings++;}
+			STRING
+		)+                                                 {yy_read_strings(val, strings, num_strings);}
 	)
 ;
 
@@ -1827,17 +1823,14 @@ static char yy_strings_append(yy_dyn_str *dyn_str, char prefix, const char *str,
 	return prefix;
 }
 
-static void yy_strings(c_value *res, str_list *first, str_list *last)
+static void yy_read_string(c_value *res, const char *str, size_t len)
 {
 	yy_dyn_str dyn_str;
 	char prefix = 0;
 	const c_type *type;
 
 	yy_dyn_str_init(&dyn_str, "", 0);
-	do {
-		prefix = yy_strings_append(&dyn_str, prefix, first->str, first->len);
-		first = first->next;
-	} while(first);
+	prefix = yy_strings_append(&dyn_str, prefix, str, len);
 
 	if (!prefix) {
 		yy_dyn_str_append(&dyn_str, "\0", 1);
@@ -1855,6 +1848,57 @@ static void yy_strings(c_value *res, str_list *first, str_list *last)
 	}
 
 	c_value_set_const_str(res, type, IR_ADDR, dyn_str.str, dyn_str.len);
+}
+
+
+static void yy_read_strings(c_value *res, yy_str *strings, uint32_t num_strings)
+{
+	yy_dyn_str dyn_str;
+	char prefix = 0;
+	const c_type *type;
+	uint32_t i;
+
+	yy_dyn_str_init(&dyn_str, "", 0);
+	for (i = 0; i < num_strings; i++) {
+		prefix = yy_strings_append(&dyn_str, prefix, strings[i].str, strings[i].len);
+	}
+
+	if (!prefix) {
+		yy_dyn_str_append(&dyn_str, "\0", 1);
+		type = &c_type_string;
+	} else if (prefix == 'L') {
+		yy_dyn_str_append(&dyn_str, "\0\0\0\0", 4);
+		type = &c_type_lstring;
+	} else if (prefix == 'u') {
+		yy_dyn_str_append(&dyn_str, "\0\0", 2);
+		type = &c_type_string_u16;
+	} else {
+		IR_ASSERT(prefix == 'U');
+		yy_dyn_str_append(&dyn_str, "\0\0\0\0", 4);
+		type = &c_type_string_u32;
+	}
+
+	c_value_set_const_str(res, type, IR_ADDR, dyn_str.str, dyn_str.len);
+
+	if (num_strings > C_ALLOCA_STRINGS) ir_mem_free(strings);
+}
+
+static yy_str *yy_grow_strings(yy_str *strings, uint32_t num_strings)
+{
+	if (num_strings == C_ALLOCA_STRINGS) {
+		yy_str *new_strings = ir_mem_malloc(C_ALLOCA_STRINGS * 2 * sizeof(yy_str));
+		memcpy(new_strings, strings, C_ALLOCA_STRINGS * sizeof(yy_str));
+		return new_strings;
+	} else {
+		IR_ASSERT(num_strings % C_ALLOCA_STRINGS == 0);
+		if ((num_strings + C_ALLOCA_STRINGS) * sizeof(yy_str) < 4096) {
+			return ir_mem_realloc(strings, (num_strings + C_ALLOCA_STRINGS) * sizeof(yy_str));
+		} else if ((num_strings * sizeof(yy_str)) % 4096 == 0) {
+			return ir_mem_realloc(strings, (num_strings * sizeof(yy_str)) + 4096);
+		} else {
+			return strings;
+		}
+	}
 }
 
 static yy_sym parse_vla_param(yy_sym sym, c_value *val)
