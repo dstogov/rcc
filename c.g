@@ -1891,7 +1891,7 @@ static yy_str *yy_grow_strings(yy_str *strings, uint32_t num_strings)
 		return new_strings;
 	} else {
 		IR_ASSERT(num_strings % C_ALLOCA_STRINGS == 0);
-		if ((num_strings + C_ALLOCA_STRINGS) * sizeof(yy_str) < 4096) {
+		if ((num_strings + C_ALLOCA_STRINGS) * sizeof(yy_str) <= 4096) {
 			return ir_mem_realloc(strings, (num_strings + C_ALLOCA_STRINGS) * sizeof(yy_str));
 		} else if ((num_strings * sizeof(yy_str)) % 4096 == 0) {
 			return ir_mem_realloc(strings, (num_strings * sizeof(yy_str)) + 4096);
