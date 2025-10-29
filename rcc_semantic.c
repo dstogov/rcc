@@ -3212,9 +3212,10 @@ void c_value_rval(c_value *val)
 			val->u.ref = ir_RLOAD(val->u.type, val->u.ref);
 		} else if (val->type->kind != C_TYPE_STRUCT && val->type->kind != C_TYPE_UNION) {
 			if (!C_IS_BIT_FIELD(val->u.proto)) {
-				if ((val->type->attr & C_ATTR_CONST)
-				 && IR_IS_CONST_REF(val->u.ref)
-				 && active_ctx->ir_base[val->u.ref].op == IR_SYM
+				if (IR_IS_CONST_REF(val->u.ref)
+				 && ((active_ctx->ir_base[val->u.ref].op == IR_SYM
+				   && (val->type->attr & C_ATTR_CONST))
+				  || active_ctx->ir_base[val->u.ref].op == IR_STR)
 				 && (C_IS_TYPE_INT(val->type) || C_IS_TYPE_FP(val->type))
 				 && val->u.val.ptr) {
 					const void *p = val->u.val.ptr;
@@ -4627,7 +4628,16 @@ void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 void c_do_builtin_constant_p(c_value *val, c_value *arg)
 {
 	ir_val v;
-	v.u64 = c_value_is_const(arg) ? 1 : 0;
+
+	if (c_value_is_const(arg)) {
+		v.u64 = 1;
+	} else {
+		v.u64 = 0;
+		if (c_value_is_lval(arg)) c_value_rval(arg);
+		if (IR_IS_CONST_REF(arg->u.ref) && !IR_IS_SYM_CONST(active_ctx->ir_base[arg->u.ref].op)) {
+			v.u64 = 1;
+		}
+	}
 	c_value_set_const(val, &c_type_i32, IR_I32, v);
 }
 
@@ -4910,6 +4920,7 @@ static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, i
 				xlat2[i] = xlat[i] = ctx->control;
 				ctx->control = IR_UNUSED;
 			} else if (op == IR_LOAD) {
+				// TODO: constant folding ???
 				ctx->control = op1;
 				xlat[i] = _ir_LOAD(ctx, insn->type, op2);
 				xlat2[i] = ctx->control;
@@ -6238,13 +6249,21 @@ void c_do_cond_op(c_value *cond, c_value *op1, c_value *op2)
 		if (op2->type != type) c_do_cvt(type, c_type2ir(type), op2);
 	}
 	// TODO: We might need PHI decause of dominance ???
-	if (c_value_is_const(cond) && (c_value_is_true(cond) ? c_value_is_const(op1) : c_value_is_const(op2))) {
+	if (c_value_is_const(cond)) {
 		if (c_value_is_true(cond)) {
-			*cond = *op1;
-			cond->type = type;
+			if (c_value_is_const(op1)) {
+				*cond = *op1;
+				cond->type = type;
+			} else {
+				c_value_set_rval(cond, type, c_type2ir(type), c_value_ref(op1));
+			}
 		} else {
-			*cond = *op2;
-			cond->type = type;
+			if (c_value_is_const(op2)) {
+				*cond = *op2;
+				cond->type = type;
+			} else {
+				c_value_set_rval(cond, type, c_type2ir(type), c_value_ref(op2));
+			}
 		}
 	} else if (type != &c_type_void) {
 		ir_type t = c_type2ir(type);
