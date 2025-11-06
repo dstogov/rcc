@@ -297,6 +297,11 @@ void c_type2proto_ex(const c_type *t, uint8_t *flags_ptr, ir_type *ret_type_ptr,
 	if (t->attr & C_ATTR_FASTCALL) {
 		flags |= IR_FASTCALL_FUNC;
 	}
+	if (t->attr & C_ATTR_CONST_FUNC) {
+		flags |= IR_CONST_FUNC;
+	} else if (t->attr & C_ATTR_PURE) {
+		flags |= IR_PURE_FUNC;
+	}
 
 	*flags_ptr = flags;
 	*ret_type_ptr = ret_type;
