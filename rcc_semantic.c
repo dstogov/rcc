@@ -4671,7 +4671,7 @@ void c_do_builtin_va_arg(c_value *val, c_value *list, const c_type *type)
 				yy_warning("passing structure with alignnment greater than 16 is not implemented yet");
 				align = 16;
 			}
-			ref = ir_VA_ARG_EX(c_value_ref(list), IR_ADDR, (type->size << 3) | ir_ntzl(align));
+			ref = ir_VA_ARG_EX(c_value_ref(list), IR_ADDR, type->size, align);
 			c_value_set_lval(val, type, IR_ADDR, ref);
 		}
 	} else {
