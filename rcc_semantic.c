@@ -4812,9 +4812,8 @@ static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, i
 
 	/* Wrap inlined code with BLOCK_BEGIN/BLOCK_END if necessary */
 	if (has_var) {
-		ir_ref end = ir_emit1(ctx, IR_END, ctx->control);
-		start = ir_emit1(ctx, IR_BEGIN, end);
-		block_begin = xlat2[1] = xlat[1] = ctx->control = ir_emit1(ctx, IR_OPT(IR_BLOCK_BEGIN, IR_ADDR), start);
+		block_begin = ir_emit1(ctx, IR_OPT(IR_BLOCK_BEGIN, IR_ADDR), ctx->control);
+		xlat2[1] = xlat[1] = ctx->control = start = ir_emit1(ctx, IR_BEGIN, ir_emit1(ctx, IR_END, block_begin));
 	} else if (has_alloca || has_copy) {
 		start = block_begin = xlat2[1] = xlat[1] = ctx->control = ir_emit1(ctx, IR_OPT(IR_BLOCK_BEGIN, IR_ADDR), ctx->control);
 	} else {
@@ -4897,7 +4896,11 @@ static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, i
 				ctx->control = IR_UNUSED;
 			} else if (op == IR_BEGIN) {
 				ctx->control = IR_UNUSED;
-				_ir_BEGIN(ctx, op1);
+				if (func_ctx->use_lists[i].count != 1) {
+					ctx->control = ir_emit1(ctx, IR_BEGIN, op1);
+				} else {
+					_ir_BEGIN(ctx, op1);
+				}
 				xlat2[i] = xlat[i] = ctx->control;
 				ctx->control = IR_UNUSED;
 			} else if (op == IR_IF) {
