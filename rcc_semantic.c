@@ -8088,14 +8088,15 @@ void c_do_func_end(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 	c_pop_scope(scope);
 
 	if (ctx->control) {
-		if (ctx->control == active_ctx->insns_count - 1
-		 && active_ctx->ir_base[ctx->control].op == IR_BEGIN
-		 && !active_ctx->ir_base[ctx->control].op1) {
-			active_ctx->insns_count--;
+		if (ctx->control == ctx->insns_count - 1
+		 && ctx->ir_base[ctx->control].op == IR_BEGIN
+		 && !ctx->ir_base[ctx->control].op1) {
+			ctx->insns_count--;
+			ctx->control = IR_UNUSED;
 		} else if (ctx->ret_type) {
 			ir_val val;
 
-			if (!c_is_dead_end(&active_ctx->ir_base[ctx->control])) {
+			if (!c_is_dead_end(&ctx->ir_base[ctx->control])) {
 				yy_warning("control reaches end of non-void function");
 			}
 			val.u64 = 0;
