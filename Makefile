@@ -107,3 +107,12 @@ test-ci: $(BUILD_DIR)/rcc $(BUILD_DIR)/tester
 	--show-diff \
 	--target $(TARGET) \
 	$(TESTS)
+
+
+bench: $(BUILD_DIR)/rcc
+	@if [ ! -d "$(SRC_DIR)/c-benchmarks" ]; then \
+		echo "Cloning https://github.com/dstogov/c-benchmarks.git into $(SRC_DIR)/c-benchmarks ..." ; \
+		git clone https://github.com/dstogov/c-benchmarks.git $(SRC_DIR)/c-benchmarks ; \
+	fi
+	(cd $(SRC_DIR)/c-benchmarks/; GCC=gcc RCC=$(realpath $(BUILD_DIR)/rcc) ./run-benchmarks.sh)
+	(cd $(SRC_DIR)/c-benchmarks/; GCC=gcc RCC=$(realpath $(BUILD_DIR)/rcc) ./cmp-benchmarks.sh)
