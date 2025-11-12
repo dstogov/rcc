@@ -757,6 +757,7 @@ struct _c_type {
 #define C_VAL_LVAL     (1<<2)
 #define C_VAL_VAR      (1<<3)
 #define C_VAL_REG      (1<<4)
+#define C_VAL_VOLATILE (1<<5)
 #define C_VAL_BUILTIN  (1<<5)
 #define C_VAL_INLINE   (1<<6)
 #define C_VAL_STR      (1<<7)

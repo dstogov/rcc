@@ -1,4 +1,3 @@
-- volatile
 - struct/union arguments and return value according to ABI
 - computed goto
 - initializers with ranges ([1 ... 2] = X)

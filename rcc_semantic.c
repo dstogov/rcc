@@ -2844,7 +2844,9 @@ void c_sizeof_expr(c_value *res, yy_sym op, c_value *expr, ir_ref old_control)
 			if (expr->type->kind == C_TYPE_BOOL
 			 && c_value_is_ref(expr)
 			 && active_ctx->ir_base[expr->u.ref].op != IR_LOAD
-			 && active_ctx->ir_base[expr->u.ref].op != IR_VLOAD) {
+			 && active_ctx->ir_base[expr->u.ref].op != IR_LOAD_v
+			 && active_ctx->ir_base[expr->u.ref].op != IR_VLOAD
+			 && active_ctx->ir_base[expr->u.ref].op != IR_VLOAD_v) {
 				/* IR uses 1-byte "bool" for computation, but C assumes 4-byte "int" */
 				val.u64 = 4;
 			} else {
@@ -2856,7 +2858,9 @@ void c_sizeof_expr(c_value *res, yy_sym op, c_value *expr, ir_ref old_control)
 		if (expr->type->kind == C_TYPE_BOOL
 		 && c_value_is_ref(expr)
 		 && active_ctx->ir_base[expr->u.ref].op != IR_LOAD
-		 && active_ctx->ir_base[expr->u.ref].op != IR_VLOAD) {
+		 && active_ctx->ir_base[expr->u.ref].op != IR_LOAD_v
+		 && active_ctx->ir_base[expr->u.ref].op != IR_VLOAD
+		 && active_ctx->ir_base[expr->u.ref].op != IR_VLOAD_v) {
 			/* IR uses 1-byte "bool" for computation, but C assumes 4-byte "int" */
 			val.u64 = 4;
 		} else {
@@ -3212,14 +3216,18 @@ void c_value_rval(c_value *val)
 	if (c_value_is_lval(val)) {
 		IR_ASSERT(val->type->kind != C_TYPE_ARRAY && val->type->kind != C_TYPE_FUNC);
 		if (c_value_is_var(val)) {
-			val->u.ref = ir_VLOAD(val->u.type, val->u.ref);
+			if ((val->type->attr & C_ATTR_VOLATILE) || (val->u.op & C_VAL_VOLATILE)) {
+				val->u.ref = ir_VLOAD_v(val->u.type, val->u.ref);
+			} else {
+				val->u.ref = ir_VLOAD(val->u.type, val->u.ref);
+			}
 		} else if (c_value_is_reg(val)) {
 			val->u.ref = ir_RLOAD(val->u.type, val->u.ref);
 		} else if (val->type->kind != C_TYPE_STRUCT && val->type->kind != C_TYPE_UNION) {
 			if (!C_IS_BIT_FIELD(val->u.proto)) {
 				if (IR_IS_CONST_REF(val->u.ref)
 				 && ((active_ctx->ir_base[val->u.ref].op == IR_SYM
-				   && (val->type->attr & C_ATTR_CONST))
+				   && ((val->type->attr & (C_ATTR_CONST|C_ATTR_VOLATILE)) == C_ATTR_CONST))
 				  || active_ctx->ir_base[val->u.ref].op == IR_STR)
 				 && (C_IS_TYPE_INT(val->type) || C_IS_TYPE_FP(val->type))
 				 && val->u.val.ptr) {
@@ -3247,14 +3255,18 @@ void c_value_rval(c_value *val)
 					c_value_set_const(val, val->type, t, v);
 					return;
 				}
-				val->u.ref = ir_LOAD(val->u.type, val->u.ref);
+				if ((val->type->attr & C_ATTR_VOLATILE) || (val->u.op & C_VAL_VOLATILE)) {
+					val->u.ref = ir_LOAD_v(val->u.type, val->u.ref);
+				} else {
+					val->u.ref = ir_LOAD(val->u.type, val->u.ref);
+				}
 			} else if (!C_IS_BIT_FIELD_PACKED(val->u.proto)) {
 				c_do_load_bit_field(val, C_BIT_FIELD_START(val->u.proto), C_BIT_FIELD_SIZE(val->u.proto));
 			} else {
 				c_do_load_bit_field_packed(val, C_BIT_FIELD_START(val->u.proto), C_BIT_FIELD_SIZE(val->u.proto));
 			}
 		}
-		val->u.op &= ~(C_VAL_LVAL|C_VAL_VAR|C_VAL_REG);
+		val->u.op &= ~(C_VAL_LVAL|C_VAL_VAR|C_VAL_REG|C_VAL_VOLATILE);
 	}
 }
 
@@ -3706,11 +3718,19 @@ static ir_ref c_do_store(c_value *addr, c_value *val)
 	if (!C_IS_BIT_FIELD(addr->u.proto)) {
 		ref = c_value_ref(val);
 		if (c_value_is_var(addr)) {
-			ir_VSTORE(addr->u.ref, ref);
+			if ((addr->type->attr & C_ATTR_VOLATILE) || (addr->u.op & C_VAL_VOLATILE)) {
+				ir_VSTORE_v(addr->u.ref, ref);
+			} else {
+				ir_VSTORE(addr->u.ref, ref);
+			}
 		} else if (c_value_is_reg(addr)) {
 			ir_RSTORE(addr->u.ref, ref);
 		} else {
-			ir_STORE(addr->u.ref, ref);
+			if ((addr->type->attr & C_ATTR_VOLATILE) || (addr->u.op & C_VAL_VOLATILE)) {
+				ir_STORE_v(addr->u.ref, ref);
+			} else {
+				ir_STORE(addr->u.ref, ref);
+			}
 		}
 		return ref;
 	} else if (!C_IS_BIT_FIELD_PACKED(addr->u.proto)) {
@@ -4113,6 +4133,7 @@ void c_do_array_dim(c_value *v, c_value *dim)
 {
 	const c_type *type;
 	ir_ref ref;
+	bool is_volatile;
 
 	type = v->type;
 	if (type->kind == C_TYPE_ARRAY) {
@@ -4172,10 +4193,15 @@ void c_do_array_dim(c_value *v, c_value *dim)
 			ref = ir_ADD_A(ref, ir_MUL(IR_SIZE_T, c_value_ref(dim), c_type_size(type)));
 		}
 	}
+	is_volatile = (v->type->kind == C_TYPE_ARRAY)
+		&& ((v->type->attr & C_ATTR_VOLATILE) || (v->u.op & C_VAL_VOLATILE));
 	if (type->kind != C_TYPE_ARRAY) {
 		c_value_set_lval(v, type, c_type2ir(type), ref);
 	} else {
 		c_value_set_rval(v, type, c_type2ir(type), ref);
+	}
+	if (is_volatile) {
+		v->u.op |= C_VAL_VOLATILE;
 	}
 }
 
@@ -4183,6 +4209,7 @@ void c_do_struct_field(c_value *v, c_name field_name)
 {
 	c_field *field;
 	size_t offset;
+	bool is_volatile;
 
 	if (v->type->kind != C_TYPE_STRUCT && v->type->kind != C_TYPE_UNION) {
 		yy_error_fmt("request for member \"%s\" in something not a structure or union", yy_sym2str(field_name));
@@ -4197,7 +4224,7 @@ void c_do_struct_field(c_value *v, c_name field_name)
 	field = c_find_struct_field(v->type, field_name, &offset);
 	if (!field) {
 		if (v->type->record.tag) {
-			yy_error_fmt("\"%s %s\" has no member named \"%s\"",
+			yy_error_fmt("\"%s %s\" hasu.operand no member named \"%s\"",
 				(v->type->kind == C_TYPE_STRUCT) ? "struct" : "union",
 				yy_sym2str(v->type->record.tag),
 				yy_sym2str(field_name));
@@ -4211,11 +4238,15 @@ void c_do_struct_field(c_value *v, c_name field_name)
 	if (offset) {
 		ref = ir_ADD_A(ref, ir_const_size_t(active_ctx, offset));
 	}
+	is_volatile = ((v->type->attr & C_ATTR_VOLATILE) || (v->u.op & C_VAL_VOLATILE));
 	if (field->type->kind != C_TYPE_ARRAY) {
 		c_value_set_lval(v, field->type, c_type2ir(field->type), ref);
 		v->u.proto = field->bit_field;
 	} else {
 		c_value_set_rval(v, field->type, c_type2ir(field->type), ref);
+	}
+	if (is_volatile) {
+		v->u.op |= C_VAL_VOLATILE;
 	}
 }
 
@@ -4223,6 +4254,7 @@ void c_do_struct_field_deref(c_value *v, c_name field_name)
 {
 	c_field *field;
 	size_t offset;
+	bool is_volatile;
 
 	if (v->type->kind != C_TYPE_POINTER && v->type->kind != C_TYPE_ARRAY) {
 		yy_error("invalid type argument of \"->\"");
@@ -4253,11 +4285,15 @@ void c_do_struct_field_deref(c_value *v, c_name field_name)
 	if (offset) {
 		ref = ir_ADD_A(ref, ir_const_size_t(active_ctx, offset));
 	}
+	is_volatile = (v->type->pointer.type->attr & C_ATTR_VOLATILE) != 0;
 	if (field->type->kind != C_TYPE_ARRAY) {
 		c_value_set_lval(v, field->type, c_type2ir(field->type), ref);
 		v->u.proto = field->bit_field;
 	} else {
 		c_value_set_rval(v, field->type, c_type2ir(field->type), ref);
+	}
+	if (is_volatile) {
+		v->u.op |= C_VAL_VOLATILE;
 	}
 }
 
@@ -8037,14 +8073,22 @@ void c_do_func_start(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 
 				if (n == 1) {
 					if (t->size) {
-						ir_STORE(obj->value.u.ref, i + j + 2);
+						if (obj->value.type->attr & C_ATTR_VOLATILE) {
+							ir_STORE_v(obj->value.u.ref, i + j + 2);
+						} else {
+							ir_STORE(obj->value.u.ref, i + j + 2);
+						}
 					}
 				} else {
 					IR_ASSERT(n == 0);
 					c_value_set_lval(&obj->value, t, IR_ADDR, i + j + 2);
 				}
 			} else {
-				ir_VSTORE(obj->value.u.ref, i + j + 2);
+				if (obj->value.type->attr & C_ATTR_VOLATILE) {
+					ir_VSTORE_v(obj->value.u.ref, i + j + 2);
+				} else {
+					ir_VSTORE(obj->value.u.ref, i + j + 2);
+				}
 			}
 		} else {
 			yy_warning("omitting the parameter name in a function definition");
