@@ -4869,8 +4869,9 @@ static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, i
 				int size = ir_const_size_t(ctx, arg_insn->op2);
 				ir_ref dst = ir_ALLOCA(size);
 				ir_ref src = arg_insn->op1;
-				ir_memcpy(ctx, dst, src, size, arg_insn->op3);
+				ir_ref op3 = arg_insn->op3;
 				MAKE_NOP(arg_insn);
+				ir_memcpy(ctx, dst, src, size, op3);
 				xlat2[i] = xlat[i] = dst;
 				xlat2[1] = xlat[1] = ctx->control;
 			}
