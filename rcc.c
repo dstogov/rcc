@@ -1579,6 +1579,8 @@ static void rcc_help(const char *cmd)
 		"  --save-ir-codegen          - print IR with selcted code rules and registers\n"
 		"  --save-live-ranges         - print info about live ranges (use with --save-ir-after-live-ranges)\n"
 		"  --save-dot                 - print IR in .DOT format (affects all --save-ir-...)\n"
+		"                               the output may be converted into multi-page PDF using pipe: \n"
+		"                               \"rcc ... 2>&1 | dot -Tps:cairo:cairo | ps2pdf - > out.pdf\"\n"
 #ifdef IR_DEBUG
 		"  --debug-sccp               - debug SCCP optimization pass\n"
 		"  --debug-gcm                - debug GCM optimization pass\n"
