@@ -38,6 +38,8 @@
 #define C_PERF                        (1<<7)
 #define C_SYNTAX_ONLY                 (1<<8)
 
+#define C_DUMP_DOT                    (1<<9)
+
 #define C_DUMP_IR_AFTER_LOAD          (1<<10)
 #define C_DUMP_IR_AFTER_USE_LISTS     (1<<11)
 #define C_DUMP_IR_AFTER_MEM2SSA       (1<<12)
@@ -138,16 +140,24 @@ static void rcc_ir_codegen(c_name name, ir_ctx *ctx, c_sym *sym)
 	if ((c_opt_flags & C_OPT_LEVEL) > 0 || c_native || 0) {
 		ir_assign_virtual_registers(ctx);
 		if (c_flags & C_DUMP_IR_AFTER_CODE_MATCHING) {
-			rcc_dump_func_proto(name, 0, stderr);
-			ir_save(ctx, c_save_flags | IR_SAVE_CFG | IR_SAVE_RULES, stderr);
+			if (c_flags & C_DUMP_DOT) {
+				ir_dump_dot(ctx, yy_sym2str(name), stderr);
+			} else {
+				rcc_dump_func_proto(name, 0, stderr);
+				ir_save(ctx, c_save_flags | IR_SAVE_CFG | IR_SAVE_RULES, stderr);
+			}
 		}
 	}
 
 	if ((c_opt_flags & C_OPT_LEVEL) > 0) {
 		ir_compute_live_ranges(ctx);
 		if (c_flags & C_DUMP_IR_AFTER_LIVE_RANGES) {
-			rcc_dump_func_proto(name, 0, stderr);
-			ir_save(ctx, c_save_flags | IR_SAVE_CFG | IR_SAVE_RULES | IR_SAVE_REGS, stderr);
+			if (c_flags & C_DUMP_DOT) {
+				ir_dump_dot(ctx, yy_sym2str(name), stderr);
+			} else {
+				rcc_dump_func_proto(name, 0, stderr);
+				ir_save(ctx, c_save_flags | IR_SAVE_CFG | IR_SAVE_RULES | IR_SAVE_REGS, stderr);
+			}
 			if (c_flags & C_DUMP_LIVE_RANGES) {
 				ir_dump_live_ranges(ctx, stderr);
 			}
@@ -155,8 +165,12 @@ static void rcc_ir_codegen(c_name name, ir_ctx *ctx, c_sym *sym)
 
 		ir_coalesce(ctx);
 		if (c_flags & C_DUMP_IR_AFTER_COALESCING) {
-			rcc_dump_func_proto(name, 0, stderr);
-			ir_save(ctx, c_save_flags | IR_SAVE_CFG | IR_SAVE_RULES | IR_SAVE_REGS, stderr);
+			if (c_flags & C_DUMP_DOT) {
+				ir_dump_dot(ctx, yy_sym2str(name), stderr);
+			} else {
+				rcc_dump_func_proto(name, 0, stderr);
+				ir_save(ctx, c_save_flags | IR_SAVE_CFG | IR_SAVE_RULES | IR_SAVE_REGS, stderr);
+			}
 			if (c_flags & C_DUMP_LIVE_RANGES) {
 				ir_dump_live_ranges(ctx, stderr);
 			}
@@ -165,8 +179,12 @@ static void rcc_ir_codegen(c_name name, ir_ctx *ctx, c_sym *sym)
 		if (c_native) {
 			ir_reg_alloc(ctx);
 			if (c_flags & C_DUMP_IR_AFTER_REGALLOC) {
-				rcc_dump_func_proto(name, 0, stderr);
-				ir_save(ctx, c_save_flags | IR_SAVE_CFG | IR_SAVE_RULES | IR_SAVE_REGS, stderr);
+				if (c_flags & C_DUMP_DOT) {
+					ir_dump_dot(ctx, yy_sym2str(name), stderr);
+				} else {
+					rcc_dump_func_proto(name, 0, stderr);
+					ir_save(ctx, c_save_flags | IR_SAVE_CFG | IR_SAVE_RULES | IR_SAVE_REGS, stderr);
+				}
 				if (c_flags & C_DUMP_LIVE_RANGES) {
 					ir_dump_live_ranges(ctx, stderr);
 				}
@@ -251,8 +269,12 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym)
 	c_value *func = &sym->value;
 
 	if (c_flags & C_DUMP_IR_AFTER_LOAD) {
-		rcc_dump_func_proto(name, 0, stderr);
-		ir_save(ctx, c_save_flags, stderr);
+		if (c_flags & C_DUMP_DOT) {
+			ir_dump_dot(ctx, yy_sym2str(name), stderr);
+		} else {
+			rcc_dump_func_proto(name, 0, stderr);
+			ir_save(ctx, c_save_flags, stderr);
+		}
 	}
 
 	if (c_flags & C_SYNTAX_ONLY) {
@@ -284,8 +306,12 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym)
 	}
 
 	if (c_flags & C_DUMP_IR_AFTER_USE_LISTS) {
-		rcc_dump_func_proto(name, 0, stderr);
-		ir_save(ctx, c_save_flags | IR_SAVE_USE_LISTS, stderr);
+		if (c_flags & C_DUMP_DOT) {
+			ir_dump_dot(ctx, yy_sym2str(name), stderr);
+		} else {
+			rcc_dump_func_proto(name, 0, stderr);
+			ir_save(ctx, c_save_flags | IR_SAVE_USE_LISTS, stderr);
+		}
 	}
 
 #ifdef IR_DEBUG
@@ -297,8 +323,12 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym)
 		ir_build_dominators_tree(ctx);
 		ir_mem2ssa(ctx);
 		if (c_flags & C_DUMP_IR_AFTER_MEM2SSA) {
-			rcc_dump_func_proto(name, 0, stderr);
-			ir_save(ctx, c_save_flags | IR_SAVE_CFG, stderr);
+			if (c_flags & C_DUMP_DOT) {
+				ir_dump_dot(ctx, yy_sym2str(name), stderr);
+			} else {
+				rcc_dump_func_proto(name, 0, stderr);
+				ir_save(ctx, c_save_flags | IR_SAVE_CFG, stderr);
+			}
 		}
 		ir_reset_cfg(ctx);
 	}
@@ -306,40 +336,64 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym)
 	if ((c_opt_flags & C_OPT_LEVEL) > 1) {
 		ir_sccp(ctx);
 		if (c_flags & C_DUMP_IR_AFTER_SCCP) {
-			rcc_dump_func_proto(name, 0, stderr);
-			ir_save(ctx, c_save_flags, stderr);
+			if (c_flags & C_DUMP_DOT) {
+				ir_dump_dot(ctx, yy_sym2str(name), stderr);
+			} else {
+				rcc_dump_func_proto(name, 0, stderr);
+				ir_save(ctx, c_save_flags, stderr);
+			}
 		}
 	}
 
 	ir_build_cfg(ctx);
 	if (c_flags & C_DUMP_IR_AFTER_CFG) {
-		rcc_dump_func_proto(name, 0, stderr);
-		ir_save(ctx, c_save_flags | IR_SAVE_CFG, stderr);
+		if (c_flags & C_DUMP_DOT) {
+			ir_dump_dot(ctx, yy_sym2str(name), stderr);
+		} else {
+			rcc_dump_func_proto(name, 0, stderr);
+			ir_save(ctx, c_save_flags | IR_SAVE_CFG, stderr);
+		}
 	}
 
 	if ((c_opt_flags & C_OPT_LEVEL) > 0) {
 		ir_build_dominators_tree(ctx);
 		if (c_flags & C_DUMP_IR_AFTER_DOM) {
-			rcc_dump_func_proto(name, 0, stderr);
-			ir_save(ctx, c_save_flags | IR_SAVE_CFG, stderr);
+			if (c_flags & C_DUMP_DOT) {
+				ir_dump_dot(ctx, yy_sym2str(name), stderr);
+			} else {
+				rcc_dump_func_proto(name, 0, stderr);
+				ir_save(ctx, c_save_flags | IR_SAVE_CFG, stderr);
+			}
 		}
 
 		ir_find_loops(ctx);
 		if (c_flags & C_DUMP_IR_AFTER_LOOP) {
-			rcc_dump_func_proto(name, 0, stderr);
-			ir_save(ctx, c_save_flags | IR_SAVE_CFG, stderr);
+			if (c_flags & C_DUMP_DOT) {
+				ir_dump_dot(ctx, yy_sym2str(name), stderr);
+			} else {
+				rcc_dump_func_proto(name, 0, stderr);
+				ir_save(ctx, c_save_flags | IR_SAVE_CFG, stderr);
+			}
 		}
 
 		ir_gcm(ctx);
 		if (c_flags & C_DUMP_IR_AFTER_GCM) {
-			rcc_dump_func_proto(name, 0, stderr);
-			ir_save(ctx, c_save_flags | IR_SAVE_CFG | IR_SAVE_CFG_MAP, stderr);
+			if (c_flags & C_DUMP_DOT) {
+				ir_dump_dot(ctx, yy_sym2str(name), stderr);
+			} else {
+				rcc_dump_func_proto(name, 0, stderr);
+				ir_save(ctx, c_save_flags | IR_SAVE_CFG | IR_SAVE_CFG_MAP, stderr);
+			}
 		}
 
 		ir_schedule(ctx);
 		if (c_flags & C_DUMP_IR_AFTER_SCHEDULING) {
-			rcc_dump_func_proto(name, 0, stderr);
-			ir_save(ctx, c_save_flags | IR_SAVE_CFG, stderr);
+			if (c_flags & C_DUMP_DOT) {
+				ir_dump_dot(ctx, yy_sym2str(name), stderr);
+			} else {
+				rcc_dump_func_proto(name, 0, stderr);
+				ir_save(ctx, c_save_flags | IR_SAVE_CFG, stderr);
+			}
 		}
 	}
 
@@ -1524,6 +1578,7 @@ static void rcc_help(const char *cmd)
 		"  --save-ir-after-regalloc   - print IR after register allocation\n"
 		"  --save-ir-codegen          - print IR with selcted code rules and registers\n"
 		"  --save-live-ranges         - print info about live ranges (use with --save-ir-after-live-ranges)\n"
+		"  --save-dot                 - print IR in .DOT format (affects all --save-ir-...)\n"
 #ifdef IR_DEBUG
 		"  --debug-sccp               - debug SCCP optimization pass\n"
 		"  --debug-gcm                - debug GCM optimization pass\n"
@@ -1733,6 +1788,8 @@ int main(int argc, const char **argv)
 			c_flags |= C_DUMP_IR_CODEGEN;
 		} else if (strcmp(argv[i], "--save-live-ranges") == 0) {
 			c_flags |= C_DUMP_LIVE_RANGES;
+		} else if (strcmp(argv[i], "--save-dot") == 0) {
+			c_flags |= C_DUMP_DOT;
 #ifdef IR_DEBUG
 		} else if (strcmp(argv[i], "--debug-sccp") == 0) {
 			ir_flags |= IR_DEBUG_SCCP;
