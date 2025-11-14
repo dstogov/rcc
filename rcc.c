@@ -1533,6 +1533,10 @@ static void rcc_help(const char *cmd)
 #ifndef _WIN32
 		"  -g                         - produce debugging information (through JITGDB)\n"
 		"  -p                         - provide information about JIT-ed code to Linux Perf\n"
+		"                               the example usage:\n"
+		"                                 $ perf record -k 1 rcc -p bench.c --run\n"
+		"                                 $ perf inject -j -i perf.data -o perf.data.jitted\n"
+		"                                 $ perf report -i perf.data.jitted\n"
 #endif
 		"  -S                         - show generated assembler code\n"
 		"  -o <file-name>             - put primary output into the specified file\n"
@@ -1580,7 +1584,7 @@ static void rcc_help(const char *cmd)
 		"  --save-live-ranges         - print info about live ranges (use with --save-ir-after-live-ranges)\n"
 		"  --save-dot                 - print IR in .DOT format (affects all --save-ir-...)\n"
 		"                               the output may be converted into multi-page PDF using pipe: \n"
-		"                               \"rcc ... 2>&1 | dot -Tps:cairo:cairo | ps2pdf - > out.pdf\"\n"
+		"                                 $ rcc ... 2>&1 | dot -Tps:cairo:cairo | ps2pdf - > out.pdf\n"
 #ifdef IR_DEBUG
 		"  --debug-sccp               - debug SCCP optimization pass\n"
 		"  --debug-gcm                - debug GCM optimization pass\n"
