@@ -918,15 +918,22 @@ static void c_validate_redeclaration(c_name name, c_dcl *d, c_sym *sym)
 		} else if ((d->flags & C_DCL_STATIC) && sym->linkage != C_LINK_INTERNAL) {
 			yy_error_fmt("static declaration of \"%s\" follows non-static declaration", yy_sym2str(name));
 		} else {
-			if (d->flags & C_DCL_DEFINITION) {
-				sym->is_implemented = 1;
-			}
 			if (d->alias) {
 				if (!sym->alias) {
-					if (d->alias != name) sym->alias = d->alias;
+					if (d->alias != name) {
+						if ((d->flags & C_DCL_HAS_ASM_NAME) && sym->is_implemented) {
+							yy_warning("\"__asm__\" declaration ignored due to conflict with the previous name");
+						} else {
+							sym->alias = d->alias;
+							sym->has_asm_name = (d->flags & C_DCL_HAS_ASM_NAME) != 0;
+						}
+					}
 				} else if (d->alias != sym->alias) {
 					yy_error_fmt("incompatible redeclaration of \"%s\"", yy_sym2str(name));
 				}
+			}
+			if (d->flags & C_DCL_DEFINITION) {
+				sym->is_implemented = 1;
 			}
 			if ((sym->value.type->attr & C_ATTR_OLD_FUNC) && !(d->type->attr & C_ATTR_OLD_FUNC)) {
 				c_type *t = (c_type*)sym->value.type;
@@ -959,15 +966,22 @@ static void c_validate_redeclaration(c_name name, c_dcl *d, c_sym *sym)
 			t->array.length = d->type->array.length;
 			t->size = d->type->size;
 		}
-		if (d->flags & C_DCL_DEFINITION) {
-			sym->is_implemented = 1;
-		}
 		if (d->alias) {
 			if (!sym->alias) {
-				if (d->alias != name) sym->alias = d->alias;
+				if (d->alias != name) {
+					if ((d->flags & C_DCL_HAS_ASM_NAME) && sym->is_implemented) {
+						yy_warning("\"__asm__\" declaration ignored due to conflict with the previous name");
+					} else {
+						sym->alias = d->alias;
+						sym->has_asm_name = (d->flags & C_DCL_HAS_ASM_NAME) != 0;
+					}
+				}
 			} else if (d->alias != sym->alias) {
 				yy_error_fmt("incompatible redeclaration of \"%s\"", yy_sym2str(name));
 			}
+		}
+		if (d->flags & C_DCL_DEFINITION) {
+			sym->is_implemented = 1;
 		}
 		if (!c_value_is_const(&sym->value)
 		 && !(d->flags & C_DCL_EXTERN)
@@ -1271,6 +1285,7 @@ c_sym *c_declare(c_name name, c_dcl *d)
 		}
 		sym->is_thread_local = 0;
 		sym->is_implemented = (d->flags & C_DCL_DEFINITION) != 0;
+		sym->has_asm_name = (d->flags & C_DCL_HAS_ASM_NAME) != 0;
 	} else {
 		if (!scope) {
 			if (d->flags & C_DCL_AUTO) yy_error_fmt("file-scope declaration of \"%s\" specifies \"auto\"", yy_sym2str(name));
@@ -1305,6 +1320,7 @@ c_sym *c_declare(c_name name, c_dcl *d)
 			sym->linkage = (d->flags & C_DCL_STATIC) ? C_LINK_INTERNAL : C_LINK_EXTERNAL;
 			if (d->alias != name) sym->alias = d->alias;
 			sym->is_thread_local = (d->flags & C_DCL_THREAD_LOCAL) != 0;
+			sym->has_asm_name = (d->flags & C_DCL_HAS_ASM_NAME) != 0;
 
 			if (UNEXPECTED(d->type->attr & (C_ATTR_VLA|C_ATTR_VMT))) {
 				if (d->type->attr & C_ATTR_VLA) {
@@ -2749,6 +2765,7 @@ void c_asm_alias(c_dcl *d, c_value *val)
 	 || (d->type && d->type->kind == C_TYPE_FUNC)) {
 		c_name id = yy_hash_lookup((const char*)val->u.val.ptr, val->u.op1 - 1);
 
+		d->flags |= C_DCL_HAS_ASM_NAME;
 		d->alias = id;
 		if (yy_hash.data[id].link) {
 			yy_hash.data[id].link->is_asm_name = 1;

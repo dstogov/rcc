@@ -248,6 +248,34 @@ static const char c_builtin[] =
 "  int      vr_offset;\n"
 "} __builtin_va_list[1];\n"
 #endif
+
+"int __builtin_memcmp(const void *, const void *, __SIZE_TYPE__) __asm__(\"memcmp\");"
+"void *__builtin_memmove(void *, const void *, __SIZE_TYPE__) __asm__(\"memmove\");"
+
+"void __builtin_exit(int) __asm__(\"exit\") __attribute__((noinline))\n;"
+
+"void *__builtin_malloc(__SIZE_TYPE__) __asm__(\"malloc\")\n;"
+"void *__builtin_free(void *) __asm__(\"free\")\n;"
+"void *__builtin_calloc(__SIZE_TYPE__, __SIZE_TYPE__) __asm__(\"calloc\")\n;"
+"void *__builtin_realloc(void *, __SIZE_TYPE__) __asm__(\"realloc\")\n;"
+
+"char *__builtin_strcat(char *, const char *) __asm__(\"strcat\");\n"
+"char *__builtin_strchr(const char *, int) __asm__(\"strchr\");\n"
+"int __builtin_strcmp(const char *, const char *) __asm__(\"strcmp\");\n"
+"char *__builtin_strcpy(char *, const char *) __asm__(\"strcpy\");\n"
+"char *__builtin_strdup(const char *) __asm__(\"strdup\");\n"
+"__SIZE_TYPE__ __builtin_strlen(const char *) __asm__(\"strlen\");\n"
+"char *__builtin_strncat(char *, const char *, __SIZE_TYPE__) __asm__(\"strncat\");\n"
+"int __builtin_strncmp(const char *, const char *, __SIZE_TYPE__) __asm__(\"strncmp\");\n"
+"char *__builtin_strncpy(char *, const char *, __SIZE_TYPE__) __asm__(\"strncpy\");\n"
+"char *__builtin_strndup(const char *, __SIZE_TYPE__) __asm__(\"strndup\");\n"
+"char *__builtin_strrchr(const char *, int) __asm__(\"strchr\");\n"
+
+"int __builtin_printf(const char *, ...) __asm__(\"printf\");\n"
+"int __builtin_snprintf(char *, __SIZE_TYPE__, const char *, ...) __asm__(\"snprintf\");\n"
+"int __builtin_sprintf(char *, const char *, ...) __asm__(\"sprintf\");\n"
+
+"int __builtin_puts(const char *) __asm__(\"puts\");\n"
 "\n";
 
 static const char c_stdarg_h[] =

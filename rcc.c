@@ -424,39 +424,6 @@ delay_codegen:
 	}
 }
 
-static bool c_linker_is_builtin_name(c_name id)
-{
-	return id >= YY___BUILTIN_CALLOC && id <= YY___BUILTIN_STRRCHR;
-}
-
-static void* c_linker_resolve_builtin_name(c_name id)
-{
-	switch (id) {
-		case YY___BUILTIN_CALLOC:    return calloc;
-		case YY___BUILTIN_EXIT:      return exit;
-		case YY___BUILTIN_FREE:      return free;
-		case YY___BUILTIN_MALLOC:    return malloc;
-		case YY___BUILTIN_MEMCMP:    return memcmp;
-		case YY___BUILTIN_MEMMOVE:   return memmove;
-		case YY___BUILTIN_PRINTF:    return printf;
-		case YY___BUILTIN_PUTS:      return puts;
-		case YY___BUILTIN_REALLOC:   return realloc;
-		case YY___BUILTIN_SNPRINTF:  return snprintf;
-		case YY___BUILTIN_SPRINTF:   return sprintf;
-		case YY___BUILTIN_STRCAT:    return strcat;
-		case YY___BUILTIN_STRCHR:    return strchr;
-		case YY___BUILTIN_STRCMP:    return strcmp;
-		case YY___BUILTIN_STRCPY:    return strcpy;
-		case YY___BUILTIN_STRDUP:    return strdup;
-		case YY___BUILTIN_STRLEN:    return strlen;
-		case YY___BUILTIN_STRNCAT:   return strncat;
-		case YY___BUILTIN_STRNCMP:   return strncmp;
-		case YY___BUILTIN_STRNCPY:   return strncpy;
-		case YY___BUILTIN_STRRCHR:   return strrchr;
-		default:                     IR_ASSERT(0); return NULL;
-	}
-}
-
 static void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, uint32_t flags)
 {
 	uint32_t len;
@@ -492,11 +459,7 @@ static void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, uint
 		if (sym->linkage == C_LINK_EXTERNAL) {
 			void *addr;
 
-			if (c_linker_is_builtin_name(id)) {
-				addr = c_linker_resolve_builtin_name(id);
-			} else {
-			    addr = ir_resolve_sym_name(name);
-			}
+			addr = ir_resolve_sym_name(name);
 			if (addr) {
 				sym->is_external = 1;
 				sym->value.u.opt = IR_OPT(C_VAL_CONST, IR_ADDR);
@@ -1505,6 +1468,7 @@ static void rcc_reset_state(void)
 		if (i != YY_MEMCPY && i != YY_MEMSET) {
 			if ((c_flags & C_RUN)
 			 && p->sym
+			 && !p->sym->has_asm_name
 			 && (p->sym->linkage == C_LINK_EXTERNAL
 			  || (p->sym->kind == C_SYM_VAR && p->sym->reloc))) {
 				rcc_update_link(p);
@@ -1515,6 +1479,7 @@ static void rcc_reset_state(void)
 	for (; i < yy_hash.count; p++, i++) {
 		if ((c_flags & C_RUN)
 		 && p->sym
+		 && !p->sym->has_asm_name
 		 && (p->sym->linkage == C_LINK_EXTERNAL
 		  || (p->sym->kind == C_SYM_VAR && p->sym->reloc))) {
 			rcc_update_link(p);

@@ -2,8 +2,6 @@
 tinycc 117: builtins
 --ARGS--
 --run
---XFAIL--
-__builtin_*() not implemented yet
 --CODE--
 #include <stdio.h>
 
@@ -17,12 +15,6 @@ main (void)
   char *p;
   char tmp[100];
   int r = 0;
-
-#if defined __TCC_BCHECK__
-  printf("BOUNDS ON:\n");
-#else
-  printf("BOUNDS OFF:\n");
-#endif
 
   if (r != 0)
     __builtin_abort();
@@ -98,9 +90,7 @@ main (void)
   __builtin_memset(p, 0, 100);
 #endif
   printf("\n");
+  return 0;
 }
 --EXPECT--
-BOUNDS OFF:
- 1:1 2:1 3:1 4:1 5:1 6:1 7:1 8:1 9:1 10:1 11:1 12:1 13:1 14:1 15:1
-BOUNDS ON:
  1:1 2:1 3:1 4:1 5:1 6:1 7:1 8:1 9:1 10:1 11:1 12:1 13:1 14:1 15:1
