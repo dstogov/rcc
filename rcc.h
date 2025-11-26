@@ -398,18 +398,27 @@
 	_("sqrtf",                         YY_SQRTF)                       \
 	_("trunc",                         YY_TRUNC)                       \
 	_("truncf",                        YY_TRUNCF)                      \
+	_("__builtin_calloc",              YY___BUILTIN_CALLOC)            \
 	_("__builtin_exit",                YY___BUILTIN_EXIT)              \
 	_("__builtin_free",                YY___BUILTIN_FREE)              \
 	_("__builtin_malloc",              YY___BUILTIN_MALLOC)            \
 	_("__builtin_memcmp",              YY___BUILTIN_MEMCMP)            \
+	_("__builtin_memmove",             YY___BUILTIN_MEMMOVE)           \
 	_("__builtin_printf",              YY___BUILTIN_PRINTF)            \
 	_("__builtin_puts",                YY___BUILTIN_PUTS)              \
+	_("__builtin_realloc",             YY___BUILTIN_REALLOC)           \
 	_("__builtin_snprintf",            YY___BUILTIN_SNPRINTF)          \
 	_("__builtin_sprintf",             YY___BUILTIN_SPRINTF)           \
+	_("__builtin_strcat",              YY___BUILTIN_STRCAT)            \
+	_("__builtin_strchr",              YY___BUILTIN_STRCHR)            \
 	_("__builtin_strcmp",              YY___BUILTIN_STRCMP)            \
 	_("__builtin_strcpy",              YY___BUILTIN_STRCPY)            \
+	_("__builtin_strdup",              YY___BUILTIN_STRDUP)            \
 	_("__builtin_strlen",              YY___BUILTIN_STRLEN)            \
+	_("__builtin_strncat",             YY___BUILTIN_STRNCAT)           \
+	_("__builtin_strncmp",             YY___BUILTIN_STRNCMP)           \
 	_("__builtin_strncpy",             YY___BUILTIN_STRNCPY)           \
+	_("__builtin_strrchr",             YY___BUILTIN_STRRCHR)           \
 
 typedef enum {
 #define _YY_SYM(str, id) id,

@@ -426,24 +426,33 @@ delay_codegen:
 
 static bool c_linker_is_builtin_name(c_name id)
 {
-	return id >= YY___BUILTIN_EXIT && id <= YY___BUILTIN_STRNCPY;
+	return id >= YY___BUILTIN_CALLOC && id <= YY___BUILTIN_STRRCHR;
 }
 
 static void* c_linker_resolve_builtin_name(c_name id)
 {
 	switch (id) {
+		case YY___BUILTIN_CALLOC:    return calloc;
 		case YY___BUILTIN_EXIT:      return exit;
 		case YY___BUILTIN_FREE:      return free;
 		case YY___BUILTIN_MALLOC:    return malloc;
 		case YY___BUILTIN_MEMCMP:    return memcmp;
+		case YY___BUILTIN_MEMMOVE:   return memmove;
 		case YY___BUILTIN_PRINTF:    return printf;
 		case YY___BUILTIN_PUTS:      return puts;
+		case YY___BUILTIN_REALLOC:   return realloc;
 		case YY___BUILTIN_SNPRINTF:  return snprintf;
 		case YY___BUILTIN_SPRINTF:   return sprintf;
+		case YY___BUILTIN_STRCAT:    return strcat;
+		case YY___BUILTIN_STRCHR:    return strchr;
 		case YY___BUILTIN_STRCMP:    return strcmp;
 		case YY___BUILTIN_STRCPY:    return strcpy;
+		case YY___BUILTIN_STRDUP:    return strdup;
 		case YY___BUILTIN_STRLEN:    return strlen;
+		case YY___BUILTIN_STRNCAT:   return strncat;
+		case YY___BUILTIN_STRNCMP:   return strncmp;
 		case YY___BUILTIN_STRNCPY:   return strncpy;
+		case YY___BUILTIN_STRRCHR:   return strrchr;
 		default:                     IR_ASSERT(0); return NULL;
 	}
 }
