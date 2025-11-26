@@ -1,0 +1,17 @@
+--TEST--
+Alias 009:
+--ARGS--
+--run
+--CODE--
+int puts(const char *);
+int x(const char * f, ...) {
+	return puts("OK\n");
+}
+int x(const char *, ...) __asm__("printf");
+int main() {
+	x("FAIL\n");
+	return 0;
+}
+--EXPECT--
+./tests/rcc/alias-009.c:5:43: warning: "__asm__" declaration ignored due to conflict with the previous name
+OK
