@@ -2633,7 +2633,7 @@ static int8_t c_parse_reg_var(const char *str)
 error:
 #elif defined(IR_TARGET_X86)
 	if (*s == '%') s++;
-	if (*s == 'r' && s[1] >= '0' && s[1] <= '9')) {
+	if (*s == 'r' && s[1] >= '0' && s[1] <= '9') {
 		reg = s[1] - '0';
 		s += 2;
 		if (reg > 7) goto error;
