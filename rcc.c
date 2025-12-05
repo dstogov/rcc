@@ -558,6 +558,28 @@ static void c_linker_add_reloc(c_sym *obj, size_t obj_offset, c_name name, size_
 	obj->reloc = reloc;
 }
 
+static bool c_linker_add_label(ir_loader *loader, const char *str, void *addr)
+{
+	c_name name;
+	c_sym *sym;
+	ir_val val;
+
+	name = yy_hash_lookup(str, strlen(str));
+	IR_ASSERT(!yy_hash.data[name].sym);
+
+	/* Create a global symbol in yy_arena */
+	sym = ir_arena_alloc(&yy_arena, sizeof(c_sym));
+	memset(sym, 0, sizeof(c_sym));
+	sym->kind = C_SYM_VAR;
+	sym->linkage = C_LINK_INTERNAL;
+	sym->is_thread_local = 0;
+	sym->is_implemented = 1;
+	val.ptr = addr;
+	c_value_set_const(&sym->value, &c_type_const_ptr, IR_ADDR, val);
+	yy_hash.data[name].sym = sym;
+	return 1;
+}
+
 static ir_insn *c_linker_find_sym_offset(ir_insn *insn, size_t *offset)
 {
 	if (insn->op == IR_SYM) {
@@ -652,6 +674,27 @@ bool c_linker_fix_reloc(c_sym *obj, size_t obj_offset, c_value *val)
 			}
 		}
 		return 1;
+	} else if (addr_insn->op == IR_LABEL) {
+		size_t len;
+		const char *name = ir_get_strl(active_ctx, addr_insn->val.name, &len);
+		c_name n = yy_hash_lookup(name, len);
+
+		if (c_flags & (C_DUMP_IR|C_RUN)) {
+			c_linker_add_reloc(obj, obj_offset, n, 0);
+		}
+		if (c_flags & C_RUN) {
+			c_flags |= C_DO_LINK_INTERNAL;
+		}
+
+		/* Disable inlining */
+		c_type *t = (c_type*)active_func->value.type;
+		if (t->attr & (C_ATTR_ALWAYS_INLINE|C_ATTR_INLINE)) {
+			yy_warning_fmt("function \"%s\" can never be inlined because it saves address of local label in a static variable",
+				yy_sym2str(active_func_name));
+		}
+		t->attr |= C_ATTR_NOINLINE;
+		t->attr &= ~(C_ATTR_ALWAYS_INLINE|C_ATTR_INLINE);
+		return 1;
 #if 0
 	} else if (addr_insn->op == IR_FUNC) {
 		size_t len;
@@ -682,6 +725,7 @@ bool c_linker_fix_reloc(c_sym *obj, size_t obj_offset, c_value *val)
 
 ir_loader c_linker = {
 	.resolve_sym_name = c_linker_resolve_sym_name,
+	.add_label        = c_linker_add_label,
 };
 
 void rcc_ir_init(ir_ctx *ctx, uint32_t flags)

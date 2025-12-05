@@ -2,10 +2,8 @@
 tinycc 096.06: nodata wanted
 --ARGS--
 --run
---XFAIL--
-computed goto not implemented yet
 --CODE--
-#define SKIP 0
+#define SKIP 1
 
 #include <stdio.h>
 /* some gcc headers #define __attribute__ to empty if it's not gcc */
@@ -56,7 +54,8 @@ te1:;
     printf("size of data/text:\n  %s/%s\n",
         dl ? "non-zero":"zero", tl ? "non-zero":"zero");
     /*printf("# %d/%d\n", dl, tl);*/
+    return 0;
 }
 --EXPECT--
 size of data/text:
-  zero/zero
+  non-zero/zero

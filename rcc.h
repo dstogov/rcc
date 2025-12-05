@@ -891,6 +891,8 @@ struct _c_label {
 	ir_ref    dst;
 	ir_ref    src_list;
 	ir_ref    vla_block;
+	ir_ref    value_sym;      /* used for labels as value and computed goto */
+	ir_ref    value_block;    /* used for labels as value and computed goto */
 	c_scope  *scope;
 };
 
@@ -1156,6 +1158,8 @@ extern bool                  c_dead_code;
 extern bool                  c_static_data;
 extern ir_ref                c_prologue_end;
 extern uint64_t              c_fixed_regset;
+extern c_sym                *active_func;
+extern c_name                active_func_name;
 extern ir_ctx               *active_ctx;
 extern ir_ctx               *global_ctx;
 

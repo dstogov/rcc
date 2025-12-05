@@ -2,8 +2,6 @@
 tinycc 119: random stuff
 --ARGS--
 --run
---XFAIL--
-computed goto not implemented yet
 --CODE--
 #include <stdio.h>
 
@@ -145,8 +143,11 @@ main (void)
   tst_cast();
   tst_indir_func();
   tst_struct_return_align();
+  return 0;
 }
 --EXPECT--
+./tests/tinycc/tests2/119_random_stuff.c:18:11: warning: dereferencing "void *" pointer
+./tests/tinycc/tests2/119_random_stuff.c:18:16: warning: dereferencing "void *" pointer
 tst_branch -- --
 tst_adr 5
 tst_compare: ok

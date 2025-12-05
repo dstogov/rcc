@@ -110,15 +110,18 @@ const c_type c_type_const_ptr = {
        ir_ctx     *active_ctx = NULL;
        ir_ctx     *global_ctx = NULL;
 
-static c_sym      *active_func = NULL;
+       c_sym      *active_func = NULL;
 static c_scope    *active_func_scope = NULL;
 static c_scope    *active_scope = NULL;
 static c_loop     *active_loop = NULL;
-static c_name      active_func_name = 0;
+       c_name      active_func_name = 0;
 static uint32_t    c_static_sym_num = 0;
 static uint32_t    c_static_str_num = 0;
+static uint32_t    c_label_num = 0;
        ir_ref      c_prologue_end = IR_UNUSED;
 static ir_ref      c_last_expect_ref = IR_UNUSED;
+static ir_ref      c_computed_goto = IR_UNUSED;
+static ir_ref      c_computed_goto_targets = IR_UNUSED;
 static bool        c_last_expect_val;
 static ir_strtab   c_strtab;
        uint64_t    c_fixed_regset = 0;
@@ -1152,6 +1155,28 @@ static ir_ref c_create_str_sym(c_value *res)
 	res->u.val.ptr = addr;
 
 	return ref;
+}
+
+static ir_ref c_create_label_str(ir_ctx *ctx, ir_ref label_num)
+{
+	char buf[32];
+	uint32_t i, n;
+
+	i = sizeof(buf);
+	n = label_num;
+	buf[--i] = 0;
+	do {
+		buf[--i] = '0' + n % 10;
+		n = n / 10;
+	} while (n != 0);
+	buf[--i] = '.';
+	buf[--i] = 'l';
+	buf[--i] = 'e';
+	buf[--i] = 'b';
+	buf[--i] = 'a';
+	buf[--i] = 'l';
+
+	return ir_strl(ctx, buf + i, sizeof(buf) - 1 - i);
 }
 
 static bool c_is_builtin_func_name(c_name name)
@@ -2933,6 +2958,8 @@ static c_label *c_new_label(c_name name, c_scope *scope, c_label *label, bool lo
 	label->dst = IR_UNUSED;
 	label->src_list = IR_UNUSED;
 	label->vla_block = IR_UNUSED;
+	label->value_sym = IR_UNUSED;
+	label->value_block = IR_UNUSED;
 	label->scope = scope;
 	yy_hash.data[name].label = label;
 	return label;
@@ -4801,6 +4828,8 @@ static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, i
 			const char *str = ir_get_strl(func_ctx, val.str, &len);
 
 			val.str = ir_strl(ctx, str, len);
+		} else if (op == IR_LABEL) {
+			val.u64 = c_create_label_str(ctx, ++c_label_num);
 		}
 		if (op == IR_FUNC || op == IR_FUNC_ADDR) {
 			ir_ref proto = insn->proto;
@@ -4950,7 +4979,10 @@ static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, i
 				ctx->control = IR_UNUSED;
 			} else if (op == IR_BEGIN) {
 				ctx->control = IR_UNUSED;
-				if (func_ctx->use_lists[i].count != 1) {
+				if (op2) {
+					op2 = xlat[op2];
+					ctx->control = ir_emit2(ctx, IR_BEGIN, op1, op2);
+				} else if (func_ctx->use_lists[i].count != 1) {
 					ctx->control = ir_emit1(ctx, IR_BEGIN, op1);
 				} else {
 					_ir_BEGIN(ctx, op1);
@@ -7127,6 +7159,12 @@ c_label *c_do_set_label(c_name name)
 	}
 	label->dst = active_ctx->control;
 
+	if (label->value_block) {
+		/* remember label block strat in BEGIN node corresponding to label address */
+		IR_ASSERT(active_ctx->ir_base[label->value_block].op == IR_BEGIN);
+		active_ctx->ir_base[label->value_block].op1 = label->dst;
+	}
+
 	return label;
 }
 
@@ -7145,14 +7183,12 @@ void c_do_finish_label(c_name name, c_label *label)
 
 		IR_ASSERT(insn->op == IR_MERGE);
 		if (!label->src_list) {
-			if (insn->inputs_count == 2) {
+			insn->inputs_count--;
+			if (insn->inputs_count == 1) {
 				if (!label->is_unused) {
 					yy_warning_fmt("label \"%s\" defined but not used", yy_sym2str(name));
 				}
 				insn->op = IR_BEGIN;
-				insn->inputs_count = 1;
-			} else {
-				insn->inputs_count--;
 			}
 		} else {
 			if (!active_ctx->ir_base[label->src_list].op2) {
@@ -7179,15 +7215,31 @@ void c_do_finish_label(c_name name, c_label *label)
 	}
 }
 
-void c_do_label_value(c_value *res, c_name label)
+void c_do_label_value(c_value *res, c_name label_name)
 {
-	memset(res, 0, sizeof(*res)); //???
-	yy_error("computed goto not implemented yet"); //???
+	c_label *label;
+
+	IR_ASSERT(label_name);
+	label = yy_hash.data[label_name].label;
+	if (!label) {
+		label = c_new_label(label_name, active_func_scope, NULL, active_scope == active_func_scope);
+	}
+	if (!label->value_sym) {
+		ir_ref end = ir_END();
+
+		label->value_sym = ir_const_label(active_ctx, c_create_label_str(active_ctx, ++c_label_num));
+		c_computed_goto_targets = active_ctx->control = label->value_block =
+			ir_emit3(active_ctx, IR_BEGIN, label->dst, label->value_sym, c_computed_goto_targets);
+		ir_END_list(label->src_list);
+		ir_BEGIN(end);
+	}
+	c_value_set_rval(res, &c_type_ptr, IR_ADDR, label->value_sym);
 }
 
 void c_do_computed_goto(c_value *v)
 {
-	yy_error("computed goto not implemented yet"); //???
+	ir_END_PHI_list(c_computed_goto, c_value_ref(v));
+	ir_BEGIN(IR_UNUSED);
 }
 
 static void c_do_init(void *addr, c_value *val)
@@ -7989,6 +8041,8 @@ void c_do_func_start(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 	active_func_name = name;
 	c_prologue_end = IR_UNUSED;
 	c_last_expect_ref = IR_UNUSED;
+	c_computed_goto = IR_UNUSED;
+	c_computed_goto_targets = IR_UNUSED;
 
 	c_push_scope(scope);
 
@@ -8171,6 +8225,48 @@ void c_do_func_end(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 		}
 	}
 
+	if (c_computed_goto) {
+		ir_ref ref = ir_PHI_list(c_computed_goto);
+		ir_ref goto_ref = ir_IGOTO(ref);
+
+		if (c_computed_goto_targets) {
+			ir_ref ref = c_computed_goto_targets;
+			do {
+				ir_insn *insn = &active_ctx->ir_base[ref];
+				IR_ASSERT(insn->op == IR_BEGIN);
+				ref = insn->op3;
+				insn->op1 = goto_ref;
+				insn->op3 = IR_UNUSED;
+			} while (ref);
+			c_computed_goto_targets = IR_UNUSED;
+		}
+	} else if (c_computed_goto_targets) {
+		ir_ref ref = c_computed_goto_targets;
+		do {
+			ir_insn *insn = &active_ctx->ir_base[ref];
+			ir_ref i, n;
+			ir_insn *merge;
+
+			IR_ASSERT(insn->op == IR_BEGIN);
+			ref = insn->op3;
+			insn->op3 = IR_UNUSED;
+			IR_ASSERT(IR_IS_CONST_REF(insn->op2));
+
+			/* re-link BEGIN node corresponding to label address */
+			merge = &active_ctx->ir_base[insn->op1];
+			IR_ASSERT(merge->op == IR_MERGE);
+			insn->op1 = merge->op1;
+			n = merge->inputs_count;
+			for (i = 1; i < n; i++) {
+				ir_ref input = ir_insn_op(merge, i + 1);
+				ir_insn_set_op(merge, i, input);
+			}
+			ir_insn_set_op(merge, i, IR_UNUSED);
+			merge->inputs_count = i - 1;
+		} while (ref);
+		c_computed_goto_targets = IR_UNUSED;
+	}
+
 	rcc_ir_compile(name, ctx, active_func);
 
 	active_func = NULL; // TODO: nested functions ???
@@ -8197,6 +8293,7 @@ void c_do_compile_start(void)
 	c_static_sym_num = 0;
 	c_static_str_num = 0;
 	c_fixed_regset = 0;
+	c_label_num = 0;
 
 	ir_strtab_init(&c_strtab, 256, 0);
 }
