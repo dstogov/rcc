@@ -7415,6 +7415,8 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 		IR_ASSERT(c_value_is_ref(&obj->value));
 		if (active_ctx->ir_base[obj->value.u.ref].op == IR_VAR) {
 			ir_VSTORE(obj->value.u.ref, c_value_ref(val));
+		} else if (c_value_is_reg(&obj->value)) {
+			ir_RSTORE(obj->value.u.ref, c_value_ref(val));
 		} else {
 			ir_STORE(obj->value.u.ref, c_value_ref(val));
 		}
@@ -7765,6 +7767,9 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 		} else if (active_ctx->ir_base[obj->value.u.ref].op == IR_VAR) {
 			IR_ASSERT(!C_IS_BIT_FIELD(bit_field));
 			ir_VSTORE(obj->value.u.ref, c_value_ref(val));
+		} else if (c_value_is_reg(&obj->value)) {
+			IR_ASSERT(!C_IS_BIT_FIELD(bit_field));
+			ir_RSTORE(obj->value.u.ref, c_value_ref(val));
 		} else {
 			IR_ASSERT(active_ctx->ir_base[obj->value.u.ref].op == IR_ALLOCA);
 			if (!C_IS_BIT_FIELD(bit_field)) {
