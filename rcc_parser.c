@@ -2547,9 +2547,9 @@ static void parse(void) {
 
 enum {
 	YY_UNSIGNED_INT       = IR_U32,
-	YY_UNSIGNED_LONG      = IR_U64,
+	YY_UNSIGNED_LONG      = IR_ULONG,
 	YY_UNSIGNED_LONG_LONG = IR_U64,
-	YY_SIGNED_LONG        = IR_I64,
+	YY_SIGNED_LONG        = IR_LONG,
 	YY_SIGNED_LONG_LONG   = IR_I64,
 };
 
