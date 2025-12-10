@@ -231,7 +231,9 @@ static const char c_boot[] =
 
 static const char c_builtin[] =
 #if defined(__i386__) || defined(__WIN32) || defined(__APPLE__)
-"typedef char *__builtin_va_list;\n"
+"typedef struct {\n"
+"  void    *stack;\n"
+"} __builtin_va_list[1];\n"
 #elif defined(__x86_64__)
 "typedef struct {\n"
 "  unsigned int gp_offset;\n"
