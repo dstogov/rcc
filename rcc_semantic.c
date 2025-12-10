@@ -1651,9 +1651,12 @@ void c_make_array_type(c_dcl *d, c_dcl *dim, c_value *len, uint64_t attr, bool i
 		} else {
 			if (IR_IS_TYPE_SIGNED(len->u.type) && len->u.val.i64 < 0) yy_error("array size is negative");
 			if (d->type->attr & C_ATTR_VLA) {
+				if (len->u.val.u64 > SIZE_MAX) yy_error("array is too large");
 				attr |= C_ATTR_VLA;
 				length = ir_const_size_t(active_ctx, len->u.val.u64);
 			} else {
+				// TODO: overflow check ???
+				if (len->u.val.u64 * d->type->size > SIZE_MAX) yy_error("array is too large");
 				length = len->u.val.u64;
 			}
 		}
