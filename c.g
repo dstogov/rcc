@@ -1291,22 +1291,36 @@ static const char *yy_read_int_suffix(const c_type **ctype, ir_type *type, const
 	return e;
 }
 
-static void yy_check_int_type(const c_type **ctype, ir_type *type, ir_val val)
+static void yy_check_int_type(const c_type **ctype, ir_type *type, ir_val val, bool is_dec)
 {
 	if (!*ctype) {
 		if (val.u64 > 0x7fffffffffffffff) {
 			*ctype = &c_type_u64;
 			*type = IR_U64;
 		} else if (val.u64 > 0x7fffffff) {
-			*ctype = &c_type_i64;
-			*type = IR_I64;
+			if (is_dec || val.u64 > 0xffffffff) {
+				*ctype = &c_type_i64;
+				*type = IR_I64;
+			} else {
+				*ctype = &c_type_u32;
+				*type = IR_U32;
+			}
 		} else {
 			*ctype = &c_type_i32;
 			*type = IR_I32;
 	    }
-	} else if (*ctype == &c_type_u32 && val.u64 > 0xffffffff) {
-		*ctype = &c_type_u64;
-		*type = IR_U64;
+	} else if ((*ctype)->size == 4) {
+		if (C_IS_TYPE_UNSIGNED(*ctype)) {
+			if (val.u64 > 0xffffffff) {
+				*ctype = &c_type_u64;
+				*type = IR_U64;
+			}
+		} else if (C_IS_TYPE_SIGNED(*ctype)) {
+			if (val.u64 > 0x7fffffff) {
+				*ctype = &c_type_i64;
+				*type = IR_I64;
+			}
+		}
 	}
 }
 
@@ -1332,7 +1346,7 @@ static void yy_read_oct(c_value *res, const char *p, size_t len)
 		type = IR_U64;
 	}
 	val.u64 = ret;
-	yy_check_int_type(&ctype, &type, val);
+	yy_check_int_type(&ctype, &type, val, 0);
 	c_value_set_const(res, ctype, type, val);
 }
 
@@ -1354,7 +1368,7 @@ static void yy_read_dec(c_value *res, const char *p, size_t len)
 		ret = (ret * 10) + (ch - '0');
 	}
 	val.u64 = ret;
-	yy_check_int_type(&ctype, &type, val);
+	yy_check_int_type(&ctype, &type, val, 1);
 	c_value_set_const(res, ctype, type, val);
 }
 
@@ -1392,7 +1406,7 @@ static void yy_read_hex(c_value *res, const char *p, size_t len)
 		type = IR_U64;
 	}
 	val.u64 = ret;
-	yy_check_int_type(&ctype, &type, val);
+	yy_check_int_type(&ctype, &type, val, 0);
 	c_value_set_const(res, ctype, type, val);
 }
 
@@ -1416,7 +1430,7 @@ static void yy_read_bin(c_value *res, const char *p, size_t len)
 		type = IR_U64;
 	}
 	val.u64 = ret;
-	yy_check_int_type(&ctype, &type, val);
+	yy_check_int_type(&ctype, &type, val, 0);
 	c_value_set_const(res, ctype, type, val);
 }
 
