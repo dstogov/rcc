@@ -1317,8 +1317,13 @@ static void yy_check_int_type(const c_type **ctype, ir_type *type, ir_val val, b
 			}
 		} else if (C_IS_TYPE_SIGNED(*ctype)) {
 			if (val.u64 > 0x7fffffff) {
-				*ctype = &c_type_i64;
-				*type = IR_I64;
+				if (is_dec || val.u64 > 0xffffffff) {
+					*ctype = &c_type_i64;
+					*type = IR_I64;
+				} else {
+					*ctype = &c_type_u32;
+					*type = IR_U32;
+				}
 			}
 		}
 	}
