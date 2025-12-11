@@ -231,9 +231,7 @@ static const char c_boot[] =
 
 static const char c_builtin[] =
 #if defined(__i386__) || defined(__WIN32) || defined(__APPLE__)
-"typedef struct {\n"
-"  void    *stack;\n"
-"} __builtin_va_list[1];\n"
+"typedef char *__builtin_va_list;\n"
 #elif defined(__x86_64__)
 "typedef struct {\n"
 "  unsigned int gp_offset;\n"
@@ -297,7 +295,11 @@ static const char c_stdarg_h[] =
 "#define va_start __builtin_va_start\n"
 "#define va_arg __builtin_va_arg\n"
 "#define va_end(ap) (void)(ap)\n"
+#if defined(__i386__) || defined(__WIN32) || defined(__APPLE__)
+"#define va_copy(dest, src) ((dest) = (src))\n"
+#else
 "#define va_copy(dest, src) ((dest)[0] = (src)[0])\n"
+#endif
 "\n"
 "#endif\n";
 

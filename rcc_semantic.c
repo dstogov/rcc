@@ -4356,20 +4356,30 @@ c_value *c_do_grow_actual_parameters(c_value *args, int32_t num_args)
 	}
 }
 
+static ir_ref c_va_list_addr(c_value *val)
+{
+#if defined(__i386__) || defined(__WIN32) || defined(__APPLE__)
+	if (!c_value_is_lval(val)) yy_error("lvalue required");
+	return c_value_is_var(val) ? ir_VADDR(val->u.ref) : val->u.ref;
+#else
+	return c_value_ref(val);
+#endif
+}
+
 void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 {
 	if (name == YY___BUILTIN_VA_START) {
 		if (num_args != 1 && num_args != 2) yy_error("wrong number of arguments in __builtin_va_start() call");
 		// TODO: arg type check ???
-		ir_VA_START(c_value_ref(&args[0]));
+		ir_VA_START(c_va_list_addr(&args[0]));
 		c_value_set_rval(val, &c_type_void, IR_VOID, IR_UNUSED);
 	} else if (name == YY___BUILTIN_VA_END) {
 		if (num_args != 1) yy_error("wrong number of arguments in __builtin_va_end() call");
-		ir_VA_END(c_value_ref(&args[0]));
+		ir_VA_END(c_va_list_addr(&args[0]));
 		c_value_set_rval(val, &c_type_void, IR_VOID, IR_UNUSED);
 	} else if (name == YY___BUILTIN_VA_COPY) {
 		if (num_args != 2) yy_error("wrong number of arguments in __builtin_va_copy() call");
-		ir_VA_COPY(c_value_ref(&args[0]), c_value_ref(&args[1]));
+		ir_VA_COPY(c_va_list_addr(&args[0]), c_va_list_addr(&args[1]));
 		c_value_set_rval(val, &c_type_void, IR_VOID, IR_UNUSED);
 	} else if (name == YY___BUILTIN_ALLOCA) {
 		ir_ref ref;
@@ -4745,7 +4755,7 @@ void c_do_builtin_va_arg(c_value *val, c_value *list, const c_type *type)
 		n = c_abi_lower_struct_arg(type, types);
 		if (n == 1) {
 			t = types[0];
-			ref = ir_VA_ARG(c_value_ref(list), t);
+			ref = ir_VA_ARG(c_va_list_addr(list), t);
 			alloca = c_do_alloca(type->size, c_attr2align(type->attr), 0);
 			ir_STORE(alloca, ref);
 			c_value_set_lval(val, type, IR_ADDR, alloca);
@@ -4759,13 +4769,13 @@ void c_do_builtin_va_arg(c_value *val, c_value *list, const c_type *type)
 				yy_warning("passing structure with alignnment greater than 16 is not implemented yet");
 				align = 16;
 			}
-			ref = ir_VA_ARG_EX(c_value_ref(list), IR_ADDR, type->size, align);
+			ref = ir_VA_ARG_EX(c_va_list_addr(list), IR_ADDR, type->size, align);
 			c_value_set_lval(val, type, IR_ADDR, ref);
 		}
 	} else {
 		if (type->kind == C_TYPE_VOID) yy_error("second argument to \"__builtin_va_arg\" is of incomplete type \"void\"");
 		t = c_type2ir(type);
-		ref = ir_VA_ARG(c_value_ref(list), t);
+		ref = ir_VA_ARG(c_va_list_addr(list), t);
 		c_value_set_rval(val, type, t, ref);
 	}
 }
