@@ -3141,7 +3141,7 @@ static void c_do_load_bit_field(c_value *val, uint32_t first_bit, uint32_t bits)
 				ref = ir_SHR(type, ref, ir_const(active_ctx, v, type));
 			}
 		} else if (first_bit == 0 && bits <= 32) { // use AND instead of SHL+SHR if small immediate (AArch64) ???
-			v.u64 = (uint64_t)((1UL<<bits)-1);
+			v.u64 = (1ULL<<bits)-1;
 			ref = ir_AND(type, ref, ir_const(active_ctx, v, type));
 		} else {
 			v.u64 = ir_type_size[type] * 8 - (first_bit + bits);
@@ -3649,7 +3649,7 @@ static ir_ref c_do_store_bit_field(ir_ref addr, uint32_t first_bit, uint32_t bit
 		}
 	}
 
-	v.u64 = (1UL<<bits)-1;
+	v.u64 = (1ULL<<bits)-1;
 	ref = ir_AND(type, ref, ir_const(active_ctx, v, type));
 	if (val->u.type == type) ret = ref;
 
@@ -3659,7 +3659,7 @@ static ir_ref c_do_store_bit_field(ir_ref addr, uint32_t first_bit, uint32_t bit
 		ref = ir_SHL(type, ref, ir_const(active_ctx, v, type));
 	}
 
-	v.u64 = ~(((1UL<<bits)-1)<<first_bit);
+	v.u64 = ~(((1ULL<<bits)-1)<<first_bit);
 	ir_STORE(
 		addr,
 		ir_OR(type,
@@ -3677,7 +3677,7 @@ static ir_ref c_do_store_bit_field(ir_ref addr, uint32_t first_bit, uint32_t bit
 			ret = ir_SAR(val->u.type, ret, c);
 		}
 	} else if (val->u.type != type) {
-		v.u64 = (1UL<<bits)-1;
+		v.u64 = (1ULL<<bits)-1;
 		ret = ir_AND(val->u.type, ret, ir_const(active_ctx, v, val->u.type));
 	}
 	return ret;
@@ -3699,7 +3699,7 @@ static ir_ref c_do_store_bit_field_packed(ir_ref addr, uint32_t first_bit, uint3
 
 	shift.i64 = 0;
 	if (first_bit) {
-		mask.u64 = ~(((1UL<<(8-first_bit))-1)<<first_bit);
+		mask.u64 = ~(((1ULL<<(8-first_bit))-1)<<first_bit);
 		shift.u64 = first_bit;
 		IR_ASSERT(shift.u64 < ir_type_size[val->u.type] * 8);
 		ref = ir_SHL(val->u.type, ret, ir_const(active_ctx, shift, val->u.type));
@@ -3742,10 +3742,10 @@ static ir_ref c_do_store_bit_field_packed(ir_ref addr, uint32_t first_bit, uint3
 			ref = ir_TRUNC_U8(ref);
 		}
 
-		mask.u64 = (1UL<<bits)-1;
+		mask.u64 = (1ULL<<bits)-1;
 		ref = ir_AND(type, ref, ir_const(active_ctx, mask, type));
 
-		mask.u64 = ~((1UL<<bits)-1);
+		mask.u64 = ~((1ULL<<bits)-1);
 		ir_STORE(
 			a,
 				ir_OR(type,
@@ -7741,14 +7741,14 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 				if (first_bit) {
 					bits_val <<= first_bit;
 				}
-				mask = (((1UL<<bits)-1)<<first_bit);
+				mask = (((1ULL<<bits)-1)<<first_bit);
 				data[0] &= ~mask;
 				data[0] |= bits_val & mask;
 			} else {
-				mask = (((1UL<<(64-first_bit))-1)<<first_bit);
+				mask = (((1ULL<<(64-first_bit))-1)<<first_bit);
 				data[0] &= ~mask;
 				data[0] |= (bits_val << first_bit) & mask;
-				mask = (1UL<<(bits-64+first_bit))-1;
+				mask = (1ULL<<(bits-64+first_bit))-1;
 				data[1] &= ~mask;
 				data[1] |= (bits_val >> (64 - first_bit)) & mask;
 			}
