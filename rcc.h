@@ -574,7 +574,7 @@ void pp_list_grow(pp_list *l, uint32_t size);
 #ifdef IR_64
 # define C_TYPE_SPEC_INT64       C_TYPE_SPEC_LONG
 #else
-# define C_TYPE_SPEC_INT64       C_TYPE_SPEC_LONG_LONG
+# define C_TYPE_SPEC_INT64       (C_TYPE_SPEC_LONG_LONG|C_TYPE_SPEC_LONG)
 #endif
 
 #define C_TYPE_SPEC_ANY_MODE     (C_TYPE_SPEC_SIGNED-2)
