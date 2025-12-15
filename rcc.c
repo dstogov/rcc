@@ -630,7 +630,7 @@ bool c_linker_fix_reloc(c_sym *obj, size_t obj_offset, c_value *val)
 		return 1;
 	}
 	if (val->type->kind != C_TYPE_POINTER
-	 && (!C_IS_TYPE_INT(val->type) || val->type->size != sizeof(void*))) {
+	 && (!C_IS_TYPE_INT(val->type) || c_value_is_lval(val) || val->type->size != sizeof(void*))) {
 		return 0;
 	}
 
