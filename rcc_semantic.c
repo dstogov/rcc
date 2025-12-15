@@ -5478,11 +5478,27 @@ common_int_type:
 			  && (!C_IS_BIT_FIELD(op2->u.proto) || C_BIT_FIELD_SIZE(op2->u.proto) >= 32))) {
 				if (op1_type->size != 8 || C_IS_TYPE_KIND_SIGNED(t1)) c_do_cvt(&c_type_u64, IR_U64, op1);
 				if (op2_type->size != 8 || C_IS_TYPE_KIND_SIGNED(t2)) c_do_cvt(&c_type_u64, IR_U64, op2);
-				return &c_type_u64;
+				if (sizeof(long long) == sizeof(uint64_t)
+				 && (op1_type->kind == C_TYPE_ILL
+				  || op1_type->kind == C_TYPE_ULL
+				  || op1_type->kind == C_TYPE_ILL
+				  || op1_type->kind == C_TYPE_ULL)) {
+					return &c_type_ull;
+				} else {
+					return &c_type_u64;
+				}
 			} else {
 				if (op1_type->size != 8 || C_IS_TYPE_KIND_UNSIGNED(t1)) c_do_cvt(&c_type_i64, IR_I64, op1);
 				if (op2_type->size != 8 || C_IS_TYPE_KIND_UNSIGNED(t2)) c_do_cvt(&c_type_i64, IR_I64, op2);
-				return &c_type_i64;
+				if (sizeof(long long) == sizeof(int64_t)
+				 && (op1_type->kind == C_TYPE_ILL
+				  || op1_type->kind == C_TYPE_ULL
+				  || op1_type->kind == C_TYPE_ILL
+				  || op1_type->kind == C_TYPE_ULL)) {
+					return &c_type_ill;
+				} else {
+					return &c_type_i64;
+				}
 			}
 		} else {
 			if ((op1_type->size == 4 && C_IS_TYPE_KIND_UNSIGNED(t1)
@@ -5492,11 +5508,27 @@ common_int_type:
 			  && (!C_IS_BIT_FIELD(op2->u.proto) || C_BIT_FIELD_SIZE(op2->u.proto) >= 32))) {
 				if (op1_type->size != 4 || C_IS_TYPE_KIND_SIGNED(t1)) c_do_cvt(&c_type_u32, IR_U32, op1);
 				if (op2_type->size != 4 || C_IS_TYPE_KIND_SIGNED(t2)) c_do_cvt(&c_type_u32, IR_U32, op2);
-				return &c_type_u32;
+				if (sizeof(long) == sizeof(uint32_t)
+				 && (op1_type->kind == C_TYPE_IL
+				  || op1_type->kind == C_TYPE_UL
+				  || op2_type->kind == C_TYPE_IL
+				  || op2_type->kind == C_TYPE_UL)) {
+					return &c_type_ul;
+				} else {
+					return &c_type_u32;
+				}
 			} else {
 				if (op1_type->size != 4 || C_IS_TYPE_KIND_UNSIGNED(t1)) c_do_cvt(&c_type_i32, IR_I32, op1);
 				if (op2_type->size != 4 || C_IS_TYPE_KIND_UNSIGNED(t2)) c_do_cvt(&c_type_i32, IR_I32, op2);
-				return &c_type_i32;
+				if (sizeof(long) == sizeof(int32_t)
+				 && (op1_type->kind == C_TYPE_IL
+				  || op1_type->kind == C_TYPE_UL
+				  || op2_type->kind == C_TYPE_IL
+				  || op2_type->kind == C_TYPE_UL)) {
+					return &c_type_il;
+				} else {
+					return &c_type_i32;
+				}
 			}
 		}
 	} else if (sym == YY__COLON) {
