@@ -1,7 +1,7 @@
 --TEST--
 tinycc 094: generic
 --ARGS--
---run
+-w --run
 --CODE--
 #include <stdio.h>
 
