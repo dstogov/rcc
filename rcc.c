@@ -1989,6 +1989,10 @@ int main(int argc, const char **argv)
 				if ((cpuinfo & IR_X86_BMI1) && !(mflags_disabled & IR_X86_BMI1)) {
 					ir_mflags |= IR_X86_BMI1;
 				}
+			} else {
+				if (!(mflags_disabled & IR_X86_BMI1)) {
+					ir_mflags |= IR_X86_BMI1;
+				}
 			}
 #endif
 		}
