@@ -189,6 +189,9 @@
 	_("__builtin_ctz",                 YY___BUILTIN_CTZ)               \
 	_("__builtin_ctzl",                YY___BUILTIN_CTZL)              \
 	_("__builtin_ctzll",               YY___BUILTIN_CTZLL)             \
+	_("__builtin_ffs",                 YY___BUILTIN_FFS)               \
+	_("__builtin_ffsl",                YY___BUILTIN_FFSL)              \
+	_("__builtin_ffsll",               YY___BUILTIN_FFSLL)             \
 	_("__builtin_huge_val",            YY___BUILTIN_HUGE_VAL)          \
 	_("__builtin_huge_valf",           YY___BUILTIN_HUGE_VALF)         \
 	_("__builtin_inf",                 YY___BUILTIN_INF)               \
