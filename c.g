@@ -198,10 +198,18 @@ declaration(uint32_t flags):                               {c_dcl d0 = {0};}
                                                            {c_name name;}
                                                            {c_sym *obj;}
 	(	static_assert_declaration ";"
-	|	/* use "?" to support C89 defaults to int */
+	|	/* use "?" to support C89 defaults to int */       {d0.flags = flags;}
 		(   ?{!C_IS_ID(sym) || is_typedef_name(sym)}
 			declaration_specifiers(&d0)
-		)?                                                 {d0.flags |= flags;}
+			(	?{d0.flags == C_DCL_STATEMENT && d0.attr == C_ATTR_MUSTTAIL && !d0.type && !d0.alias}
+                                                           {c_value val;}
+                                                           {c_value_clear(&val);}
+                                                           {/* Use IR_TAILCALL in val.u.proto to prevent inlining */}
+                                                           {val.u.proto = IR_TAILCALL;}
+				"return" expression(&val)? ";"             {c_do_tailcall(&val);}
+				                                           {return sym;}
+			)?                                             {if (d0.flags == C_DCL_STATEMENT && d0.attr == C_ATTR_MUSTTAIL) yy_error("\"__musttail__\" attribute only applies to return statements");}
+		)?
 		(	                                               {c_dcl d = d0;}
 		    declarator(&d, &name, 1)
 			(   &(	"__attribute__"
@@ -339,8 +347,9 @@ type_specifier_or_qualifier(c_dcl *d):                     {c_name name;}
 		"("
 		(	?{!C_IS_ID(sym) || is_typedef_name(sym)}
 			type_name(&d->type)
-		|                                                  {c_value v = {0};}
+		|                                                  {c_value v;}
 		                                                   {ir_ref old = c_do_nocode();}
+                                                           {c_value_clear(&v);}
 			expression(&v)                                 {d->type = c_typeof_expr(&v, old);}
 		)
 		")"
@@ -376,12 +385,13 @@ function_specifier(c_dcl *d):
 //	|	"__vectorcall"
 ;
 
-alignment_specifier(c_dcl *d):                             {c_value v = {0};}
+alignment_specifier(c_dcl *d):                             {c_value v;}
 	"_Alignas"                                             {if ((d->attr & C_ATTR_ALIGN_MASK) != 0) yy_warning("multiple alignments");}
 	"("
 	(   ?{!C_IS_ID(sym) || is_typedef_name(sym)}           {const c_type *t;}
 		type_name(&t)                                      {d->attr |= t->attr & C_ATTR_ALIGN_MASK;}
-	|	constant_expression(&v)                            {c_alignas_expr(d, &v);}
+	|                                                      {c_value_clear(&v);}
+		constant_expression(&v)                            {c_alignas_expr(d, &v);}
 	)
 	")"
 ;
@@ -397,16 +407,17 @@ attributes(c_dcl *d):
 ;
 
 attrib(c_dcl *d):                                          {c_name name = sym;}
-                                                           {c_value v = {0};}
+                                                           {c_value v;}
 	(	("alias"|"__alias__")
 		( "(" strings(&v) ")" )?                           {c_gcc_attribute_alias(d, name, &v);}
-	|	("aligned"|"__aligned__")
+	|	("aligned"|"__aligned__")                          {c_value_clear(&v);}
 		( "(" constant_expression(&v) ")" )?               {c_gcc_attribute_aligned(d, name, &v);}
 	|	("always_inline"|"__always_inline__")              {d->attr |= C_ATTR_ALWAYS_INLINE;}
 	|	("cdecl"|"__cdecl__")                              {d->attr |= C_ATTR_CDECL;}
 	|	("cold"|"__cold__")                                {d->attr |= C_ATTR_COLD;}
 	|	("const"|"__const__")                              {d->attr |= C_ATTR_CONST_FUNC;}
 	|	("deprecated"|"__deprecated__")                    {d->attr |= C_ATTR_DEPRECATED;}
+                                                           {c_value_clear(&v);}
 		( "(" constant_expression(&v) ")" )?
 	|	("fallthrough"|"__fallthrough__")                  {d->attr |= C_ATTR_FALLTHROUGH;}
 	|	("fastcall"|"__fastcall__")                        {d->attr |= C_ATTR_FASTCALL;}
@@ -426,14 +437,15 @@ attrib(c_dcl *d):                                          {c_name name = sym;}
 		)
 		")"
 	|	("ms_struct"|"__ms_struct__")                      {d->attr |= C_ATTR_MS_STRUCT;}
-	|	("musttail"|"__musttail__")                        {d->attr |= C_ATTR_MUSTTAIL;}
+	|	("musttail"|"__musttail__")                        {if (!(d->flags & C_DCL_STATEMENT)) yy_error_fmt("\"%s\" attribute only applies to return statements", yy_sym2str(name));}
+	                                                       {d->attr |= C_ATTR_MUSTTAIL;}
 	|	("noinline"|"__noinline__")                        {d->attr |= C_ATTR_NOINLINE;}
 	|	("noreturn"|"__noreturn__")                        {if (!(d->flags & C_DCL_TYPEDEF) || !d->type) d->attr |= C_ATTR_NORETURN;}
 	|	("nothrow"|"__nothrow__")                          {d->attr |= C_ATTR_NOTHROW;}
 	|	("packed"|"__packed__")                            {c_gcc_attribute_packed(d, name);}
 	|	("pure"|"__pure__")                                {d->attr |= C_ATTR_PURE;}
 	|	("unused"|"__unused__")                            {d->attr |= C_ATTR_UNUSED;}
-	|	("vector_size"|"__vector_size__")
+	|	("vector_size"|"__vector_size__")                  {c_value_clear(&v);}
 		( "(" constant_expression(&v) ")" )?               {yy_error_fmt("unsupported attribute \"%s\"", yy_sym2str(name));}
 	|	ID(&name)                                          {sym = c_gcc_attribute(d, name, sym);}
 	)?
@@ -487,8 +499,9 @@ struct_declaration(c_type *t):                             {c_dcl field0 = {0};}
 	|	static_assert_declaration
 ;
 
-struct_declarator(c_type *t, c_dcl *field):                {c_value v = {0};}
+struct_declarator(c_type *t, c_dcl *field):                {c_value v;}
                                                            {c_name name;}
+                                                           {c_value_clear(&v);}
 	(	declarator(field, &name, 0) attributes(field)?
 		(":" constant_expression(&v) attributes(field)?)?  {c_declare_struct_field(t, name, field, &v);}
 	|   (":" constant_expression(&v) attributes(field)?)?  {c_declare_struct_field(t, 0, field, &v);}
@@ -533,9 +546,10 @@ enum_contents(c_type *t, c_dcl *d):                        {int64_t min = 0;}
 ;
 
 enumerator(const c_type *t, int64_t *min, uint64_t *max, c_value *last):
-                                                           {c_value v = {0};}
+                                                           {c_value v;}
                                                            {c_dcl attr = {0};}
                                                            {c_name name;}
+                                                           {c_value_clear(&v);}
 	ID(&name) attributes(&attr)?
 	("=" constant_expression(&v))?                         {c_declare_enum_val(t, name, &attr, &v, min, max, last);}
 ;
@@ -590,9 +604,10 @@ arrays_and_params(c_dcl *d, bool allow_old_func, bool is_param):
 	)
 ;
 
-array_declarator(c_dcl *d, bool is_param):                 {c_value len = {0};}
+array_declarator(c_dcl *d, bool is_param):                 {c_value len;}
                                                            {c_dcl dim = {0};}
                                                            {uint64_t attr = 0;}
+                                                           {c_value_clear(&len);}
 	"["
 	(	/* empty */                                        {attr |= C_ATTR_FLEXIBLE;}
 	|	&"*" "*"                                           {if (!is_param) yy_error("[*] not allowed in other than function prototype scope");}
@@ -659,7 +674,8 @@ type_name(const c_type **t):                               {c_dcl d = {0};}
 ;
 
 initializer(c_sym *obj):                                   {c_static_data = (obj && obj->linkage);}
-	(                                                      {c_value v = {0};}
+	(                                                      {c_value v;}
+                                                           {c_value_clear(&v);}
 		assignment_expression(&v)                          {c_do_init_obj(obj, &v);}
 	|	                                                   {size_t size = obj->value.type->size;}
 		initializer_contents(obj, obj->value.type, 0, &size)
@@ -668,7 +684,8 @@ initializer(c_sym *obj):                                   {c_static_data = (obj
 ;
 
 nested_initializer(c_sym *obj, c_init *init, bool b, size_t *size):
-                                                           {c_value v = {0};}
+                                                           {c_value v;}
+                                                           {c_value_clear(&v);}
 		assignment_expression(&v)                          {c_do_init_set(obj, init, &v, size);}
 	|                                                      {size_t offset;}
 	                                                       {const c_type *type = c_do_init_nested(obj, init, b, &offset);}
@@ -705,7 +722,9 @@ designated_initializer(c_sym *obj, c_init *init, size_t *size):
 	nested_initializer(obj, init, 1, size)
 ;
 
-static_assert_declaration:                                 {c_value cond = {0}, msg = {0};}
+static_assert_declaration:                                 {c_value cond, msg;}
+                                                           {c_value_clear(&cond);}
+                                                           {c_value_clear(&msg);}
 	"_Static_assert" "("
 	constant_expression(&cond)
 	("," strings(&msg))?
@@ -714,6 +733,7 @@ static_assert_declaration:                                 {c_value cond = {0}, 
 
 /* Statements */
 compound_statement:                                        {c_value val;}
+                                                           {c_value_clear(&val);}
 	(                                                      {c_name name;}
 		"__label__" ID(&name)                              {c_declare_local_label(name);}
 			(
@@ -727,7 +747,7 @@ compound_statement:                                        {c_value val;}
 	|                                                      {if (sym == YY___EXTENSION__) sym = yy_next();}
 		(	?{!C_IS_ID(sym) || !is_typedef_name(sym)}
 			expression(&val) ";"
-		|	declaration(0)
+		|	declaration(C_DCL_STATEMENT)
 		)
 	)*
 ;
@@ -747,7 +767,7 @@ expression_statement(c_value *val):
 		|                                                  {if (sym == YY___EXTENSION__) sym = yy_next();}
 			(	?{!C_IS_ID(sym) || !is_typedef_name(sym)}
 				expression(val) ";"
-			|	declaration(0)
+			|	declaration(C_DCL_STATEMENT)
 			)
 		)
 	)*
@@ -758,7 +778,8 @@ statement:                                                 {c_value val;}
 		labels
 	)?
 	(	c_statement
-	|	expression(&val) ";"
+	|                                                      {c_value_clear(&val);}
+		expression(&val) ";"
 	|	";"
 	)
 ;
@@ -769,7 +790,7 @@ labels:
 		(	ID(&name)                                      {label = c_do_set_label(name);}
 			":"
 			(                                              {c_dcl attrs = {0};}
-				attributes(&attrs)                         {c_do_set_label_attrs(label, &attrs);}
+				attributes(&attrs) ";"                     {c_do_set_label_attrs(label, &attrs);}
 			)?
 		|                                                  {c_value val1;}
 			"case" constant_expression(&val1)
@@ -782,9 +803,10 @@ labels:
 	)++
 ;
 
-c_statement:                                               {c_value val = {0};}
+c_statement:                                               {c_value val;}
                                                            {c_name name;}
                                                            {c_scope scope;}
+                                                           {c_value_clear(&val);}
 	(	"{"                                                {c_push_scope(&scope);}
 		compound_statement                                 {c_pop_scope(&scope);}
         "}"
@@ -839,7 +861,6 @@ c_statement:                                               {c_value val = {0};}
 	|	"continue" ";"                                     {c_do_continue();}
 	|	"break" ";"                                        {c_do_break();}
 	|	"return" expression(&val)? ";"                     {c_do_return(&val);}
-//???	|	attributes ";"
 	|	("asm"|"__asm"|"__asm__")                          {/*???*/yy_error("asm support not implemented yet");}
 		("volatile"|"inline"|"goto")*
 		"("
@@ -864,7 +885,8 @@ asm_operands:
 ;
 
 asm_operand:                                               {c_name name;}
-                                                           {c_value v = {0};}
+                                                           {c_value v;}
+                                                           {c_value_clear(&v);}
 	(	STRING "(" expression(&v) ")"
 	|	"[" ID(&name) "]" STRING "(" expression(&v) ")"
 	)
@@ -894,13 +916,15 @@ strings(c_value *val):                                     {const char *str = yy
 	)
 ;
 
-actual_parameters(c_value *func):                          {int32_t num_args = 0;}
+actual_parameters(c_value *func, c_value *res):            {int32_t num_args = 0;}
 	                                                       {c_value *args = alloca(sizeof(c_value) * C_ALLOCA_PARAMS);}
-	(   assignment_expression(&args[num_args])             {num_args++;}
+	(                                                      {c_value_clear(&args[num_args]);}
+		assignment_expression(&args[num_args])             {num_args++;}
 		(	","                                            {if (num_args % C_ALLOCA_PARAMS == 0) args = c_do_grow_actual_parameters(args, num_args);}
+		                                                   {c_value_clear(&args[num_args]);}
 			assignment_expression(&args[num_args])         {num_args++;}
 		)*
-	)?                                                     {c_do_call(func, num_args, args);}
+	)?                                                     {c_do_call(func, num_args, args, res);}
 ;
 
 builtin_parameters(c_value *val, c_name name):             {int32_t num_args = 0;}
@@ -925,7 +949,7 @@ dummy_value(const c_type *t):                              {ir_ref old_control =
 unary_expression(c_value *val):
                                                            {c_name name;}
                                                            {const c_type *t;}
-                                                           {c_value v = {0};}
+                                                           {c_value v;}
                                                            {ir_ref old_control = IR_UNUSED;}
                                                            {yy_sym op = sym;}
    (
@@ -935,27 +959,29 @@ unary_expression(c_value *val):
 			(                                              {c_sym obj;}
                                                            {size_t size = t->size;}
                                                            {c_do_init_expr_start(&obj, t);}
-				initializer_contents(&obj, t, 0, &size)    {c_do_init_expr_end(val, &obj, size);}
-			|	unary_expression(val)                      {c_do_cast(t, val);}
+				initializer_contents(&obj, t, 0, &size)    {c_do_init_expr_end(&v, &obj, size);}
+			|                                              {c_value_clear(&v);}
+				unary_expression(&v)                       {c_do_cast(t, &v);}
 			)
-		|   expression(val) ")"
+		|                                                  {v.u.optx = val->u.optx;}
+			expression(&v) ")"
 		|                                                  {c_scope scope;}
-			"{"                                            {c_do_statement_expression(&scope, val);}
-			expression_statement(val)                      {c_pop_scope(&scope);}
+			"{"                                            {c_do_statement_expression(&scope, &v);}
+			expression_statement(&v)                       {c_pop_scope(&scope);}
 			"}" ")"
 		)
-	|	ID(&name)                                          {c_resolve_sym_name(val, name, sym);}
-	|	DECIMAL_NUMBER(val)
-	|	OCTAL_NUMBER(val)
-	|	HEXADECIMAL_NUMBER(val)
-	|	BINARY_NUMBER(val)
-	|	FLOATING_NUMBER(val)
-	|	HEXADECIMAL_FLOATING_NUMBER(val)
-	|	CHARACTER(val)
-	|	strings(val)
+	|	ID(&name)                                          {c_resolve_sym_name(&v, name, sym);}
+	|	DECIMAL_NUMBER(&v)
+	|	OCTAL_NUMBER(&v)
+	|	HEXADECIMAL_NUMBER(&v)
+	|	BINARY_NUMBER(&v)
+	|	FLOATING_NUMBER(&v)
+	|	HEXADECIMAL_FLOATING_NUMBER(&v)
+	|	CHARACTER(&v)
+	|	strings(&v)
 	|                                                      {c_generic g;}
 		"_Generic"                                         {c_do_generic_start(&g);}
-		"("
+		"("	                                               {c_value_clear(&v);}
 		assignment_expression(&v)                          {c_do_generic_type(&g, v.type);}
 		(
 			","
@@ -967,55 +993,62 @@ unary_expression(c_value *val):
 				assignment_expression(&v)                  {c_do_generic_default(&g, &v);}
 			)
 		)+
-		")"                                                {c_do_generic_end(val, &g);}
-	|	"__extension__" unary_expression(val)
-	|	("++"|"--") unary_expression(val)                  {c_do_pre_op(op, val);}
-	|	(	"&" unary_expression(val)                      {c_do_addr(val);}
-		|	"*" unary_expression(val)                      {c_do_deref(val);}
-		|	"+" unary_expression(val)                      {c_do_unary_plus(val);}
-		|	"-" unary_expression(val)                      {c_do_neg(val);}
-		|	"~" unary_expression(val)                      {c_do_not(val);}
-		|	"!" unary_expression(val)                      {c_do_bool_not(val);}
+		")"                                                {c_do_generic_end(&v, &g);}
+	|	"__extension__"                                    {v.u.optx = val->u.optx;}
+		unary_expression(&v)
+	|	("++"|"--")                                        {c_value_clear(&v);}
+		unary_expression(&v)                               {c_do_pre_op(op, &v);}
+	|                                                      {c_value_clear(&v);}
+		(	"&" unary_expression(&v)                       {c_do_addr(&v);}
+		|	"*" unary_expression(&v)                       {c_do_deref(&v);}
+		|	"+" unary_expression(&v)                       {c_do_unary_plus(&v);}
+		|	"-" unary_expression(&v)                       {c_do_neg(&v);}
+		|	"~" unary_expression(&v)                       {c_do_not(&v);}
+		|	"!" unary_expression(&v)                       {c_do_bool_not(&v);}
 		)
 	|	"sizeof"
 		(	&"(" "("
 			(	?{!C_IS_ID(sym) || is_typedef_name(sym)}
 				type_name(&t)
 				")"
-				dummy_value(t)?                            {c_sizeof_type(val, t);}
+				dummy_value(t)?                            {c_sizeof_type(&v, t);}
 			|                                              {old_control = c_do_nocode();}
-				expression(val)
+                                                           {c_value_clear(&v);}
+				expression(&v)
 				")"
 			|                                              {c_scope scope;}
-				"{"                                        {c_do_statement_expression(&scope, val);}
-				expression_statement(val)                  {c_pop_scope(&scope);}
+				"{"                                        {c_do_statement_expression(&scope, &v);}
+				expression_statement(&v)                   {c_pop_scope(&scope);}
 				"}"
 				")"
 			)
 		|                                                  {ir_ref old = c_do_nocode();}
-			unary_expression(&v)                           {c_sizeof_expr(val, op, &v, old);}
+                                                           {c_value_clear(&v);}
+			unary_expression(&v)                           {c_sizeof_expr(&v, op, &v, old);}
 		)
 	|	"_Alignof"
-		"(" type_name(&t) ")"                              {c_alignof_type(val, t);}
+		"(" type_name(&t) ")"                              {c_alignof_type(&v, t);}
 	|	("__alignof__"|"__alignof")
 		(	&"(" "("
 			(	?{!C_IS_ID(sym) || is_typedef_name(sym)}
 				type_name(&t)
 				")"
-				dummy_value(t)?                            {c_alignof_type(val, t);}
+				dummy_value(t)?                            {c_alignof_type(&v, t);}
 			|                                              {old_control = c_do_nocode();}
-				expression(val)
+                                                           {c_value_clear(&v);}
+				expression(&v)
 				")"
 			|                                              {c_scope scope;}
-				"{"                                        {c_do_statement_expression(&scope, val);}
-				expression_statement(val)                  {c_pop_scope(&scope);}
+				"{"                                        {c_do_statement_expression(&scope, &v);}
+				expression_statement(&v)                   {c_pop_scope(&scope);}
 				"}"
 				")"
 			)
 		|	                                               {ir_ref old = c_do_nocode();}
-			unary_expression(&v)                           {c_sizeof_expr(val, op, &v, old);}
+                                                           {c_value_clear(&v);}
+			unary_expression(&v)                           {c_sizeof_expr(&v, op, &v, old);}
 		)
-	|	"&&" ID(&name)                                     {c_do_label_value(val, name);}
+	|	"&&" ID(&name)                                     {c_do_label_value(&v, name);}
 	|                                                      {name = sym;}
 		(	"__builtin_va_start"
 		|	"__builtin_va_end"
@@ -1082,27 +1115,29 @@ unary_expression(c_value *val):
 		|	"__builtin_umull_overflow"
 		|	"__builtin_umulll_overflow"
 		)
-		"(" builtin_parameters(val, name) ")"
+		"(" builtin_parameters(&v, name) ")"
 	|	                                                   {ir_ref old = c_do_nocode();}
 		"__builtin_constant_p"
-		"("
+		"("                                                {c_value_clear(&v);}
 		assignment_expression(&v)                          {c_do_end_nocode(old);}
-		")"                                                {c_do_builtin_constant_p(val, &v);}
+		")"                                                {c_do_builtin_constant_p(&v, &v);}
 	|	"__builtin_va_arg"
-		"("
+		"("                                                {c_value_clear(&v);}
 		assignment_expression(&v)
 		","
-		type_name(&t)                                      {c_do_builtin_va_arg(val, &v, t);}
+		type_name(&t)                                      {c_do_builtin_va_arg(&v, &v, t);}
 		")"
 	)
-	(                                                      {c_value dim = {0};}
-		"[" expression(&dim) "]"                           {c_do_array_dim(val, &dim);}
-	|	"(" actual_parameters(val) ")"
-	|	"." ID(&name)                                      {c_do_struct_field(val, name);}
-	|	"->" ID(&name)                                     {c_do_struct_field_deref(val, name);}
+	(                                                      {c_value dim;}
+                                                           {c_value_clear(&dim);}
+		"[" expression(&dim) "]"                           {c_do_array_dim(&v, &dim);}
+	|	"(" actual_parameters(&v, val) ")"
+	|	"." ID(&name)                                      {c_do_struct_field(&v, name);}
+	|	"->" ID(&name)                                     {c_do_struct_field_deref(&v, name);}
 	|	                                                   {yy_sym post_op = sym;}
-		("++"|"--")                                        {c_do_post_op(post_op, val);}
-	)*+                                                    {if (old_control) c_sizeof_expr(val, op, val, old_control);}
+		("++"|"--")                                        {c_do_post_op(post_op, &v);}
+	)*+                                                    {if (old_control) c_sizeof_expr(&v, op, &v, old_control);}
+	                                                       {*val = v;}
 ;
 
 /* Use recursive-descent in combination with precedence-climbing */
@@ -1124,7 +1159,7 @@ infix_expression(c_value *val, yy_sym prev):               {c_value op2;}
 		|	("<<"|">>")                                    {next = YY__LESS_LESS;}
 		|	("+"|"-")                                      {next = YY__PLUS;}
 		|	("*"|"/"|"%")                                  {next = YY__STAR;}
-		)
+		)                                                  {c_value_clear(&op2);}
 		unary_expression(&op2)
 		(   ?{sym >= YY__STAR && sym < next}
 			infix_expression(&op2, next - 1)
@@ -1144,7 +1179,8 @@ infix_expression(c_value *val, yy_sym prev):               {c_value op2;}
 
 conditional_expression(c_value *val):                      {ir_ref check;}
 	                                                       {bool orig_dead_code = c_dead_code;}
-                                                           {c_value op2 = {0}, op3;}
+                                                           {c_value op2, op3;}
+                                                           {c_value_clear(&op2);}
 	"?"                                                    {check = c_do_if(val);}
 	(	expression(&op2)                                   {c_value_rval(&op2);}
 	)?
@@ -1160,6 +1196,7 @@ assignment_expression(c_value *val):
 	unary_expression(val)
 	(                                                      {int op = sym;}
 			                                               {c_value op2;}
+														   {c_value_clear(&op2);}
 		("="|"*="|"/="|"%="|"+="|"-="|"<<="|">>="|
 		 "&="|"^="|"|=")
 		assignment_expression(&op2)                        {c_do_assign_op(op, val, &op2);}

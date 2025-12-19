@@ -1,0 +1,25 @@
+--TEST--
+__attribute__((musttail)) 012:
+--ARGS--
+--run
+--CODE--
+int printf(const char *, ...);
+int bar(int x) {
+	return x * 2;
+}
+int foo(int x) {
+	if (x) {
+		int a[x];
+		a[0] = x;
+		__attribute__((musttail)) return bar(x);
+	}
+	return x;
+}
+int main() {
+	printf("%d\n", foo(21));
+	return 0;
+}
+--EXPECT--
+./tests/rcc/musttail-012.c:10:2: error: cannot tail-call: blocked by VLA
+
+exit code = 1

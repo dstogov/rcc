@@ -1,0 +1,19 @@
+--TEST--
+__attribute__((musttail)) 001:
+--ARGS--
+--run
+--CODE--
+__attribute__((musttail)) int bar(int x) {
+	return x * 2;
+}
+int foo(int x) {
+	return bar(x);
+}
+int main() {
+	foo(21);
+	return 0;
+}
+--EXPECT--
+./tests/rcc/musttail-001.c:1:24: error: "musttail" attribute only applies to return statements
+
+exit code = 1

@@ -126,6 +126,8 @@ static bool        c_last_expect_val;
 static ir_strtab   c_strtab;
        uint64_t    c_fixed_regset = 0;
 
+static const c_type *c_last_call_func_type = NULL;
+
 static ir_ref c_value_ref(c_value *val);
 static void c_do_cvt(const c_type *t, ir_type type, c_value *v);
 static void ir_memzero(ir_ctx *ctx, ir_ref dst, ir_ref size, uint32_t align);
@@ -3036,6 +3038,7 @@ static void ir_memcpy(ir_ctx *ctx, ir_ref dst, ir_ref src, ir_ref size, uint32_t
 			ir_strl(active_ctx, "memcpy", sizeof("memcpy")-1),
 			ir_proto_3(active_ctx, 0, IR_ADDR, IR_ADDR, IR_ADDR, IR_SIZE_T)),
 		dst, src, size);
+	c_last_call_func_type = NULL;
 }
 
 static void ir_memzero(ir_ctx *ctx, ir_ref dst, ir_ref size, uint32_t align)
@@ -3070,6 +3073,7 @@ static void ir_memzero(ir_ctx *ctx, ir_ref dst, ir_ref size, uint32_t align)
 			ir_strl(active_ctx, "memset", sizeof("memset")-1),
 			ir_proto_3(active_ctx, 0, IR_ADDR, IR_ADDR, IR_I32, IR_SIZE_T)),
 		dst, ir_const_i32(active_ctx, 0), size);
+	c_last_call_func_type = NULL;
 }
 
 ir_ref c_do_alloca(size_t size, uint32_t align, bool zero)
@@ -4368,6 +4372,7 @@ static ir_ref c_va_list_addr(c_value *val)
 
 void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 {
+	c_last_call_func_type = NULL;
 	if (name == YY___BUILTIN_VA_START) {
 		if (num_args != 1 && num_args != 2) yy_error("wrong number of arguments in __builtin_va_start() call");
 		// TODO: arg type check ???
@@ -5105,8 +5110,6 @@ static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, i
 			}
 			insn++;
 			i++;
-		} else if (op == IR_TAILCALL) {
-			IR_ASSERT(op != IR_TAILCALL);
 		} else {
 			ir_ref ref, *p, input, n = insn->inputs_count;
 			ir_insn *new_insn;
@@ -5137,6 +5140,21 @@ static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, i
 				n = ir_insn_inputs_to_len(n);
 				insn += n;
 				i += n;
+			}
+			if (op == IR_TAILCALL) {
+				ctx->control = ref;
+				if (new_insn->type) {
+					ir_END_PHI_list(ret, ref);
+					add_phi = 1;
+				} else {
+					ir_END_list(ret);
+				}
+				ctx->control = IR_UNUSED;
+				xlat2[i] = xlat[i] = IR_UNUSED;
+				new_insn->op = IR_CALL;
+				IR_ASSERT(insn->op == IR_UNREACHABLE);
+				insn++;
+				i++;
 			}
 		}
 	}
@@ -5175,10 +5193,11 @@ static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, i
 		ctx->control = ir_emit2(ctx, IR_BLOCK_END, ctx->control, block_begin);
 	}
 
+	c_last_call_func_type = NULL;
 	return ret;
 }
 
-void c_do_call(c_value *func, int32_t num_args, c_value *args)
+void c_do_call(c_value *func, int32_t num_args, c_value *args, c_value *res)
 {
 	const c_type *func_type, *ret_type;
 	ir_type _ret_type;
@@ -5187,6 +5206,7 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args)
 	int j = 0;
 	uint8_t inlining = C_VAL_INLINE;
 
+	c_last_call_func_type = func->type;
 	c_value_rval(func);
 	if (func->type->kind == C_TYPE_FUNC) {
 		func_type = func->type;
@@ -5311,12 +5331,14 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args)
 		arg_refs[0] = ret_struct;
 	}
 	if ((func->u.op & inlining)
+	 && res->u.proto != IR_TAILCALL
 	 && (!(func->type->attr & C_ATTR_NORETURN) || func->type->func.ret_type->kind == C_TYPE_VOID)
 	 && active_ctx->fixed_regset == ((ir_ctx*)func->u.val.ptr)->fixed_regset
 	 && active_ctx->fixed_save_regset == ((ir_ctx*)func->u.val.ptr)->fixed_save_regset) {
 		ref = ir_inline_call(active_ctx, (ir_ctx*)func->u.val.ptr, num_args + j, arg_refs);
 	} else if (!(func->u.op & C_VAL_BUILTIN)) {
 		ref = ir_CALL_N(_ret_type, c_value_ref(func), num_args + j, arg_refs);
+		c_last_call_func_type = func->type;
 		if (func->type->attr & C_ATTR_NORETURN) {
 			ir_val val;
 
@@ -5330,6 +5352,7 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args)
 		ref = c_do_convert_builtin(func, num_args + j, arg_refs);
 		if (!ref) {
 			ref = ir_CALL_N(_ret_type, c_value_ref(func), num_args + j, arg_refs);
+			c_last_call_func_type = func->type;
 		}
 	}
 	if (ret_type->kind == C_TYPE_STRUCT || ret_type->kind == C_TYPE_UNION) {
@@ -7110,6 +7133,113 @@ void c_do_break(void)
 	ir_BEGIN(IR_UNUSED);
 }
 
+static bool c_is_local_address(const ir_insn *insn)
+{
+	if (insn->op == IR_VADDR || insn->op == IR_ALLOCA) {
+		return 1;
+	}
+	return 0;
+}
+
+static bool c_is_no_local_address(const ir_insn *insn)
+{
+	if (insn->op == IR_PARAM || insn->op == IR_CALL) {
+		return 1;
+	}
+	return 0;
+}
+
+static bool c_may_tailcall(ir_ref ref, bool musttail)
+{
+	const ir_insn *insn = &active_ctx->ir_base[ref];
+	const c_type *t1;
+	const c_type *t2;
+	const c_param *p1, *p2;
+	uint32_t n;
+	uint32_t attr1, attr2;
+
+	if (!c_last_call_func_type || insn->op != IR_CALL) {
+		if (musttail) yy_error("cannot tail-call: return value must be a call");
+		return 0;
+	}
+
+	t1 = c_last_call_func_type;
+	t2 = active_func->value.type;
+	if (t1->kind == C_TYPE_POINTER) t1 = t1->pointer.type;
+	IR_ASSERT(t1->kind == C_TYPE_FUNC && t2->kind == C_TYPE_FUNC);
+
+	attr1 = t1->attr;
+	attr2 = t2->attr;
+	if ((attr1 | attr2) & C_ATTR_OLD_FUNC) {
+		if (musttail) yy_error("cannot tail-call: functions must have prototypes");
+		return 0;
+	} else if ((attr1 | attr2) & C_ATTR_VARIADIC) {
+		if (musttail) yy_error("cannot tail-call: variadic functions are not supported");
+		return 0;
+	} else if ((attr1 & C_ATTR_FASTCALL) != (attr2 & C_ATTR_FASTCALL)) {
+		if (musttail) yy_error("cannot tail-call: incompatible function prototypes");
+		return 0;
+	}
+
+	if (!c_compatible_types(t1->func.ret_type, t2->func.ret_type, 0, 0)) {
+		if (musttail) yy_error("cannot tail-call: incompatible function prototypes");
+		return 0;
+	}
+
+	if (t1->func.num_params != t2->func.num_params) {
+		if (musttail) yy_error("cannot tail-call: incompatible function prototypes");
+		return 0;
+	}
+	p1 = t1->func.params;
+	p2 = t2->func.params;
+	for (n = t1->func.num_params; n > 0; p1++, p2++, n--) {
+		if (!c_compatible_types(p1->type, p2->type, 1, 0)) {
+			if (musttail) yy_error("cannot tail-call: incompatible function prototypes");
+			return 0;
+		}
+	}
+
+	/* check for VLA arrays */
+	c_scope *scope = active_scope;
+	while (scope != active_func_scope) {
+		IR_ASSERT(scope);
+		if (scope->vla_block) {
+			if (musttail) yy_error("cannot tail-call: blocked by VLA");
+			return 0;
+		}
+		scope = scope->prev;
+	}
+
+	if (insn->inputs_count != t2->func.num_params + 2) {
+		if (musttail) yy_error("cannot tail-call: other reasons");
+		return 0;
+	}
+
+	n = ir_insn_inputs_to_len(insn->inputs_count);
+	if (active_ctx->insns_count != ref + (ir_ref)n) {
+		if (musttail) yy_error("cannot tail-call: other reasons");
+		return 0;
+	}
+
+	/* check for passing addresses of local variable */
+	n = insn->inputs_count;
+	for (uint32_t i = 3; i <= n; i++) {
+		ir_ref input = ir_insn_op(insn, i);
+		if (!IR_IS_CONST_REF(input) && active_ctx->ir_base[input].type == IR_ADDR) {
+			if (musttail) {
+				if (c_is_local_address(&active_ctx->ir_base[input])) {
+					yy_error("cannot tail-call: passing address of local variable");
+					return 0;
+				}
+			} else if (!c_is_no_local_address(&active_ctx->ir_base[input])) {
+				return 0;
+			}
+		}
+	}
+
+	return 1;
+}
+
 void c_do_return(c_value *val)
 {
 	IR_ASSERT(active_func);
@@ -7120,7 +7250,14 @@ void c_do_return(c_value *val)
 		} else if (active_func->value.type->func.ret_type != val->type) {
 			c_do_check_cvt(active_func->value.type->func.ret_type, val, 0);
 		}
-		if (val->type->kind == C_TYPE_STRUCT || val->type->kind == C_TYPE_UNION) {
+		if (c_value_is_ref(val)
+		 && active_ctx->ir_base[val->u.ref].op == IR_CALL
+		 && active_ctx->insns_count ==
+			val->u.ref + (ir_ref)ir_insn_inputs_to_len(active_ctx->ir_base[val->u.ref].inputs_count)
+		 && c_may_tailcall(val->u.ref, 0)) {
+			active_ctx->ir_base[val->u.ref].op = IR_TAILCALL;
+			ir_UNREACHABLE();
+		} else if (val->type->kind == C_TYPE_STRUCT || val->type->kind == C_TYPE_UNION) {
 			ir_type types[MAX_ABI_TYPES];
 			int n = c_abi_lower_struct_ret(val->type, types);
 
@@ -7138,8 +7275,39 @@ void c_do_return(c_value *val)
 		}
 	} else {
 		if (active_ctx->ret_type) yy_error("\"return\" with no value, in function returning non-void");
-		ir_RETURN(IR_UNUSED);
+		if (active_ctx->ir_base[active_ctx->control].op == IR_CALL
+		 && active_ctx->insns_count ==
+			active_ctx->control + (ir_ref)ir_insn_inputs_to_len(active_ctx->ir_base[active_ctx->control].inputs_count)
+		 && c_may_tailcall(active_ctx->control, 0)) {
+			active_ctx->ir_base[active_ctx->control].op = IR_TAILCALL;
+			ir_UNREACHABLE();
+		} else {
+			ir_RETURN(IR_UNUSED);
+		}
 	}
+	/* start an unreachable block  (it's going to be optimized out) */
+	ir_BEGIN(IR_UNUSED);
+}
+
+void c_do_tailcall(c_value *val)
+{
+	IR_ASSERT(active_func);
+	if (!val || !c_value_is_ref(val)) {
+		yy_error("cannot tail-call: return value must be a call");
+	} else if (!c_may_tailcall(val->u.ref, 1)) {
+		c_do_return(val);
+	}
+	c_leave_scope(active_func_scope);
+
+	IR_ASSERT(val
+		&& c_value_is_ref(val)
+		&& active_ctx->ir_base[val->u.ref].op == IR_CALL
+		&& active_ctx->insns_count ==
+			val->u.ref + (ir_ref)ir_insn_inputs_to_len(active_ctx->ir_base[val->u.ref].inputs_count));
+
+	active_ctx->ir_base[val->u.ref].op = IR_TAILCALL;
+	ir_UNREACHABLE();
+
 	/* start an unreachable block  (it's going to be optimized out) */
 	ir_BEGIN(IR_UNUSED);
 }
@@ -8154,6 +8322,7 @@ void c_do_func_start(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 	c_last_expect_ref = IR_UNUSED;
 	c_computed_goto = IR_UNUSED;
 	c_computed_goto_targets = IR_UNUSED;
+	c_last_call_func_type = NULL;
 
 	c_push_scope(scope);
 

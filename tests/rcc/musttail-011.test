@@ -1,0 +1,22 @@
+--TEST--
+__attribute__((musttail)) 011:
+--ARGS--
+--run
+--CODE--
+int printf(const char *, ...);
+int bar(int *x) {
+	return *x * 2;
+}
+int foo(int *x) {
+	int y = *x;
+	__attribute__((musttail)) return bar(&y);
+}
+int main() {
+	int x = 21;
+	printf("%d\n", foo(&x));
+	return 0;
+}
+--EXPECT--
+./tests/rcc/musttail-011.c:8:1: error: cannot tail-call: passing address of local variable
+
+exit code = 1

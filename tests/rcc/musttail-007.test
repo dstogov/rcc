@@ -1,0 +1,20 @@
+--TEST--
+__attribute__((musttail)) 007:
+--ARGS--
+--run
+--CODE--
+int printf(const char *, ...);
+__attribute__((fastcall)) int bar(int x) {
+	return x * 2;
+}
+int foo(int x) {
+	__attribute__((musttail)) return bar(x);
+}
+int main() {
+	printf("%d\n", foo(21));
+	return 0;
+}
+--EXPECT--
+./tests/rcc/musttail-007.c:7:1: error: cannot tail-call: incompatible function prototypes
+
+exit code = 1

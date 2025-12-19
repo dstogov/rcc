@@ -1,0 +1,22 @@
+--TEST--
+__attribute__((musttail)) 008:
+--ARGS--
+--run
+--CODE--
+int printf(const char *, ...);
+int bar(x)
+int x;
+{
+	return x * 2;
+}
+int foo(int x) {
+	__attribute__((musttail)) return bar(x);
+}
+int main() {
+	printf("%d\n", foo(21));
+	return 0;
+}
+--EXPECT--
+./tests/rcc/musttail-008.c:9:1: error: cannot tail-call: functions must have prototypes
+
+exit code = 1
