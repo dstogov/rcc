@@ -1623,10 +1623,6 @@ static yy_sym parse_labels(yy_sym sym) {
 			if (sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__ || sym == YY___DECLSPEC) {
 				c_dcl attrs = {0};
 				sym = parse_attributes(sym, &attrs);
-				if (sym != YY__SEMICOLON) {
-					yy_error_sym("';' expected, got", sym);
-				}
-				sym = get_sym();
 				c_do_set_label_attrs(label, &attrs);
 			}
 		} else if (sym == YY_CASE) {

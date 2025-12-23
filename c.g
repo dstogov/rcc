@@ -790,7 +790,7 @@ labels:
 		(	ID(&name)                                      {label = c_do_set_label(name);}
 			":"
 			(                                              {c_dcl attrs = {0};}
-				attributes(&attrs) ";"                     {c_do_set_label_attrs(label, &attrs);}
+				attributes(&attrs)                         {c_do_set_label_attrs(label, &attrs);}
 			)?
 		|                                                  {c_value val1;}
 			"case" constant_expression(&val1)
