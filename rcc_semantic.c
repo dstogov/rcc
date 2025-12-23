@@ -5026,12 +5026,14 @@ static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, i
 			} else if (op == IR_RETURN) {
 				ctx->control = op1;
 				if (insn->op2) {
+					IR_ASSERT(func_ctx->ret_type);
 					op2 = insn->op2;
 					IR_ASSERT(op2 < i);
 					op2 = xlat[op2];
 					ir_END_PHI_list(ret, op2);
 					add_phi = 1;
 				} else {
+					IR_ASSERT(!func_ctx->ret_type);
 					ir_END_list(ret);
 				}
 				ctx->control = IR_UNUSED;
@@ -5144,6 +5146,14 @@ static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, i
 			if (op == IR_TAILCALL) {
 				ctx->control = ref;
 				if (new_insn->type) {
+					IR_ASSERT(func_ctx->ret_type);
+					ir_END_PHI_list(ret, ref);
+					add_phi = 1;
+				} else if (func_ctx->ret_type) {
+					ir_val val;
+
+					val.u64 = 0;
+					ref = ir_const(active_ctx, val, func_ctx->ret_type);
 					ir_END_PHI_list(ret, ref);
 					add_phi = 1;
 				} else {
@@ -5186,6 +5196,12 @@ static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, i
 	} else {
 		ir_BEGIN(IR_UNUSED);
 		ret = IR_UNUSED;
+		if (func_ctx->ret_type) {
+			ir_val val;
+
+			val.u64 = 0;
+			ret = ir_const(active_ctx, val, func_ctx->ret_type);
+		}
 	}
 
 	/* Add BLOCK_END if necessary */
