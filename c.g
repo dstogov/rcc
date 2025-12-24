@@ -447,6 +447,7 @@ attrib(c_dcl *d):                                          {c_name name = sym;}
 	|	("unused"|"__unused__")                            {d->attr |= C_ATTR_UNUSED;}
 	|	("vector_size"|"__vector_size__")                  {c_value_clear(&v);}
 		( "(" constant_expression(&v) ")" )?               {yy_error_fmt("unsupported attribute \"%s\"", yy_sym2str(name));}
+	|	("weak"|"__weak__")                                {d->attr |= C_ATTR_WEAK;}
 	|	ID(&name)                                          {sym = c_gcc_attribute(d, name, sym);}
 	)?
 ;

@@ -628,16 +628,19 @@ void pp_list_grow(pp_list *l, uint32_t size);
 #define C_ATTR_ALWAYS_INLINE     (1<<20)
 #define C_ATTR_NOINLINE          (1<<21)
 #define C_ATTR_NOTHROW           (1<<22)
-#define C_ATTR_LEAF              (1<<23)
-#define C_ATTR_CONST_FUNC        (1<<24)
-#define C_ATTR_PURE              (1<<25)
-#define C_ATTR_HOT               (1<<26)
-#define C_ATTR_COLD              (1<<27)
+#define C_ATTR_CONST_FUNC        (1<<23)
+#define C_ATTR_PURE              (1<<24)
+#define C_ATTR_LEAF              (0)        /* TODO: find a free bit ??? */
+#define C_ATTR_HOT               (0)        /* TODO: find a free bit ??? */
+#define C_ATTR_COLD              (0)        /* TODO: find a free bit ??? */
 #define C_ATTR_DEPRECATED        (0)        /* TODO: find a free bit ??? */
-#define C_ATTR_CDECL             (1<<28)
-#define C_ATTR_FASTCALL          (1<<29)
-#define C_ATTR_UNUSED            (1<<30)
-#define C_ATTR_OLD_FUNC          (1U<<31)
+#define C_ATTR_CDECL             (1<<25)
+#define C_ATTR_FASTCALL          (1<<26)
+#define C_ATTR_UNUSED            (1<<27)
+#define C_ATTR_OLD_FUNC          (1<<28)
+
+/* symbol attributes */
+#define C_ATTR_WEAK              (1<<29)
 
 /* statement attributes */
 #define C_ATTR_FALLTHROUGH       (1<<30)
