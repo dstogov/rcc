@@ -733,7 +733,7 @@ static yy_sym parse_attributes(yy_sym sym, c_dcl *d) {
 static yy_sym parse_attrib(yy_sym sym, c_dcl *d) {
 	c_name name = sym;
 	c_value v;
-	if (sym == YY_ALIAS || sym == YY___ALIAS__ || sym == YY_ALIGNED || sym == YY___ALIGNED__ || sym == YY_ALWAYS_INLINE || sym == YY___ALWAYS_INLINE__ || sym == YY_CDECL || sym == YY___CDECL__ || sym == YY_COLD || sym == YY___COLD__ || sym == YY_CONST || sym == YY___CONST__ || sym == YY_DEPRECATED || sym == YY___DEPRECATED__ || sym == YY_FALLTHROUGH || sym == YY___FALLTHROUGH__ || sym == YY_FASTCALL || sym == YY___FASTCALL__ || sym == YY_GCC_STRUCT || sym == YY___GCC_STRUCT__ || sym == YY_HOT || sym == YY___HOT__ || sym == YY_LEAF || sym == YY___LEAF__ || sym == YY_MODE || sym == YY___MODE__ || sym == YY_MS_STRUCT || sym == YY___MS_STRUCT__ || sym == YY_MUSTTAIL || sym == YY___MUSTTAIL__ || sym == YY_NOINLINE || sym == YY___NOINLINE__ || sym == YY_NORETURN || sym == YY___NORETURN__ || sym == YY_NOTHROW || sym == YY___NOTHROW__ || sym == YY_PACKED || sym == YY___PACKED__ || sym == YY_PURE || sym == YY___PURE__ || sym == YY_UNUSED || sym == YY___UNUSED__ || sym == YY_VECTOR_SIZE || sym == YY___VECTOR_SIZE__ || sym == YY_WEAK || sym == YY___WEAK__ || C_IS_ID(sym)) {
+	if (sym == YY_ALIAS || sym == YY___ALIAS__ || sym == YY_ALIGNED || sym == YY___ALIGNED__ || sym == YY_ALWAYS_INLINE || sym == YY___ALWAYS_INLINE__ || sym == YY_CDECL || sym == YY___CDECL__ || sym == YY_COLD || sym == YY___COLD__ || sym == YY_CONST || sym == YY___CONST__ || sym == YY_DEPRECATED || sym == YY___DEPRECATED__ || sym == YY_FALLTHROUGH || sym == YY___FALLTHROUGH__ || sym == YY_FASTCALL || sym == YY___FASTCALL__ || sym == YY_GCC_STRUCT || sym == YY___GCC_STRUCT__ || sym == YY_HOT || sym == YY___HOT__ || sym == YY_LEAF || sym == YY___LEAF__ || sym == YY_MODE || sym == YY___MODE__ || sym == YY_MS_STRUCT || sym == YY___MS_STRUCT__ || sym == YY_MUSTTAIL || sym == YY___MUSTTAIL__ || sym == YY_NOINLINE || sym == YY___NOINLINE__ || sym == YY_NORETURN || sym == YY___NORETURN__ || sym == YY_NOTHROW || sym == YY___NOTHROW__ || sym == YY_PACKED || sym == YY___PACKED__ || sym == YY_PRESERVE_NONE || sym == YY___PRESERVE_NONE__ || sym == YY_PURE || sym == YY___PURE__ || sym == YY_UNUSED || sym == YY___UNUSED__ || sym == YY_VECTOR_SIZE || sym == YY___VECTOR_SIZE__ || sym == YY_WEAK || sym == YY___WEAK__ || C_IS_ID(sym)) {
 		if (sym == YY_ALIAS || sym == YY___ALIAS__) {
 			sym = get_sym();
 			if (sym == YY__LPAREN) {
@@ -762,7 +762,8 @@ static yy_sym parse_attrib(yy_sym sym, c_dcl *d) {
 			d->attr |= C_ATTR_ALWAYS_INLINE;
 		} else if (sym == YY_CDECL || sym == YY___CDECL__) {
 			sym = get_sym();
-			d->attr |= C_ATTR_CDECL;
+			if ((d->attr & C_ATTR_CALL_CONV) && (d->attr & C_ATTR_CALL_CONV) != C_ATTR_CC_CDECL) yy_error_fmt("multiple calling conventions");
+			d->attr |= C_ATTR_CC_CDECL;
 		} else if (sym == YY_COLD || sym == YY___COLD__) {
 			sym = get_sym();
 			d->attr |= C_ATTR_COLD;
@@ -786,7 +787,8 @@ static yy_sym parse_attrib(yy_sym sym, c_dcl *d) {
 			d->attr |= C_ATTR_FALLTHROUGH;
 		} else if (sym == YY_FASTCALL || sym == YY___FASTCALL__) {
 			sym = get_sym();
-			d->attr |= C_ATTR_FASTCALL;
+			if ((d->attr & C_ATTR_CALL_CONV) && (d->attr & C_ATTR_CALL_CONV) != C_ATTR_CC_FASTCALL) yy_error_fmt("multiple calling conventions");
+			d->attr |= C_ATTR_CC_FASTCALL;
 		} else if (sym == YY_GCC_STRUCT || sym == YY___GCC_STRUCT__) {
 			sym = get_sym();
 			d->attr |= C_ATTR_GCC_STRUCT;
@@ -853,6 +855,10 @@ static yy_sym parse_attrib(yy_sym sym, c_dcl *d) {
 		} else if (sym == YY_PACKED || sym == YY___PACKED__) {
 			sym = get_sym();
 			c_gcc_attribute_packed(d, name);
+		} else if (sym == YY_PRESERVE_NONE || sym == YY___PRESERVE_NONE__) {
+			sym = get_sym();
+			if ((d->attr & C_ATTR_CALL_CONV) && (d->attr & C_ATTR_CALL_CONV) != C_ATTR_CC_PRESERVE_NONE) yy_error_fmt("multiple calling conventions");
+			d->attr |= C_ATTR_CC_PRESERVE_NONE;
 		} else if (sym == YY_PURE || sym == YY___PURE__) {
 			sym = get_sym();
 			d->attr |= C_ATTR_PURE;

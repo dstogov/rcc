@@ -8,7 +8,6 @@
 - trigraphs
 - Unicode characters in identifiers (\uXXXX \UXXXXXXXX)
 - full support for "\"
-- calling conventions
 - nested functions
 ? asm names
 

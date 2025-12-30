@@ -246,7 +246,29 @@ static int c_abi_lower_struct_ret(const c_type *t, ir_type *types)
 	return c_abi_lower_struct(t, types);
 }
 
-void c_type2proto_ex(const c_type *t, uint8_t *flags_ptr, ir_type *ret_type_ptr,
+static uint32_t c_type_call_conv(const c_type *t)
+{
+	uint32_t flags = IR_CC_DEFAULT;
+
+	if (t->attr & C_ATTR_CALL_CONV) {
+		switch (t->attr & C_ATTR_CALL_CONV) {
+			case C_ATTR_CC_CDECL:
+				break;
+			case C_ATTR_CC_FASTCALL:
+				flags = IR_CC_FASTCALL;
+				break;
+			case C_ATTR_CC_PRESERVE_NONE:
+				flags = IR_CC_PRESERVE_NONE;
+				break;
+			default:
+				yy_error("unsupported calling convention");
+		}
+	}
+
+	return flags;
+}
+
+void c_type2proto_ex(const c_type *t, uint32_t *flags_ptr, ir_type *ret_type_ptr,
                                       uint32_t *params_count_ptr, uint8_t *param_types)
 {
 	uint8_t flags = 0;
@@ -299,9 +321,7 @@ void c_type2proto_ex(const c_type *t, uint8_t *flags_ptr, ir_type *ret_type_ptr,
 	if (t->attr & C_ATTR_VARIADIC) {
 		flags |= IR_VARARG_FUNC;
 	}
-	if (t->attr & C_ATTR_FASTCALL) {
-		flags |= IR_FASTCALL_FUNC;
-	}
+	flags |= c_type_call_conv(t);
 	if (t->attr & C_ATTR_CONST_FUNC) {
 		flags |= IR_CONST_FUNC;
 	} else if (t->attr & C_ATTR_PURE) {
@@ -315,7 +335,7 @@ void c_type2proto_ex(const c_type *t, uint8_t *flags_ptr, ir_type *ret_type_ptr,
 
 static ir_ref c_type2proto(const c_type *t, uint32_t linkage)
 {
-	uint8_t flags;
+	uint32_t flags;
 	uint32_t params_count;
 	uint8_t *param_types;
 	ir_type ret_type;
@@ -326,7 +346,7 @@ static ir_ref c_type2proto(const c_type *t, uint32_t linkage)
 	if (linkage == C_LINK_INTERNAL) {
 		flags |= IR_STATIC;
 	} else if (linkage == C_LINK_BUILTIN) {
-		flags |= IR_BUILTIN_FUNC;
+		flags |= IR_CC_BUILTIN;
 	}
 	return ir_proto(active_ctx, flags, ret_type, params_count, param_types);
 }
@@ -1333,7 +1353,9 @@ c_sym *c_declare(c_name name, c_dcl *d)
 			} else {
 				yy_error_fmt("data type of \"%s\" is not suitable for a register", yy_sym2str(name));
 			}
-			if (!IR_REGSET_IN(IR_REGSET_PRESERVED, d->reg)) {
+			// TODO: Global register variables shouldn't be clobbered by any function ???
+			const ir_call_conv_dsc *cc = ir_get_call_conv_dsc(active_ctx->flags);
+			if (!IR_REGSET_IN(cc->preserved_regs, d->reg)) {
 				yy_warning_fmt("call-clobbered register used for global register variable \"%s\"", yy_sym2str(name));
 			}
 			if (c_fixed_regset & (1ULL << d->reg)) {
@@ -1463,7 +1485,8 @@ c_sym *c_declare(c_name name, c_dcl *d)
 				} else {
 					yy_error_fmt("data type of \"%s\" is not suitable for a register", yy_sym2str(name));
 				}
-				if (IR_REGSET_IN(IR_REGSET_PRESERVED, d->reg)) {
+				const ir_call_conv_dsc *cc = ir_get_call_conv_dsc(active_ctx->flags);
+				if (IR_REGSET_IN(cc->preserved_regs, d->reg)) {
 					if (active_ctx->fixed_regset & (1ULL << d->reg)) {
 						yy_error_fmt("register \"%s\" is already used", ir_reg_name(d->reg, c_type2ir(d->type)));
 					}
@@ -5021,7 +5044,11 @@ static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, i
 				}
 			}
 			if (IR_IS_FOLDABLE_OP(op)) {
-				IR_ASSERT(op != IR_PROTO);
+				if (op == IR_PROTO) {
+					size_t len;
+					const char *str = ir_get_strl(func_ctx, op2, &len);
+					op2 = ir_strl(ctx, str, len);
+				}
 				xlat2[i] = xlat[i] = ir_fold(ctx, insn->opt, op1, op2, op3);
 			} else if (op == IR_RETURN) {
 				ctx->control = op1;
@@ -5103,7 +5130,6 @@ static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, i
 				if (insn->op1 == 1) op1 = start;
 				xlat2[i] = xlat[i] = ir_emit(ctx, insn->opt, op1, op2, op3);
 			} else {
-				IR_ASSERT(op != IR_PROTO);
 				IR_ASSERT(op != IR_VA_START);
 				xlat2[i] = xlat[i] = ir_emit(ctx, insn->opt, op1, op2, op3);
 				if (flags & (IR_OP_FLAG_BB_END|IR_OP_FLAG_TERMINATOR)) {
@@ -5353,7 +5379,13 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args, c_value *res)
 	 && active_ctx->fixed_save_regset == ((ir_ctx*)func->u.val.ptr)->fixed_save_regset) {
 		ref = ir_inline_call(active_ctx, (ir_ctx*)func->u.val.ptr, num_args + j, arg_refs);
 	} else if (!(func->u.op & C_VAL_BUILTIN)) {
-		ref = ir_CALL_N(_ret_type, c_value_ref(func), num_args + j, arg_refs);
+		ref = c_value_ref(func);
+		if (!IR_IS_CONST_REF(ref) && active_ctx->ir_base[ref].op != IR_PROTO) {
+			const c_type *type = func->type;
+			if (type->kind == C_TYPE_POINTER) type = type->pointer.type;
+			ref = ir_emit2(active_ctx, IR_OPT(IR_PROTO, IR_ADDR), ref, c_type2proto(type, 0));
+		}
+		ref = ir_CALL_N(_ret_type, ref, num_args + j, arg_refs);
 		c_last_call_func_type = func->type;
 		if (func->type->attr & C_ATTR_NORETURN) {
 			ir_val val;
@@ -5367,7 +5399,13 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args, c_value *res)
 	} else {
 		ref = c_do_convert_builtin(func, num_args + j, arg_refs);
 		if (!ref) {
-			ref = ir_CALL_N(_ret_type, c_value_ref(func), num_args + j, arg_refs);
+			ref = c_value_ref(func);
+			if (!IR_IS_CONST_REF(ref) && active_ctx->ir_base[ref].op != IR_PROTO) {
+				const c_type *type = func->type;
+				if (type->kind == C_TYPE_POINTER) type = type->pointer.type;
+				ref = ir_emit2(active_ctx, IR_OPT(IR_PROTO, IR_ADDR), ref, c_type2proto(type, 0));
+			}
+			ref = ir_CALL_N(_ret_type, ref, num_args + j, arg_refs);
 			c_last_call_func_type = func->type;
 		}
 	}
@@ -7192,7 +7230,7 @@ static bool c_may_tailcall(ir_ref ref, bool musttail)
 	} else if ((attr1 | attr2) & C_ATTR_VARIADIC) {
 		if (musttail) yy_error("cannot tail-call: variadic functions are not supported");
 		return 0;
-	} else if ((attr1 & C_ATTR_FASTCALL) != (attr2 & C_ATTR_FASTCALL)) {
+	} else if ((attr1 & C_ATTR_CALL_CONV) != (attr2 & C_ATTR_CALL_CONV)) {
 		if (musttail) yy_error("cannot tail-call: incompatible function prototypes");
 		return 0;
 	}
@@ -8350,7 +8388,9 @@ void c_do_func_start(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 		flags |= IR_VARARG_FUNC;
 	}
 
+	flags |= c_type_call_conv(type);
 	rcc_ir_init(ctx, flags);
+
 	if (type->func.ret_type->kind == C_TYPE_STRUCT || type->func.ret_type->kind == C_TYPE_UNION) {
 		ir_type types[MAX_ABI_TYPES];
 		int n = c_abi_lower_struct_ret(type->func.ret_type, types);

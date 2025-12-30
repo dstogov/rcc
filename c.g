@@ -413,14 +413,16 @@ attrib(c_dcl *d):                                          {c_name name = sym;}
 	|	("aligned"|"__aligned__")                          {c_value_clear(&v);}
 		( "(" constant_expression(&v) ")" )?               {c_gcc_attribute_aligned(d, name, &v);}
 	|	("always_inline"|"__always_inline__")              {d->attr |= C_ATTR_ALWAYS_INLINE;}
-	|	("cdecl"|"__cdecl__")                              {d->attr |= C_ATTR_CDECL;}
+	|	("cdecl"|"__cdecl__")                              {if ((d->attr & C_ATTR_CALL_CONV) && (d->attr & C_ATTR_CALL_CONV) != C_ATTR_CC_CDECL) yy_error_fmt("multiple calling conventions");}
+	                                                       {d->attr |= C_ATTR_CC_CDECL;}
 	|	("cold"|"__cold__")                                {d->attr |= C_ATTR_COLD;}
 	|	("const"|"__const__")                              {d->attr |= C_ATTR_CONST_FUNC;}
 	|	("deprecated"|"__deprecated__")                    {d->attr |= C_ATTR_DEPRECATED;}
                                                            {c_value_clear(&v);}
 		( "(" constant_expression(&v) ")" )?
 	|	("fallthrough"|"__fallthrough__")                  {d->attr |= C_ATTR_FALLTHROUGH;}
-	|	("fastcall"|"__fastcall__")                        {d->attr |= C_ATTR_FASTCALL;}
+	|	("fastcall"|"__fastcall__")                        {if ((d->attr & C_ATTR_CALL_CONV) && (d->attr & C_ATTR_CALL_CONV) != C_ATTR_CC_FASTCALL) yy_error_fmt("multiple calling conventions");}
+	                                                       {d->attr |= C_ATTR_CC_FASTCALL;}
 	|	("gcc_struct"|"__gcc_struct__")                    {d->attr |= C_ATTR_GCC_STRUCT;}
 	|	("hot"|"__hot__")                                  {d->attr |= C_ATTR_HOT;}
 	|	("leaf"|"__leaf__")                                {d->attr |= C_ATTR_LEAF;}
@@ -443,6 +445,8 @@ attrib(c_dcl *d):                                          {c_name name = sym;}
 	|	("noreturn"|"__noreturn__")                        {if (!(d->flags & C_DCL_TYPEDEF) || !d->type) d->attr |= C_ATTR_NORETURN;}
 	|	("nothrow"|"__nothrow__")                          {d->attr |= C_ATTR_NOTHROW;}
 	|	("packed"|"__packed__")                            {c_gcc_attribute_packed(d, name);}
+	|	("preserve_none"|"__preserve_none__")              {if ((d->attr & C_ATTR_CALL_CONV) && (d->attr & C_ATTR_CALL_CONV) != C_ATTR_CC_PRESERVE_NONE) yy_error_fmt("multiple calling conventions");}
+	                                                       {d->attr |= C_ATTR_CC_PRESERVE_NONE;}
 	|	("pure"|"__pure__")                                {d->attr |= C_ATTR_PURE;}
 	|	("unused"|"__unused__")                            {d->attr |= C_ATTR_UNUSED;}
 	|	("vector_size"|"__vector_size__")                  {c_value_clear(&v);}

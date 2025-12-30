@@ -332,6 +332,8 @@
 	_("__nothrow__",                   YY___NOTHROW__)          /*f  */\
 	_("packed",                        YY_PACKED)               /* vt*/\
 	_("__packed__",                    YY___PACKED__)           /* vt*/\
+	_("preserve_none",                 YY_PRESERVE_NONE)        /*f  */\
+	_("__preserve_none__",             YY___PRESERVE_NONE__)    /*f  */\
 	_("pure",                          YY_PURE)                 /*f  */\
 	_("__pure__",                      YY___PURE__)             /*f  */\
 	_("regparam",                      YY_REGPARAM)             /*f  */\
@@ -634,10 +636,16 @@ void pp_list_grow(pp_list *l, uint32_t size);
 #define C_ATTR_HOT               (0)        /* TODO: find a free bit ??? */
 #define C_ATTR_COLD              (0)        /* TODO: find a free bit ??? */
 #define C_ATTR_DEPRECATED        (0)        /* TODO: find a free bit ??? */
-#define C_ATTR_CDECL             (1<<25)
-#define C_ATTR_FASTCALL          (1<<26)
-#define C_ATTR_UNUSED            (1<<27)
-#define C_ATTR_OLD_FUNC          (1<<28)
+#define C_ATTR_UNUSED            (1<<25)
+#define C_ATTR_OLD_FUNC          (1<<26)
+#define C_ATTR_CALL_CONV         ((1<<27) | (1<<28))
+
+/* calling convention */
+#define C_ATTR_CC_DEFAULT        0
+#define C_ATTR_CC_CDECL          (1<<28)
+#define C_ATTR_CC_FASTCALL       (1<<27)
+#define C_ATTR_CC_PRESERVE_NONE  ((1<<27) | (1<<28))
+
 
 /* symbol attributes */
 #define C_ATTR_WEAK              (1<<29)
@@ -661,7 +669,7 @@ void pp_list_grow(pp_list *l, uint32_t size);
 
 #define C_FUNC_TYPE_ATTRS \
 	(C_ATTR_VARIADIC|C_ATTR_INLINE|C_ATTR_NORETURN|C_ATTR_ALWAYS_INLINE|C_ATTR_NOINLINE|C_ATTR_NOTHROW \
-		|C_ATTR_LEAF|C_ATTR_PURE|C_ATTR_HOT|C_ATTR_COLD|C_ATTR_DEPRECATED|C_ATTR_CDECL|C_ATTR_FASTCALL \
+		|C_ATTR_LEAF|C_ATTR_PURE|C_ATTR_HOT|C_ATTR_COLD|C_ATTR_DEPRECATED|C_ATTR_CALL_CONV \
 		|C_ATTR_UNUSED|C_ATTR_OLD_FUNC|C_ATTR_CONST_FUNC)
 
 #define C_POINTER_ATTRS \
@@ -1031,7 +1039,7 @@ ir_type c_type2ir(const c_type *t);
 c_sym *c_global_sym(c_sym *sym);
 yy_sym c_get_current_func_name(void);
 
-void c_type2proto_ex(const c_type *t, uint8_t *flags_ptr, ir_type *ret_type_ptr,
+void c_type2proto_ex(const c_type *t, uint32_t *flags_ptr, ir_type *ret_type_ptr,
                                       uint32_t *params_count_ptr, uint8_t *param_types);
 
 /* IR Code Generation */

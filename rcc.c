@@ -84,7 +84,7 @@ static void rcc_dump_func_proto(c_name name, bool prototype, FILE *f)
 {
 	c_sym *sym = yy_hash.data[name].sym;
 	const c_type *t;
-	uint8_t flags;
+	uint32_t flags;
 	ir_type ret_type;
 	uint32_t params_count;
 	uint8_t *param_types;
@@ -102,7 +102,7 @@ static void rcc_dump_func_proto(c_name name, bool prototype, FILE *f)
 	param_types = alloca(t->func.num_params + 16);
 	c_type2proto_ex(t, &flags, &ret_type, &params_count, param_types);
 	if (sym->linkage == C_LINK_BUILTIN) {
-		flags |= IR_BUILTIN_FUNC;
+		flags |= IR_CC_BUILTIN;
 	}
 	ir_print_proto_ex(flags, ret_type, params_count, param_types, f);
 	if (prototype) {
@@ -1217,7 +1217,7 @@ static void rcc_emit_ir(FILE *f)
 static void rcc_emit_llvm_proto(const char *name, c_sym *func, FILE *f)
 {
 	const c_type *t = func->value.type;
-	uint8_t flags;
+	uint32_t flags;
 	ir_type ret_type;
 	uint32_t params_count;
 	uint8_t *param_types;
@@ -1228,7 +1228,7 @@ static void rcc_emit_llvm_proto(const char *name, c_sym *func, FILE *f)
 	if (func->linkage == C_LINK_INTERNAL) {
 		flags |= IR_STATIC;
 	} else if (func->linkage == C_LINK_BUILTIN) {
-		flags |= IR_BUILTIN_FUNC;
+		flags |= IR_CC_BUILTIN;
 	}
 	ir_emit_llvm_func_decl(name, flags, ret_type, params_count, param_types, f);
 }
@@ -1810,7 +1810,7 @@ int main(int argc, const char **argv)
 			ir_flags |= IR_USE_FRAME_POINTER;
 #if defined(IR_TARGET_X86)
 		} else if (strcmp(argv[i], "-mfastcall") == 0) {
-			ir_flags |= IR_FASTCALL_FUNC;
+			ir_flags |= IR_CC_FASTCALL;
 #endif
 		} else if (strcmp(argv[i], "--save-ir-after-load") == 0) {
 			c_flags |= C_DUMP_IR_AFTER_LOAD;
