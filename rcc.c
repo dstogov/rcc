@@ -53,9 +53,13 @@
 #define C_DUMP_IR_AFTER_LIVE_RANGES   (1<<20)
 #define C_DUMP_IR_AFTER_COALESCING    (1<<21)
 #define C_DUMP_IR_AFTER_REGALLOC      (1<<22)
-#define C_DUMP_IR_CODEGEN             (1<<23)
+#define C_DUMP_IR_FINAL               (1<<23)
 
-#define C_DUMP_LIVE_RANGES            (1<<24)
+#define C_DUMP_IR_AFTER_ALL           0x00fffc00
+
+#define C_DUMP_IR_CODEGEN             (1<<24)
+
+#define C_DUMP_LIVE_RANGES            (1<<25)
 
 #define C_SINGLE_FILE                 (1<<29)
 #define C_DO_LINK_INTERNAL            (1<<30)
@@ -141,9 +145,10 @@ static void rcc_ir_codegen(c_name name, ir_ctx *ctx, c_sym *sym)
 		ir_assign_virtual_registers(ctx);
 		if (c_flags & C_DUMP_IR_AFTER_CODE_MATCHING) {
 			if (c_flags & C_DUMP_DOT) {
-				ir_dump_dot(ctx, yy_sym2str(name), stderr);
+				ir_dump_dot(ctx, yy_sym2str(name), "(after code matching)", stderr);
 			} else {
 				rcc_dump_func_proto(name, 0, stderr);
+				fprintf(stderr, "# (after code matching)\n");
 				ir_save(ctx, c_save_flags | IR_SAVE_CFG | IR_SAVE_RULES, stderr);
 			}
 		}
@@ -153,26 +158,28 @@ static void rcc_ir_codegen(c_name name, ir_ctx *ctx, c_sym *sym)
 		ir_compute_live_ranges(ctx);
 		if (c_flags & C_DUMP_IR_AFTER_LIVE_RANGES) {
 			if (c_flags & C_DUMP_DOT) {
-				ir_dump_dot(ctx, yy_sym2str(name), stderr);
+				ir_dump_dot(ctx, yy_sym2str(name), "(after live ranges)", stderr);
 			} else {
 				rcc_dump_func_proto(name, 0, stderr);
+				fprintf(stderr, "# (after live ranges)\n");
 				ir_save(ctx, c_save_flags | IR_SAVE_CFG | IR_SAVE_RULES | IR_SAVE_REGS, stderr);
-			}
-			if (c_flags & C_DUMP_LIVE_RANGES) {
-				ir_dump_live_ranges(ctx, stderr);
+				if (c_flags & C_DUMP_LIVE_RANGES) {
+					ir_dump_live_ranges(ctx, stderr);
+				}
 			}
 		}
 
 		ir_coalesce(ctx);
 		if (c_flags & C_DUMP_IR_AFTER_COALESCING) {
 			if (c_flags & C_DUMP_DOT) {
-				ir_dump_dot(ctx, yy_sym2str(name), stderr);
+				ir_dump_dot(ctx, yy_sym2str(name), "(after coalescing)", stderr);
 			} else {
 				rcc_dump_func_proto(name, 0, stderr);
+				fprintf(stderr, "# (after coalescing)\n");
 				ir_save(ctx, c_save_flags | IR_SAVE_CFG | IR_SAVE_RULES | IR_SAVE_REGS, stderr);
-			}
-			if (c_flags & C_DUMP_LIVE_RANGES) {
-				ir_dump_live_ranges(ctx, stderr);
+				if (c_flags & C_DUMP_LIVE_RANGES) {
+					ir_dump_live_ranges(ctx, stderr);
+				}
 			}
 		}
 
@@ -180,13 +187,14 @@ static void rcc_ir_codegen(c_name name, ir_ctx *ctx, c_sym *sym)
 			ir_reg_alloc(ctx);
 			if (c_flags & C_DUMP_IR_AFTER_REGALLOC) {
 				if (c_flags & C_DUMP_DOT) {
-					ir_dump_dot(ctx, yy_sym2str(name), stderr);
+					ir_dump_dot(ctx, yy_sym2str(name), "(after regalloc)", stderr);
 				} else {
 					rcc_dump_func_proto(name, 0, stderr);
+					fprintf(stderr, "# (after regalloc)\n");
 					ir_save(ctx, c_save_flags | IR_SAVE_CFG | IR_SAVE_RULES | IR_SAVE_REGS, stderr);
-				}
-				if (c_flags & C_DUMP_LIVE_RANGES) {
-					ir_dump_live_ranges(ctx, stderr);
+					if (c_flags & C_DUMP_LIVE_RANGES) {
+						ir_dump_live_ranges(ctx, stderr);
+					}
 				}
 			}
 		}
@@ -197,10 +205,13 @@ static void rcc_ir_codegen(c_name name, ir_ctx *ctx, c_sym *sym)
 	}
 
 	if (c_flags & C_DUMP_IR_CODEGEN) {
-		rcc_dump_func_proto(name, 0, stderr);
-		ir_dump_codegen(ctx, stderr);
-		if (c_flags & C_DUMP_LIVE_RANGES) {
-			ir_dump_live_ranges(ctx, stderr);
+		if (!(c_flags & C_DUMP_DOT)) {
+			rcc_dump_func_proto(name, 0, stderr);
+			fprintf(stderr, "# (codegen)\n");
+			ir_dump_codegen(ctx, stderr);
+			if (c_flags & C_DUMP_LIVE_RANGES) {
+				ir_dump_live_ranges(ctx, stderr);
+			}
 		}
 	}
 
@@ -270,9 +281,10 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym)
 
 	if (c_flags & C_DUMP_IR_AFTER_LOAD) {
 		if (c_flags & C_DUMP_DOT) {
-			ir_dump_dot(ctx, yy_sym2str(name), stderr);
+			ir_dump_dot(ctx, yy_sym2str(name), "(after load)", stderr);
 		} else {
 			rcc_dump_func_proto(name, 0, stderr);
+			fprintf(stderr, "# (after load)\n");
 			ir_save(ctx, c_save_flags, stderr);
 		}
 	}
@@ -307,9 +319,10 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym)
 
 	if (c_flags & C_DUMP_IR_AFTER_USE_LISTS) {
 		if (c_flags & C_DUMP_DOT) {
-			ir_dump_dot(ctx, yy_sym2str(name), stderr);
+			ir_dump_dot(ctx, yy_sym2str(name), "(after use lists)", stderr);
 		} else {
 			rcc_dump_func_proto(name, 0, stderr);
+			fprintf(stderr, "# (after use lists)\n");
 			ir_save(ctx, c_save_flags | IR_SAVE_USE_LISTS, stderr);
 		}
 	}
@@ -324,9 +337,10 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym)
 		ir_mem2ssa(ctx);
 		if (c_flags & C_DUMP_IR_AFTER_MEM2SSA) {
 			if (c_flags & C_DUMP_DOT) {
-				ir_dump_dot(ctx, yy_sym2str(name), stderr);
+				ir_dump_dot(ctx, yy_sym2str(name), "(after mem2ssa)", stderr);
 			} else {
 				rcc_dump_func_proto(name, 0, stderr);
+				fprintf(stderr, "# (after mem2ssa)\n");
 				ir_save(ctx, c_save_flags | IR_SAVE_CFG, stderr);
 			}
 		}
@@ -337,9 +351,10 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym)
 		ir_sccp(ctx);
 		if (c_flags & C_DUMP_IR_AFTER_SCCP) {
 			if (c_flags & C_DUMP_DOT) {
-				ir_dump_dot(ctx, yy_sym2str(name), stderr);
+				ir_dump_dot(ctx, yy_sym2str(name), "(after sccp)", stderr);
 			} else {
 				rcc_dump_func_proto(name, 0, stderr);
+				fprintf(stderr, "# (after sccp)\n");
 				ir_save(ctx, c_save_flags, stderr);
 			}
 		}
@@ -348,9 +363,10 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym)
 	ir_build_cfg(ctx);
 	if (c_flags & C_DUMP_IR_AFTER_CFG) {
 		if (c_flags & C_DUMP_DOT) {
-			ir_dump_dot(ctx, yy_sym2str(name), stderr);
+			ir_dump_dot(ctx, yy_sym2str(name), "(after cfg)", stderr);
 		} else {
 			rcc_dump_func_proto(name, 0, stderr);
+			fprintf(stderr, "# (after cfg)\n");
 			ir_save(ctx, c_save_flags | IR_SAVE_CFG, stderr);
 		}
 	}
@@ -359,9 +375,10 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym)
 		ir_build_dominators_tree(ctx);
 		if (c_flags & C_DUMP_IR_AFTER_DOM) {
 			if (c_flags & C_DUMP_DOT) {
-				ir_dump_dot(ctx, yy_sym2str(name), stderr);
+				ir_dump_dot(ctx, yy_sym2str(name), "(after dom)", stderr);
 			} else {
 				rcc_dump_func_proto(name, 0, stderr);
+				fprintf(stderr, "# (after dom)\n");
 				ir_save(ctx, c_save_flags | IR_SAVE_CFG, stderr);
 			}
 		}
@@ -369,9 +386,10 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym)
 		ir_find_loops(ctx);
 		if (c_flags & C_DUMP_IR_AFTER_LOOP) {
 			if (c_flags & C_DUMP_DOT) {
-				ir_dump_dot(ctx, yy_sym2str(name), stderr);
+				ir_dump_dot(ctx, yy_sym2str(name), "(after loop)", stderr);
 			} else {
 				rcc_dump_func_proto(name, 0, stderr);
+				fprintf(stderr, "# (after loop)\n");
 				ir_save(ctx, c_save_flags | IR_SAVE_CFG, stderr);
 			}
 		}
@@ -379,9 +397,10 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym)
 		ir_gcm(ctx);
 		if (c_flags & C_DUMP_IR_AFTER_GCM) {
 			if (c_flags & C_DUMP_DOT) {
-				ir_dump_dot(ctx, yy_sym2str(name), stderr);
+				ir_dump_dot(ctx, yy_sym2str(name), "(after gcm)", stderr);
 			} else {
 				rcc_dump_func_proto(name, 0, stderr);
+				fprintf(stderr, "# (after gcm)\n");
 				ir_save(ctx, c_save_flags | IR_SAVE_CFG | IR_SAVE_CFG_MAP, stderr);
 			}
 		}
@@ -389,9 +408,10 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym)
 		ir_schedule(ctx);
 		if (c_flags & C_DUMP_IR_AFTER_SCHEDULING) {
 			if (c_flags & C_DUMP_DOT) {
-				ir_dump_dot(ctx, yy_sym2str(name), stderr);
+				ir_dump_dot(ctx, yy_sym2str(name), "(after scheduling)", stderr);
 			} else {
 				rcc_dump_func_proto(name, 0, stderr);
+				fprintf(stderr, "# (after scheduling)\n");
 				ir_save(ctx, c_save_flags | IR_SAVE_CFG, stderr);
 			}
 		}
@@ -1578,29 +1598,9 @@ static void rcc_help(const char *cmd)
 		"General Options:\n"
 		"  --run ...                  - run the main() function of generated code\n"
 		"                               (the remaining arguments are passed to main)\n"
-#ifndef _WIN32
-		"  -g                         - produce debugging information (through JITGDB)\n"
-		"  -p                         - provide information about JIT-ed code to Linux Perf\n"
-		"                               the example usage:\n"
-		"                                 $ perf record -k 1 rcc -p bench.c --run\n"
-		"                                 $ perf inject -j -i perf.data -o perf.data.jitted\n"
-		"                                 $ perf report -i perf.data.jitted\n"
-#endif
+		"  --emit-ir                  - show generated and optimized IR code\n"
 		"  -S                         - show generated assembler code\n"
 		"  -o <file-name>             - put primary output into the specified file\n"
-		"Optimization Options:\n"
-		"  -O[012]                    - optimization level (default: -O2)\n"
-		"  -f[no-]inline              - enable/disable function inlining (default: enabled at -O1)\n"
-		"  -fno-mem2ssa               - disable MEM2SSA pass (default: enabled at -O1)\n"
-		"Code Generation Options:\n"
-#if defined(IR_TARGET_X86) || defined(IR_TARGET_X64)
-		"  -mavx                      - use AVX instruction set\n"
-		"  -m[no-]bmi1                - enable/disable BMI1 instruction set\n"
-#endif
-		"  -muse-fp                   - use base frame pointer register\n"
-#if defined(IR_TARGET_X86)
-		"  -mfastcall                 - use fastcall calling convention\n"
-#endif
 		"Preprocessor Options:\n"
 		"  -E                         - preprocess only\n"
 		"  -P                         - inhibit generation of linemarkers\n"
@@ -1614,23 +1614,53 @@ static void rcc_help(const char *cmd)
 		"Error Reporting Options:\n"
 		"  -w                         - inhibit all warning messages\n"
 		"  -fsyntax-only              - check the input files for syntax errors, but don't do anything beyond that\n"
+		"Optimization Options:\n"
+		"  -O[012]                    - optimization level (default: -O2)\n"
+		"  -f[no-]inline              - enable/disable function inlining (default: enabled at -O1)\n"
+		"  -fno-mem2ssa               - disable MEM2SSA pass (default: enabled at -O1)\n"
+		"Code Generation Options:\n"
+#if defined(IR_TARGET_X86) || defined(IR_TARGET_X64)
+		"  -mavx                      - use AVX instruction set\n"
+		"  -m[no-]bmi1                - enable/disable BMI1 instruction set\n"
+#endif
+		"  -muse-fp                   - use base frame pointer register\n"
+#if defined(IR_TARGET_X86)
+		"  -mfastcall                 - use fastcall calling convention\n"
+#endif
+#ifndef _WIN32
+		"Debugguing Options:\n"
+		"  -g                         - produce debugging information (through JITGDB)\n"
+		"  -p                         - provide information about JIT-ed code to Linux Perf\n"
+		"                               the example usage:\n"
+		"                                 $ perf record -k 1 rcc -p bench.c --run\n"
+		"                                 $ perf inject -j -i perf.data -o perf.data.jitted\n"
+		"                                 $ perf report -i perf.data.jitted\n"
+#endif
 		"IR Debugging Options:\n"
-		"  --save-ir-after-load       - print IR generated by C front-end\n"
-		"  --save-ir-after-use-lists  - print IR after USE-LISTS construction\n"
-		"  --save-ir-after-mem2ssa    - print IR after SSA construction pass\n"
-		"  --save-ir-after-sccp       - print IR after SCCP optimization pass\n"
-		"  --save-ir-after-cfg        - print IR after CFG construction\n"
-		"  --save-ir-after-dom        - print IR after Dominators tree construction\n"
-		"  --save-ir-after-loop       - print IR after Loop detection\n"
-		"  --save-ir-after-gcm        - print IR after GCM optimization pass\n"
-		"  --save-ir-after-scheduling - print IR after scheduling\n"
-		"  --save-ir-after-matching   - print IR after code selection\n"
-		"  --save-ir-after-live-ranges - print IR after live ranges identification\n"
-		"  --save-ir-after-coalescing - print IR after live ranges coalescing\n"
-		"  --save-ir-after-regalloc   - print IR after register allocation\n"
-		"  --save-ir-codegen          - print IR with selcted code rules and registers\n"
-		"  --save-live-ranges         - print info about live ranges (use with --save-ir-after-live-ranges)\n"
-		"  --save-dot                 - print IR in .DOT format (affects all --save-ir-...)\n"
+		"  --save                     - save IR\n"
+		"  --save-cfg                 - save IR with information about CFG\n"
+		"  --save-cfg-map             - save IR with information about assigned basic-locks\n"
+		"  --save-rules               - save IR with information selectd code-generation \n"
+		"  --save-regs                - save IR with information about assigned CPU register\n"
+		"  --save-use-lists           - save IR with def->use chains\n"
+		"  --save-ir-after-load       - save IR generated by C front-end\n"
+		"  --save-ir-after-use-lists  - save IR after USE-LISTS construction\n"
+		"  --save-ir-after-mem2ssa    - save IR after SSA construction pass\n"
+		"  --save-ir-after-sccp       - save IR after SCCP optimization pass\n"
+		"  --save-ir-after-cfg        - save IR after CFG construction\n"
+		"  --save-ir-after-dom        - save IR after Dominators tree construction\n"
+		"  --save-ir-after-loop       - save IR after Loop detection\n"
+		"  --save-ir-after-gcm        - save IR after GCM optimization pass\n"
+		"  --save-ir-after-scheduling - save IR after scheduling\n"
+		"  --save-ir-after-matching   - save IR after code selection\n"
+		"  --save-ir-after-live-ranges - save IR after live ranges identification\n"
+		"  --save-ir-after-coalescing - save IR after live ranges coalescing\n"
+		"  --save-ir-after-regalloc   - save IR after register allocation\n"
+		"  --save-ir-codegen          - save IR with selcted code rules and registers\n"
+		"  --save-ir-final            - save IR after all passes\n"
+		"  --save-ir-after-each-pass  - save IR after each pass\n"
+		"  --save-live-ranges         - save info about live ranges (use with --save-ir-after-live-ranges)\n"
+		"  --save-dot                 - save IR in .DOT format (affects all --save-ir-...)\n"
 		"                               the output may be converted into multi-page PDF using pipe: \n"
 		"                                 $ rcc ... 2>&1 | dot -Tps:cairo:cairo | ps2pdf - > out.pdf\n"
 #ifdef IR_DEBUG
@@ -1643,8 +1673,7 @@ static void rcc_help(const char *cmd)
 		"  --debug-bb-scheduling      - debug BB PLCEMENT optimization pass\n"
 #endif
 		"Utility Options\n"
-		"  --emit-ir                  - emit final IR\n"
-		"  --emit-llvm                - emit LLVM code (implementation is incomplete)\n"
+		"  --emit-llvm                - convert final IR to LLVM code (implementation is incomplete)\n"
 		"  --dump-size                - print size of generated code\n"
 		"  --dump-time                - print compilation and execution time\n"
 		"  --target                   - print JIT target\n"
@@ -1812,6 +1841,16 @@ int main(int argc, const char **argv)
 		} else if (strcmp(argv[i], "-mfastcall") == 0) {
 			ir_flags |= IR_CC_FASTCALL;
 #endif
+		} else if (strcmp(argv[i], "--save-cfg") == 0) {
+			c_save_flags |= IR_SAVE_CFG;
+		} else if (strcmp(argv[i], "--save-cfg-map") == 0) {
+			c_save_flags |= IR_SAVE_CFG | IR_SAVE_CFG_MAP;
+		} else if (strcmp(argv[i], "--save-rules") == 0) {
+			c_save_flags |= IR_SAVE_RULES;
+		} else if (strcmp(argv[i], "--save-regs") == 0) {
+			c_save_flags |= IR_SAVE_REGS;
+		} else if (strcmp(argv[i], "--save-use-lists") == 0) {
+			c_save_flags |= IR_SAVE_USE_LISTS;
 		} else if (strcmp(argv[i], "--save-ir-after-load") == 0) {
 			c_flags |= C_DUMP_IR_AFTER_LOAD;
 		} else if (strcmp(argv[i], "--save-ir-after-use-lists") == 0) {
@@ -1840,6 +1879,10 @@ int main(int argc, const char **argv)
 			c_flags |= C_DUMP_IR_AFTER_REGALLOC;
 		} else if (strcmp(argv[i], "--save-ir-codegen") == 0) {
 			c_flags |= C_DUMP_IR_CODEGEN;
+		} else if (strcmp(argv[i], "--save-ir-final") == 0) {
+			c_flags |= C_DUMP_IR_FINAL;
+		} else if (strcmp(argv[i], "--save-ir-after-each-pass") == 0) {
+			c_flags |= C_DUMP_IR_AFTER_ALL;
 		} else if (strcmp(argv[i], "--save-live-ranges") == 0) {
 			c_flags |= C_DUMP_LIVE_RANGES;
 		} else if (strcmp(argv[i], "--save-dot") == 0) {
@@ -1865,7 +1908,7 @@ int main(int argc, const char **argv)
 			}
 			ir_debug_regset = strtoull(argv[i + 1], NULL, 0);
 			i++;
-		} else if (strcmp(argv[i], "--emit-ir") == 0) {
+		} else if (strcmp(argv[i], "--emit-ir") == 0 || strcmp(argv[i], "--save") == 0) {
 			c_flags |= C_DUMP_IR;
 		} else if (strcmp(argv[i], "--emit-llvm") == 0) {
 			c_flags |= C_DUMP_LLVM;

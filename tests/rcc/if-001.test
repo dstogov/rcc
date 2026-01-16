@@ -17,6 +17,7 @@ int test2(int c) {
 }
 --EXPECT--
 func @test1(int32_t): int32_t
+# (after load)
 {
 	uintptr_t c_1 = 0;
 	bool c_2 = 0;
@@ -38,6 +39,7 @@ func @test1(int32_t): int32_t
 	l_14 = RETURN(l_13, d_13);
 }
 func @test2(int32_t): int32_t
+# (after load)
 {
 	uintptr_t c_1 = 0;
 	bool c_2 = 0;
