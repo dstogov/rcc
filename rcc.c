@@ -1010,16 +1010,32 @@ static size_t rcc_emit_ir_data(FILE *f, const c_type *type, const void *addr, si
 
 		switch (size) {
 			case 1:
-				fprintf(f, "\t%s 0x%02x,\n", ir_type_cname[t], (uint32_t)*(uint8_t*)addr);
+				if (!*(uint8_t*)addr) {
+					fprintf(f, "\t%s 0,\n", ir_type_cname[t]);
+				} else {
+					fprintf(f, "\t%s 0x%02x,\n", ir_type_cname[t], (uint32_t)*(uint8_t*)addr);
+				}
 				return 1;
 			case 2:
-				fprintf(f, "\t%s 0x%04x,\n", ir_type_cname[t], (uint32_t)*(uint16_t*)addr);
+				if (!*(uint16_t*)addr) {
+					fprintf(f, "\t%s 0,\n", ir_type_cname[t]);
+				} else {
+					fprintf(f, "\t%s 0x%04x,\n", ir_type_cname[t], (uint32_t)*(uint16_t*)addr);
+				}
 				return 2;
 			case 4:
-				fprintf(f, "\t%s 0x%08x,\n", ir_type_cname[t], *(uint32_t*)addr);
+				if (!*(uint32_t*)addr) {
+					fprintf(f, "\t%s 0,\n", ir_type_cname[t]);
+				} else {
+					fprintf(f, "\t%s 0x%08x,\n", ir_type_cname[t], *(uint32_t*)addr);
+				}
 				return 4;
 			case 8:
-				fprintf(f, "\t%s 0x%016" PRIx64 ",\n", ir_type_cname[t], *(uint64_t*)addr);
+				if (!*(uint64_t*)addr) {
+					fprintf(f, "\t%s 0,\n", ir_type_cname[t]);
+				} else {
+					fprintf(f, "\t%s 0x%016" PRIx64 ",\n", ir_type_cname[t], *(uint64_t*)addr);
+				}
 				return 8;
 			default:
 				IR_ASSERT(0);
@@ -1034,7 +1050,7 @@ static size_t rcc_emit_ir_data(FILE *f, const c_type *type, const void *addr, si
 		} else if (!*(uintptr_t*)addr) {
 			fprintf(f, "\tuintptr_t 0,\n");
 		} else {
-			fprintf(f, "\tuintptr_t 0x%" PRIxPTR ",\n", *(uintptr_t*)addr);
+			fprintf(f, "\tuintptr_t 0x016%" PRIxPTR ",\n", *(uintptr_t*)addr);
 		}
 		return sizeof(void*);
 	} else if (type->kind == C_TYPE_FUNC) {
@@ -1054,7 +1070,7 @@ static size_t rcc_emit_ir_data(FILE *f, const c_type *type, const void *addr, si
 		for (i = 0; i < type->array.length; el_offset += type->array.type->size, i++) {
 			while (offset < el_offset) {
 				/* padding */
-				fprintf(f, "\tuint8_t 0x00,\n");
+				fprintf(f, "\tuint8_t 0,\n");
 				offset++;
 			}
 			offset += rcc_emit_ir_data(f, type->array.type, (const char*)addr + el_offset, base + el_offset, rel);
@@ -1067,7 +1083,7 @@ static size_t rcc_emit_ir_data(FILE *f, const c_type *type, const void *addr, si
 
 		for (i = 0; i < type->record.num_fields; field++, i++) {
 			while (offset < field->offset) {
-				fprintf(f, "\tuint8_t 0x00,\n");
+				fprintf(f, "\tuint8_t 0,\n");
 				/* padding */
 				offset++;
 			}
@@ -1087,7 +1103,7 @@ static size_t rcc_emit_ir_data(FILE *f, const c_type *type, const void *addr, si
 			}
 		}
 		while (offset < type->size) {
-			fprintf(f, "\tuint8_t 0x00,\n");
+			fprintf(f, "\tuint8_t 0,\n");
 			/* padding */
 			offset++;
 		}
@@ -1109,7 +1125,7 @@ static size_t rcc_emit_ir_data(FILE *f, const c_type *type, const void *addr, si
 			offset += rcc_emit_ir_data(f, best_field->type, addr, base, rel);
 		}
 		while (offset < type->size) {
-			fprintf(f, "\tuint8_t 0x00,\n");
+			fprintf(f, "\tuint8_t 0,\n");
 			/* padding */
 			offset++;
 		}
@@ -1129,14 +1145,22 @@ static void rcc_emit_ir_mbstring(FILE *f, const c_type *type, const void *addr, 
 	switch (size) {
 		case 2:
 			while (len > 0) {
-				fprintf(f, "\t%s 0x%04x,\n", ir_type_cname[t], (uint32_t)*(uint16_t*)addr);
+				if (!*(uint16_t*)addr) {
+					fprintf(f, "\t%s 0,\n", ir_type_cname[t]);
+				} else {
+					fprintf(f, "\t%s 0x%04x,\n", ir_type_cname[t], (uint32_t)*(uint16_t*)addr);
+				}
 				addr = (const char*)addr + 2;
 				len -= 2;
 			}
 			break;
 		case 4:
 			while (len > 0) {
-				fprintf(f, "\t%s 0x%08x,\n", ir_type_cname[t], *(uint32_t*)addr);
+				if (!*(uint32_t*)addr) {
+					fprintf(f, "\t%s 0,\n", ir_type_cname[t]);
+				} else {
+					fprintf(f, "\t%s 0x%08x,\n", ir_type_cname[t], *(uint32_t*)addr);
+				}
 				addr = (const char*)addr + 4;
 				len -= 4;
 			}
