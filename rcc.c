@@ -1253,7 +1253,7 @@ static void rcc_emit_ir(FILE *f)
 	for (i = YY_LAST_KEYWORD + 1, p = yy_hash.data + i; i < yy_hash.count; p++, i++) {
 		if (p->sym && p->sym->kind == C_SYM_FUNC && p->sym->ctx) {
 			rcc_dump_func_proto(i, 0, f);
-			ir_save(p->sym->ctx, c_save_flags | IR_SAVE_CFG, f);
+			ir_save(p->sym->ctx, c_save_flags, f);
 		}
 	}
 }
@@ -1932,7 +1932,10 @@ int main(int argc, const char **argv)
 			}
 			ir_debug_regset = strtoull(argv[i + 1], NULL, 0);
 			i++;
-		} else if (strcmp(argv[i], "--emit-ir") == 0 || strcmp(argv[i], "--save") == 0) {
+		} else if (strcmp(argv[i], "--emit-ir") == 0) {
+			c_flags |= C_DUMP_IR;
+			c_save_flags |= IR_SAVE_CFG;
+		} else if (strcmp(argv[i], "--save") == 0) {
 			c_flags |= C_DUMP_IR;
 		} else if (strcmp(argv[i], "--emit-llvm") == 0) {
 			c_flags |= C_DUMP_LLVM;
