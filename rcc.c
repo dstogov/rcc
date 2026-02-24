@@ -415,6 +415,10 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym)
 				ir_save(ctx, c_save_flags | IR_SAVE_CFG, stderr);
 			}
 		}
+
+#ifdef IR_DEBUG
+		ir_check(ctx);
+#endif
 	}
 
 	if ((c_opt_flags & C_OPT_INLINE)
