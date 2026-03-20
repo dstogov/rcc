@@ -3884,7 +3884,9 @@ incompatible:
 				if (attr) {
 check_qualifiers:
 					if (attr & C_ATTR_CONST) {
-						if (arg < 0) {
+						if (type->pointer.type->kind == C_TYPE_FUNC) {
+							/* assignement of "const void*" to a pointer to function is allowed */
+						} else if (arg < 0) {
 							yy_warning_fmt("assignment discards \"%s\" qualifier from pointer target type", "const");
 						} else if (arg > 0) {
 							yy_warning_fmt("passing argument %d discards \"%s\" qualifier from pointer target type", arg, "const");
