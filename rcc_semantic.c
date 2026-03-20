@@ -7815,7 +7815,7 @@ static bool c_find_struct_field_ex(const c_type *type, c_name name, c_init *init
 			init->level--;
 		}
 	}
-	return NULL;
+	return 0;
 }
 
 void c_do_init_field(c_sym *obj, c_init *init, c_name field_name)
