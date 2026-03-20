@@ -1,0 +1,18 @@
+--TEST--
+Macro 018 - valid macros substitution
+--ARGS--
+-E -P
+--CODE--
+#define A(_) \
+	_(a) \
+	_(b) \
+	_(c)
+#define B(x) \
+	#x,
+static const char *s[] = {
+	A(B)
+};
+--EXPECT--
+static const char *s[] = {
+ "a", "b", "c",
+};

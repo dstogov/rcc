@@ -2509,7 +2509,7 @@ void pp_parse_directive(void)
 	bool start_of_include = (pp_include_ifndef_state & YY_INCLUDE_START) != 0;
 
 	yy_flags &= ~YY_SKIP_EOL;
-	yy_flags |= YY_SKIP_WS | YY_NO_MACRO | YY_ACCEPT_PUNCTUATOR;
+	yy_flags |= YY_SKIP_WS | YY_NO_MACRO | YY_ACCEPT_PUNCTUATOR | YY_NO_DIRECTIVE;
 	sym = yy_next();
 	while (1) {
 		skip = 0;
