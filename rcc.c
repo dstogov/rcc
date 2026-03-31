@@ -332,19 +332,20 @@ void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym)
 #endif
 
 	if ((c_opt_flags & C_OPT_LEVEL) > 0 && (c_opt_flags & C_OPT_MEM2SSA)) {
+		ir_iter_cleanup(ctx);
 		ir_build_cfg(ctx);
 		ir_build_dominators_tree(ctx);
 		ir_mem2ssa(ctx);
+		ir_reset_cfg(ctx);
 		if (c_flags & C_DUMP_IR_AFTER_MEM2SSA) {
 			if (c_flags & C_DUMP_DOT) {
 				ir_dump_dot(ctx, yy_sym2str(name), "(after mem2ssa)", stderr);
 			} else {
 				rcc_dump_func_proto(name, 0, stderr);
 				fprintf(stderr, "# (after mem2ssa)\n");
-				ir_save(ctx, c_save_flags | IR_SAVE_CFG, stderr);
+				ir_save(ctx, c_save_flags, stderr);
 			}
 		}
-		ir_reset_cfg(ctx);
 	}
 
 	if ((c_opt_flags & C_OPT_LEVEL) > 1) {
