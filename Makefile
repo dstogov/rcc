@@ -110,9 +110,13 @@ test-ci: $(BUILD_DIR)/rcc $(BUILD_DIR)/tester
 
 
 bench: $(BUILD_DIR)/rcc
-	@if [ ! -d "$(SRC_DIR)/c-benchmarks" ]; then \
-		echo "Cloning https://github.com/dstogov/c-benchmarks.git into $(SRC_DIR)/c-benchmarks ..." ; \
-		git clone https://github.com/dstogov/c-benchmarks.git $(SRC_DIR)/c-benchmarks ; \
+	@if [ ! -x "$(SRC_DIR)/c-benchmarks/run-benchmarks.sh" ]; then \
+		echo "Clone the C benchmark suite using one of the following commands, then run 'make bench' once again" ; \
+		echo "" ; \
+		echo "git clone https://github.com/dstogov/c-benchmarks.git $(SRC_DIR)/c-benchmarks" ; \
+		echo "git clone git@github.com:dstogov/c-benchmarks.git $(SRC_DIR)/c-benchmarks" ; \
+		echo "" ; \
+		exit 1; \
 	fi
 	(cd $(SRC_DIR)/c-benchmarks/; GCC=gcc RCC=$(realpath $(BUILD_DIR)/rcc) ./run-benchmarks.sh)
 	(cd $(SRC_DIR)/c-benchmarks/; GCC=gcc RCC=$(realpath $(BUILD_DIR)/rcc) ./cmp-benchmarks.sh)
