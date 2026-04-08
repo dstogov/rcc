@@ -34,12 +34,12 @@ jobs:
       - name: make ir
         run: |
           cd ir
-          make TARGET=x86_64 BUILD=debug all
-          make TARGET=x86_64 BUILD=debug install
+          make BUILD=debug all
+          make BUILD=debug install
       - name: make
-        run: make TARGET=x86_64 BUILD=debug all
+        run: make BUILD=debug all
       - name: test
-        run: make TARGET=x86_64 BUILD=debug test-ci
+        run: make BUILD=debug test-ci
   Linux_aarch64:
     name: 'Linux aarch64'
     runs-on: ubuntu-22.04-arm
@@ -64,9 +64,9 @@ jobs:
       - name: make ir
         run: |
           cd ir
-          make TARGET=aarch64 BUILD=debug all
-          make TARGET=aarch64 BUILD=debug install
+          make BUILD=debug all
+          make BUILD=debug install
       - name: make
-        run: make TARGET=aarch64 BUILD=debug all
+        run: make BUILD=debug all
       - name: test
-        run: make TARGET=aarch64 BUILD=debug test-ci
+        run: make BUILD=debug test-ci

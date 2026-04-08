@@ -1,5 +1,5 @@
 # TARGET may be "x86_64" or "x86" or "aarch64"
-TARGET     = x86_64
+TARGET     = $(shell uname -m)
 OS         = $(shell uname -s)
 # BUILD can be "debug" or "release"
 BUILD      = release
@@ -20,34 +20,35 @@ ifeq (debug, $(BUILD))
  override CFLAGS += -O0 -g -DIR_DEBUG=1
  override BUILD_CFLAGS += -O2 -g -DIR_DEBUG=1
  MINILUA_CFLAGS = -O0 -g
-endif
-ifeq (release, $(BUILD))
+else ifeq (release, $(BUILD))
  override CFLAGS += -O2 -g
  override BUILD_CFLAGS += -O2 -g
  MINILUA_CFLAGS = -O2 -g
+else
+ $(error Unsupported build type. BUILD must be 'release' or 'debug')
 endif
 
-ifeq (x86_64, $(TARGET))
+ifneq (, $(filter x86_64 amd64, $(TARGET)))
   override CFLAGS += -m64 -DIR_TARGET_X64
   override BUILD_CFLAGS += -m64 -DIR_TARGET_X64
-endif
-ifeq (x86, $(TARGET))
+else ifneq (, $(filter x86 i386, $(TARGET)))
   override CFLAGS += -m32 -DIR_TARGET_X86
   override BUILD_CFLAGS += -m32 -DIR_TARGET_X86
-endif
-ifeq (aarch64, $(TARGET))
+else ifneq (, $(filter aarch64 arm64, $(TARGET)))
 # CC= aarch64-linux-gnu-gcc --sysroot=$(HOME)/php/ARM64
   override CFLAGS += -DIR_TARGET_AARCH64
   override BUILD_CFLAGS += -DIR_TARGET_AARCH64
+else
+ $(error Unsupported target. TRGET must be 'x86_64', 'x86' or 'aarch64')
 endif
+
 ifeq (FreeBSD, $(OS))
   CC=cc
   BUILD_CC=$(CC)
   override CFLAGS += -I/usr/local/include
   override BUILD_CFLAGS += -I/usr/local/include
   LDFLAGS += -L/usr/local/lib
-endif
-ifeq (NetBSD, $(OS))
+else ifeq (NetBSD, $(OS))
   CC=cc
   BUILD_CC=$(CC)
   override CFLAGS += -I/usr/pkg/include
