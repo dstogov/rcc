@@ -22,7 +22,7 @@
 #include "rcc.h"
 
 #undef _ir_CTX
-#define _ir_CTX active_ctx
+#define _ir_CTX rcc->active_ctx
 
 const c_type c_type_void                = {.kind = C_TYPE_VOID,   .flags = C_TYPE_GLOBAL, .size = 0,  .attr = 1};
 const c_type c_type_bool                = {.kind = C_TYPE_BOOL,   .flags = C_TYPE_GLOBAL, .size = 1,  .attr = 1};
@@ -104,33 +104,9 @@ const c_type c_type_const_ptr = {
 	.pointer.type = &c_type_const_void,
 };
 
-       ir_arena   *c_arena;
-       bool        c_dead_code = 0;
-       bool        c_static_data = 0;
-       ir_ctx     *active_ctx = NULL;
-       ir_ctx     *global_ctx = NULL;
-
-       c_sym      *active_func = NULL;
-static c_scope    *active_func_scope = NULL;
-static c_scope    *active_scope = NULL;
-static c_loop     *active_loop = NULL;
-       c_name      active_func_name = 0;
-static uint32_t    c_static_sym_num = 0;
-static uint32_t    c_static_str_num = 0;
-static uint32_t    c_label_num = 0;
-       ir_ref      c_prologue_end = IR_UNUSED;
-static ir_ref      c_last_expect_ref = IR_UNUSED;
-static ir_ref      c_computed_goto = IR_UNUSED;
-static ir_ref      c_computed_goto_targets = IR_UNUSED;
-static bool        c_last_expect_val;
-static ir_strtab   c_strtab;
-       uint64_t    c_fixed_regset = 0;
-
-static const c_type *c_last_call_func_type = NULL;
-
-static ir_ref c_value_ref(c_value *val);
-static void c_do_cvt(const c_type *t, ir_type type, c_value *v);
-static void ir_memzero(ir_ctx *ctx, ir_ref dst, ir_ref size, uint32_t align);
+static ir_ref c_value_ref(rcc_ctx *rcc, c_value *val);
+static void c_do_cvt(rcc_ctx *rcc, const c_type *t, ir_type type, c_value *v);
+static void ir_memzero(rcc_ctx *rcc, ir_ref dst, ir_ref size, uint32_t align);
 
 static bool c_valid_alignment(c_value *val)
 {
@@ -151,7 +127,7 @@ static size_t c_attr2align(uint32_t attr)
 	return 1ULL << ((attr & C_ATTR_ALIGN_MASK) - 1);
 }
 
-ir_type c_type2ir(const c_type *t)
+ir_type c_type2ir(rcc_ctx *rcc, const c_type *t)
 {
 	c_type_kind kind = t->kind;
 
@@ -246,7 +222,7 @@ static int c_abi_lower_struct_ret(const c_type *t, ir_type *types)
 	return c_abi_lower_struct(t, types);
 }
 
-static uint32_t c_type_call_conv(const c_type *t)
+static uint32_t c_type_call_conv(rcc_ctx *rcc, const c_type *t)
 {
 	uint32_t flags = IR_CC_DEFAULT;
 
@@ -268,8 +244,9 @@ static uint32_t c_type_call_conv(const c_type *t)
 	return flags;
 }
 
-void c_type2proto_ex(const c_type *t, uint32_t *flags_ptr, ir_type *ret_type_ptr,
-                                      uint32_t *params_count_ptr, uint8_t *param_types)
+void c_type2proto_ex(rcc_ctx *rcc, const c_type *t,
+                     uint32_t *flags_ptr, ir_type *ret_type_ptr,
+                     uint32_t *params_count_ptr, uint8_t *param_types)
 {
 	uint8_t flags = 0;
 	ir_type ret_type;
@@ -290,7 +267,7 @@ void c_type2proto_ex(const c_type *t, uint32_t *flags_ptr, ir_type *ret_type_ptr
 			j = 1;
 		}
 	} else {
-		ret_type = c_type2ir(t->func.ret_type);
+		ret_type = c_type2ir(rcc, t->func.ret_type);
 	}
 	if (t->func.num_params > 0) {
 		params_count = t->func.num_params + j;
@@ -309,7 +286,7 @@ void c_type2proto_ex(const c_type *t, uint32_t *flags_ptr, ir_type *ret_type_ptr
 					param_types[i + j] = IR_ADDR;
 				}
 			} else {
-				param_types[i + j] = c_type2ir(param_type);
+				param_types[i + j] = c_type2ir(rcc, param_type);
 			}
 		}
 	} else if (j) {
@@ -321,7 +298,7 @@ void c_type2proto_ex(const c_type *t, uint32_t *flags_ptr, ir_type *ret_type_ptr
 	if (t->attr & C_ATTR_VARIADIC) {
 		flags |= IR_VARARG_FUNC;
 	}
-	flags |= c_type_call_conv(t);
+	flags |= c_type_call_conv(rcc, t);
 	if (t->attr & C_ATTR_CONST_FUNC) {
 		flags |= IR_CONST_FUNC;
 	} else if (t->attr & C_ATTR_PURE) {
@@ -333,7 +310,7 @@ void c_type2proto_ex(const c_type *t, uint32_t *flags_ptr, ir_type *ret_type_ptr
 	*params_count_ptr = params_count;
 }
 
-static ir_ref c_type2proto(const c_type *t, uint32_t linkage)
+static ir_ref c_type2proto(rcc_ctx *rcc, const c_type *t, uint32_t linkage)
 {
 	uint32_t flags;
 	uint32_t params_count;
@@ -342,21 +319,21 @@ static ir_ref c_type2proto(const c_type *t, uint32_t linkage)
 
 	IR_ASSERT(t->kind == C_TYPE_FUNC);
 	param_types = alloca(t->func.num_params + 16);
-	c_type2proto_ex(t, &flags, &ret_type, &params_count, param_types);
+	c_type2proto_ex(rcc, t, &flags, &ret_type, &params_count, param_types);
 	if (linkage == C_LINK_INTERNAL) {
 		flags |= IR_STATIC;
 	} else if (linkage == C_LINK_BUILTIN) {
 		flags |= IR_CC_BUILTIN;
 	}
-	return ir_proto(active_ctx, flags, ret_type, params_count, param_types);
+	return ir_proto(rcc->active_ctx, flags, ret_type, params_count, param_types);
 }
 
-static bool c_fix_incomplete_type(const c_type *type)
+static bool c_fix_incomplete_type(rcc_ctx *rcc, const c_type *type)
 {
 	c_tag *tag;
 
 	IR_ASSERT((type->flags & C_TYPE_INCOMPLETE) && type->tag);
-	tag = yy_hash.data[type->tag].tag;
+	tag = rcc->yy_hash.data[type->tag].tag;
 	if (tag && tag->type != type && !(tag->type->flags & C_TYPE_INCOMPLETE)) {
 		/* The incomplete type reffers to a complete tag. */
 		uint32_t attr = type->attr;
@@ -368,19 +345,19 @@ static bool c_fix_incomplete_type(const c_type *type)
 	return 0;
 }
 
-void c_push_scope(c_scope *scope)
+void c_push_scope(rcc_ctx *rcc, c_scope *scope)
 {
 	scope->list.syms = NULL;
 	scope->list.size = 0;
 	scope->list.len = 0;
-	scope->checkpoint = ir_arena_checkpoint(c_arena);
+	scope->checkpoint = ir_arena_checkpoint(rcc->c_arena);
 	scope->vla_block = IR_UNUSED;
-	scope->last_vla_block = active_scope ? active_scope->last_vla_block : IR_UNUSED;
-	scope->prev = active_scope;
-	active_scope = scope;
+	scope->last_vla_block = rcc->active_scope ? rcc->active_scope->last_vla_block : IR_UNUSED;
+	scope->prev = rcc->active_scope;
+	rcc->active_scope = scope;
 }
 
-void c_pop_scope_light(c_scope *scope)
+void c_pop_scope_light(rcc_ctx *rcc, c_scope *scope)
 {
 	if (scope->list.syms) {
 		yy_sym id, *p = scope->list.syms;
@@ -396,26 +373,26 @@ void c_pop_scope_light(c_scope *scope)
 			ptr = (void*)(((uintptr_t)ptr) & ~C_POP_MASK);
 			switch (kind) {
 				case C_POP_SYM:
-					yy_hash.data[id].sym = ptr;
+					rcc->yy_hash.data[id].sym = ptr;
 					break;
 				case C_POP_TAG:
-					yy_hash.data[id].tag = ptr;
+					rcc->yy_hash.data[id].tag = ptr;
 					break;
 				default:
 					IR_ASSERT(0);
 			}
 		}
-		pp_list_release(scope->list.syms, scope->list.size);
+		pp_list_release(rcc, scope->list.syms, scope->list.size);
 	}
-	active_scope = scope->prev;
+	rcc->active_scope = scope->prev;
 }
 
-void c_pop_scope(c_scope *scope)
+void c_pop_scope(rcc_ctx *rcc, c_scope *scope)
 {
 	if (scope->vla_block
-	 && active_ctx->control
-	 && (active_ctx->ir_base[active_ctx->control].op != IR_BEGIN
-	  || active_ctx->ir_base[active_ctx->control].op1)) {
+	 && rcc->active_ctx->control
+	 && (rcc->active_ctx->ir_base[rcc->active_ctx->control].op != IR_BEGIN
+	  || rcc->active_ctx->ir_base[rcc->active_ctx->control].op1)) {
 		ir_BLOCK_END(scope->vla_block);
 	}
 	if (scope->list.syms) {
@@ -432,37 +409,37 @@ void c_pop_scope(c_scope *scope)
 			ptr = (void*)(((uintptr_t)ptr) & ~C_POP_MASK);
 			switch (kind) {
 				case C_POP_SYM:
-					yy_hash.data[id].sym = ptr;
+					rcc->yy_hash.data[id].sym = ptr;
 					break;
 				case C_POP_TAG:
-					yy_hash.data[id].tag = ptr;
+					rcc->yy_hash.data[id].tag = ptr;
 					break;
 				case C_POP_LABEL:
-					c_do_finish_label(id, yy_hash.data[id].label);
-					if (!yy_hash.data[id].label->is_local) {
-						ir_mem_free(yy_hash.data[id].label);
+					c_do_finish_label(rcc, id, rcc->yy_hash.data[id].label);
+					if (!rcc->yy_hash.data[id].label->is_local) {
+						ir_mem_free(rcc->yy_hash.data[id].label);
 					}
-					yy_hash.data[id].label = ptr;
+					rcc->yy_hash.data[id].label = ptr;
 					break;
 				default:
 					IR_ASSERT(0);
 			}
 		}
-		pp_list_release(scope->list.syms, scope->list.size);
+		pp_list_release(rcc, scope->list.syms, scope->list.size);
 	}
 	if (scope->checkpoint) {
-		ir_arena_release(&c_arena, scope->checkpoint);
+		ir_arena_release(&rcc->c_arena, scope->checkpoint);
 	}
-	active_scope = scope->prev;
-	if (scope == active_func_scope) {
-		active_func_scope = active_scope;
+	rcc->active_scope = scope->prev;
+	if (scope == rcc->active_func_scope) {
+		rcc->active_func_scope = rcc->active_scope;
 	}
 }
 
-static void c_leave_scope(c_scope *to)
+static void c_leave_scope(rcc_ctx *rcc, c_scope *to)
 {
 	ir_ref vla_block = IR_UNUSED;
-	c_scope *scope = active_scope;
+	c_scope *scope = rcc->active_scope;
 
 	while (scope != to) {
 		IR_ASSERT(scope);
@@ -472,33 +449,33 @@ static void c_leave_scope(c_scope *to)
 	if (vla_block) ir_BLOCK_END(vla_block);
 }
 
-const c_type *c_resolve_type_name(c_name name)
+const c_type *c_resolve_type_name(rcc_ctx *rcc, c_name name)
 {
-	c_sym *s = yy_hash.data[name].sym;
-	if (!s || s->kind != C_SYM_TYPE) yy_error_fmt("\"%s\" is not a type name", yy_hash.data[name].str);
+	c_sym *s = rcc->yy_hash.data[name].sym;
+	if (!s || s->kind != C_SYM_TYPE) yy_error_fmt("\"%s\" is not a type name", rcc->yy_hash.data[name].str);
 	return s->value.type;
 }
 
-void c_resolve_sym_name(c_value *res, c_name name, yy_sym sym)
+void c_resolve_sym_name(rcc_ctx *rcc, c_value *res, c_name name, yy_sym sym)
 {
-	c_sym *s = yy_hash.data[name].sym;
+	c_sym *s = rcc->yy_hash.data[name].sym;
 	if (!s) {
 		if (sym == YY__LPAREN) {
 			c_dcl dcl;
 
-			if (yy_flags & PP_EVAL_EXPRESSION) {
+			if (rcc->yy_flags & PP_EVAL_EXPRESSION) {
 				ir_val val;
-				if (!c_dead_code) yy_error_fmt("undefined function macro \"%s\"", yy_hash.data[name].str);
+				if (!rcc->c_dead_code) yy_error_fmt("undefined function macro \"%s\"", rcc->yy_hash.data[name].str);
 				val.u64 = 0;
 				c_value_set_const(res, &c_type_void, IR_VOID, val);
 				return;
 			}
-			yy_warning_fmt("implicit declaration of function \"%s\"", yy_hash.data[name].str);
+			yy_warning_fmt("implicit declaration of function \"%s\"", rcc->yy_hash.data[name].str);
 
 			/* Function in going to be declared in the global scope */
 			memset(&dcl, 0, sizeof(dcl));
 			dcl.flags = C_DCL_EXTERN | C_TYPE_SPEC_TYPE;
-			c_type *type = type = ir_arena_alloc(&c_arena, sizeof(c_type));
+			c_type *type = type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
 			type->kind = C_TYPE_FUNC;
 			type->flags = 0;
 			type->attr = C_ATTR_OLD_FUNC;
@@ -507,14 +484,14 @@ void c_resolve_sym_name(c_value *res, c_name name, yy_sym sym)
 			type->func.num_params = 0;
 			type->func.params = NULL;
 			dcl.type = type;
-			s = c_declare(name, &dcl);
+			s = c_declare(rcc, name, &dcl);
 		} else {
-			yy_error_fmt("undefined identifier \"%s\"", yy_hash.data[name].str);
+			yy_error_fmt("undefined identifier \"%s\"", rcc->yy_hash.data[name].str);
 		}
 	}
-	if (s->kind == C_SYM_TYPE) yy_error_fmt("\"%s\" is a type name", yy_hash.data[name].str);
+	if (s->kind == C_SYM_TYPE) yy_error_fmt("\"%s\" is a type name", rcc->yy_hash.data[name].str);
 	if (s->kind == C_SYM_CONST) {
-		c_value_set_const(res, s->value.type, c_type2ir(s->value.type), s->value.u.val);
+		c_value_set_const(res, s->value.type, c_type2ir(rcc, s->value.type), s->value.u.val);
 	} else if (s->kind == C_SYM_VAR || s->kind == C_SYM_FUNC) {
 		if (c_value_is_ref(&s->value)) {
 			IR_ASSERT(s->kind != C_SYM_FUNC);
@@ -524,19 +501,19 @@ void c_resolve_sym_name(c_value *res, c_name name, yy_sym sym)
 			size_t name_len;
 			ir_ref ref;
 
-			name_str = yy_sym2strl(s->alias ? s->alias : name, &name_len);
+			name_str = yy_sym2strl(rcc, s->alias ? s->alias : name, &name_len);
 			if (s->kind == C_SYM_FUNC) {
-				ref = ir_const_func(active_ctx, ir_strl(active_ctx, name_str, name_len),
-					c_type2proto(s->value.type, s->linkage));
+				ref = ir_const_func(rcc->active_ctx, ir_strl(rcc->active_ctx, name_str, name_len),
+					c_type2proto(rcc, s->value.type, s->linkage));
 			} else {
-				ref = ir_const_sym(active_ctx, ir_strl(active_ctx, name_str, name_len));
+				ref = ir_const_sym(rcc->active_ctx, ir_strl(rcc->active_ctx, name_str, name_len));
 			}
 			if (s->kind == C_SYM_FUNC) {
 				c_value_set_rval(res, s->value.type, IR_ADDR, ref);
 				if (s->linkage == C_LINK_BUILTIN) {
 					res->u.op |= C_VAL_BUILTIN;
 				}
-				if (s == active_func) {
+				if (s == rcc->active_func) {
 					/* recursive function - disable inlining */
 					c_type *type = (c_type*)s->value.type;
 					type->attr |= C_ATTR_NOINLINE;
@@ -545,10 +522,10 @@ void c_resolve_sym_name(c_value *res, c_name name, yy_sym sym)
 					res->u.val.ptr = s->ctx;
 				}
 			} else if (s->value.type->kind != C_TYPE_ARRAY) {
-				c_value_set_lval(res, s->value.type, c_type2ir(s->value.type), ref);
+				c_value_set_lval(res, s->value.type, c_type2ir(rcc, s->value.type), ref);
 				res->u.val.ptr = c_value_is_const(&s->value) ? s->value.u.val.ptr : NULL;
 			} else {
-				c_value_set_rval(res, s->value.type, c_type2ir(s->value.type), ref);
+				c_value_set_rval(res, s->value.type, c_type2ir(rcc, s->value.type), ref);
 				res->u.val.ptr = NULL;
 			}
 		} else {
@@ -559,7 +536,7 @@ void c_resolve_sym_name(c_value *res, c_name name, yy_sym sym)
 	}
 }
 
-void c_wrong_type_specifiers(uint32_t flags, yy_sym sym)
+void c_wrong_type_specifiers(rcc_ctx *rcc, uint32_t flags, yy_sym sym)
 {
 	if (sym) {
 		if (flags & C_TYPE_SPEC_COMPLEX) {
@@ -585,20 +562,20 @@ void c_wrong_type_specifiers(uint32_t flags, yy_sym sym)
 	 && (flags & (C_TYPE_SPEC_CHAR|C_TYPE_SPEC_SHORT|C_TYPE_SPEC_INT|
 			C_TYPE_SPEC_LONG|C_TYPE_SPEC_LONG_LONG|C_TYPE_SPEC_SIGNED|C_TYPE_SPEC_UNSIGNED))) {
 		if (sym) {
-			yy_error_fmt("unexpected \"%s\", complex integer types are not supported", yy_sym2str(sym));
+			yy_error_fmt("unexpected \"%s\", complex integer types are not supported", yy_sym2str(rcc, sym));
 		} else {
 			yy_error("complex integer types are not supported");
 		}
 	} else {
 		if (sym) {
-			yy_error_fmt("unexpected \"%s\", unsupported type specifier combination", yy_sym2str(sym));
+			yy_error_fmt("unexpected \"%s\", unsupported type specifier combination", yy_sym2str(rcc, sym));
 		} else {
 			yy_error("unsupported type specifier combination");
 		}
 	}
 }
 
-static void c_resolve_type_spec(c_dcl *d)
+static void c_resolve_type_spec(rcc_ctx *rcc, c_dcl *d)
 {
 	IR_ASSERT(!d->type);
 	switch (d->flags & C_TYPE_SPEC_ANY) {
@@ -681,14 +658,14 @@ static void c_resolve_type_spec(c_dcl *d)
 				d->type = &c_type_i32;
 				break;
 			}
-			c_wrong_type_specifiers(d->flags, 0);
+			c_wrong_type_specifiers(rcc, d->flags, 0);
 			break;
 	}
 	d->flags &= ~C_TYPE_SPEC_ANY;
 	d->flags |= C_TYPE_SPEC_TYPE;
 }
 
-static void c_validate_dcl(c_dcl *d)
+static void c_validate_dcl(rcc_ctx *rcc, c_dcl *d)
 {
 	IR_ASSERT(d->type);
 	if (d->attr) {
@@ -709,11 +686,11 @@ static void c_validate_dcl(c_dcl *d)
 	}
 }
 
-static void c_merge_type_attr(c_dcl *d)
+static void c_merge_type_attr(rcc_ctx *rcc, c_dcl *d)
 {
-	c_type *type = ir_arena_alloc(&c_arena, sizeof(c_type));
+	c_type *type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
 	*type = *d->type;
-	if (active_scope) type->flags &= ~C_TYPE_GLOBAL;
+	if (rcc->active_scope) type->flags &= ~C_TYPE_GLOBAL;
 	type->attr |= (d->attr & C_TYPE_ATTRS);
 	if ((d->attr & C_ATTR_ALIGN_MASK)
 	 && (d->attr & C_ATTR_ALIGN_MASK) != (d->type->attr & C_ATTR_ALIGN_MASK)) {
@@ -722,16 +699,16 @@ static void c_merge_type_attr(c_dcl *d)
 	d->type = type;
 }
 
-static void c_finalize_type(c_dcl *d)
+static void c_finalize_type(rcc_ctx *rcc, c_dcl *d)
 {
-	if (!d->type) c_resolve_type_spec(d);
+	if (!d->type) c_resolve_type_spec(rcc, d);
 	if (d->flags & C_TYPE_SPEC_ATOMIC) {
 		d->attr |= C_ATTR_ATOMIC;
 		d->flags &= ~C_TYPE_SPEC_ANY;
 		d->flags |= C_TYPE_SPEC_TYPE;
 	}
 
-	c_validate_dcl(d);
+	c_validate_dcl(rcc, d);
 
 	if ((d->flags & C_TYPE_SPEC_NAME)
 	 && (d->attr & C_TYPE_ATTRS)
@@ -742,16 +719,16 @@ static void c_finalize_type(c_dcl *d)
 			t = t->array.type;
 		} while (t->kind == C_TYPE_ARRAY);
 		if ((t->attr & C_TYPE_ATTRS) != (d->attr & C_TYPE_ATTRS)) {
-			c_type *tmp = ir_arena_alloc(&c_arena, sizeof(c_type));
+			c_type *tmp = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
 
 			*tmp = *d->type;
-			if (active_scope) tmp->flags &= ~C_TYPE_GLOBAL;
+			if (rcc->active_scope) tmp->flags &= ~C_TYPE_GLOBAL;
 			d->type = tmp;
 			t = d->type;
 			do {
-				tmp = ir_arena_alloc(&c_arena, sizeof(c_type));
+				tmp = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
 				*tmp = *t->array.type;
-				if (active_scope) tmp->flags &= ~C_TYPE_GLOBAL;
+				if (rcc->active_scope) tmp->flags &= ~C_TYPE_GLOBAL;
 				((c_type*)(t))->array.type = tmp;
 				t = tmp;
 			} while (t->kind == C_TYPE_ARRAY);
@@ -763,14 +740,14 @@ static void c_finalize_type(c_dcl *d)
 	if ((d->attr & (C_TYPE_ATTRS|C_ATTR_ALIGN_MASK))
 	 && (d->attr & (C_TYPE_ATTRS|C_ATTR_ALIGN_MASK))
 	 != (d->type->attr & (C_TYPE_ATTRS|C_ATTR_ALIGN_MASK))) {
-		c_merge_type_attr(d);
+		c_merge_type_attr(rcc, d);
 	}
 	d->attr &= ~C_TYPE_ATTRS;
 }
 
-const c_type *c_resolve_type(c_dcl *d)
+const c_type *c_resolve_type(rcc_ctx *rcc, c_dcl *d)
 {
-	c_finalize_type(d);
+	c_finalize_type(rcc, d);
 	return d->type;
 }
 
@@ -854,7 +831,7 @@ static bool c_is_flexible(const c_type *type)
 	return 0;
 }
 
-static void c_do_grow_flexible(c_sym *obj, size_t old_size, size_t size)
+static void c_do_grow_flexible(rcc_ctx *rcc, c_sym *obj, size_t old_size, size_t size)
 {
 	IR_ASSERT(obj->tmp_data);
 	IR_ASSERT(obj->value.u.type == IR_ADDR);
@@ -863,38 +840,38 @@ static void c_do_grow_flexible(c_sym *obj, size_t old_size, size_t size)
 	memset((char*)obj->value.u.val.ptr + old_size, 0, size - old_size);
 	if (c_value_is_ref(&obj->value)) {
 		size_t len;
-		const char *str = ir_get_strl(active_ctx, active_ctx->ir_base[obj->value.u.ref].val.name, &len);
-		c_name sym = yy_hash_find(str, len);
-		yy_hash.data[sym].sym->value.u.val.ptr = obj->value.u.val.ptr;
+		const char *str = ir_get_strl(rcc->active_ctx, rcc->active_ctx->ir_base[obj->value.u.ref].val.name, &len);
+		c_name sym = yy_hash_find(rcc, str, len);
+		rcc->yy_hash.data[sym].sym->value.u.val.ptr = obj->value.u.val.ptr;
 	}
 }
 
-static void c_do_end_flexible(c_sym *obj, size_t size)
+static void c_do_end_flexible(rcc_ctx *rcc, c_sym *obj, size_t size)
 {
 	void *addr;
 
 	IR_ASSERT(obj->tmp_data);
 	if (c_value_is_ref(&obj->value)) {
 		size_t len;
-		const char *str = ir_get_strl(active_ctx, active_ctx->ir_base[obj->value.u.ref].val.name, &len);
+		const char *str = ir_get_strl(rcc->active_ctx, rcc->active_ctx->ir_base[obj->value.u.ref].val.name, &len);
 
-		addr = c_linker_allocate_data(str, size);
+		addr = c_linker_allocate_data(rcc, str, size);
 		memcpy(addr, obj->value.u.val.ptr, size);
 		ir_mem_free(obj->value.u.val.ptr);
 		obj->value.u.val.ptr = addr;
 		obj->tmp_data = 0;
 
 		/* Fix global symbol */
-		c_name sym = yy_hash_find(str, len);
-		yy_hash.data[sym].sym->value.u.val.ptr = obj->value.u.val.ptr;
-		if (yy_hash.data[sym].sym->value.type->attr & C_ATTR_FLEXIBLE) {
-			c_type *type = (c_type*)yy_hash.data[sym].sym->value.type;
+		c_name sym = yy_hash_find(rcc, str, len);
+		rcc->yy_hash.data[sym].sym->value.u.val.ptr = obj->value.u.val.ptr;
+		if (rcc->yy_hash.data[sym].sym->value.type->attr & C_ATTR_FLEXIBLE) {
+			c_type *type = (c_type*)rcc->yy_hash.data[sym].sym->value.type;
 			type->array.length = obj->value.type->array.length;
 			type->size = obj->value.type->size;
 			type->attr &= ~C_ATTR_FLEXIBLE;
 		}
 	} else {
-		addr = c_linker_allocate_data(obj->value.u.ref ? yy_sym2str(obj->value.u.ref) : NULL, size);
+		addr = c_linker_allocate_data(rcc, obj->value.u.ref ? yy_sym2str(rcc, obj->value.u.ref) : NULL, size);
 		memcpy(addr, obj->value.u.val.ptr, size);
 		ir_mem_free(obj->value.u.val.ptr);
 		obj->value.u.val.ptr = addr;
@@ -902,46 +879,46 @@ static void c_do_end_flexible(c_sym *obj, size_t size)
 	}
 }
 
-static ir_ref c_type_size(const c_type *type)
+static ir_ref c_type_size(rcc_ctx *rcc, const c_type *type)
 {
 	if (type->attr & C_ATTR_VLA) {
 		IR_ASSERT(type->kind == C_TYPE_ARRAY);
-		return ir_MUL(IR_SIZE_T, type->array.length, c_type_size(type->array.type));
+		return ir_MUL(IR_SIZE_T, type->array.length, c_type_size(rcc, type->array.type));
 	} else {
-		return ir_const_size_t(active_ctx, type->size);
+		return ir_const_size_t(rcc->active_ctx, type->size);
 	}
 }
 
-static ir_ref c_type_ssize(const c_type *type)
+static ir_ref c_type_ssize(rcc_ctx *rcc, const c_type *type)
 {
 	if (type->attr & C_ATTR_VLA) {
 		IR_ASSERT(type->kind == C_TYPE_ARRAY);
 		return ir_BITCAST(IR_SSIZE_T,
-			ir_MUL(IR_SIZE_T, type->array.length, c_type_size(type->array.type)));
+			ir_MUL(IR_SIZE_T, type->array.length, c_type_size(rcc, type->array.type)));
 	} else {
-		return ir_const_ssize_t(active_ctx, type->size);
+		return ir_const_ssize_t(rcc->active_ctx, type->size);
 	}
 }
 
-static void c_validate_redeclaration(c_name name, c_dcl *d, c_sym *sym)
+static void c_validate_redeclaration(rcc_ctx *rcc, c_name name, c_dcl *d, c_sym *sym)
 {
 	if (d->flags & C_DCL_TYPEDEF) {
 		if (sym->kind != C_SYM_TYPE) {
-			yy_error_fmt("incompatible redeclaration of \"%s\"", yy_sym2str(name));
+			yy_error_fmt("incompatible redeclaration of \"%s\"", yy_sym2str(rcc, name));
 		} else if (!c_compatible_types(d->type, sym->value.type, 0, 0)) {
-			yy_error_fmt("incompatible redeclaration of \"%s\"", yy_sym2str(name));
+			yy_error_fmt("incompatible redeclaration of \"%s\"", yy_sym2str(rcc, name));
 		}
 	} else if (d->flags & C_DCL_ENUM_CONST) {
-		yy_error_fmt("redeclaration of \"%s\"", yy_sym2str(name));
+		yy_error_fmt("redeclaration of \"%s\"", yy_sym2str(rcc, name));
 	} else if (d->type->kind == C_TYPE_FUNC) {
 		if (sym->kind != C_SYM_FUNC) {
-			yy_error_fmt("incompatible redeclaration of \"%s\"", yy_sym2str(name));
+			yy_error_fmt("incompatible redeclaration of \"%s\"", yy_sym2str(rcc, name));
 		} else if (!c_compatible_types(d->type, sym->value.type, 0, 1)) {
-			yy_error_fmt("incompatible redeclaration of \"%s\"", yy_sym2str(name));
+			yy_error_fmt("incompatible redeclaration of \"%s\"", yy_sym2str(rcc, name));
 		} else if ((d->flags & C_DCL_DEFINITION) && sym->is_implemented) {
-			yy_error_fmt("redefinition of \"%s\"", yy_sym2str(name));
+			yy_error_fmt("redefinition of \"%s\"", yy_sym2str(rcc, name));
 		} else if ((d->flags & C_DCL_STATIC) && sym->linkage != C_LINK_INTERNAL) {
-			yy_error_fmt("static declaration of \"%s\" follows non-static declaration", yy_sym2str(name));
+			yy_error_fmt("static declaration of \"%s\" follows non-static declaration", yy_sym2str(rcc, name));
 		} else {
 			if (d->alias) {
 				if (!sym->alias) {
@@ -954,7 +931,7 @@ static void c_validate_redeclaration(c_name name, c_dcl *d, c_sym *sym)
 						}
 					}
 				} else if (d->alias != sym->alias) {
-					yy_error_fmt("incompatible redeclaration of \"%s\"", yy_sym2str(name));
+					yy_error_fmt("incompatible redeclaration of \"%s\"", yy_sym2str(rcc, name));
 				}
 			}
 			if (d->flags & C_DCL_DEFINITION) {
@@ -969,19 +946,19 @@ static void c_validate_redeclaration(c_name name, c_dcl *d, c_sym *sym)
 		}
 	} else {
 		if (sym->kind != C_SYM_VAR || !c_compatible_types(d->type, sym->value.type, 0, 0)) {
-			yy_error_fmt("incompatible redeclaration of \"%s\"", yy_sym2str(name));
+			yy_error_fmt("incompatible redeclaration of \"%s\"", yy_sym2str(rcc, name));
 		} else if ((d->flags & C_DCL_DEFINITION) && sym->is_implemented) {
-			yy_error_fmt("redefinition of \"%s\"", yy_sym2str(name));
+			yy_error_fmt("redefinition of \"%s\"", yy_sym2str(rcc, name));
 		} else if ((d->flags & C_DCL_STATIC) && sym->linkage != C_LINK_INTERNAL) {
-			yy_error_fmt("static declaration of \"%s\" follows non-static declaration", yy_sym2str(name));
+			yy_error_fmt("static declaration of \"%s\" follows non-static declaration", yy_sym2str(rcc, name));
 		} else if (!(d->flags & (C_DCL_STATIC|C_DCL_EXTERN)) && sym->linkage == C_LINK_INTERNAL) {
-			yy_error_fmt("non-static declaration of \"%s\" follows static declaration", yy_sym2str(name));
+			yy_error_fmt("non-static declaration of \"%s\" follows static declaration", yy_sym2str(rcc, name));
 		} else if ((d->flags & C_DCL_THREAD_LOCAL) && !sym->is_thread_local) {
-			yy_error_fmt("thread-local declaration of \"%s\" follows non-thread-local declaration", yy_sym2str(name));
+			yy_error_fmt("thread-local declaration of \"%s\" follows non-thread-local declaration", yy_sym2str(rcc, name));
 		} else if (!(d->flags & C_DCL_THREAD_LOCAL) && sym->is_thread_local) {
-			yy_error_fmt("non-thread-local declaration of \"%s\" follows thread-local declaration", yy_sym2str(name));
+			yy_error_fmt("non-thread-local declaration of \"%s\" follows thread-local declaration", yy_sym2str(rcc, name));
 		} else if ((d->flags & (C_DCL_DEFINITION|C_DCL_EXTERN)) == (C_DCL_DEFINITION|C_DCL_EXTERN)) {
-			yy_warning_fmt("\"%s\" initialized and declared \"extern\"", yy_sym2str(name));
+			yy_warning_fmt("\"%s\" initialized and declared \"extern\"", yy_sym2str(rcc, name));
 			d->flags &= ~C_DCL_EXTERN;
 		}
 		if (sym->value.type->kind == C_TYPE_ARRAY && (sym->value.type->attr & C_ATTR_FLEXIBLE)
@@ -1002,7 +979,7 @@ static void c_validate_redeclaration(c_name name, c_dcl *d, c_sym *sym)
 					}
 				}
 			} else if (d->alias != sym->alias) {
-				yy_error_fmt("incompatible redeclaration of \"%s\"", yy_sym2str(name));
+				yy_error_fmt("incompatible redeclaration of \"%s\"", yy_sym2str(rcc, name));
 			}
 		}
 		if (d->flags & C_DCL_DEFINITION) {
@@ -1018,13 +995,13 @@ static void c_validate_redeclaration(c_name name, c_dcl *d, c_sym *sym)
 				sym->value.u.val.ptr = ir_mem_calloc(1, sym->value.type->size);
 				sym->value.u.ref = name; /* keep name in addition to address */
 			} else {
-				sym->value.u.val.ptr = c_linker_allocate_data(yy_sym2str(name), sym->value.type->size);
+				sym->value.u.val.ptr = c_linker_allocate_data(rcc, yy_sym2str(rcc, name), sym->value.type->size);
 			}
 		}
 	}
 }
 
-c_sym *c_global_sym(c_sym *sym)
+c_sym *c_global_sym(rcc_ctx *rcc, c_sym *sym)
 {
 	c_scope *scope = sym->scope;
 	yy_sym id, *p = scope->list.syms;
@@ -1048,31 +1025,31 @@ c_sym *c_global_sym(c_sym *sym)
 	return NULL;
 }
 
-static const c_type *c_create_global_type(const c_type *type)
+static const c_type *c_create_global_type(rcc_ctx *rcc, const c_type *type)
 {
 	c_type *t;
 	int i;
 
 	if (type->flags & C_TYPE_GLOBAL) return type;
-	t = ir_arena_alloc(&yy_arena, sizeof(c_type));
+	t = ir_arena_alloc(&rcc->yy_arena, sizeof(c_type));
 	*t = *type;
 	t->flags |= C_TYPE_GLOBAL;
 	if (t->kind == C_TYPE_POINTER) {
-		t->pointer.type = c_create_global_type(t->pointer.type);
+		t->pointer.type = c_create_global_type(rcc, t->pointer.type);
 	} else if (t->kind == C_TYPE_ARRAY) {
-		t->array.type = c_create_global_type(t->array.type);
+		t->array.type = c_create_global_type(rcc, t->array.type);
 	} else if (t->kind == C_TYPE_STRUCT || t->kind == C_TYPE_UNION) {
-		t->record.fields = ir_arena_alloc(&yy_arena, sizeof(c_field) * t->record.num_fields);
+		t->record.fields = ir_arena_alloc(&rcc->yy_arena, sizeof(c_field) * t->record.num_fields);
 		memcpy(t->record.fields, type->record.fields, sizeof(c_field) * t->record.num_fields);
 		for (i = 0; i < t->record.num_fields; i++) {
-			t->record.fields[i].type = c_create_global_type(t->record.fields[i].type);
+			t->record.fields[i].type = c_create_global_type(rcc, t->record.fields[i].type);
 		}
 	} else if (t->kind == C_TYPE_FUNC) {
-		t->func.ret_type = c_create_global_type(t->func.ret_type);
-		t->func.params = ir_arena_alloc(&yy_arena, sizeof(c_param) * t->func.num_params);
+		t->func.ret_type = c_create_global_type(rcc, t->func.ret_type);
+		t->func.params = ir_arena_alloc(&rcc->yy_arena, sizeof(c_param) * t->func.num_params);
 		memcpy(t->func.params, type->func.params, sizeof(c_param) * t->func.num_params);
 		for (i = 0; i < t->func.num_params; i++) {
-			t->func.params[i].type = c_create_global_type(t->func.params[i].type);
+			t->func.params[i].type = c_create_global_type(rcc, t->func.params[i].type);
 		}
 	} else if (t->kind == C_TYPE_ENUM) {
 		t->enumeration.values = NULL;
@@ -1080,7 +1057,7 @@ static const c_type *c_create_global_type(const c_type *type)
 	return t;
 }
 
-static c_name c_create_static_var(c_name name, c_dcl *d)
+static c_name c_create_static_var(rcc_ctx *rcc, c_name name, c_dcl *d)
 {
 	yy_dyn_str  dyn_str;
 	const char *name_str;
@@ -1089,34 +1066,34 @@ static c_name c_create_static_var(c_name name, c_dcl *d)
 	char buf[16];
 	c_sym *sym;
 
-	name_str = yy_sym2strl(name, &name_len);
-	yy_dyn_str_init(&dyn_str, name_str, name_len);
-	yy_dyn_str_append(&dyn_str, ".", 1);
+	name_str = yy_sym2strl(rcc, name, &name_len);
+	yy_dyn_str_init(rcc, &dyn_str, name_str, name_len);
+	yy_dyn_str_append(rcc, &dyn_str, ".", 1);
 
 	i = sizeof(buf);
-	n = ++c_static_sym_num;
+	n = ++rcc->c_static_var_num;
 	buf[--i] = 0;
 	do {
 		buf[--i] = '0' + n % 10;
 		n = n / 10;
 	} while (n != 0);
-	yy_dyn_str_append0(&dyn_str, buf + i, sizeof(buf) - i - 1);
-	name = yy_hash_lookup(dyn_str.str, dyn_str.len);
+	yy_dyn_str_append0(rcc, &dyn_str, buf + i, sizeof(buf) - i - 1);
+	name = yy_hash_lookup(rcc, dyn_str.str, dyn_str.len);
 
 	/* Create a global symbol in yy_arena */
-	sym = ir_arena_alloc(&yy_arena, sizeof(c_sym));
+	sym = ir_arena_alloc(&rcc->yy_arena, sizeof(c_sym));
 	memset(sym, 0, sizeof(c_sym));
 	sym->kind = C_SYM_VAR;
 	sym->linkage = C_LINK_INTERNAL;
 	sym->is_thread_local = 0;
 	sym->is_implemented = (d->flags & C_DCL_DEFINITION) != 0;
-	sym->value.type = c_create_global_type(d->type);
-	yy_hash.data[name].sym = sym;
+	sym->value.type = c_create_global_type(rcc, d->type);
+	rcc->yy_hash.data[name].sym = sym;
 
 	return name;
 }
 
-static ir_ref c_create_str_sym(c_value *res)
+static ir_ref c_create_str_sym(rcc_ctx *rcc, c_value *res)
 {
 	const c_type *type = res->type;
 	const void *str = c_value_str_addr(res);
@@ -1128,18 +1105,19 @@ static ir_ref c_create_str_sym(c_value *res)
 	c_sym *sym;
 	ir_ref ref;
 
-	name = ir_strtab_find(&c_strtab, str, size);
+	name = ir_strtab_find(&rcc->c_strtab, str, size);
 	if (name) {
-		ref = ir_const_sym(active_ctx, ir_strl(active_ctx, yy_hash.data[name].str, yy_hash.data[name].len));
+		ref = ir_const_sym(rcc->active_ctx,
+			ir_strl(rcc->active_ctx, rcc->yy_hash.data[name].str, rcc->yy_hash.data[name].len));
 
 		c_value_set_rval(res, type, IR_ADDR, ref);
-		res->u.val.ptr = yy_hash.data[name].sym->value.u.val.ptr;
+		res->u.val.ptr = rcc->yy_hash.data[name].sym->value.u.val.ptr;
 
 		return ref;
 	}
 
 	i = sizeof(buf);
-	n = ++c_static_str_num;
+	n = ++rcc->c_static_str_num;
 	buf[--i] = 0;
 	do {
 		buf[--i] = '0' + n % 10;
@@ -1150,28 +1128,28 @@ static ir_ref c_create_str_sym(c_value *res)
 	buf[--i] = 't';
 	buf[--i] = 's';
 
-	name = yy_hash_lookup(buf + i, sizeof(buf) - 1 - i);
-	addr = c_linker_allocate_data(buf + i, size);
+	name = yy_hash_lookup(rcc, buf + i, sizeof(buf) - 1 - i);
+	addr = c_linker_allocate_data(rcc, buf + i, size);
 	memcpy(addr, str, size);
 
 	/* Create a global symbol in yy_arena */
-	sym = ir_arena_alloc(&yy_arena, sizeof(c_sym));
+	sym = ir_arena_alloc(&rcc->yy_arena, sizeof(c_sym));
 	memset(sym, 0, sizeof(c_sym));
 	sym->kind = C_SYM_VAR;
 	sym->linkage = C_LINK_INTERNAL;
 	sym->is_thread_local = 0;
 	sym->is_implemented = 1;
 	sym->is_string = 1;
-	yy_hash.data[name].sym = sym;
+	rcc->yy_hash.data[name].sym = sym;
 
 	sym->value.type = type;
 	sym->value.u.optx = IR_OPT(C_SYM_CONST, IR_ADDR);
 	sym->value.u.val.ptr = addr;
 	sym->value.u.ref = size;
 
-	ir_strtab_lookup(&c_strtab, str, size, name);
+	ir_strtab_lookup(&rcc->c_strtab, str, size, name);
 
-	ref = ir_const_sym(active_ctx, ir_strl(active_ctx, buf + i, sizeof(buf) - 1 - i));
+	ref = ir_const_sym(rcc->active_ctx, ir_strl(rcc->active_ctx, buf + i, sizeof(buf) - 1 - i));
 
 	c_value_set_rval(res, type, IR_ADDR, ref);
 	res->u.val.ptr = addr;
@@ -1206,12 +1184,12 @@ static bool c_is_builtin_func_name(c_name name)
 	return name >= YY_BUILTIN_FIRST && name <= YY_BUILTIN_LAST;
 }
 
-c_sym *c_declare(c_name name, c_dcl *d)
+c_sym *c_declare(rcc_ctx *rcc, c_name name, c_dcl *d)
 {
 	c_sym *sym;
-	c_scope *scope = active_scope;
+	c_scope *scope = rcc->active_scope;
 
-	c_finalize_type(d);
+	c_finalize_type(rcc, d);
 	if (d->attr) {
 		if (d->attr & C_ATTR_INLINE) {
 			if (d->type->kind != C_TYPE_FUNC) yy_error("invalid use of \"inline\"");
@@ -1246,59 +1224,59 @@ c_sym *c_declare(c_name name, c_dcl *d)
 		}
 	}
 
-	sym = yy_hash.data[name].sym;
+	sym = rcc->yy_hash.data[name].sym;
 	if (sym) {
 		if (d->flags & C_DCL_EXTERN) {
 			if (!sym->scope) {
-				c_validate_redeclaration(name, d, sym);
+				c_validate_redeclaration(rcc, name, d, sym);
 				return sym;
 			} else {
-				c_sym *gsym = c_global_sym(sym);
+				c_sym *gsym = c_global_sym(rcc, sym);
 				if (gsym) {
-					c_validate_redeclaration(name, d, gsym);
+					c_validate_redeclaration(rcc, name, d, gsym);
 				}
-				if (active_scope) {
-					if (!active_scope->list.syms) pp_list_init(&active_scope->list);
-					pp_list_push(&active_scope->list, name);
-					pp_list_push_ptr(&active_scope->list, (void*)(((uintptr_t)sym) | C_POP_SYM));
+				if (rcc->active_scope) {
+					if (!rcc->active_scope->list.syms) pp_list_init(rcc, &rcc->active_scope->list);
+					pp_list_push(&rcc->active_scope->list, name);
+					pp_list_push_ptr(&rcc->active_scope->list, (void*)(((uintptr_t)sym) | C_POP_SYM));
 				}
 				if (gsym) {
-					yy_hash.data[name].sym = gsym;
+					rcc->yy_hash.data[name].sym = gsym;
 					return gsym;
 				}
 			}
 		}
 		if (sym->scope == scope) {
 			if (!scope) {
-				c_validate_redeclaration(name, d, sym);
+				c_validate_redeclaration(rcc, name, d, sym);
 				return sym;
 			} else {
-				yy_error_fmt("redeclaration of \"%s\"", yy_sym2str(name));
+				yy_error_fmt("redeclaration of \"%s\"", yy_sym2str(rcc, name));
 				return NULL;
 			}
 		}
 	}
 
 	if (scope) {
-		if (!scope->list.syms) pp_list_init(&scope->list);
+		if (!scope->list.syms) pp_list_init(rcc, &scope->list);
 		pp_list_push(&scope->list, name);
 		pp_list_push_ptr(&scope->list, (void*)(((uintptr_t)sym) | C_POP_SYM));
 	}
 
 	if (((d->type->flags & C_TYPE_INCOMPLETE)
 	  && !(d->flags & (C_DCL_TYPEDEF|C_DCL_EXTERN))
-	  && !c_fix_incomplete_type(d->type))
+	  && !c_fix_incomplete_type(rcc, d->type))
 	 || ((d->type->attr & C_ATTR_FLEXIBLE)
 	  && !(d->flags & (C_DCL_TYPEDEF|C_DCL_EXTERN|C_DCL_DEFINITION))
 	  && scope)
 	 || ((d->type->kind == C_TYPE_VOID)
 	  && !(d->flags & (C_DCL_TYPEDEF|C_DCL_EXTERN)))
 	  ) {
-		yy_error_fmt("storage size of \"%s\" isn't known", yy_sym2str(name));
+		yy_error_fmt("storage size of \"%s\" isn't known", yy_sym2str(rcc, name));
 		return NULL;
 	}
 
-	sym = ir_arena_alloc(&c_arena, sizeof(c_sym));
+	sym = ir_arena_alloc(&rcc->c_arena, sizeof(c_sym));
 	memset(sym, 0, sizeof(c_sym));
 	if (d->flags & C_DCL_TYPEDEF) {
 		IR_ASSERT((d->flags & (C_DCL_STORAGE_CLASS-C_DCL_TYPEDEF)) == 0);
@@ -1317,8 +1295,8 @@ c_sym *c_declare(c_name name, c_dcl *d)
 		/* the value will be set in c_declare_enum_val() */
 	} else if (d->type->kind == C_TYPE_FUNC) {
 		if ((d->flags & (C_DCL_THREAD_LOCAL|C_DCL_AUTO|C_DCL_REGISTER))
-		 || ((d->flags & C_DCL_STATIC) && active_scope)) {
-			yy_error_fmt("invalid storage class for function \"%s\"", yy_sym2str(name));
+		 || ((d->flags & C_DCL_STATIC) && rcc->active_scope)) {
+			yy_error_fmt("invalid storage class for function \"%s\"", yy_sym2str(rcc, name));
 		}
 		IR_ASSERT((d->flags & (C_DCL_STORAGE_CLASS-(C_DCL_EXTERN|C_DCL_STATIC))) == 0);
 		sym->kind = C_SYM_FUNC;
@@ -1335,34 +1313,34 @@ c_sym *c_declare(c_name name, c_dcl *d)
 		sym->has_asm_name = (d->flags & C_DCL_HAS_ASM_NAME) != 0;
 	} else {
 		if (!scope) {
-			if (d->flags & C_DCL_AUTO) yy_error_fmt("file-scope declaration of \"%s\" specifies \"auto\"", yy_sym2str(name));
+			if (d->flags & C_DCL_AUTO) yy_error_fmt("file-scope declaration of \"%s\" specifies \"auto\"", yy_sym2str(rcc, name));
 		} else {
 			if ((d->flags & (C_DCL_THREAD_LOCAL|C_DCL_STATIC|C_DCL_EXTERN)) == C_DCL_THREAD_LOCAL) {
-				yy_error_fmt("function-scope \"%s\" declared \"_Thread_local\"", yy_sym2str(name));
+				yy_error_fmt("function-scope \"%s\" declared \"_Thread_local\"", yy_sym2str(rcc, name));
 			}
 		}
 		IR_ASSERT((d->flags & (C_DCL_STORAGE_CLASS-(C_DCL_EXTERN|C_DCL_STATIC|C_DCL_THREAD_LOCAL|C_DCL_AUTO|C_DCL_REGISTER))) == 0);
 		sym->kind = C_SYM_VAR;
 		if (!scope && (d->flags & C_DCL_REGISTER)) {
 			/* global register variable */
-			if (!(d->flags & C_DCL_REG_VAR)) yy_error_fmt("register name not specified for global register variable \"%s\"", yy_sym2str(name));
+			if (!(d->flags & C_DCL_REG_VAR)) yy_error_fmt("register name not specified for global register variable \"%s\"", yy_sym2str(rcc, name));
 			if (C_IS_TYPE_INT_OR_PTR(d->type)) {
-				if (d->reg >= IR_REG_FP_FIRST) yy_error_fmt("data type of \"%s\" is not suitable for a floating point register", yy_sym2str(name));
+				if (d->reg >= IR_REG_FP_FIRST) yy_error_fmt("data type of \"%s\" is not suitable for a floating point register", yy_sym2str(rcc, name));
 			} else if (C_IS_TYPE_FP(d->type)) {
-				if (d->reg < IR_REG_FP_FIRST) yy_error_fmt("data type of \"%s\" is not suitable for a general purpose register", yy_sym2str(name));
+				if (d->reg < IR_REG_FP_FIRST) yy_error_fmt("data type of \"%s\" is not suitable for a general purpose register", yy_sym2str(rcc, name));
 			} else {
-				yy_error_fmt("data type of \"%s\" is not suitable for a register", yy_sym2str(name));
+				yy_error_fmt("data type of \"%s\" is not suitable for a register", yy_sym2str(rcc, name));
 			}
 			// TODO: Global register variables shouldn't be clobbered by any function ???
-			const ir_call_conv_dsc *cc = ir_get_call_conv_dsc(active_ctx->flags);
+			const ir_call_conv_dsc *cc = ir_get_call_conv_dsc(rcc->active_ctx->flags);
 			if (!IR_REGSET_IN(cc->preserved_regs, d->reg)) {
-				yy_warning_fmt("call-clobbered register used for global register variable \"%s\"", yy_sym2str(name));
+				yy_warning_fmt("call-clobbered register used for global register variable \"%s\"", yy_sym2str(rcc, name));
 			}
-			if (c_fixed_regset & (1ULL << d->reg)) {
-				yy_error_fmt("register \"%s\" is already used", ir_reg_name(d->reg, c_type2ir(d->type)));
+			if (rcc->c_fixed_regset & (1ULL << d->reg)) {
+				yy_error_fmt("register \"%s\" is already used", ir_reg_name(d->reg, c_type2ir(rcc, d->type)));
 			}
-			c_fixed_regset |= 1ULL << d->reg;
-			c_value_set_reg(&sym->value, d->type, c_type2ir(d->type), d->reg);
+			rcc->c_fixed_regset |= 1ULL << d->reg;
+			c_value_set_reg(&sym->value, d->type, c_type2ir(rcc, d->type), d->reg);
 			sym->linkage = C_LINK_NONE;
 			sym->is_implemented = 1;
 		} else if (!scope || (d->flags & (C_DCL_STATIC|C_DCL_EXTERN))) {
@@ -1391,7 +1369,7 @@ c_sym *c_declare(c_name name, c_dcl *d)
 				}
 			}
 			if ((d->flags & C_DCL_EXTERN) && (d->flags & C_DCL_DEFINITION)) {
-				yy_warning_fmt("\"%s\" initialized and declared \"extern\"", yy_sym2str(name));
+				yy_warning_fmt("\"%s\" initialized and declared \"extern\"", yy_sym2str(rcc, name));
 				d->flags &= ~C_DCL_EXTERN;
 			}
 			if (!(d->flags & C_DCL_EXTERN)
@@ -1404,30 +1382,30 @@ c_sym *c_declare(c_name name, c_dcl *d)
 						sym->tmp_data = 1;
 						addr = ir_mem_calloc(1, d->type->size);
 					} else {
-						addr = c_linker_allocate_data(yy_sym2str(name), d->type->size);
+						addr = c_linker_allocate_data(rcc, yy_sym2str(rcc, name), d->type->size);
 					}
 					sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
 					sym->value.u.val.ptr = addr;
 					sym->value.u.ref = name; /* keep name in addition to address */
 				} else {
-					c_name sym_name = sym->alias ? sym->alias : c_create_static_var(name, d);
+					c_name sym_name = sym->alias ? sym->alias : c_create_static_var(rcc, name, d);
 					size_t len;
-					const char *str = yy_sym2strl(sym_name, &len);
+					const char *str = yy_sym2strl(rcc, sym_name, &len);
 					ir_ref ref;
 
 					if (c_is_flexible(d->type)) {
 						sym->tmp_data = 1;
 						addr = ir_mem_calloc(1, d->type->size);
 					} else {
-						addr = c_linker_allocate_data(str, d->type->size);
+						addr = c_linker_allocate_data(rcc, str, d->type->size);
 					}
-					yy_hash.data[sym_name].sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
-					yy_hash.data[sym_name].sym->value.u.val.ptr = addr;
-					ref = ir_const_sym(active_ctx, ir_strl(active_ctx, str, len));
+					rcc->yy_hash.data[sym_name].sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
+					rcc->yy_hash.data[sym_name].sym->value.u.val.ptr = addr;
+					ref = ir_const_sym(rcc->active_ctx, ir_strl(rcc->active_ctx, str, len));
 					if (d->type->kind == C_TYPE_ARRAY) {
-						c_value_set_rval(&sym->value, d->type, c_type2ir(d->type), ref);
+						c_value_set_rval(&sym->value, d->type, c_type2ir(rcc, d->type), ref);
 					} else {
-						c_value_set_lval(&sym->value, d->type, c_type2ir(d->type), ref);
+						c_value_set_lval(&sym->value, d->type, c_type2ir(rcc, d->type), ref);
 					}
 					sym->value.u.val.ptr = addr; /* keep address in addition to ref */
 				}
@@ -1439,26 +1417,26 @@ c_sym *c_declare(c_name name, c_dcl *d)
 			sym->is_thread_local = 0;
 			if (d->type->kind == C_TYPE_ARRAY) {
 				if (d->type->attr & C_ATTR_VLA) {
-					ir_ref size = c_type_size(d->type);
+					ir_ref size = c_type_size(rcc, d->type);
 
 					IR_ASSERT(scope);
 					if (!scope->vla_block) {
 						if (scope->last_vla_block) {
 							scope->last_vla_block = scope->vla_block = ir_BLOCK_BEGIN();
 						} else {
-							IR_ASSERT(c_prologue_end);
-							scope->last_vla_block = scope->vla_block = c_prologue_end;
+							IR_ASSERT(rcc->c_prologue_end);
+							scope->last_vla_block = scope->vla_block = rcc->c_prologue_end;
 						}
 					}
 					ref = ir_ALLOCA(size);
 					if (d->flags & C_DCL_DEFINITION) {
-						ir_memzero(active_ctx, ref, size, c_attr2align(d->type->attr));
+						ir_memzero(rcc, ref, size, c_attr2align(d->type->attr));
 					}
-					c_value_set_rval(&sym->value, d->type, c_type2ir(d->type), ref);
+					c_value_set_rval(&sym->value, d->type, c_type2ir(rcc, d->type), ref);
 				} else {
 					size_t size = (d->type->attr & C_ATTR_FLEXIBLE) ? (size_t)-1 : d->type->size;
-					ref = c_do_alloca(size, c_attr2align(d->type->attr), (d->flags & C_DCL_DEFINITION) != 0);
-					c_value_set_rval(&sym->value, d->type, c_type2ir(d->type), ref);
+					ref = c_do_alloca(rcc, size, c_attr2align(d->type->attr), (d->flags & C_DCL_DEFINITION) != 0);
+					c_value_set_rval(&sym->value, d->type, c_type2ir(rcc, d->type), ref);
 				}
 			} else if (d->type->kind == C_TYPE_STRUCT || d->type->kind == C_TYPE_UNION) {
 				if (d->flags == C_DCL_PARAM) {
@@ -1466,54 +1444,54 @@ c_sym *c_declare(c_name name, c_dcl *d)
 					int n = c_abi_lower_struct_arg(d->type, types);
 
 					if (n == 1) {
-						ref = c_do_alloca(d->type->size, c_attr2align(d->type->attr), (d->flags & C_DCL_DEFINITION) != 0);
+						ref = c_do_alloca(rcc, d->type->size, c_attr2align(d->type->attr), (d->flags & C_DCL_DEFINITION) != 0);
 						c_value_set_lval(&sym->value, d->type, types[0], ref);
 					} else {
 						IR_ASSERT(n == 0);
 						c_value_set_lval(&sym->value, d->type, IR_ADDR, IR_UNUSED);
 					}
 				} else {
-					ref = c_do_alloca(d->type->size, c_attr2align(d->type->attr), (d->flags & C_DCL_DEFINITION) != 0);
-					c_value_set_lval(&sym->value, d->type, c_type2ir(d->type), ref);
+					ref = c_do_alloca(rcc, d->type->size, c_attr2align(d->type->attr), (d->flags & C_DCL_DEFINITION) != 0);
+					c_value_set_lval(&sym->value, d->type, c_type2ir(rcc, d->type), ref);
 				}
 			} else if (d->flags & C_DCL_REG_VAR) {
 				/* local register variables */
 				if (C_IS_TYPE_INT_OR_PTR(d->type)) {
-					if (d->reg >= IR_REG_FP_FIRST) yy_error_fmt("data type of \"%s\" is not suitable for a floating point register", yy_sym2str(name));
+					if (d->reg >= IR_REG_FP_FIRST) yy_error_fmt("data type of \"%s\" is not suitable for a floating point register", yy_sym2str(rcc, name));
 				} else if (C_IS_TYPE_FP(d->type)) {
-					if (d->reg < IR_REG_FP_FIRST) yy_error_fmt("data type of \"%s\" is not suitable for a general purpose register", yy_sym2str(name));
+					if (d->reg < IR_REG_FP_FIRST) yy_error_fmt("data type of \"%s\" is not suitable for a general purpose register", yy_sym2str(rcc, name));
 				} else {
-					yy_error_fmt("data type of \"%s\" is not suitable for a register", yy_sym2str(name));
+					yy_error_fmt("data type of \"%s\" is not suitable for a register", yy_sym2str(rcc, name));
 				}
-				const ir_call_conv_dsc *cc = ir_get_call_conv_dsc(active_ctx->flags);
+				const ir_call_conv_dsc *cc = ir_get_call_conv_dsc(rcc->active_ctx->flags);
 				if (IR_REGSET_IN(cc->preserved_regs, d->reg)) {
-					if (active_ctx->fixed_regset & (1ULL << d->reg)) {
-						yy_error_fmt("register \"%s\" is already used", ir_reg_name(d->reg, c_type2ir(d->type)));
+					if (rcc->active_ctx->fixed_regset & (1ULL << d->reg)) {
+						yy_error_fmt("register \"%s\" is already used", ir_reg_name(d->reg, c_type2ir(rcc, d->type)));
 					}
-					active_ctx->fixed_regset |= 1ULL << d->reg;
-					active_ctx->fixed_save_regset |= 1ULL << d->reg;
+					rcc->active_ctx->fixed_regset |= 1ULL << d->reg;
+					rcc->active_ctx->fixed_save_regset |= 1ULL << d->reg;
 				} else {
-					if (active_ctx->fixed_regset & (1ULL << d->reg)) {
-						yy_error_fmt("register \"%s\" is already used", ir_reg_name(d->reg, c_type2ir(d->type)));
+					if (rcc->active_ctx->fixed_regset & (1ULL << d->reg)) {
+						yy_error_fmt("register \"%s\" is already used", ir_reg_name(d->reg, c_type2ir(rcc, d->type)));
 					}
-					active_ctx->fixed_regset |= 1ULL << d->reg;
+					rcc->active_ctx->fixed_regset |= 1ULL << d->reg;
 				}
-				c_value_set_reg(&sym->value, d->type, c_type2ir(d->type), d->reg);
+				c_value_set_reg(&sym->value, d->type, c_type2ir(rcc, d->type), d->reg);
 			} else {
-				ref = ir_var(active_ctx, c_type2ir(d->type), 1, yy_sym2str(name));
-				c_value_set_var(&sym->value, d->type, c_type2ir(d->type), ref);
+				ref = ir_var(rcc->active_ctx, c_type2ir(rcc, d->type), 1, yy_sym2str(rcc, name));
+				c_value_set_var(&sym->value, d->type, c_type2ir(rcc, d->type), ref);
 			}
 		}
 	}
 	sym->value.type = d->type;
 	sym->scope = scope;
 
-	yy_hash.data[name].sym = sym;
+	rcc->yy_hash.data[name].sym = sym;
 
 	return sym;
 }
 
-void c_empty_declaration(c_dcl *d)
+void c_empty_declaration(rcc_ctx *rcc, c_dcl *d)
 {
 	if (d->flags & C_DCL_STORAGE_CLASS) yy_warning("useless storage class specifier in empty declaration");
 	if (d->type) {
@@ -1544,28 +1522,28 @@ static const char* c_tag2str(c_tag *tag)
 	return c_type_kind2str(tag->type->kind);
 }
 
-c_type *c_resolve_tag(c_name name, c_dcl *d, bool define, const c_type *underlying_type)
+c_type *c_resolve_tag(rcc_ctx *rcc, c_name name, c_dcl *d, bool define, const c_type *underlying_type)
 {
 	c_type *type;
 	c_tag *tag;
 
 	IR_ASSERT(name);
-	tag = yy_hash.data[name].tag;
+	tag = rcc->yy_hash.data[name].tag;
 	if (tag) {
 		if (((d->flags & C_TYPE_SPEC_ENUM) && (tag->type->kind != C_TYPE_ENUM))
 		 || ((d->flags & C_TYPE_SPEC_STRUCT) && (tag->type->kind != C_TYPE_STRUCT))
 		 || ((d->flags & C_TYPE_SPEC_UNION) && (tag->type->kind != C_TYPE_UNION))) {
-			yy_error_fmt("\"%s\" defined as wrong kind of tag", yy_sym2str(name));
+			yy_error_fmt("\"%s\" defined as wrong kind of tag", yy_sym2str(rcc, name));
 		}
 		if (define) {
 			if (tag->type->flags & C_TYPE_INCOMPLETE) {
-				if (tag->type->flags & C_TYPE_INPROGRESS) yy_error_fmt("nested redefinition of \"%s %s\"", c_tag2str(tag), yy_sym2str(name));
-				if (tag->scope == active_scope) {
+				if (tag->type->flags & C_TYPE_INPROGRESS) yy_error_fmt("nested redefinition of \"%s %s\"", c_tag2str(tag), yy_sym2str(rcc, name));
+				if (tag->scope == rcc->active_scope) {
 					d->type = tag->type;
 					return (c_type*)tag->type;
 				}
 			} else {
-				if (tag->scope == active_scope) yy_error_fmt("redefinition of \"%s %s\"", c_tag2str(tag), yy_sym2str(name));
+				if (tag->scope == rcc->active_scope) yy_error_fmt("redefinition of \"%s %s\"", c_tag2str(tag), yy_sym2str(rcc, name));
 			}
 		} else {
 			d->type = tag->type;
@@ -1575,23 +1553,23 @@ c_type *c_resolve_tag(c_name name, c_dcl *d, bool define, const c_type *underlyi
 		}
 	}
 
-	if (active_scope) {
-		if (!active_scope->list.syms) pp_list_init(&active_scope->list);
-		pp_list_push(&active_scope->list, name);
-		pp_list_push_ptr(&active_scope->list, (void*)(((uintptr_t)tag) | C_POP_TAG));
+	if (rcc->active_scope) {
+		if (!rcc->active_scope->list.syms) pp_list_init(rcc, &rcc->active_scope->list);
+		pp_list_push(&rcc->active_scope->list, name);
+		pp_list_push_ptr(&rcc->active_scope->list, (void*)(((uintptr_t)tag) | C_POP_TAG));
 	}
 
 	if (d->flags & C_TYPE_SPEC_ENUM) {
-		type = c_make_enum_type(d, name, underlying_type);
+		type = c_make_enum_type(rcc, d, name, underlying_type);
 	} else {
-		type = c_make_struct_type(d, name);
+		type = c_make_struct_type(rcc, d, name);
 	}
 
-	tag = ir_arena_alloc(&c_arena, sizeof(c_tag));
-	tag->scope = active_scope;
+	tag = ir_arena_alloc(&rcc->c_arena, sizeof(c_tag));
+	tag->scope = rcc->active_scope;
 	tag->type = d->type;
 
-	yy_hash.data[name].tag = tag;
+	rcc->yy_hash.data[name].tag = tag;
 	return type;
 }
 
@@ -1600,11 +1578,11 @@ static void c_validate_pointer_type(const c_type *t)
 	//???
 }
 
-static c_type *c_create_pointer_type(const c_type *element_type)
+static c_type *c_create_pointer_type(rcc_ctx *rcc, const c_type *element_type)
 {
-	c_type *type = ir_arena_alloc(&c_arena, sizeof(c_type));
+	c_type *type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
 	type->kind = C_TYPE_POINTER;
-	type->flags = active_scope ? 0 : C_TYPE_GLOBAL;
+	type->flags = rcc->active_scope ? 0 : C_TYPE_GLOBAL;
 	type->attr = c_align2attr(_Alignof(void*));
 	if (element_type->attr & (C_ATTR_VLA|C_ATTR_VMT)) {
 		type->attr |= C_ATTR_VMT;
@@ -1614,14 +1592,14 @@ static c_type *c_create_pointer_type(const c_type *element_type)
 	return type;
 }
 
-void c_make_pointer_type(c_dcl *d)
+void c_make_pointer_type(rcc_ctx *rcc, c_dcl *d)
 {
 	c_type *type;
 
-	c_finalize_type(d);
+	c_finalize_type(rcc, d);
 	c_validate_pointer_type(d->type);
 
-	type = c_create_pointer_type(d->type);
+	type = c_create_pointer_type(rcc, d->type);
 	type->attr |= d->attr & C_POINTER_ATTRS;
 
 	d->type = type;
@@ -1630,11 +1608,11 @@ void c_make_pointer_type(c_dcl *d)
 	d->attr &= ~C_POINTER_ATTRS;
 }
 
-static void c_validate_array_element_type(const c_type *t)
+static void c_validate_array_element_type(rcc_ctx *rcc, const c_type *t)
 {
 	if (t->kind == C_TYPE_VOID) yy_error("array of voids");
 	if (t->kind == C_TYPE_FUNC) yy_error("array of functions");
-	if ((t->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(t)) {
+	if ((t->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(rcc, t)) {
 		yy_error("array type has incomplete element type");
 	}
 	if (t->kind == C_TYPE_ARRAY && (t->attr & C_ATTR_FLEXIBLE)) {
@@ -1642,7 +1620,7 @@ static void c_validate_array_element_type(const c_type *t)
 	}
 }
 
-void c_make_array_type(c_dcl *d, c_dcl *dim, c_value *len, uint64_t attr, bool is_param)
+void c_make_array_type(rcc_ctx *rcc, c_dcl *d, c_dcl *dim, c_value *len, uint64_t attr, bool is_param)
 {
 	c_type *type;
 	size_t length;
@@ -1650,8 +1628,8 @@ void c_make_array_type(c_dcl *d, c_dcl *dim, c_value *len, uint64_t attr, bool i
 	yy_sym *vla_tokens = NULL;
 
 	d->attr &= ~C_ATTR_ALIGN_MASK;
-	c_finalize_type(d);
-	c_validate_array_element_type(d->type);
+	c_finalize_type(rcc, d);
+	c_validate_array_element_type(rcc, d->type);
 	d->attr |= align_attr;
 
 	length = 0;
@@ -1659,14 +1637,14 @@ void c_make_array_type(c_dcl *d, c_dcl *dim, c_value *len, uint64_t attr, bool i
 		if (!C_IS_TYPE_INT(len->type) && len->type->kind != C_TYPE_ENUM) {
 			yy_error("size of array has non-integer type");
 		} else if (!c_value_is_const(len)) {
-			if (!active_scope) {
+			if (!rcc->active_scope) {
 				yy_error("array size must be a constant expression");
 			} else {
 				attr |= C_ATTR_VLA;
 				if (!is_param) {
-					c_value_ref(len);
+					c_value_ref(rcc, len);
 					if (len->type->kind != c_type_size_t.kind) {
-						c_do_cvt(&c_type_size_t, IR_SIZE_T, len);
+						c_do_cvt(rcc, &c_type_size_t, IR_SIZE_T, len);
 					}
 				} else {
 					vla_tokens = len->u.val.ptr;
@@ -1678,7 +1656,7 @@ void c_make_array_type(c_dcl *d, c_dcl *dim, c_value *len, uint64_t attr, bool i
 			if (d->type->attr & C_ATTR_VLA) {
 				if (len->u.val.u64 > SIZE_MAX) yy_error("array is too large");
 				attr |= C_ATTR_VLA;
-				length = ir_const_size_t(active_ctx, len->u.val.u64);
+				length = ir_const_size_t(rcc->active_ctx, len->u.val.u64);
 			} else {
 				// TODO: overflow check ???
 				if (len->u.val.u64 * d->type->size > SIZE_MAX) yy_error("array is too large");
@@ -1687,9 +1665,9 @@ void c_make_array_type(c_dcl *d, c_dcl *dim, c_value *len, uint64_t attr, bool i
 		}
 	}
 
-	type = ir_arena_alloc(&c_arena, sizeof(c_type));
+	type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
 	type->kind = C_TYPE_ARRAY;
-	type->flags = active_scope ? 0 : C_TYPE_GLOBAL;
+	type->flags = rcc->active_scope ? 0 : C_TYPE_GLOBAL;
 	if ((d->type->attr & C_ATTR_ALIGN_MASK) && d->type->size && c_attr2align(d->type->attr) > d->type->size) {
 		yy_error("alignment of array elements is greater than element size");
 	}
@@ -1715,19 +1693,19 @@ void c_make_array_type(c_dcl *d, c_dcl *dim, c_value *len, uint64_t attr, bool i
 	d->attr &= ~C_ARRAY_ATTRS;
 }
 
-const c_type *c_underlying_enum_type(c_dcl *dcl)
+const c_type *c_underlying_enum_type(rcc_ctx *rcc, c_dcl *dcl)
 {
-	const c_type *t = c_resolve_type(dcl);
+	const c_type *t = c_resolve_type(rcc, dcl);
     if (!C_IS_TYPE_INT(t)) yy_error("invalid \"enum\" underlying type");
 	return t;
 }
 
-c_type *c_make_enum_type(c_dcl *d, c_name tag, const c_type *underlying_type)
+c_type *c_make_enum_type(rcc_ctx *rcc, c_dcl *d, c_name tag, const c_type *underlying_type)
 {
 	c_type *type;
-	type = ir_arena_alloc(&c_arena, sizeof(c_type));
+	type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
 	type->kind = C_TYPE_ENUM;
-	type->flags = C_TYPE_INCOMPLETE | (active_scope ? 0 : C_TYPE_GLOBAL);
+	type->flags = C_TYPE_INCOMPLETE | (rcc->active_scope ? 0 : C_TYPE_GLOBAL);
 	type->attr = (d->attr & C_ENUM_ATTRS);
 	type->size = 0;
 	type->enumeration.tag = tag;
@@ -1749,14 +1727,15 @@ c_type *c_make_enum_type(c_dcl *d, c_name tag, const c_type *underlying_type)
 	return type;
 }
 
-void c_declare_enum_val(const c_type *type, c_name name, c_dcl *attr, c_value *val, int64_t *min, uint64_t *max, c_value *last)
+void c_declare_enum_val(rcc_ctx *rcc, const c_type *type, c_name name, c_dcl *attr, c_value *val,
+                        int64_t *min, uint64_t *max, c_value *last)
 {
 	c_sym *obj;
 	const c_type *const_type;
 
 	if (val && c_value_is_set(val)) {
 		if (!c_value_is_const(val) || (!C_IS_TYPE_INT(val->type) && val->type->kind != C_TYPE_ENUM)) {
-			yy_error_fmt("enumerator value for \"%s\" is not an integer constant", yy_sym2str(name));
+			yy_error_fmt("enumerator value for \"%s\" is not an integer constant", yy_sym2str(rcc, name));
 		}
 		last->u.type = IR_IS_TYPE_SIGNED(val->u.type) ? IR_I64 : IR_U64;
 		last->u.val.i64 = val->u.val.i64;
@@ -1787,12 +1766,12 @@ void c_declare_enum_val(const c_type *type, c_name name, c_dcl *attr, c_value *v
 
 	attr->type = const_type;
 	attr->flags |= C_DCL_ENUM_CONST;
-	obj = c_declare(name, attr);
+	obj = c_declare(rcc, name, attr);
 	IR_ASSERT(obj && obj->kind == C_SYM_CONST);
 	c_value_set_const(&obj->value, const_type, last->u.type, last->u.val);
 }
 
-void c_finish_enum_type(c_type *type, c_dcl *d, int64_t min, uint64_t max)
+void c_finish_enum_type(rcc_ctx *rcc, c_type *type, c_dcl *d, int64_t min, uint64_t max)
 {
 	IR_ASSERT(type && type->kind == C_TYPE_ENUM);
 	type->attr |= d->attr & C_ENUM_ATTRS;
@@ -1846,12 +1825,12 @@ void c_finish_enum_type(c_type *type, c_dcl *d, int64_t min, uint64_t max)
 	d->type = type;
 }
 
-c_type *c_make_struct_type(c_dcl *d, c_name tag)
+c_type *c_make_struct_type(rcc_ctx *rcc, c_dcl *d, c_name tag)
 {
 	c_type *type;
-	type = ir_arena_alloc(&c_arena, sizeof(c_type));
+	type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
 	type->kind = (d->flags & C_TYPE_SPEC_UNION) ? C_TYPE_UNION : C_TYPE_STRUCT;
-	type->flags = C_TYPE_INCOMPLETE | (active_scope ? 0 : C_TYPE_GLOBAL);
+	type->flags = C_TYPE_INCOMPLETE | (rcc->active_scope ? 0 : C_TYPE_GLOBAL);
 	type->attr = d->attr & C_STRUCT_ATTRS;
 	type->size = 0;
 	type->record.tag = tag;
@@ -1897,7 +1876,7 @@ static c_field *c_find_struct_field(const c_type *type, c_name name, size_t *off
 	return NULL;
 }
 
-void c_static_assert(c_value *expr, c_value *msg)
+void c_static_assert(rcc_ctx *rcc, c_value *expr, c_value *msg)
 {
 	if (!c_value_is_const(expr)) yy_error("expression in static assertion is not constant");
 	if (expr->type->kind == C_TYPE_VOID || expr->type->kind == C_TYPE_STRUCT || expr->type->kind == C_TYPE_UNION) {
@@ -1912,27 +1891,27 @@ void c_static_assert(c_value *expr, c_value *msg)
 	}
 }
 
-void c_declare_struct_field(c_type *type, c_name name, c_dcl *field, c_value *bits)
+void c_declare_struct_field(rcc_ctx *rcc, c_type *type, c_name name, c_dcl *field, c_value *bits)
 {
 	uint32_t i;
 	size_t offset;
 
 	IR_ASSERT(type->kind == C_TYPE_STRUCT || type->kind == C_TYPE_UNION);
 
-	c_finalize_type(field);
-	if (field->type->kind == C_TYPE_VOID) yy_error_fmt("field \"%s\" declared void", yy_sym2str(name));
-	if (field->type->kind == C_TYPE_FUNC) yy_error_fmt("field \"%s\" declared as a function", yy_sym2str(name));
+	c_finalize_type(rcc, field);
+	if (field->type->kind == C_TYPE_VOID) yy_error_fmt("field \"%s\" declared void", yy_sym2str(rcc, name));
+	if (field->type->kind == C_TYPE_FUNC) yy_error_fmt("field \"%s\" declared as a function", yy_sym2str(rcc, name));
 	if (field->type->attr & (C_ATTR_VLA|C_ATTR_VMT)) {
 		if (field->type->attr & C_ATTR_VLA) {
-			yy_error_fmt("field \"%s\" declared as a variable length array", yy_sym2str(name));
+			yy_error_fmt("field \"%s\" declared as a variable length array", yy_sym2str(rcc, name));
 		} else {
-			yy_error_fmt("field \"%s\" declared as a variable modified type", yy_sym2str(name));
+			yy_error_fmt("field \"%s\" declared as a variable modified type", yy_sym2str(rcc, name));
 		}
 	}
-	if ((field->type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(field->type)) {
-		yy_error_fmt("field \"%s\" has incomplete type", yy_sym2str(name));
+	if ((field->type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(rcc, field->type)) {
+		yy_error_fmt("field \"%s\" has incomplete type", yy_sym2str(rcc, name));
 	}
-	if (name && c_find_struct_field(type, name, &offset)) yy_error_fmt("duplicate member \"%s\"", yy_sym2str(name));
+	if (name && c_find_struct_field(type, name, &offset)) yy_error_fmt("duplicate member \"%s\"", yy_sym2str(rcc, name));
 
 	if (type->record.num_fields >= C_ALLOCA_FIELDS) c_grow_struct_fields(type);
 
@@ -1946,14 +1925,14 @@ void c_declare_struct_field(c_type *type, c_name name, c_dcl *field, c_value *bi
 	if (!bits || !c_value_is_set(bits)) {
 		type->record.fields[i].bit_field = 0;
 	} else {
-		if (!c_value_is_const(bits)) yy_error_fmt("bit-field \"%s\" width not an integer constant", yy_sym2str(name));
-		if (!IR_IS_TYPE_INT(bits->u.type)) yy_error_fmt("bit-field \"%s\" width not an integer constant", yy_sym2str(name));
-		if (IR_IS_TYPE_SIGNED(bits->u.type) && bits->u.val.i64 < 0) yy_error_fmt("negative width in bit-field \"%s\"", yy_sym2str(name));
-		if (bits->u.val.i64 == 0 && name) yy_error_fmt("zero width for bit-field \"%s\"", yy_sym2str(name));
+		if (!c_value_is_const(bits)) yy_error_fmt("bit-field \"%s\" width not an integer constant", yy_sym2str(rcc, name));
+		if (!IR_IS_TYPE_INT(bits->u.type)) yy_error_fmt("bit-field \"%s\" width not an integer constant", yy_sym2str(rcc, name));
+		if (IR_IS_TYPE_SIGNED(bits->u.type) && bits->u.val.i64 < 0) yy_error_fmt("negative width in bit-field \"%s\"", yy_sym2str(rcc, name));
+		if (bits->u.val.i64 == 0 && name) yy_error_fmt("zero width for bit-field \"%s\"", yy_sym2str(rcc, name));
 		if (!C_IS_TYPE_INT(field->type) && field->type->kind != C_TYPE_ENUM) {
-			yy_error_fmt("bit-field \"%s\" has invalid type", yy_sym2str(name));
+			yy_error_fmt("bit-field \"%s\" has invalid type", yy_sym2str(rcc, name));
 		}
-		if (bits->u.val.u64 > field->type->size * 8) yy_error_fmt("width of \"%s\" exceeds its type", yy_sym2str(name));
+		if (bits->u.val.u64 > field->type->size * 8) yy_error_fmt("width of \"%s\" exceeds its type", yy_sym2str(rcc, name));
 		if (bits->u.val.u64 < field->type->size * 8) {
 			IR_ASSERT(bits->u.val.u64 < 64);
 			type->record.fields[i].bit_field = C_BIT_FIELD(0, bits->u.val.u64);
@@ -1963,7 +1942,7 @@ void c_declare_struct_field(c_type *type, c_name name, c_dcl *field, c_value *bi
 	}
 }
 
-static void c_do_check_nested_redeclarations(const c_type *type, const c_type *nested_type)
+static void c_do_check_nested_redeclarations(rcc_ctx *rcc, const c_type *type, const c_type *nested_type)
 {
 	int32_t i;
 
@@ -1975,10 +1954,10 @@ static void c_do_check_nested_redeclarations(const c_type *type, const c_type *n
 			c_field *field2 = c_find_struct_field(type, field->name, &offset);
 
 			if (field2 && field2 != field) {
-				yy_error_fmt("duplicate member \"%s\"", yy_sym2str(field->name));
+				yy_error_fmt("duplicate member \"%s\"", yy_sym2str(rcc, field->name));
 			}
 		} else if (field->type->kind == C_TYPE_UNION || field->type->kind == C_TYPE_STRUCT) {
-			c_do_check_nested_redeclarations(type, field->type);
+			c_do_check_nested_redeclarations(rcc, type, field->type);
 		}
 	}
 }
@@ -1989,7 +1968,7 @@ static void c_do_check_nested_redeclarations(const c_type *type, const c_type *n
 # define IS_GCC_STRUCT(attr) (((attr) & C_ATTR_MS_STRUCT) == 0)
 #endif
 
-static size_t c_gcc_field_alignment(c_type *type, c_field *field, bool *packed)
+static size_t c_gcc_field_alignment(rcc_ctx *rcc, c_type *type, c_field *field, bool *packed)
 {
 	size_t align = c_attr2align(field->type->attr);
 	size_t a = field->offset;
@@ -2001,17 +1980,17 @@ static size_t c_gcc_field_alignment(c_type *type, c_field *field, bool *packed)
 			align = 1;
 			*packed = 1;
 		}
-		if (pp_pack) {
+		if (rcc->pp_pack) {
 			*packed = 1;
-			if (pp_pack < align) align = pp_pack;
-			if (pp_pack < a) a = 0;
+			if (rcc->pp_pack < align) align = rcc->pp_pack;
+			if (rcc->pp_pack < a) a = 0;
 		}
 	}
 	if (a) align = a;
 	return align;
 }
 
-static size_t c_ms_field_alignment(c_type *type, c_field *field)
+static size_t c_ms_field_alignment(rcc_ctx *rcc, c_type *type, c_field *field)
 {
 	size_t align = c_attr2align(field->type->attr);
 	size_t a = field->offset;
@@ -2020,15 +1999,15 @@ static size_t c_ms_field_alignment(c_type *type, c_field *field)
 	if ((type->attr & C_ATTR_PACKED) || (field->type->attr & C_ATTR_PACKED)) {
 		align = 1;
 	}
-	if (pp_pack) {
-		if (pp_pack < align) align = pp_pack;
-		if (pp_pack < a) a = 0;
+	if (rcc->pp_pack) {
+		if (rcc->pp_pack < align) align = rcc->pp_pack;
+		if (rcc->pp_pack < a) a = 0;
 	}
 	if (a) align = a;
 	return align;
 }
 
-void c_finish_struct_type(c_type *type, c_dcl *d)
+void c_finish_struct_type(rcc_ctx *rcc, c_type *type, c_dcl *d)
 {
 	IR_ASSERT(type && (type->kind == C_TYPE_STRUCT || type->kind == C_TYPE_UNION));
 	type->attr |= d->attr & C_STRUCT_ATTRS;
@@ -2038,7 +2017,7 @@ void c_finish_struct_type(c_type *type, c_dcl *d)
 	}
 
 	if (type->record.num_fields) {
-		c_field *fields = ir_arena_alloc(&c_arena, sizeof(c_field) * type->record.num_fields);
+		c_field *fields = ir_arena_alloc(&rcc->c_arena, sizeof(c_field) * type->record.num_fields);
 		int32_t i;
 		size_t size = 0;
 		size_t field_align, struct_align = c_attr2align(type->attr);
@@ -2055,10 +2034,10 @@ void c_finish_struct_type(c_type *type, c_dcl *d)
 
 					if (!field->name
 					 && (field->type->kind == C_TYPE_UNION || field->type->kind == C_TYPE_STRUCT)) {
-						c_do_check_nested_redeclarations(type, field->type);
+						c_do_check_nested_redeclarations(rcc, type, field->type);
 					}
 
-					field_align = c_gcc_field_alignment(type, field, &packed);
+					field_align = c_gcc_field_alignment(rcc, type, field, &packed);
 					field_size = field->type->size;
 //???					field_size = C_IS_BIT_FIELD(field->bit_field) ?
 //						(size_t)(C_BIT_FIELD_SIZE(field->bit_field) + 7) / 8 : field->type->size;
@@ -2072,10 +2051,10 @@ void c_finish_struct_type(c_type *type, c_dcl *d)
 
 					if (!field->name
 					 && (field->type->kind == C_TYPE_UNION || field->type->kind == C_TYPE_STRUCT)) {
-						c_do_check_nested_redeclarations(type, field->type);
+						c_do_check_nested_redeclarations(rcc, type, field->type);
 					}
 
-					field_align = c_ms_field_alignment(type, field);
+					field_align = c_ms_field_alignment(rcc, type, field);
 					field->offset = 0;
 					if (field_align > struct_align) struct_align = field_align;
 					if (field->type->size > size) size = field->type->size;
@@ -2097,14 +2076,14 @@ void c_finish_struct_type(c_type *type, c_dcl *d)
 
 					if (!field->name
 					 && (field->type->kind == C_TYPE_UNION || field->type->kind == C_TYPE_STRUCT)) {
-						c_do_check_nested_redeclarations(type, field->type);
+						c_do_check_nested_redeclarations(rcc, type, field->type);
 					}
 					if (field->type->attr & C_ATTR_FLEXIBLE) {
 						if (type->kind == C_TYPE_UNION) yy_error("flexible array member in union");
 						if (i != type->record.num_fields - 1) yy_error("flexible array member not at the end of struct");
 					}
 
-					field_align = c_gcc_field_alignment(type, field, &packed);
+					field_align = c_gcc_field_alignment(rcc, type, field, &packed);
 					if (!C_IS_BIT_FIELD(field->bit_field)) {
 						field->offset = IR_ALIGNED_SIZE(size, field_align);
 						last_offset = size = field->offset + field->type->size;
@@ -2120,7 +2099,7 @@ void c_finish_struct_type(c_type *type, c_dcl *d)
 							last_offset = IR_ALIGNED_SIZE(size, field_align);
 							last_bit = bits;
 							if (bits == 0
-							 && ((type->attr & C_ATTR_PACKED) || pp_pack)) {
+							 && ((type->attr & C_ATTR_PACKED) || rcc->pp_pack)) {
 								/* prevent modification of the struct alignment */
 								field_align = 1;
 							}
@@ -2159,14 +2138,14 @@ void c_finish_struct_type(c_type *type, c_dcl *d)
 
 					if (!field->name
 					 && (field->type->kind == C_TYPE_UNION || field->type->kind == C_TYPE_STRUCT)) {
-						c_do_check_nested_redeclarations(type, field->type);
+						c_do_check_nested_redeclarations(rcc, type, field->type);
 					}
 					if (field->type->attr & C_ATTR_FLEXIBLE) {
 						if (type->kind == C_TYPE_UNION) yy_error("flexible array member in union");
 						if (i != type->record.num_fields - 1) yy_error("flexible array member not at the end of struct");
 					}
 
-					field_align = c_ms_field_alignment(type, field);
+					field_align = c_ms_field_alignment(rcc, type, field);
 					if (!C_IS_BIT_FIELD(field->bit_field)) {
 						field->offset = IR_ALIGNED_SIZE(size, field_align);
 						last_offset = size = field->offset + field->type->size;
@@ -2206,14 +2185,14 @@ void c_finish_struct_type(c_type *type, c_dcl *d)
 	d->type = type;
 }
 
-void c_validate_func_params(c_name name, c_dcl *d)
+void c_validate_func_params(rcc_ctx *rcc, c_name name, c_dcl *d)
 {
 	int32_t i;
 	const c_type *type = d->type;
 
 	for (i = 0; i < type->func.num_params; i++) {
 		if (!type->func.params[i].type) {
-			yy_warning_fmt("type of \"%s\" defaults to \"int\"", yy_sym2str(type->func.params[i].name));
+			yy_warning_fmt("type of \"%s\" defaults to \"int\"", yy_sym2str(rcc, type->func.params[i].name));
 			type->func.params[i].type = &c_type_i32;
 		}
 	}
@@ -2230,33 +2209,33 @@ static void c_grow_func_params(c_param **params, int32_t *num_params)
 	}
 }
 
-void c_declare_func_param(c_param **params, int32_t *num_params, c_name name, c_dcl *param)
+void c_declare_func_param(rcc_ctx *rcc, c_param **params, int32_t *num_params, c_name name, c_dcl *param)
 {
-	c_finalize_type(param);
+	c_finalize_type(rcc, param);
 	if (param->flags & (C_DCL_STORAGE_CLASS-C_DCL_REGISTER)) {
 		if (name) {
-			yy_error_fmt("storage class specified for parameter \"%s\"", yy_sym2str(name));
+			yy_error_fmt("storage class specified for parameter \"%s\"", yy_sym2str(rcc, name));
 		} else {
 			yy_error("storage class specified for parameter");
 		}
 	} else if (param->type->kind == C_TYPE_VOID) {
 		if (name) {
-			yy_error_fmt("parameter \"%s\" has void type", yy_sym2str(name));
+			yy_error_fmt("parameter \"%s\" has void type", yy_sym2str(rcc, name));
 		} else if (*num_params) {
 			yy_error("\"void\" must be the only parameter");
 		}
 	} else if (param->attr & C_ATTR_ALIGN_MASK) {
 		yy_error("invalid use of \"_Alignas\" for a function parameter");
 	} else if (param->type->kind == C_TYPE_FUNC) {
-		c_type *type = ir_arena_alloc(&c_arena, sizeof(c_type));
+		c_type *type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
 		type->kind = C_TYPE_POINTER;
-		type->flags = active_scope ? 0 : C_TYPE_GLOBAL;
+		type->flags = rcc->active_scope ? 0 : C_TYPE_GLOBAL;
 		type->attr = c_align2attr(_Alignof(void*));
 		type->size = sizeof(void*);
 		type->pointer.type = param->type;
 		param->type = type;
 	} else if (param->type->kind == C_TYPE_ARRAY) {
-		c_type *t = c_create_pointer_type(param->type->array.type);
+		c_type *t = c_create_pointer_type(rcc, param->type->array.type);
 		t->attr |= (param->type->attr & C_ATTR_VLA);
 		t->array.length = param->type->array.length;
 		t->array.vla_tokens = param->type->array.vla_tokens;
@@ -2266,21 +2245,21 @@ void c_declare_func_param(c_param **params, int32_t *num_params, c_name name, c_
 	if (name) {
 		c_sym *sym;
 
-		sym = yy_hash.data[name].sym;
-		if (sym && sym->scope == active_scope && sym->kind == C_SYM_PARAM) {
-			yy_error_fmt("redefinition of parameter \"%s\"", yy_sym2str(name));
+		sym = rcc->yy_hash.data[name].sym;
+		if (sym && sym->scope == rcc->active_scope && sym->kind == C_SYM_PARAM) {
+			yy_error_fmt("redefinition of parameter \"%s\"", yy_sym2str(rcc, name));
 		}
 
-		if (!active_scope->list.syms) pp_list_init(&active_scope->list);
-		pp_list_push(&active_scope->list, name);
-		pp_list_push_ptr(&active_scope->list, (void*)(((uintptr_t)sym) | C_POP_SYM));
+		if (!rcc->active_scope->list.syms) pp_list_init(rcc, &rcc->active_scope->list);
+		pp_list_push(&rcc->active_scope->list, name);
+		pp_list_push_ptr(&rcc->active_scope->list, (void*)(((uintptr_t)sym) | C_POP_SYM));
 
-		sym = ir_arena_alloc(&c_arena, sizeof(c_sym));
+		sym = ir_arena_alloc(&rcc->c_arena, sizeof(c_sym));
 		memset(sym, 0, sizeof(c_sym));
 		sym->kind = C_SYM_PARAM;
-		sym->scope = active_scope;
-		c_value_set_lval(&sym->value, param->type, c_type2ir(param->type), *num_params + 1);
-		yy_hash.data[name].sym = sym;
+		sym->scope = rcc->active_scope;
+		c_value_set_lval(&sym->value, param->type, c_type2ir(rcc, param->type), *num_params + 1);
+		rcc->yy_hash.data[name].sym = sym;
 	}
 
 	if (*num_params >= C_ALLOCA_PARAMS) c_grow_func_params(params, num_params);
@@ -2290,25 +2269,25 @@ void c_declare_func_param(c_param **params, int32_t *num_params, c_name name, c_
 	(*num_params)++;
 }
 
-void c_declare_func_param_name(c_param **params, int32_t *num_params, c_name name)
+void c_declare_func_param_name(rcc_ctx *rcc, c_param **params, int32_t *num_params, c_name name)
 {
 	c_sym *sym;
 
 	IR_ASSERT(name);
-	sym = yy_hash.data[name].sym;
-	if (sym && sym->scope == active_scope && sym->kind == C_SYM_PARAM) {
-		yy_error_fmt("multiple parameters named \"%s\"", yy_sym2str(name));
+	sym = rcc->yy_hash.data[name].sym;
+	if (sym && sym->scope == rcc->active_scope && sym->kind == C_SYM_PARAM) {
+		yy_error_fmt("multiple parameters named \"%s\"", yy_sym2str(rcc, name));
 	}
 
-	if (!active_scope->list.syms) pp_list_init(&active_scope->list);
-	pp_list_push(&active_scope->list, name);
-	pp_list_push_ptr(&active_scope->list, (void*)(((uintptr_t)sym) | C_POP_SYM));
+	if (!rcc->active_scope->list.syms) pp_list_init(rcc, &rcc->active_scope->list);
+	pp_list_push(&rcc->active_scope->list, name);
+	pp_list_push_ptr(&rcc->active_scope->list, (void*)(((uintptr_t)sym) | C_POP_SYM));
 
-	sym = ir_arena_alloc(&c_arena, sizeof(c_sym));
+	sym = ir_arena_alloc(&rcc->c_arena, sizeof(c_sym));
 	memset(sym, 0, sizeof(c_sym));
 	sym->kind = C_SYM_PARAM;
-	sym->scope = active_scope;
-	yy_hash.data[name].sym = sym;
+	sym->scope = rcc->active_scope;
+	rcc->yy_hash.data[name].sym = sym;
 
 	if (*num_params >= C_ALLOCA_PARAMS) c_grow_func_params(params, num_params);
 
@@ -2317,18 +2296,18 @@ void c_declare_func_param_name(c_param **params, int32_t *num_params, c_name nam
 	(*num_params)++;
 }
 
-static void c_validate_func_ret_type(const c_type *t)
+static void c_validate_func_ret_type(rcc_ctx *rcc, const c_type *t)
 {
 	if (t->kind == C_TYPE_FUNC) yy_error("function returning a function");
 	if (t->kind == C_TYPE_ARRAY) yy_error("function returning an array");
 }
 
-void c_make_func_type(c_dcl *d, c_param *params, int32_t num_params, uint32_t attr)
+void c_make_func_type(rcc_ctx *rcc, c_dcl *d, c_param *params, int32_t num_params, uint32_t attr)
 {
 	c_type *type;
 
-	c_finalize_type(d);
-	c_validate_func_ret_type(d->type);
+	c_finalize_type(rcc, d);
+	c_validate_func_ret_type(rcc, d->type);
 
 	if (num_params) {
 		if (params[0].type && params[0].type->kind == C_TYPE_VOID) {
@@ -2337,7 +2316,7 @@ void c_make_func_type(c_dcl *d, c_param *params, int32_t num_params, uint32_t at
 		}
 	}
 	if (num_params > 0) {
-		c_param *ptr = ir_arena_alloc(&c_arena, sizeof(c_param) * num_params);
+		c_param *ptr = ir_arena_alloc(&rcc->c_arena, sizeof(c_param) * num_params);
 		memcpy(ptr, params, sizeof(c_param) * num_params);
 		if (num_params > C_ALLOCA_PARAMS) ir_mem_free(params);
 		params = ptr;
@@ -2345,9 +2324,9 @@ void c_make_func_type(c_dcl *d, c_param *params, int32_t num_params, uint32_t at
 		params = NULL;
 	}
 
-	type = ir_arena_alloc(&c_arena, sizeof(c_type));
+	type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
 	type->kind = C_TYPE_FUNC;
-	type->flags = active_scope ? 0 : C_TYPE_GLOBAL;
+	type->flags = rcc->active_scope ? 0 : C_TYPE_GLOBAL;
 	type->size = sizeof(void*);
 	type->attr = d->attr & C_FUNC_TYPE_ATTRS;
 	type->attr |= attr & C_FUNC_TYPE_ATTRS;
@@ -2361,45 +2340,45 @@ void c_make_func_type(c_dcl *d, c_param *params, int32_t num_params, uint32_t at
 	d->attr &= ~C_FUNC_TYPE_ATTRS;
 }
 
-void c_declare_func_param_type(const c_type *type, c_name name, c_dcl *param)
+void c_declare_func_param_type(rcc_ctx *rcc, const c_type *type, c_name name, c_dcl *param)
 {
 	int32_t i;
 
 	IR_ASSERT(type->kind == C_TYPE_FUNC);
 	IR_ASSERT(name);
-	c_finalize_type(param);
+	c_finalize_type(rcc, param);
 	if (param->flags & (C_DCL_STORAGE_CLASS-C_DCL_REGISTER)) {
-		yy_error_fmt("storage class specified for parameter \"%s\"", yy_sym2str(name));
+		yy_error_fmt("storage class specified for parameter \"%s\"", yy_sym2str(rcc, name));
 	} else if (param->type->kind == C_TYPE_VOID) {
-		yy_error_fmt("parameter \"%s\" has void type", yy_sym2str(name));
+		yy_error_fmt("parameter \"%s\" has void type", yy_sym2str(rcc, name));
 	} else if (param->attr & C_ATTR_ALIGN_MASK) {
 		yy_error("invalid use of \"_Alignas\" for a function parameter");
 	} else if (param->type->kind == C_TYPE_FUNC) {
-		c_type *type = ir_arena_alloc(&c_arena, sizeof(c_type));
+		c_type *type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
 		type->kind = C_TYPE_POINTER;
-		type->flags = active_scope ? 0 : C_TYPE_GLOBAL;
+		type->flags = rcc->active_scope ? 0 : C_TYPE_GLOBAL;
 		type->attr = c_align2attr(_Alignof(void*));
 		type->size = sizeof(void*);
 		type->pointer.type = param->type;
 		param->type = type;
 	} else if (param->type->kind == C_TYPE_ARRAY) {
-		param->type = c_create_pointer_type(param->type->array.type);
+		param->type = c_create_pointer_type(rcc, param->type->array.type);
 	}
     if (type->func.num_params > 0) {
 		for (i = 0; i < type->func.num_params; i++) {
 			if (type->func.params[i].name == name) {
 				if (type->func.params[i].type) {
-					yy_error_fmt("redefinition of parameter \"%s\"", yy_sym2str(name));
+					yy_error_fmt("redefinition of parameter \"%s\"", yy_sym2str(rcc, name));
 				}
 				type->func.params[i].type = param->type;
 				return;
 			}
 		}
 	}
-	yy_error_fmt("declaration for parameter \"%s\" but no such parameter", yy_sym2str(name));
+	yy_error_fmt("declaration for parameter \"%s\" but no such parameter", yy_sym2str(rcc, name));
 }
 
-static void c_fix_nested_type(const c_type *t, c_type *nested)
+static void c_fix_nested_type(rcc_ctx *rcc, const c_type *t, c_type *nested)
 {
 	switch (nested->kind) {
 		case C_TYPE_POINTER:
@@ -2411,7 +2390,7 @@ static void c_fix_nested_type(const c_type *t, c_type *nested)
 					nested->attr |= C_ATTR_VMT;
 				}
 			} else {
-				c_fix_nested_type(t, (c_type*)nested->pointer.type);
+				c_fix_nested_type(rcc, t, (c_type*)nested->pointer.type);
 				if ((nested->pointer.type->attr & (C_ATTR_VLA|C_ATTR_VMT)) && !(nested->attr & C_ATTR_VMT)) {
 					nested->attr |= C_ATTR_VMT;
 				}
@@ -2421,21 +2400,21 @@ static void c_fix_nested_type(const c_type *t, c_type *nested)
 			/* "char" is used as a terminator of nested declaration */
 			if (nested->array.type == &c_type_char) {
 				nested->array.type = t;
-				c_validate_array_element_type(t);
+				c_validate_array_element_type(rcc, t);
 				if (t->attr & C_ATTR_VLA) {
 					if (!(nested->attr & C_ATTR_VLA)) {
 						nested->attr |= C_ATTR_VLA;
-						nested->array.length = ir_const_size_t(active_ctx, nested->array.length);
+						nested->array.length = ir_const_size_t(rcc->active_ctx, nested->array.length);
 					}
 				} else if ((t->attr & C_ATTR_VMT) && !(nested->attr & C_ATTR_VMT)) {
 					nested->attr |= C_ATTR_VMT;
 				}
 			} else {
-				c_fix_nested_type(t, (c_type*)nested->array.type);
+				c_fix_nested_type(rcc, t, (c_type*)nested->array.type);
 				if (nested->array.type->attr & C_ATTR_VLA) {
 					if (!(nested->attr & C_ATTR_VLA)) {
 						nested->attr |= C_ATTR_VLA;
-						nested->array.length = ir_const_size_t(active_ctx, nested->array.length);
+						nested->array.length = ir_const_size_t(rcc->active_ctx, nested->array.length);
 					}
 				} else if ((nested->array.type->attr & C_ATTR_VMT) && !(nested->attr & C_ATTR_VMT)) {
 					nested->attr |= C_ATTR_VMT;
@@ -2454,7 +2433,7 @@ static void c_fix_nested_type(const c_type *t, c_type *nested)
 			if (nested->func.ret_type == &c_type_char) {
 				nested->func.ret_type = t;
 			} else {
-				c_fix_nested_type(t, (c_type*)nested->func.ret_type);
+				c_fix_nested_type(rcc, t, (c_type*)nested->func.ret_type);
 			}
 			break;
 		default:
@@ -2462,16 +2441,16 @@ static void c_fix_nested_type(const c_type *t, c_type *nested)
 	}
 }
 
-void c_make_nested_type(c_dcl *d, c_dcl *nested)
+void c_make_nested_type(rcc_ctx *rcc, c_dcl *d, c_dcl *nested)
 {
-	c_finalize_type(d);
+	c_finalize_type(rcc, d);
 	if (nested->type && nested->type != &c_type_char) {
-		c_fix_nested_type(d->type, (c_type*)nested->type);
+		c_fix_nested_type(rcc, d->type, (c_type*)nested->type);
 		d->type = nested->type;
 	}
 }
 
-void c_gcc_attribute_aligned(c_dcl *d, c_name attr, c_value *val)
+void c_gcc_attribute_aligned(rcc_ctx *rcc, c_dcl *d, c_name attr, c_value *val)
 {
 	if (!c_value_is_set(val)) {
 		// TODO: ???
@@ -2487,7 +2466,7 @@ void c_gcc_attribute_aligned(c_dcl *d, c_name attr, c_value *val)
 	}
 }
 
-void c_gcc_attribute_packed(c_dcl *d, c_name attr)
+void c_gcc_attribute_packed(rcc_ctx *rcc, c_dcl *d, c_name attr)
 {
 	if ((d->flags & (C_TYPE_SPEC_ENUM|C_TYPE_SPEC_STRUCT|C_TYPE_SPEC_UNION))
 	 || ((d->flags & C_TYPE_SPEC_ANY) == C_TYPE_SPEC_TYPE
@@ -2495,11 +2474,11 @@ void c_gcc_attribute_packed(c_dcl *d, c_name attr)
 	  && (d->type->flags & C_TYPE_INCOMPLETE))) {
 		d->attr |= C_ATTR_PACKED;
 	} else {
-		yy_warning_fmt("\"%s\" attribure ignored", yy_sym2str(attr));
+		yy_warning_fmt("\"%s\" attribure ignored", yy_sym2str(rcc, attr));
 	}
 }
 
-yy_sym c_gcc_attribute(c_dcl *d, c_name attr, yy_sym sym)
+yy_sym c_gcc_attribute(rcc_ctx *rcc, c_dcl *d, c_name attr, yy_sym sym)
 {
 	if (attr == YY_FORMAT
 	 || attr == YY___FORMAT__
@@ -2512,16 +2491,16 @@ yy_sym c_gcc_attribute(c_dcl *d, c_name attr, yy_sym sym)
 	) {
 		/* silently ignore some known attributes */
 	} else {
-		yy_warning_fmt("unsupported attribure \"%s\"", yy_sym2str(attr));
+		yy_warning_fmt("unsupported attribure \"%s\"", yy_sym2str(rcc, attr));
 	}
 
 	if (sym == YY__LPAREN) {
 		int level = 0;
 
 		while (1) {
-			sym = yy_next();
+			sym = yy_next(rcc);
 			if (sym == YY__RPAREN) {
-				if (level == 0) return yy_next();
+				if (level == 0) return yy_next(rcc);
 				level--;
 			} else if (sym == YY__LPAREN) {
 				level++;
@@ -2534,7 +2513,7 @@ yy_sym c_gcc_attribute(c_dcl *d, c_name attr, yy_sym sym)
 	return sym;
 }
 
-void c_gcc_attribute_alias(c_dcl *d, c_name attr, c_value *val)
+void c_gcc_attribute_alias(rcc_ctx *rcc, c_dcl *d, c_name attr, c_value *val)
 {
 	if (d->alias) {
 		yy_error("duplicate __attribure__((alias())) or __asm__() specifiers");
@@ -2542,23 +2521,23 @@ void c_gcc_attribute_alias(c_dcl *d, c_name attr, c_value *val)
 
 	if ((d->flags & C_DCL_STORAGE_CLASS) == C_DCL_EXTERN
 	 || (!(d->flags & C_DCL_STORAGE_CLASS) && d->type && d->type->kind == C_TYPE_FUNC)) {
-		c_name id = yy_hash_find((const char*)val->u.val.ptr, val->u.op1 - 1);
+		c_name id = yy_hash_find(rcc, (const char*)val->u.val.ptr, val->u.op1 - 1);
 
 		if (!id
-		 || !yy_hash.data[id].sym
-		 || (yy_hash.data[id].sym->kind != C_SYM_FUNC && yy_hash.data[id].sym->kind != C_SYM_VAR)
-		 || (yy_hash.data[id].sym->linkage != C_LINK_EXTERNAL && yy_hash.data[id].sym->linkage != C_LINK_INTERNAL)) {
+		 || !rcc->yy_hash.data[id].sym
+		 || (rcc->yy_hash.data[id].sym->kind != C_SYM_FUNC && rcc->yy_hash.data[id].sym->kind != C_SYM_VAR)
+		 || (rcc->yy_hash.data[id].sym->linkage != C_LINK_EXTERNAL && rcc->yy_hash.data[id].sym->linkage != C_LINK_INTERNAL)) {
 			yy_error_fmt("alias to undefined symbol \"%s\"", (const char*)val->u.val.ptr);
-		} else if (!yy_hash.data[id].sym->is_implemented) {
+		} else if (!rcc->yy_hash.data[id].sym->is_implemented) {
 			yy_error("alias must point to a variable or function defined in the same file");
 		}
-		d->alias = yy_hash.data[id].sym->alias ? yy_hash.data[id].sym->alias : id;
+		d->alias = rcc->yy_hash.data[id].sym->alias ? rcc->yy_hash.data[id].sym->alias : id;
 	} else {
-		yy_warning_fmt("ignoring __attribute__((%s(\"%s\")))", yy_sym2str(attr), (const char*)val->u.val.ptr);
+		yy_warning_fmt("ignoring __attribute__((%s(\"%s\")))", yy_sym2str(rcc, attr), (const char*)val->u.val.ptr);
 	}
 }
 
-static int8_t c_parse_reg_var(const char *str)
+static int8_t c_parse_reg_var(rcc_ctx *rcc, const char *str)
 {
 	int8_t reg = 0;
 	const char *s = str;
@@ -2804,7 +2783,7 @@ error:
 	return IR_REG_NONE;
 }
 
-void c_asm_alias(c_dcl *d, c_value *val)
+void c_asm_alias(rcc_ctx *rcc, c_dcl *d, c_value *val)
 {
 	if (d->alias) {
 		yy_error("duplicate __attribure__((alias())) or __asm__() specifiers");
@@ -2812,40 +2791,40 @@ void c_asm_alias(c_dcl *d, c_value *val)
 
 	if ((d->flags & C_DCL_STORAGE_CLASS) == C_DCL_REGISTER) {
 		d->flags |= C_DCL_REG_VAR;
-		d->reg = c_parse_reg_var((const char*)val->u.val.ptr);
+		d->reg = c_parse_reg_var(rcc, (const char*)val->u.val.ptr);
 	} else if ((d->flags & (C_DCL_EXTERN|C_DCL_STATIC))
-	 || !active_scope
+	 || !rcc->active_scope
 	 || (d->type && d->type->kind == C_TYPE_FUNC)) {
-		c_name id = yy_hash_lookup((const char*)val->u.val.ptr, val->u.op1 - 1);
+		c_name id = yy_hash_lookup(rcc, (const char*)val->u.val.ptr, val->u.op1 - 1);
 
 		d->flags |= C_DCL_HAS_ASM_NAME;
 		d->alias = id;
-		if (yy_hash.data[id].link) {
-			yy_hash.data[id].link->is_asm_name = 1;
+		if (rcc->yy_hash.data[id].link) {
+			rcc->yy_hash.data[id].link->is_asm_name = 1;
 		} else {
-			c_linker_sym *link = ir_arena_alloc(&yy_arena, sizeof(c_linker_sym));
+			c_linker_sym *link = ir_arena_alloc(&rcc->yy_arena, sizeof(c_linker_sym));
 			link->addr = NULL;
 			link->reloc = NULL;
 			link->is_thunk = 0;
 			link->is_asm_name = 1;
-			yy_hash.data[id].link = link;
+			rcc->yy_hash.data[id].link = link;
 		}
 	} else {
 		yy_warning_fmt("ignoring __asm__(\"%s\") specifier for non-static local variable", (const char*)val->u.val.ptr);
 	}
 }
 
-yy_sym c_declspec(c_dcl *d, c_name attr, yy_sym sym)
+yy_sym c_declspec(rcc_ctx *rcc, c_dcl *d, c_name attr, yy_sym sym)
 {
-	yy_warning_fmt("unsupported \"__declspec(%s)\"", yy_sym2str(attr));
+	yy_warning_fmt("unsupported \"__declspec(%s)\"", yy_sym2str(rcc, attr));
 
 	if (sym == YY__LPAREN) {
 		int level = 0;
 
 		while (1) {
-			sym = yy_next();
+			sym = yy_next(rcc);
 			if (sym == YY__RPAREN) {
-				if (level == 0) return yy_next();
+				if (level == 0) return yy_next(rcc);
 				level--;
 			} else if (sym == YY__LPAREN) {
 				level++;
@@ -2858,43 +2837,43 @@ yy_sym c_declspec(c_dcl *d, c_name attr, yy_sym sym)
 	return sym;
 }
 
-void c_sizeof_type(c_value *res, const c_type *type)
+void c_sizeof_type(rcc_ctx *rcc, c_value *res, const c_type *type)
 {
 	ir_val val;
 
-	if ((type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(type)) {
+	if ((type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(rcc, type)) {
 		yy_error_fmt("invalid application of \"%s\" to incomplete type", "sizeof");
 	} else if (type->attr & C_ATTR_VLA) {
 		IR_ASSERT(type->kind == C_TYPE_ARRAY);
-		c_value_set_rval(res, &c_type_size_t, IR_SIZE_T, c_type_size(type));
+		c_value_set_rval(res, &c_type_size_t, IR_SIZE_T, c_type_size(rcc, type));
 		return;
 	}
 	val.u64 = type->size;
 	c_value_set_const(res, &c_type_size_t, IR_SIZE_T, val);
 }
 
-ir_ref c_do_nocode(void)
+ir_ref c_do_nocode(rcc_ctx *rcc)
 {
-	ir_ref old_control = active_ctx->control;
-	active_ctx->control = IR_UNUSED;
+	ir_ref old_control = rcc->active_ctx->control;
+	rcc->active_ctx->control = IR_UNUSED;
 	ir_BEGIN(IR_UNUSED);
 	return old_control;
 }
 
-void c_do_end_nocode(ir_ref old_control)
+void c_do_end_nocode(rcc_ctx *rcc, ir_ref old_control)
 {
-	if (active_ctx->control == active_ctx->insns_count - 1
-	 && active_ctx->ir_base[active_ctx->control].op == IR_BEGIN
-	 && active_ctx->ir_base[active_ctx->control].op1 == IR_UNUSED) {
-		active_ctx->insns_count--;
+	if (rcc->active_ctx->control == rcc->active_ctx->insns_count - 1
+	 && rcc->active_ctx->ir_base[rcc->active_ctx->control].op == IR_BEGIN
+	 && rcc->active_ctx->ir_base[rcc->active_ctx->control].op1 == IR_UNUSED) {
+		rcc->active_ctx->insns_count--;
 	} else {
 		ir_END();
 		// TODO: cleanup dead code ???
 	}
-	active_ctx->control = old_control;
+	rcc->active_ctx->control = old_control;
 }
 
-void c_sizeof_expr(c_value *res, yy_sym op, c_value *expr, ir_ref old_control)
+void c_sizeof_expr(rcc_ctx *rcc, c_value *res, yy_sym op, c_value *expr, ir_ref old_control)
 {
 	ir_val val;
 
@@ -2907,16 +2886,16 @@ void c_sizeof_expr(c_value *res, yy_sym op, c_value *expr, ir_ref old_control)
 			yy_error_fmt("invalid application of \"%s\" to incomplete type", "sizeof");
 		} else if (expr->type->attr & C_ATTR_VLA) {
 			IR_ASSERT(expr->type->kind == C_TYPE_ARRAY);
-			c_do_end_nocode(old_control);
-			c_value_set_rval(res, &c_type_size_t, IR_SIZE_T, c_type_size(expr->type));
+			c_do_end_nocode(rcc, old_control);
+			c_value_set_rval(res, &c_type_size_t, IR_SIZE_T, c_type_size(rcc, expr->type));
 			return;
 		} else {
 			if (expr->type->kind == C_TYPE_BOOL
 			 && c_value_is_ref(expr)
-			 && active_ctx->ir_base[expr->u.ref].op != IR_LOAD
-			 && active_ctx->ir_base[expr->u.ref].op != IR_LOAD_v
-			 && active_ctx->ir_base[expr->u.ref].op != IR_VLOAD
-			 && active_ctx->ir_base[expr->u.ref].op != IR_VLOAD_v) {
+			 && rcc->active_ctx->ir_base[expr->u.ref].op != IR_LOAD
+			 && rcc->active_ctx->ir_base[expr->u.ref].op != IR_LOAD_v
+			 && rcc->active_ctx->ir_base[expr->u.ref].op != IR_VLOAD
+			 && rcc->active_ctx->ir_base[expr->u.ref].op != IR_VLOAD_v) {
 				/* IR uses 1-byte "bool" for computation, but C assumes 4-byte "int" */
 				val.u64 = 4;
 			} else {
@@ -2927,10 +2906,10 @@ void c_sizeof_expr(c_value *res, yy_sym op, c_value *expr, ir_ref old_control)
 		IR_ASSERT(op == YY___ALIGNOF || op == YY___ALIGNOF__);
 		if (expr->type->kind == C_TYPE_BOOL
 		 && c_value_is_ref(expr)
-		 && active_ctx->ir_base[expr->u.ref].op != IR_LOAD
-		 && active_ctx->ir_base[expr->u.ref].op != IR_LOAD_v
-		 && active_ctx->ir_base[expr->u.ref].op != IR_VLOAD
-		 && active_ctx->ir_base[expr->u.ref].op != IR_VLOAD_v) {
+		 && rcc->active_ctx->ir_base[expr->u.ref].op != IR_LOAD
+		 && rcc->active_ctx->ir_base[expr->u.ref].op != IR_LOAD_v
+		 && rcc->active_ctx->ir_base[expr->u.ref].op != IR_VLOAD
+		 && rcc->active_ctx->ir_base[expr->u.ref].op != IR_VLOAD_v) {
 			/* IR uses 1-byte "bool" for computation, but C assumes 4-byte "int" */
 			val.u64 = 4;
 		} else {
@@ -2938,21 +2917,21 @@ void c_sizeof_expr(c_value *res, yy_sym op, c_value *expr, ir_ref old_control)
 		}
 	}
 	c_value_set_const(res, &c_type_size_t, IR_SIZE_T, val);
-	c_do_end_nocode(old_control);
+	c_do_end_nocode(rcc, old_control);
 }
 
-void c_alignof_type(c_value *res, const c_type *type)
+void c_alignof_type(rcc_ctx *rcc, c_value *res, const c_type *type)
 {
 	ir_val val;
 
-	if ((type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(type)) {
+	if ((type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(rcc, type)) {
 		yy_error_fmt("invalid application of \"%s\" to incomplete type", "_Alignof");
 	}
 	val.u64 = c_attr2align(type->attr);
 	c_value_set_const(res, &c_type_size_t, IR_SIZE_T, val);
 }
 
-void c_alignas_expr(c_dcl *dcl, c_value *expr)
+void c_alignas_expr(rcc_ctx *rcc, c_dcl *dcl, c_value *expr)
 {
 	if (!c_value_is_const(expr) || !C_IS_TYPE_INT(expr->type)) {
 		yy_error("_Alignas width not an integer constant");
@@ -2962,21 +2941,21 @@ void c_alignas_expr(c_dcl *dcl, c_value *expr)
 	dcl->attr |= c_align2attr(expr->u.val.u64);
 }
 
-const c_type *c_typeof_expr(c_value *expr, ir_ref old_control)
+const c_type *c_typeof_expr(rcc_ctx *rcc, c_value *expr, ir_ref old_control)
 {
-	c_do_end_nocode(old_control);
+	c_do_end_nocode(rcc, old_control);
 	return expr->type;
 }
 
-static c_label *c_new_label(c_name name, c_scope *scope, c_label *label, bool local)
+static c_label *c_new_label(rcc_ctx *rcc, c_name name, c_scope *scope, c_label *label, bool local)
 {
 	IR_ASSERT(scope);
-	if (!scope->list.syms) pp_list_init(&scope->list);
+	if (!scope->list.syms) pp_list_init(rcc, &scope->list);
 	pp_list_push(&scope->list, name);
 	pp_list_push_ptr(&scope->list, (void*)(((uintptr_t)label) | C_POP_LABEL));
 
 	if (local) {
-		label = ir_arena_alloc(&c_arena, sizeof(c_label));
+		label = ir_arena_alloc(&rcc->c_arena, sizeof(c_label));
 		label->is_local = 1;
 	} else {
 		label = ir_mem_malloc(sizeof(c_label)); // TODO: cache allocatons ???
@@ -2989,22 +2968,22 @@ static c_label *c_new_label(c_name name, c_scope *scope, c_label *label, bool lo
 	label->value_sym = IR_UNUSED;
 	label->value_block = IR_UNUSED;
 	label->scope = scope;
-	yy_hash.data[name].label = label;
+	rcc->yy_hash.data[name].label = label;
 	return label;
 }
 
-void c_declare_local_label(c_name name)
+void c_declare_local_label(rcc_ctx *rcc, c_name name)
 {
 	c_label *label;
 
 	IR_ASSERT(name);
-	label = yy_hash.data[name].label;
-	if (label && label->scope == active_scope) {
-		yy_error_fmt("duplicate label declaration \"%s\"", yy_sym2str(name));
+	label = rcc->yy_hash.data[name].label;
+	if (label && label->scope == rcc->active_scope) {
+		yy_error_fmt("duplicate label declaration \"%s\"", yy_sym2str(rcc, name));
 		return;
 	}
 
-	c_new_label(name, active_scope, label, 1);
+	c_new_label(rcc, name, rcc->active_scope, label, 1);
 }
 
 static const c_type *c_type_by_kind(c_type_kind kind)
@@ -3029,10 +3008,10 @@ static const c_type *c_type_by_kind(c_type_kind kind)
 	}
 }
 
-static void ir_memcpy(ir_ctx *ctx, ir_ref dst, ir_ref src, ir_ref size, uint32_t align)
+static void ir_memcpy(rcc_ctx *rcc, ir_ref dst, ir_ref src, ir_ref size, uint32_t align)
 {
 	if (IR_IS_CONST_REF(size)) {
-		ir_insn *size_insn = &active_ctx->ir_base[size];
+		ir_insn *size_insn = &rcc->active_ctx->ir_base[size];
 
 		if (!IR_IS_SYM_CONST(size_insn->op)) {
 			if (size_insn->val.u64 == 1) {
@@ -3057,73 +3036,73 @@ static void ir_memcpy(ir_ctx *ctx, ir_ref dst, ir_ref src, ir_ref size, uint32_t
 		}
 	}
 	ir_CALL_3(IR_VOID,
-		ir_const_func(active_ctx,
-			ir_strl(active_ctx, "memcpy", sizeof("memcpy")-1),
-			ir_proto_3(active_ctx, 0, IR_ADDR, IR_ADDR, IR_ADDR, IR_SIZE_T)),
+		ir_const_func(rcc->active_ctx,
+			ir_strl(rcc->active_ctx, "memcpy", sizeof("memcpy")-1),
+			ir_proto_3(rcc->active_ctx, 0, IR_ADDR, IR_ADDR, IR_ADDR, IR_SIZE_T)),
 		dst, src, size);
-	c_last_call_func_type = NULL;
+	rcc->c_last_call_func_type = NULL;
 }
 
-static void ir_memzero(ir_ctx *ctx, ir_ref dst, ir_ref size, uint32_t align)
+static void ir_memzero(rcc_ctx *rcc, ir_ref dst, ir_ref size, uint32_t align)
 {
 	if (IR_IS_CONST_REF(size)) {
-		ir_insn *size_insn = &active_ctx->ir_base[size];
+		ir_insn *size_insn = &rcc->active_ctx->ir_base[size];
 
 		if (!IR_IS_SYM_CONST(size_insn->op)) {
 			if (size_insn->val.u64 == 1) {
-				ir_STORE(dst, ir_const_u8(active_ctx, 0));
+				ir_STORE(dst, ir_const_u8(rcc->active_ctx, 0));
 				return;
 			} else if (size_insn->val.u64 == 2) {
 				if (align >= 2) {
-					ir_STORE(dst, ir_const_u16(active_ctx, 0));
+					ir_STORE(dst, ir_const_u16(rcc->active_ctx, 0));
 					return;
 				}
 			} else if (size_insn->val.u64 == 4) {
 				if (align >= 4) {
-					ir_STORE(dst, ir_const_u32(active_ctx, 0));
+					ir_STORE(dst, ir_const_u32(rcc->active_ctx, 0));
 					return;
 				}
 			} else if (size_insn->val.u64 == 8) {
 				if (align >= 8) {
-					ir_STORE(dst, ir_const_u64(active_ctx, 0));
+					ir_STORE(dst, ir_const_u64(rcc->active_ctx, 0));
 					return;
 				}
 			}
 		}
 	}
 	ir_CALL_3(IR_VOID,
-		ir_const_func(active_ctx,
-			ir_strl(active_ctx, "memset", sizeof("memset")-1),
-			ir_proto_3(active_ctx, 0, IR_ADDR, IR_ADDR, IR_I32, IR_SIZE_T)),
-		dst, ir_const_i32(active_ctx, 0), size);
-	c_last_call_func_type = NULL;
+		ir_const_func(rcc->active_ctx,
+			ir_strl(rcc->active_ctx, "memset", sizeof("memset")-1),
+			ir_proto_3(rcc->active_ctx, 0, IR_ADDR, IR_ADDR, IR_I32, IR_SIZE_T)),
+		dst, ir_const_i32(rcc->active_ctx, 0), size);
+	rcc->c_last_call_func_type = NULL;
 }
 
-ir_ref c_do_alloca(size_t size, uint32_t align, bool zero)
+ir_ref c_do_alloca(rcc_ctx *rcc, size_t size, uint32_t align, bool zero)
 {
-	ir_ref size_ref = (size == (size_t)-1) ? IR_UNUSED : ir_const_size_t(active_ctx, size);
+	ir_ref size_ref = (size == (size_t)-1) ? IR_UNUSED : ir_const_size_t(rcc->active_ctx, size);
 	ir_ref ref;
 	ir_ref old_control = IR_UNUSED;
 
-	if (c_prologue_end) {
-		old_control = active_ctx->control;
-		active_ctx->control = active_ctx->ir_base[c_prologue_end].op1;
+	if (rcc->c_prologue_end) {
+		old_control = rcc->active_ctx->control;
+		rcc->active_ctx->control = rcc->active_ctx->ir_base[rcc->c_prologue_end].op1;
 	}
 
 	ref = ir_ALLOCA(size_ref);
 	if (zero) {
-		ir_memzero(active_ctx, ref, size_ref, align);
+		ir_memzero(rcc, ref, size_ref, align);
 	}
 
-	if (c_prologue_end) {
-		active_ctx->ir_base[c_prologue_end].op1 = active_ctx->control;
-		active_ctx->control = old_control;
+	if (rcc->c_prologue_end) {
+		rcc->active_ctx->ir_base[rcc->c_prologue_end].op1 = rcc->active_ctx->control;
+		rcc->active_ctx->control = old_control;
 	}
 
 	return ref;
 }
 
-static void c_do_load_bit_field(c_value *val, uint32_t first_bit, uint32_t bits)
+static void c_do_load_bit_field(rcc_ctx *rcc, c_value *val, uint32_t first_bit, uint32_t bits)
 {
 	ir_type type;
 	ir_ref ref;
@@ -3149,12 +3128,12 @@ static void c_do_load_bit_field(c_value *val, uint32_t first_bit, uint32_t bits)
 		if (ir_type_size[type] * 8 != (first_bit + bits)) {
 			v.u64 = ir_type_size[type] * 8 - (first_bit + bits);
 			IR_ASSERT(v.u64 < ir_type_size[type] * 8);
-			ref = ir_SHL(type, ref, ir_const(active_ctx, v, type));
+			ref = ir_SHL(type, ref, ir_const(rcc->active_ctx, v, type));
 		}
 		if (ir_type_size[type] * 8 != bits) {
 			v.u64 = ir_type_size[type] * 8 - bits;
 			IR_ASSERT(v.u64 < ir_type_size[type] * 8);
-			ref = ir_SAR(type, ref, ir_const(active_ctx, v, type));
+			ref = ir_SAR(type, ref, ir_const(rcc->active_ctx, v, type));
 		}
 	} else {
 		if (ir_type_size[val->u.type] > ir_type_size[type]) {
@@ -3165,19 +3144,19 @@ static void c_do_load_bit_field(c_value *val, uint32_t first_bit, uint32_t bits)
 			if (ir_type_size[type] * 8 != bits) {
 				v.u64 = ir_type_size[type] * 8 - bits;
 				IR_ASSERT(v.u64 < ir_type_size[type] * 8);
-				ref = ir_SHR(type, ref, ir_const(active_ctx, v, type));
+				ref = ir_SHR(type, ref, ir_const(rcc->active_ctx, v, type));
 			}
 		} else if (first_bit == 0 && bits <= 32) { // use AND instead of SHL+SHR if small immediate (AArch64) ???
 			v.u64 = (1ULL<<bits)-1;
-			ref = ir_AND(type, ref, ir_const(active_ctx, v, type));
+			ref = ir_AND(type, ref, ir_const(rcc->active_ctx, v, type));
 		} else {
 			v.u64 = ir_type_size[type] * 8 - (first_bit + bits);
 			IR_ASSERT(v.u64 < ir_type_size[type] * 8);
-			ref = ir_SHL(type, ref, ir_const(active_ctx, v, type));
+			ref = ir_SHL(type, ref, ir_const(rcc->active_ctx, v, type));
 			if (ir_type_size[type] * 8 != bits) {
 				v.u64 = ir_type_size[type] * 8 - bits;
 				IR_ASSERT(v.u64 < ir_type_size[type] * 8);
-				ref = ir_SHR(type, ref, ir_const(active_ctx, v, type));
+				ref = ir_SHR(type, ref, ir_const(rcc->active_ctx, v, type));
 			}
 		}
 	}
@@ -3210,7 +3189,7 @@ static void c_do_load_bit_field(c_value *val, uint32_t first_bit, uint32_t bits)
 #endif
 }
 
-static void c_do_load_bit_field_packed(c_value *val, uint32_t first_bit, uint32_t bits)
+static void c_do_load_bit_field_packed(rcc_ctx *rcc, c_value *val, uint32_t first_bit, uint32_t bits)
 {
 	ir_type type = val->u.type;
 	ir_ref addr = val->u.ref;
@@ -3227,7 +3206,7 @@ static void c_do_load_bit_field_packed(c_value *val, uint32_t first_bit, uint32_
 
 	shift.i64 = 0;
 	if (first_bit) {
-		a = offset ? ir_ADD_A(addr, ir_const_size_t(active_ctx, offset)) : addr;
+		a = offset ? ir_ADD_A(addr, ir_const_size_t(rcc->active_ctx, offset)) : addr;
 		if (ir_type_size[type] > 1) {
 			ret = ir_ZEXT(type, ir_LOAD_U8(a));
 		} else {
@@ -3235,21 +3214,21 @@ static void c_do_load_bit_field_packed(c_value *val, uint32_t first_bit, uint32_
 		}
 		shift.u64 = first_bit;
 		IR_ASSERT(shift.u64 < ir_type_size[type] * 8);
-		ret = ir_SHR(type, ret, ir_const(active_ctx, shift, type));
+		ret = ir_SHR(type, ret, ir_const(rcc->active_ctx, shift, type));
 		shift.u64 = 8 - first_bit;
 		bits -= 8 - first_bit;
 		offset++;
 	}
 
 	while (bits >= 8) {
-		a = offset ? ir_ADD_A(addr, ir_const_size_t(active_ctx, offset)) : addr;
+		a = offset ? ir_ADD_A(addr, ir_const_size_t(rcc->active_ctx, offset)) : addr;
 		if (ir_type_size[type] > 1) {
 			ref = ir_ZEXT(type, ir_LOAD_U8(a));
 		} else {
 			ref = ir_LOAD(type, a);
 		}
 		IR_ASSERT(shift.u64 < ir_type_size[type] * 8);
-		ref = ir_SHL(type, ref, ir_const(active_ctx, shift, type));
+		ref = ir_SHL(type, ref, ir_const(rcc->active_ctx, shift, type));
 		ret = ret ? ir_OR(type, ret, ref) : ref;
 		shift.u64 += 8;
 		bits -= 8;
@@ -3257,17 +3236,17 @@ static void c_do_load_bit_field_packed(c_value *val, uint32_t first_bit, uint32_
 	}
 
 	if (bits) {
-		a = offset ? ir_ADD_A(addr, ir_const_size_t(active_ctx, offset)) : addr;
+		a = offset ? ir_ADD_A(addr, ir_const_size_t(rcc->active_ctx, offset)) : addr;
 		mask = ((1UL<<bits)-1);
 		if (ir_type_size[type] > 1) {
-			ref = ir_ZEXT(type, ir_AND_U8(ir_LOAD_U8(a), ir_const_u8(active_ctx, mask)));
+			ref = ir_ZEXT(type, ir_AND_U8(ir_LOAD_U8(a), ir_const_u8(rcc->active_ctx, mask)));
 		} else {
 			ir_val v;
 			v.u64 = mask;
-			ref = ir_AND(type, ir_LOAD(type, a), ir_const(active_ctx, v, type));
+			ref = ir_AND(type, ir_LOAD(type, a), ir_const(rcc->active_ctx, v, type));
 		}
 		IR_ASSERT(shift.u64 < ir_type_size[type] * 8);
-		ref = ir_SHL(type, ref, ir_const(active_ctx, shift, type));
+		ref = ir_SHL(type, ref, ir_const(rcc->active_ctx, shift, type));
 		ret = ret ? ir_OR(type, ret, ref) : ref;
 	}
 
@@ -3276,7 +3255,7 @@ static void c_do_load_bit_field_packed(c_value *val, uint32_t first_bit, uint32_
 		shift.u64 = ir_type_size[val->u.type] * 8 - orig_bits;
 		if (shift.u64) {
 			IR_ASSERT(shift.u64 < ir_type_size[type] * 8);
-			ir_ref c = ir_const(active_ctx, shift, val->u.type);
+			ir_ref c = ir_const(rcc->active_ctx, shift, val->u.type);
 			ret = ir_SHL(val->u.type, ret, c);
 			ret = ir_SAR(val->u.type, ret, c);
 		}
@@ -3285,7 +3264,7 @@ static void c_do_load_bit_field_packed(c_value *val, uint32_t first_bit, uint32_
 	val->u.ref = ret;
 }
 
-void c_value_rval(c_value *val)
+void c_value_rval(rcc_ctx *rcc, c_value *val)
 {
 	if (c_value_is_lval(val)) {
 		IR_ASSERT(val->type->kind != C_TYPE_ARRAY && val->type->kind != C_TYPE_FUNC);
@@ -3300,13 +3279,13 @@ void c_value_rval(c_value *val)
 		} else if (val->type->kind != C_TYPE_STRUCT && val->type->kind != C_TYPE_UNION) {
 			if (!C_IS_BIT_FIELD(val->u.proto)) {
 				if (IR_IS_CONST_REF(val->u.ref)
-				 && ((active_ctx->ir_base[val->u.ref].op == IR_SYM
+				 && ((rcc->active_ctx->ir_base[val->u.ref].op == IR_SYM
 				   && ((val->type->attr & (C_ATTR_CONST|C_ATTR_VOLATILE)) == C_ATTR_CONST))
-				  || active_ctx->ir_base[val->u.ref].op == IR_STR)
+				  || rcc->active_ctx->ir_base[val->u.ref].op == IR_STR)
 				 && (C_IS_TYPE_INT(val->type) || C_IS_TYPE_FP(val->type))
 				 && val->u.val.ptr) {
 					const void *p = val->u.val.ptr;
-					ir_type t = c_type2ir(val->type);
+					ir_type t = c_type2ir(rcc, val->type);
 					ir_val v;
 
 					v.u64 = 0;
@@ -3335,32 +3314,32 @@ void c_value_rval(c_value *val)
 					val->u.ref = ir_LOAD(val->u.type, val->u.ref);
 				}
 			} else if (!C_IS_BIT_FIELD_PACKED(val->u.proto)) {
-				c_do_load_bit_field(val, C_BIT_FIELD_START(val->u.proto), C_BIT_FIELD_SIZE(val->u.proto));
+				c_do_load_bit_field(rcc, val, C_BIT_FIELD_START(val->u.proto), C_BIT_FIELD_SIZE(val->u.proto));
 			} else {
-				c_do_load_bit_field_packed(val, C_BIT_FIELD_START(val->u.proto), C_BIT_FIELD_SIZE(val->u.proto));
+				c_do_load_bit_field_packed(rcc, val, C_BIT_FIELD_START(val->u.proto), C_BIT_FIELD_SIZE(val->u.proto));
 			}
 		}
 		val->u.op &= ~(C_VAL_LVAL|C_VAL_VAR|C_VAL_REG|C_VAL_VOLATILE);
 	}
 }
 
-static ir_ref c_value_ref(c_value *val)
+static ir_ref c_value_ref(rcc_ctx *rcc, c_value *val)
 {
 	if (c_value_is_const(val)) {
 		if (c_value_is_const_str(val)) {
-			return c_create_str_sym(val);
+			return c_create_str_sym(rcc, val);
 		}
-		ir_type t = (val->type->kind == C_TYPE_ENUM) ? c_type2ir(val->type) : val->u.type;
-		return ir_const(active_ctx, val->u.val, t);
+		ir_type t = (val->type->kind == C_TYPE_ENUM) ? c_type2ir(rcc, val->type) : val->u.type;
+		return ir_const(rcc->active_ctx, val->u.val, t);
 	} else {
 		if (c_value_is_lval(val)) {
-			c_value_rval(val);
+			c_value_rval(rcc, val);
 		}
 		return val->u.ref;
 	}
 }
 
-static void c_do_trunc(const c_type *t, ir_type type, c_value *v)
+static void c_do_trunc(rcc_ctx *rcc, const c_type *t, ir_type type, c_value *v)
 {
 	ir_val val;
 
@@ -3369,7 +3348,7 @@ static void c_do_trunc(const c_type *t, ir_type type, c_value *v)
 		 || ((v->type->kind == C_TYPE_ARRAY || v->type->kind == C_TYPE_FUNC) && t->size < sizeof(void*))));
 	IR_ASSERT(IR_IS_TYPE_INT(type) && IR_IS_TYPE_INT(v->u.type) && ir_type_size[type] < ir_type_size[v->u.type]);
 	if (c_value_is_ref(v)) {
-		c_value_set_rval(v, t, type, ir_TRUNC(type, c_value_ref(v)));
+		c_value_set_rval(v, t, type, ir_TRUNC(type, c_value_ref(rcc, v)));
 	} else {
 		switch (type) {
 			case IR_I8:  val.i64 = v->u.val.i8; break;
@@ -3386,12 +3365,12 @@ static void c_do_trunc(const c_type *t, ir_type type, c_value *v)
 	}
 }
 
-static void c_do_bitcast(const c_type *t, ir_type type, c_value *v)
+static void c_do_bitcast(rcc_ctx *rcc, const c_type *t, ir_type type, c_value *v)
 {
 	IR_ASSERT(t->size == v->type->size || (t->size == sizeof(void*) && v->type->kind == C_TYPE_ARRAY));
 	IR_ASSERT(ir_type_size[type] == ir_type_size[v->u.type]);
 	if (c_value_is_ref(v) || c_value_is_const_str(v)) {
-		c_value_set_rval(v, t, type, ir_BITCAST(type, c_value_ref(v)));
+		c_value_set_rval(v, t, type, ir_BITCAST(type, c_value_ref(rcc, v)));
 	} else {
 		switch (type) {
 			case IR_BOOL: v->u.val.u64 = v->u.val.i64 != 0; break;
@@ -3418,14 +3397,14 @@ static void c_do_bitcast(const c_type *t, ir_type type, c_value *v)
 	}
 }
 
-static void c_do_sext(const c_type *t, ir_type type, c_value *v)
+static void c_do_sext(rcc_ctx *rcc, const c_type *t, ir_type type, c_value *v)
 {
 	ir_val val;
 
 	IR_ASSERT(C_IS_TYPE_INT_OR_PTR(t) && C_IS_TYPE_INT_OR_PTR(v->type) && t->size > v->type->size);
 	IR_ASSERT(IR_IS_TYPE_INT(type) && IR_IS_TYPE_INT(v->u.type) && ir_type_size[type] > ir_type_size[v->u.type]);
 	if (c_value_is_ref(v)) {
-		c_value_set_rval(v, t, type, ir_SEXT(type, c_value_ref(v)));
+		c_value_set_rval(v, t, type, ir_SEXT(type, c_value_ref(rcc, v)));
 	} else {
 		switch (v->u.type) {
 			case IR_I8:
@@ -3442,14 +3421,14 @@ static void c_do_sext(const c_type *t, ir_type type, c_value *v)
 	}
 }
 
-static void c_do_zext(const c_type *t, ir_type type, c_value *v)
+static void c_do_zext(rcc_ctx *rcc, const c_type *t, ir_type type, c_value *v)
 {
 	ir_val val;
 
 	IR_ASSERT(C_IS_TYPE_INT_OR_PTR(t) && C_IS_TYPE_INT_OR_PTR(v->type) && t->size > v->type->size);
 	IR_ASSERT(IR_IS_TYPE_INT(type) && IR_IS_TYPE_INT(v->u.type) && ir_type_size[type] > ir_type_size[v->u.type]);
 	if (c_value_is_ref(v)) {
-		c_value_set_rval(v, t, type, ir_ZEXT(type, c_value_ref(v)));
+		c_value_set_rval(v, t, type, ir_ZEXT(type, c_value_ref(rcc, v)));
 	} else {
 		switch (v->u.type) {
 			case IR_I8:
@@ -3466,14 +3445,14 @@ static void c_do_zext(const c_type *t, ir_type type, c_value *v)
 	}
 }
 
-static void c_do_fp2int(const c_type *t, ir_type type, c_value *v)
+static void c_do_fp2int(rcc_ctx *rcc, const c_type *t, ir_type type, c_value *v)
 {
 	ir_val val;
 
 	IR_ASSERT((C_IS_TYPE_INT(t) || t->kind == C_TYPE_ENUM) && C_IS_TYPE_FP(v->type));
 	IR_ASSERT(IR_IS_TYPE_INT(type) && IR_IS_TYPE_FP(v->u.type));
 	if (c_value_is_ref(v)) {
-		c_value_set_rval(v, t, type, ir_FP2INT(type, c_value_ref(v)));
+		c_value_set_rval(v, t, type, ir_FP2INT(type, c_value_ref(rcc, v)));
 	} else {
 		if (v->u.type == IR_FLOAT) {
 			switch (type) {
@@ -3511,14 +3490,14 @@ static void c_do_fp2int(const c_type *t, ir_type type, c_value *v)
 	}
 }
 
-static void c_do_int2fp(const c_type *t, ir_type type, c_value *v)
+static void c_do_int2fp(rcc_ctx *rcc, const c_type *t, ir_type type, c_value *v)
 {
 	ir_val val;
 
 	IR_ASSERT(C_IS_TYPE_FP(t) && (C_IS_TYPE_INT(v->type) || v->type->kind == C_TYPE_ENUM));
 	IR_ASSERT(IR_IS_TYPE_FP(type) && IR_IS_TYPE_INT(v->u.type));
 	if (c_value_is_ref(v)) {
-		c_value_set_rval(v, t, type, ir_INT2FP(type, c_value_ref(v)));
+		c_value_set_rval(v, t, type, ir_INT2FP(type, c_value_ref(rcc, v)));
 	} else {
 		if (type == IR_FLOAT) {
 			switch (v->u.type) {
@@ -3554,14 +3533,14 @@ static void c_do_int2fp(const c_type *t, ir_type type, c_value *v)
 	}
 }
 
-static void c_do_fp2fp(const c_type *t, ir_type type, c_value *v)
+static void c_do_fp2fp(rcc_ctx *rcc, const c_type *t, ir_type type, c_value *v)
 {
 	ir_val val;
 
 	IR_ASSERT(C_IS_TYPE_FP(t) && C_IS_TYPE_FP(v->type));
 	IR_ASSERT(IR_IS_TYPE_FP(type) && IR_IS_TYPE_FP(v->u.type));
 	if (c_value_is_ref(v)) {
-		c_value_set_rval(v, t, type, ir_FP2FP(type, c_value_ref(v)));
+		c_value_set_rval(v, t, type, ir_FP2FP(type, c_value_ref(rcc, v)));
 	} else {
 		if (type == IR_FLOAT) {
 			val.f = (float)v->u.val.d;
@@ -3573,30 +3552,30 @@ static void c_do_fp2fp(const c_type *t, ir_type type, c_value *v)
 	}
 }
 
-static void c_do_cvt(const c_type *t, ir_type type, c_value *v)
+static void c_do_cvt(rcc_ctx *rcc, const c_type *t, ir_type type, c_value *v)
 {
 	if (type != v->u.type) {
 		if (IR_IS_TYPE_INT(type)) {
 			if (IR_IS_TYPE_INT(v->u.type)) {
 				if (ir_type_size[type] < ir_type_size[v->u.type]) {
-					c_do_trunc(t, type, v);
+					c_do_trunc(rcc, t, type, v);
 				} else if (ir_type_size[type] == ir_type_size[v->u.type]) {
-					c_do_bitcast(t, type, v);
+					c_do_bitcast(rcc, t, type, v);
 				} else if (IR_IS_TYPE_SIGNED(v->u.type)) {
-					c_do_sext(t, type, v);
+					c_do_sext(rcc, t, type, v);
 				} else {
-					c_do_zext(t, type, v);
+					c_do_zext(rcc, t, type, v);
 				}
 			} else if (IR_IS_TYPE_FP(v->u.type)) {
-				c_do_fp2int(t, type, v);
+				c_do_fp2int(rcc, t, type, v);
 			} else {
 				IR_ASSERT(0);
 			}
 		} else if (IR_IS_TYPE_FP(type)) {
 			if (IR_IS_TYPE_INT(v->u.type)) {
-				c_do_int2fp(t, type, v);
+				c_do_int2fp(rcc, t, type, v);
 			} else if (IR_IS_TYPE_FP(v->u.type)) {
-				c_do_fp2fp(t, type, v);
+				c_do_fp2fp(rcc, t, type, v);
 			} else {
 				IR_ASSERT(0);
 			}
@@ -3605,13 +3584,13 @@ static void c_do_cvt(const c_type *t, ir_type type, c_value *v)
 		}
 	} else if (t != v->type) {
 		if (c_value_is_const_str(v)) {
-			c_create_str_sym(v);
+			c_create_str_sym(rcc, v);
 		}
 		v->type = t;
 	}
 }
 
-void c_do_addr(c_value *v)
+void c_do_addr(rcc_ctx *rcc, c_value *v)
 {
 	c_type *type;
 	ir_ref ref;
@@ -3626,7 +3605,7 @@ void c_do_addr(c_value *v)
 		yy_error("cannot take address of bit-field");
 	}
 
-	type = c_create_pointer_type(v->type);
+	type = c_create_pointer_type(rcc, v->type);
 	if (c_value_is_ref(v)) {
 		if (c_value_is_var(v)) {
 			ref = ir_VADDR(v->u.ref);
@@ -3635,20 +3614,20 @@ void c_do_addr(c_value *v)
 		} else {
 			ref = v->u.ref;
 		}
-		if (!IR_IS_CONST_REF(ref) || IR_IS_SYM_CONST(active_ctx->ir_base[ref].op)) {
+		if (!IR_IS_CONST_REF(ref) || IR_IS_SYM_CONST(rcc->active_ctx->ir_base[ref].op)) {
 			c_value_set_rval(v, type, IR_ADDR, ref);
 		} else {
-			c_value_set_const(v, type, IR_ADDR, active_ctx->ir_base[ref].val);
+			c_value_set_const(v, type, IR_ADDR, rcc->active_ctx->ir_base[ref].val);
 		}
 	} else {
 		if (c_value_is_const_str(v)) {
-			c_create_str_sym(v);
+			c_create_str_sym(rcc, v);
 		}
 		v->type = type;
 	}
 }
 
-static ir_ref c_do_store_bit_field(ir_ref addr, uint32_t first_bit, uint32_t bits, c_value *val)
+static ir_ref c_do_store_bit_field(rcc_ctx *rcc, ir_ref addr, uint32_t first_bit, uint32_t bits, c_value *val)
 {
 	ir_type type;
 	ir_val v;
@@ -3665,7 +3644,7 @@ static ir_ref c_do_store_bit_field(ir_ref addr, uint32_t first_bit, uint32_t bit
 		type = IR_IS_TYPE_SIGNED(val->u.type) ? IR_I64 : IR_U64;
 	}
 
-	ret = ref = c_value_ref(val);
+	ret = ref = c_value_ref(rcc, val);
 	if (val->u.type != type) {
 		if (ir_type_size[type] < ir_type_size[val->u.type]) {
 			ref = ir_TRUNC(type, ref);
@@ -3677,13 +3656,13 @@ static ir_ref c_do_store_bit_field(ir_ref addr, uint32_t first_bit, uint32_t bit
 	}
 
 	v.u64 = (1ULL<<bits)-1;
-	ref = ir_AND(type, ref, ir_const(active_ctx, v, type));
+	ref = ir_AND(type, ref, ir_const(rcc->active_ctx, v, type));
 	if (val->u.type == type) ret = ref;
 
 	if (first_bit) {
 		v.u64 = first_bit;
 		IR_ASSERT(v.u64 < ir_type_size[type] * 8);
-		ref = ir_SHL(type, ref, ir_const(active_ctx, v, type));
+		ref = ir_SHL(type, ref, ir_const(rcc->active_ctx, v, type));
 	}
 
 	v.u64 = ~(((1ULL<<bits)-1)<<first_bit);
@@ -3692,25 +3671,25 @@ static ir_ref c_do_store_bit_field(ir_ref addr, uint32_t first_bit, uint32_t bit
 		ir_OR(type,
 			ir_AND(type,
 				ir_LOAD(type, addr),
-				ir_const(active_ctx, v, type)),
+				ir_const(rcc->active_ctx, v, type)),
 			ref));
 
 	if (IR_IS_TYPE_SIGNED(val->u.type) && val->type->kind != C_TYPE_ENUM) {
 		v.u64 = ir_type_size[val->u.type] * 8 - bits;
 		if (v.u64) {
-			ir_ref c = ir_const(active_ctx, v, val->u.type);
+			ir_ref c = ir_const(rcc->active_ctx, v, val->u.type);
 			IR_ASSERT(v.u64 < ir_type_size[val->u.type] * 8);
 			ret = ir_SHL(val->u.type, ret, c);
 			ret = ir_SAR(val->u.type, ret, c);
 		}
 	} else if (val->u.type != type) {
 		v.u64 = (1ULL<<bits)-1;
-		ret = ir_AND(val->u.type, ret, ir_const(active_ctx, v, val->u.type));
+		ret = ir_AND(val->u.type, ret, ir_const(rcc->active_ctx, v, val->u.type));
 	}
 	return ret;
 }
 
-static ir_ref c_do_store_bit_field_packed(ir_ref addr, uint32_t first_bit, uint32_t bits, c_value *val)
+static ir_ref c_do_store_bit_field_packed(rcc_ctx *rcc, ir_ref addr, uint32_t first_bit, uint32_t bits, c_value *val)
 {
 	ir_type type = (ir_type_size[val->u.type] != 1) ? IR_U8 : val->u.type;
 	ir_val shift, mask;
@@ -3722,22 +3701,22 @@ static ir_ref c_do_store_bit_field_packed(ir_ref addr, uint32_t first_bit, uint3
 		offset++;
 	}
 
-	ret = ref = c_value_ref(val);
+	ret = ref = c_value_ref(rcc, val);
 
 	shift.i64 = 0;
 	if (first_bit) {
 		mask.u64 = ~(((1ULL<<(8-first_bit))-1)<<first_bit);
 		shift.u64 = first_bit;
 		IR_ASSERT(shift.u64 < ir_type_size[val->u.type] * 8);
-		ref = ir_SHL(val->u.type, ret, ir_const(active_ctx, shift, val->u.type));
+		ref = ir_SHL(val->u.type, ret, ir_const(rcc->active_ctx, shift, val->u.type));
 		if (ir_type_size[val->u.type] != 1) {
 			ref = ir_TRUNC_U8(ref);
 		}
-		a = offset ? ir_ADD_A(addr, ir_const_size_t(active_ctx, offset)) : addr;
+		a = offset ? ir_ADD_A(addr, ir_const_size_t(rcc->active_ctx, offset)) : addr;
 		ir_STORE(
 			a,
 			ir_OR(type,
-				ir_AND(type, ir_LOAD(type, a), ir_const(active_ctx, mask, type)),
+				ir_AND(type, ir_LOAD(type, a), ir_const(rcc->active_ctx, mask, type)),
 				ref));
 		shift.u64 = 8 - first_bit;
 		bits -= 8 - first_bit;
@@ -3745,10 +3724,10 @@ static ir_ref c_do_store_bit_field_packed(ir_ref addr, uint32_t first_bit, uint3
 	}
 
 	while (bits >= 8) {
-		a = offset ? ir_ADD_A(addr, ir_const_size_t(active_ctx, offset)) : addr;
+		a = offset ? ir_ADD_A(addr, ir_const_size_t(rcc->active_ctx, offset)) : addr;
 		if (shift.u64) {
 			IR_ASSERT(shift.u64 < ir_type_size[val->u.type] * 8);
-			ref = ir_SHR(val->u.type, ret, ir_const(active_ctx, shift, val->u.type));
+			ref = ir_SHR(val->u.type, ret, ir_const(rcc->active_ctx, shift, val->u.type));
 		} else {
 			ref = ret;
 		}
@@ -3762,15 +3741,15 @@ static ir_ref c_do_store_bit_field_packed(ir_ref addr, uint32_t first_bit, uint3
 	}
 
 	if (bits) {
-		a = ir_ADD_A(addr, ir_const_size_t(active_ctx, offset));
+		a = ir_ADD_A(addr, ir_const_size_t(rcc->active_ctx, offset));
 		IR_ASSERT(shift.u64 < ir_type_size[val->u.type] * 8);
-		ref = ir_SHR(val->u.type, ret, ir_const(active_ctx, shift, val->u.type));
+		ref = ir_SHR(val->u.type, ret, ir_const(rcc->active_ctx, shift, val->u.type));
 		if (ir_type_size[val->u.type] != 1) {
 			ref = ir_TRUNC_U8(ref);
 		}
 
 		mask.u64 = (1ULL<<bits)-1;
-		ref = ir_AND(type, ref, ir_const(active_ctx, mask, type));
+		ref = ir_AND(type, ref, ir_const(rcc->active_ctx, mask, type));
 
 		mask.u64 = ~((1ULL<<bits)-1);
 		ir_STORE(
@@ -3778,19 +3757,19 @@ static ir_ref c_do_store_bit_field_packed(ir_ref addr, uint32_t first_bit, uint3
 				ir_OR(type,
 				ir_AND(type,
 					ir_LOAD(type, a),
-					ir_const(active_ctx, mask, type)),
+					ir_const(rcc->active_ctx, mask, type)),
 				ref));
 	}
 
 	return ret;
 }
 
-static ir_ref c_do_store(c_value *addr, c_value *val)
+static ir_ref c_do_store(rcc_ctx *rcc, c_value *addr, c_value *val)
 {
 	ir_ref ref;
 
 	if (!C_IS_BIT_FIELD(addr->u.proto)) {
-		ref = c_value_ref(val);
+		ref = c_value_ref(rcc, val);
 		if (c_value_is_var(addr)) {
 			if ((addr->type->attr & C_ATTR_VOLATILE) || (addr->u.op & C_VAL_VOLATILE)) {
 				ir_VSTORE_v(addr->u.ref, ref);
@@ -3808,10 +3787,10 @@ static ir_ref c_do_store(c_value *addr, c_value *val)
 		}
 		return ref;
 	} else if (!C_IS_BIT_FIELD_PACKED(addr->u.proto)) {
-		return c_do_store_bit_field(addr->u.ref,
+		return c_do_store_bit_field(rcc, addr->u.ref,
 			C_BIT_FIELD_START(addr->u.proto), C_BIT_FIELD_SIZE(addr->u.proto), val);
 	} else {
-		return c_do_store_bit_field_packed(addr->u.ref,
+		return c_do_store_bit_field_packed(rcc, addr->u.ref,
 			C_BIT_FIELD_START(addr->u.proto), C_BIT_FIELD_SIZE(addr->u.proto), val);
 	}
 }
@@ -3821,7 +3800,7 @@ static ir_ref c_do_store(c_value *addr, c_value *val)
  * arg == -1 - assign
  * arg == -2 - init
  */
-static void c_do_check_cvt(const c_type *type, c_value *val, int32_t arg)
+static void c_do_check_cvt(rcc_ctx *rcc, const c_type *type, c_value *val, int32_t arg)
 {
 	const c_type *val_type = val->type;
 	uint32_t attr;
@@ -3831,7 +3810,7 @@ static void c_do_check_cvt(const c_type *type, c_value *val, int32_t arg)
 			if (val_type->kind == C_TYPE_POINTER || val_type->kind == C_TYPE_ARRAY || val_type->kind == C_TYPE_FUNC) {
 				if (arg < 0) {
 					yy_warning("assignment makes integer from pointer without a cast");
-					if (arg == -2 && !active_scope) {
+					if (arg == -2 && !rcc->active_scope) {
 						yy_error("initializer element is not computable at load time");
 					}
 				} else if (arg > 0) {
@@ -3935,11 +3914,11 @@ check_qualifiers:
 	} else {
 		goto incompatible;
 	}
-	c_value_rval(val);
-	c_do_cvt(type, c_type2ir(type), val);
+	c_value_rval(rcc, val);
+	c_do_cvt(rcc, type, c_type2ir(rcc, type), val);
 }
 
-void c_do_cast(const c_type *t, c_value *v)
+void c_do_cast(rcc_ctx *rcc, const c_type *t, c_value *v)
 {
 	if (t == v->type) {
 	} else if (t->kind == C_TYPE_VOID) {
@@ -3952,13 +3931,13 @@ void c_do_cast(const c_type *t, c_value *v)
 			for (i = 0, f = t->record.fields; i < t->record.num_fields; f++, i++) {
 				if (f->type == v->type
 				 || c_compatible_types(f->type, v->type, 1, 0)) {
-					ir_ref addr = c_do_alloca(t->size, c_attr2align(t->attr), 0);
+					ir_ref addr = c_do_alloca(rcc, t->size, c_attr2align(t->attr), 0);
 					if (C_IS_TYPE_SCALAR_OR_PTR(v->type)) {
-						ir_STORE(addr, c_value_ref(v));
+						ir_STORE(addr, c_value_ref(rcc, v));
 					} else {
 						IR_ASSERT(v->type->size);
-						ir_memcpy(active_ctx, addr, c_value_ref(v),
-							ir_const_size_t(active_ctx, v->type->size), c_attr2align(v->type->attr));
+						ir_memcpy(rcc, addr, c_value_ref(rcc, v),
+							ir_const_size_t(rcc->active_ctx, v->type->size), c_attr2align(v->type->attr));
 					}
 					c_value_set_rval(v, t, IR_ADDR, addr);
 					return;
@@ -3987,20 +3966,20 @@ void c_do_cast(const c_type *t, c_value *v)
 			yy_warning("cast from pointer to integer of different size");
 		}
 	}
-	c_value_rval(v);
+	c_value_rval(rcc, v);
 	if (t->attr & (C_ATTR_CONST|C_ATTR_VOLATILE)) {
 		/* remove top-level qualifiers */
-		c_type *type = ir_arena_alloc(&c_arena, sizeof(c_type));
+		c_type *type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
 		*type = *t;
-		if (active_scope) type->flags &= ~C_TYPE_GLOBAL;
+		if (rcc->active_scope) type->flags &= ~C_TYPE_GLOBAL;
 		type->attr &= ~(C_ATTR_CONST|C_ATTR_VOLATILE);
 		t = type;
 	}
-	c_do_cvt(t, c_type2ir(t), v);
+	c_do_cvt(rcc, t, c_type2ir(rcc, t), v);
 	v->u.proto = 0; /*reset bit-field */
 }
 
-void c_do_post_op(yy_sym sym, c_value *v)
+void c_do_post_op(rcc_ctx *rcc, yy_sym sym, c_value *v)
 {
 	c_value val, tmp;
 	ir_type res_type, type;
@@ -4008,18 +3987,18 @@ void c_do_post_op(yy_sym sym, c_value *v)
 	ir_ref ref;
 
 	if (!c_value_is_lval(v) || !C_IS_TYPE_SCALAR_OR_PTR(v->type)) {
-		yy_error_fmt("lvalue required as \"%s\" operand", yy_sym2str(sym));
+		yy_error_fmt("lvalue required as \"%s\" operand", yy_sym2str(rcc, sym));
 	} else if (v->type->attr & C_ATTR_CONST) {
 		yy_error_fmt("% of read-only location",
 			(sym == YY__PLUS_PLUS) ? "increment" : "decrement");
 	}
 	val = *v;
-	c_value_rval(&val);
+	c_value_rval(rcc, &val);
 	res_type = type = val.u.type;
 	if (v->type->kind == C_TYPE_POINTER) {
 		if (v->type->pointer.type->kind == C_TYPE_VOID) {
 			one.u64 = 1;
-		} else if ((v->type->pointer.type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(v->type->pointer.type)) {
+		} else if ((v->type->pointer.type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(rcc, v->type->pointer.type)) {
 			yy_error_fmt("%s of pointer to an incomplete type",
 				(sym == YY__PLUS_PLUS) ? "increment" : "decrement");
 		} else {
@@ -4038,35 +4017,35 @@ void c_do_post_op(yy_sym sym, c_value *v)
 		IR_ASSERT(0);
 	}
 	if (sym == YY__PLUS_PLUS) {
-		ref = ir_ADD(res_type, val.u.ref, ir_const(active_ctx, one, type));
+		ref = ir_ADD(res_type, val.u.ref, ir_const(rcc->active_ctx, one, type));
 	} else {
 		IR_ASSERT(sym == YY__MINUS_MINUS);
-		ref = ir_SUB(res_type, val.u.ref, ir_const(active_ctx, one, type));
+		ref = ir_SUB(res_type, val.u.ref, ir_const(rcc->active_ctx, one, type));
 	}
 	c_value_set_rval(&tmp, val.type, type, ref);
-	c_do_store(v, &tmp);
+	c_do_store(rcc, v, &tmp);
 	*v = val;
 }
 
-void c_do_pre_op(yy_sym sym, c_value *v)
+void c_do_pre_op(rcc_ctx *rcc, yy_sym sym, c_value *v)
 {
 	c_value val;
 	ir_type res_type, type;
 	ir_val one;
 
 	if (!c_value_is_lval(v) || !C_IS_TYPE_SCALAR_OR_PTR(v->type)) {
-		yy_error_fmt("lvalue required as \"%s\" operand", yy_sym2str(sym));
+		yy_error_fmt("lvalue required as \"%s\" operand", yy_sym2str(rcc, sym));
 	} else if (v->type->attr & C_ATTR_CONST) {
 		yy_error_fmt("% of read-only location",
 			(sym == YY__PLUS_PLUS) ? "increment" : "decrement");
 	}
 	val = *v;
-	c_value_rval(&val);
+	c_value_rval(rcc, &val);
 	res_type = type = val.u.type;
 	if (v->type->kind == C_TYPE_POINTER) {
 		if (v->type->pointer.type->kind == C_TYPE_VOID) {
 			one.u64 = 1;
-		} else if ((v->type->pointer.type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(v->type->pointer.type)) {
+		} else if ((v->type->pointer.type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(rcc, v->type->pointer.type)) {
 			yy_error_fmt("%s of pointer to an incomplete type",
 				(sym == YY__PLUS_PLUS) ? "increment" : "decrement");
 		} else {
@@ -4085,18 +4064,18 @@ void c_do_pre_op(yy_sym sym, c_value *v)
 		IR_ASSERT(0);
 	}
 	if (sym == YY__PLUS_PLUS) {
-		val.u.ref = ir_ADD(res_type, val.u.ref, ir_const(active_ctx, one, type));
+		val.u.ref = ir_ADD(res_type, val.u.ref, ir_const(rcc->active_ctx, one, type));
 	} else {
 		IR_ASSERT(sym == YY__MINUS_MINUS);
-		val.u.ref = ir_SUB(res_type, val.u.ref, ir_const(active_ctx, one, type));
+		val.u.ref = ir_SUB(res_type, val.u.ref, ir_const(rcc->active_ctx, one, type));
 	}
-	c_do_store(v, &val);
+	c_do_store(rcc, v, &val);
 	*v = val;
 }
 
-void c_do_deref(c_value *v)
+void c_do_deref(rcc_ctx *rcc, c_value *v)
 {
-	c_value_rval(v);
+	c_value_rval(rcc, v);
 	if (v->type->kind != C_TYPE_POINTER && v->type->kind != C_TYPE_ARRAY) {
 		if (v->type->kind == C_TYPE_FUNC) return;
 		yy_error("invalid type argument of unary \"*\"");
@@ -4104,47 +4083,47 @@ void c_do_deref(c_value *v)
 		yy_warning("dereferencing \"void *\" pointer");
 		c_value_set_rval(v, &c_type_void, IR_VOID, IR_UNUSED);
 		return;
-	} else if ((v->type->pointer.type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(v->type->pointer.type)) {
+	} else if ((v->type->pointer.type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(rcc, v->type->pointer.type)) {
 		yy_error_fmt("invalid use of undefined \"%s %s\"",
-			c_type_kind2str(v->type->pointer.type->kind), yy_sym2str(v->type->pointer.type->tag));
+			c_type_kind2str(v->type->pointer.type->kind), yy_sym2str(rcc, v->type->pointer.type->tag));
 	}
 	if (v->type->pointer.type->kind != C_TYPE_FUNC
 	 && v->type->pointer.type->kind != C_TYPE_ARRAY) {
-		c_value_set_lval(v, v->type->pointer.type, c_type2ir(v->type->pointer.type), c_value_ref(v));
+		c_value_set_lval(v, v->type->pointer.type, c_type2ir(rcc, v->type->pointer.type), c_value_ref(rcc, v));
 	} else {
-		c_value_set_rval(v, v->type->pointer.type, c_type2ir(v->type->pointer.type), c_value_ref(v));
+		c_value_set_rval(v, v->type->pointer.type, c_type2ir(rcc, v->type->pointer.type), c_value_ref(rcc, v));
 	}
 }
 
-void c_do_unary_plus(c_value *v)
+void c_do_unary_plus(rcc_ctx *rcc, c_value *v)
 {
 	const c_type *t = v->type;
 
-	c_value_rval(v);
+	c_value_rval(rcc, v);
 	if (C_IS_TYPE_INT(t) || t->kind == C_TYPE_ENUM) {
 		if (t->size < 4) {
-			c_do_cvt(&c_type_i32, IR_I32, v);
+			c_do_cvt(rcc, &c_type_i32, IR_I32, v);
 		}
 	} else if (!C_IS_TYPE_FP(t)) {
 		yy_error("invalid type argument of unary \"+\"");
 	}
 }
 
-void c_do_neg(c_value *v)
+void c_do_neg(rcc_ctx *rcc, c_value *v)
 {
 	const c_type *t = v->type;
 
-	c_value_rval(v);
+	c_value_rval(rcc, v);
 	if (C_IS_TYPE_INT(t) || t->kind == C_TYPE_ENUM) {
 		if (t->size < 4) {
-			c_do_cvt(&c_type_i32, IR_I32, v);
+			c_do_cvt(rcc, &c_type_i32, IR_I32, v);
 		}
 	} else if (!C_IS_TYPE_FP(t)) {
 		yy_error("invalid type argument of unary \"-\"");
 	}
 
 	if (c_value_is_ref(v)) {
-		v->u.ref = ir_NEG(v->u.type, c_value_ref(v));
+		v->u.ref = ir_NEG(v->u.type, c_value_ref(rcc, v));
 	} else {
 		switch (v->u.type) {
 			case IR_I32:
@@ -4158,20 +4137,20 @@ void c_do_neg(c_value *v)
 	}
 }
 
-void c_do_not(c_value *v)
+void c_do_not(rcc_ctx *rcc, c_value *v)
 {
 	const c_type *t = v->type;
 
-	c_value_rval(v);
+	c_value_rval(rcc, v);
 	if (C_IS_TYPE_INT(t) || t->kind == C_TYPE_ENUM) {
 		if (t->size < 4) {
-			c_do_cvt(&c_type_i32, IR_I32, v);
+			c_do_cvt(rcc, &c_type_i32, IR_I32, v);
 		}
 	} else {
 		yy_error("invalid type argument of unary \"~\"");
 	}
 	if (c_value_is_ref(v)) {
-		v->u.ref = ir_NOT(v->u.type, c_value_ref(v));
+		v->u.ref = ir_NOT(v->u.type, c_value_ref(rcc, v));
 	} else {
 		switch (v->u.type) {
 			case IR_I32: v->u.val.i64 = ~v->u.val.i32; break;
@@ -4183,21 +4162,21 @@ void c_do_not(c_value *v)
 	}
 }
 
-void c_do_bool_not(c_value *v)
+void c_do_bool_not(rcc_ctx *rcc, c_value *v)
 {
 	ir_val val;
 
-	c_value_rval(v);
+	c_value_rval(rcc, v);
 	if (v->type->kind == C_TYPE_VOID || v->type->kind == C_TYPE_STRUCT || v->type->kind == C_TYPE_UNION) {
 		yy_error("invalid type argument of unary \"!\"");
 	}
 	if (c_value_is_ref(v)) {
 		if (v->u.type == IR_BOOL) {
-			c_value_set_rval(v, &c_type_bool, IR_BOOL, ir_NOT_B(c_value_ref(v)));
+			c_value_set_rval(v, &c_type_bool, IR_BOOL, ir_NOT_B(c_value_ref(rcc, v)));
 		} else {
 			val.u64 = 0;
 			c_value_set_rval(v, &c_type_bool, IR_BOOL,
-				ir_EQ(c_value_ref(v), ir_const(active_ctx, val, v->u.type)));
+				ir_EQ(c_value_ref(rcc, v), ir_const(rcc->active_ctx, val, v->u.type)));
 		}
 	} else {
 		val.u64 = (v->u.val.u64 == 0);
@@ -4205,7 +4184,7 @@ void c_do_bool_not(c_value *v)
 	}
 }
 
-void c_do_array_dim(c_value *v, c_value *dim)
+void c_do_array_dim(rcc_ctx *rcc, c_value *v, c_value *dim)
 {
 	const c_type *type;
 	ir_ref ref;
@@ -4218,15 +4197,15 @@ void c_do_array_dim(c_value *v, c_value *dim)
 			|| type->array.type->kind == C_TYPE_STRUCT
 			|| type->array.type->kind == C_TYPE_UNION);
 		type = type->array.type;
-		ref = c_value_ref(v);
+		ref = c_value_ref(rcc, v);
 	} else if (type->kind == C_TYPE_POINTER) {
 		if (type->pointer.type->kind == C_TYPE_VOID) yy_error("dereferencing \"void *\" pointer");
-		if ((type->pointer.type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(type->pointer.type)) {
+		if ((type->pointer.type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(rcc, type->pointer.type)) {
 			yy_error_fmt("invalid use of undefined \"%s %s\"",
-				c_type_kind2str(type->pointer.type->kind), yy_sym2str(type->pointer.type->tag));
+				c_type_kind2str(type->pointer.type->kind), yy_sym2str(rcc, type->pointer.type->tag));
 		}
 		type = type->pointer.type;
-		ref = c_value_ref(v);
+		ref = c_value_ref(rcc, v);
 	} else {
 		type = dim->type;
 		if (type->kind == C_TYPE_ARRAY) {
@@ -4234,67 +4213,67 @@ void c_do_array_dim(c_value *v, c_value *dim)
 			type = type->array.type;
 		} else if (type->kind == C_TYPE_POINTER) {
 			if (type->pointer.type->kind == C_TYPE_VOID) yy_error("dereferencing \"void *\" pointer");
-			if ((type->pointer.type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(type->pointer.type)) {
+			if ((type->pointer.type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(rcc, type->pointer.type)) {
 				yy_error_fmt("invalid use of undefined \"%s %s\"",
-					c_type_kind2str(type->pointer.type->kind), yy_sym2str(type->pointer.type->tag));
+					c_type_kind2str(type->pointer.type->kind), yy_sym2str(rcc, type->pointer.type->tag));
 			}
 			type = type->pointer.type;
 		} else {
 			yy_error("subscripted value is neither array nor pointer");
 		}
 		/* turn X[Y] into Y[X] */
-		ref = c_value_ref(dim);
+		ref = c_value_ref(rcc, dim);
 		dim = v;
 	}
 	if (!C_IS_TYPE_INT(dim->type) && dim->type->kind != C_TYPE_ENUM) yy_error("array subscript is not an integer");
-	c_value_rval(dim);
+	c_value_rval(rcc, dim);
 	if (c_value_is_const(dim) && dim->u.val.u64 == 0) {
 		/* pass */
 	} else if (C_IS_TYPE_SIGNED(dim->type)) {
 		if (dim->type->kind != c_type_ssize_t.kind) {
-			c_do_cvt(&c_type_ssize_t, IR_SSIZE_T, dim);
+			c_do_cvt(rcc, &c_type_ssize_t, IR_SSIZE_T, dim);
 		}
 		if (type->size == 1 && !(type->attr & C_ATTR_VLA)) {
-			ref = ir_ADD_A(ref, c_value_ref(dim));
+			ref = ir_ADD_A(ref, c_value_ref(rcc, dim));
 		} else {
-			ref = ir_ADD_A(ref, ir_MUL(IR_SSIZE_T, c_value_ref(dim), c_type_ssize(type)));
+			ref = ir_ADD_A(ref, ir_MUL(IR_SSIZE_T, c_value_ref(rcc, dim), c_type_ssize(rcc, type)));
 		}
 	} else {
 		if (dim->type->kind != c_type_size_t.kind) {
-			c_do_cvt(&c_type_size_t, IR_SIZE_T, dim);
+			c_do_cvt(rcc, &c_type_size_t, IR_SIZE_T, dim);
 		}
 		if (type->size == 1 && !(type->attr & C_ATTR_VLA)) {
-			ref = ir_ADD_A(ref, c_value_ref(dim));
+			ref = ir_ADD_A(ref, c_value_ref(rcc, dim));
 		} else {
-			ref = ir_ADD_A(ref, ir_MUL(IR_SIZE_T, c_value_ref(dim), c_type_size(type)));
+			ref = ir_ADD_A(ref, ir_MUL(IR_SIZE_T, c_value_ref(rcc, dim), c_type_size(rcc, type)));
 		}
 	}
 	is_volatile = (v->type->kind == C_TYPE_ARRAY)
 		&& ((v->type->attr & C_ATTR_VOLATILE) || (v->u.op & C_VAL_VOLATILE));
 	if (type->kind != C_TYPE_ARRAY) {
-		c_value_set_lval(v, type, c_type2ir(type), ref);
+		c_value_set_lval(v, type, c_type2ir(rcc, type), ref);
 	} else {
-		c_value_set_rval(v, type, c_type2ir(type), ref);
+		c_value_set_rval(v, type, c_type2ir(rcc, type), ref);
 	}
 	if (is_volatile) {
 		v->u.op |= C_VAL_VOLATILE;
 	}
 }
 
-void c_do_struct_field(c_value *v, c_name field_name)
+void c_do_struct_field(rcc_ctx *rcc, c_value *v, c_name field_name)
 {
 	c_field *field;
 	size_t offset;
 	bool is_volatile;
 
 	if (v->type->kind != C_TYPE_STRUCT && v->type->kind != C_TYPE_UNION) {
-		yy_error_fmt("request for member \"%s\" in something not a structure or union", yy_sym2str(field_name));
+		yy_error_fmt("request for member \"%s\" in something not a structure or union", yy_sym2str(rcc, field_name));
 	} else if ((v->type->flags & C_TYPE_INCOMPLETE)) {
 		IR_ASSERT(v->type->tag);
-		if (!c_fix_incomplete_type(v->type)) {
+		if (!c_fix_incomplete_type(rcc, v->type)) {
 			yy_error_fmt("invalid use of undefined \"%s %s\"",
 				(v->type->kind == C_TYPE_STRUCT) ? "struct" : "union",
-				yy_sym2str(v->type->pointer.type->record.tag));
+				yy_sym2str(rcc, v->type->pointer.type->record.tag));
 		}
 	}
 	field = c_find_struct_field(v->type, field_name, &offset);
@@ -4302,31 +4281,31 @@ void c_do_struct_field(c_value *v, c_name field_name)
 		if (v->type->record.tag) {
 			yy_error_fmt("\"%s %s\" hasu.operand no member named \"%s\"",
 				(v->type->kind == C_TYPE_STRUCT) ? "struct" : "union",
-				yy_sym2str(v->type->record.tag),
-				yy_sym2str(field_name));
+				yy_sym2str(rcc, v->type->record.tag),
+				yy_sym2str(rcc, field_name));
 		} else {
 			yy_error_fmt("%s has no member named \"%s\"",
 				(v->type->kind == C_TYPE_STRUCT) ? "struct" : "union",
-				yy_sym2str(field_name));
+				yy_sym2str(rcc, field_name));
 		}
 	}
 	ir_ref ref = v->u.ref;
 	if (offset) {
-		ref = ir_ADD_A(ref, ir_const_size_t(active_ctx, offset));
+		ref = ir_ADD_A(ref, ir_const_size_t(rcc->active_ctx, offset));
 	}
 	is_volatile = ((v->type->attr & C_ATTR_VOLATILE) || (v->u.op & C_VAL_VOLATILE));
 	if (field->type->kind != C_TYPE_ARRAY) {
-		c_value_set_lval(v, field->type, c_type2ir(field->type), ref);
+		c_value_set_lval(v, field->type, c_type2ir(rcc, field->type), ref);
 		v->u.proto = field->bit_field;
 	} else {
-		c_value_set_rval(v, field->type, c_type2ir(field->type), ref);
+		c_value_set_rval(v, field->type, c_type2ir(rcc, field->type), ref);
 	}
 	if (is_volatile) {
 		v->u.op |= C_VAL_VOLATILE;
 	}
 }
 
-void c_do_struct_field_deref(c_value *v, c_name field_name)
+void c_do_struct_field_deref(rcc_ctx *rcc, c_value *v, c_name field_name)
 {
 	c_field *field;
 	size_t offset;
@@ -4335,13 +4314,13 @@ void c_do_struct_field_deref(c_value *v, c_name field_name)
 	if (v->type->kind != C_TYPE_POINTER && v->type->kind != C_TYPE_ARRAY) {
 		yy_error("invalid type argument of \"->\"");
 	} else if (v->type->pointer.type->kind != C_TYPE_STRUCT && v->type->pointer.type->kind != C_TYPE_UNION) {
-		yy_error_fmt("request for member \"%s\" in something not a structure or union", yy_sym2str(field_name));
+		yy_error_fmt("request for member \"%s\" in something not a structure or union", yy_sym2str(rcc, field_name));
 	} else if ((v->type->pointer.type->flags & C_TYPE_INCOMPLETE)) {
 		IR_ASSERT(v->type->pointer.type->tag);
-		if (!c_fix_incomplete_type(v->type->pointer.type)) {
+		if (!c_fix_incomplete_type(rcc, v->type->pointer.type)) {
 			yy_error_fmt("invalid use of undefined \"%s %s\"",
 				(v->type->pointer.type->kind == C_TYPE_STRUCT) ? "struct" : "union",
-				yy_sym2str(v->type->pointer.type->tag));
+				yy_sym2str(rcc, v->type->pointer.type->tag));
 		}
 	}
 	field = c_find_struct_field(v->type->pointer.type, field_name, &offset);
@@ -4349,24 +4328,24 @@ void c_do_struct_field_deref(c_value *v, c_name field_name)
 		if (v->type->pointer.type->record.tag) {
 			yy_error_fmt("\"%s %s\" has no member named \"%s\"",
 				(v->type->pointer.type->kind == C_TYPE_STRUCT) ? "struct" : "union",
-				yy_sym2str(v->type->pointer.type->record.tag),
-				yy_sym2str(field_name));
+				yy_sym2str(rcc, v->type->pointer.type->record.tag),
+				yy_sym2str(rcc, field_name));
 		} else {
 			yy_error_fmt("%s has no member named \"%s\"",
 				(v->type->pointer.type->kind == C_TYPE_STRUCT) ? "struct" : "union",
-				yy_sym2str(field_name));
+				yy_sym2str(rcc, field_name));
 		}
 	}
-	ir_ref ref = c_value_ref(v);
+	ir_ref ref = c_value_ref(rcc, v);
 	if (offset) {
-		ref = ir_ADD_A(ref, ir_const_size_t(active_ctx, offset));
+		ref = ir_ADD_A(ref, ir_const_size_t(rcc->active_ctx, offset));
 	}
 	is_volatile = (v->type->pointer.type->attr & C_ATTR_VOLATILE) != 0;
 	if (field->type->kind != C_TYPE_ARRAY) {
-		c_value_set_lval(v, field->type, c_type2ir(field->type), ref);
+		c_value_set_lval(v, field->type, c_type2ir(rcc, field->type), ref);
 		v->u.proto = field->bit_field;
 	} else {
-		c_value_set_rval(v, field->type, c_type2ir(field->type), ref);
+		c_value_set_rval(v, field->type, c_type2ir(rcc, field->type), ref);
 	}
 	if (is_volatile) {
 		v->u.op |= C_VAL_VOLATILE;
@@ -4385,48 +4364,48 @@ c_value *c_do_grow_actual_parameters(c_value *args, int32_t num_args)
 	}
 }
 
-static ir_ref c_va_list_addr(c_value *val)
+static ir_ref c_va_list_addr(rcc_ctx *rcc, c_value *val)
 {
 #if defined(__i386__) || defined(__WIN32) || defined(__APPLE__)
 	if (!c_value_is_lval(val)) yy_error("lvalue required");
 	return c_value_is_var(val) ? ir_VADDR(val->u.ref) : val->u.ref;
 #else
-	return c_value_ref(val);
+	return c_value_ref(rcc, val);
 #endif
 }
 
-void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
+void c_do_builtin(rcc_ctx *rcc, c_value *val, c_name name, int32_t num_args, c_value *args)
 {
-	c_last_call_func_type = NULL;
+	rcc->c_last_call_func_type = NULL;
 	if (name == YY___BUILTIN_VA_START) {
 		if (num_args != 1 && num_args != 2) yy_error("wrong number of arguments in __builtin_va_start() call");
 		// TODO: arg type check ???
-		ir_VA_START(c_va_list_addr(&args[0]));
+		ir_VA_START(c_va_list_addr(rcc, &args[0]));
 		c_value_set_rval(val, &c_type_void, IR_VOID, IR_UNUSED);
 	} else if (name == YY___BUILTIN_VA_END) {
 		if (num_args != 1) yy_error("wrong number of arguments in __builtin_va_end() call");
-		ir_VA_END(c_va_list_addr(&args[0]));
+		ir_VA_END(c_va_list_addr(rcc, &args[0]));
 		c_value_set_rval(val, &c_type_void, IR_VOID, IR_UNUSED);
 	} else if (name == YY___BUILTIN_VA_COPY) {
 		if (num_args != 2) yy_error("wrong number of arguments in __builtin_va_copy() call");
-		ir_VA_COPY(c_va_list_addr(&args[0]), c_va_list_addr(&args[1]));
+		ir_VA_COPY(c_va_list_addr(rcc, &args[0]), c_va_list_addr(rcc, &args[1]));
 		c_value_set_rval(val, &c_type_void, IR_VOID, IR_UNUSED);
 	} else if (name == YY___BUILTIN_ALLOCA) {
 		ir_ref ref;
 
 		if (num_args != 1) yy_error("wrong number of arguments in __builtin_alloca() call");
-		ref = ir_ALLOCA(c_value_ref(&args[0]));
+		ref = ir_ALLOCA(c_value_ref(rcc, &args[0]));
 		c_value_set_rval(val, &c_type_ptr, IR_ADDR, ref);
 	} else if (name == YY___BUILTIN_ABORT || name == YY___BUILTIN_TRAP) {
-		if (num_args != 0) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
-		if (!yy_hash.data[YY_ABORT].sym) {
+		if (num_args != 0) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
+		if (!rcc->yy_hash.data[YY_ABORT].sym) {
 			c_dcl dcl;
 			c_type *type;
 
 			memset(&dcl, 0, sizeof(dcl));
 			dcl.flags = C_DCL_EXTERN | C_TYPE_SPEC_TYPE;
 
-			type = ir_arena_alloc(&c_arena, sizeof(c_type));
+			type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
 			if (!type) yy_error("out of memory");
 			memset(type, 0, sizeof(c_type));
 			type->kind = C_TYPE_FUNC;
@@ -4435,31 +4414,31 @@ void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 			type->func.params = NULL;
 			dcl.type = type;
 
-			c_declare(YY_ABORT, &dcl);
+			c_declare(rcc, YY_ABORT, &dcl);
 		}
 		ir_CALL(IR_VOID,
-			ir_const_func(active_ctx,
-				ir_strl(active_ctx, "abort", sizeof("abort")-1),
-				ir_proto_0(active_ctx, 0, IR_VOID)));
+			ir_const_func(rcc->active_ctx,
+				ir_strl(rcc->active_ctx, "abort", sizeof("abort")-1),
+				ir_proto_0(rcc->active_ctx, 0, IR_VOID)));
 //???		ir_UNREACHABLE();
 //???		ir_BEGIN(IR_UNUSED);
 		c_value_set_rval(val, &c_type_void, IR_VOID, IR_UNUSED);
 	} else if (name == YY___BUILTIN_UNREACHABLE) {
-		if (num_args != 0) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (num_args != 0) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 //???		ir_UNREACHABLE();
 //???		ir_BEGIN(IR_UNUSED);
 		c_value_set_rval(val, &c_type_void, IR_VOID, IR_UNUSED);
 	} else if (name == YY___BUILTIN_DEBUGTRAP) {
-		if (num_args != 0) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (num_args != 0) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 		ir_TRAP();
 		c_value_set_rval(val, &c_type_void, IR_VOID, IR_UNUSED);
 	} else if (name == YY___BUILTIN_FRAME_ADDRESS) {
-		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 		if (!c_value_is_const(&args[0]) || !C_IS_TYPE_INT(args[0].type) || args[0].u.val.u64 != 0) {
-			yy_error_fmt("wrong level in %s() call", yy_sym2str(name));
+			yy_error_fmt("wrong level in %s() call", yy_sym2str(rcc, name));
 		}
 		c_value_set_rval(val, &c_type_ptr, IR_ADDR, ir_FRAME_ADDR());
-		c_type *t = (c_type*)active_func->value.type;
+		c_type *t = (c_type*)rcc->active_func->value.type;
 		t->attr |= C_ATTR_NOINLINE;
 	} else if (name == YY___BUILTIN_MEMCPY) {
 		ir_ref ref;
@@ -4467,223 +4446,223 @@ void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 		if (num_args != 3) yy_error("wrong number of arguments in __builtin_memcpy() call");
 		if ((args[0].type->kind != C_TYPE_POINTER && args[0].type->kind != C_TYPE_ARRAY)
 		 || (args[0].type->attr & C_ATTR_CONST)) {
-			c_do_check_cvt(&c_type_ptr, &args[0], 1);
+			c_do_check_cvt(rcc, &c_type_ptr, &args[0], 1);
 		}
 		if (args[1].type->kind != C_TYPE_POINTER && args[1].type->kind != C_TYPE_ARRAY) {
-			c_do_check_cvt(&c_type_const_ptr, &args[1], 2);
+			c_do_check_cvt(rcc, &c_type_const_ptr, &args[1], 2);
 		}
 		if (args[2].type->kind != C_TYPE_SIZE_T) {
-			c_do_check_cvt(&c_type_size_t, &args[2], 3);
+			c_do_check_cvt(rcc, &c_type_size_t, &args[2], 3);
 		}
 		ref = ir_CALL_3(IR_ADDR,
-			ir_const_func(active_ctx,
-				ir_strl(active_ctx, "memcpy", sizeof("memcpy")-1),
-				ir_proto_3(active_ctx, 0, IR_ADDR, IR_ADDR, IR_ADDR, IR_SIZE_T)),
-			c_value_ref(&args[0]), c_value_ref(&args[1]), c_value_ref(&args[2]));
+			ir_const_func(rcc->active_ctx,
+				ir_strl(rcc->active_ctx, "memcpy", sizeof("memcpy")-1),
+				ir_proto_3(rcc->active_ctx, 0, IR_ADDR, IR_ADDR, IR_ADDR, IR_SIZE_T)),
+			c_value_ref(rcc, &args[0]), c_value_ref(rcc, &args[1]), c_value_ref(rcc, &args[2]));
 		c_value_set_rval(val, &c_type_ptr, IR_ADDR, ref);
 	} else if (name == YY___BUILTIN_MEMSET) {
 		ir_ref ref;
 
 		if (num_args != 3) yy_error("wrong number of arguments in __builtin_memset() call");
 		if (args[0].type->kind != C_TYPE_POINTER && args[0].type->kind != C_TYPE_ARRAY) {
-			c_do_check_cvt(&c_type_ptr, &args[0], 1);
+			c_do_check_cvt(rcc, &c_type_ptr, &args[0], 1);
 		}
 		if (args[1].type->kind != C_TYPE_I32) {
-			c_do_check_cvt(&c_type_i32, &args[1], 2);
+			c_do_check_cvt(rcc, &c_type_i32, &args[1], 2);
 		}
 		if (args[2].type->kind != C_TYPE_SIZE_T) {
-			c_do_check_cvt(&c_type_size_t, &args[2], 3);
+			c_do_check_cvt(rcc, &c_type_size_t, &args[2], 3);
 		}
 		ref = ir_CALL_3(IR_ADDR,
-			ir_const_func(active_ctx,
-				ir_strl(active_ctx, "memset", sizeof("memset")-1),
-				ir_proto_3(active_ctx, 0, IR_ADDR, IR_ADDR, IR_ADDR, IR_SIZE_T)),
-			c_value_ref(&args[0]), c_value_ref(&args[1]), c_value_ref(&args[2]));
+			ir_const_func(rcc->active_ctx,
+				ir_strl(rcc->active_ctx, "memset", sizeof("memset")-1),
+				ir_proto_3(rcc->active_ctx, 0, IR_ADDR, IR_ADDR, IR_ADDR, IR_SIZE_T)),
+			c_value_ref(rcc, &args[0]), c_value_ref(rcc, &args[1]), c_value_ref(rcc, &args[2]));
 		c_value_set_rval(val, &c_type_ptr, IR_ADDR, ref);
 	} else if (name == YY___BUILTIN_ABS) {
 		ir_ref ref;
 
-		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 		if (args[0].type->kind != C_TYPE_I32) {
-			c_do_check_cvt(&c_type_i32, &args[0], 1);
+			c_do_check_cvt(rcc, &c_type_i32, &args[0], 1);
 		}
-		ref = ir_ABS(args[0].u.type, c_value_ref(&args[0]));
+		ref = ir_ABS(args[0].u.type, c_value_ref(rcc, &args[0]));
 		c_value_set_rval(val, args[0].type, args[0].u.type, ref);
 	} else if (name == YY___BUILTIN_LABS) {
 		ir_ref ref;
 
-		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 		if (args[0].type->kind != C_TYPE_IL) {
-			c_do_check_cvt(&c_type_il, &args[0], 1);
+			c_do_check_cvt(rcc, &c_type_il, &args[0], 1);
 		}
-		ref = ir_ABS(args[0].u.type, c_value_ref(&args[0]));
+		ref = ir_ABS(args[0].u.type, c_value_ref(rcc, &args[0]));
 		c_value_set_rval(val, args[0].type, args[0].u.type, ref);
 	} else if (name == YY___BUILTIN_LLABS) {
 		ir_ref ref;
 
-		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 		if (args[0].type->kind != C_TYPE_ILL) {
-			c_do_check_cvt(&c_type_ill, &args[0], 1);
+			c_do_check_cvt(rcc, &c_type_ill, &args[0], 1);
 		}
-		ref = ir_ABS(args[0].u.type, c_value_ref(&args[0]));
+		ref = ir_ABS(args[0].u.type, c_value_ref(rcc, &args[0]));
 		c_value_set_rval(val, args[0].type, args[0].u.type, ref);
 	} else if (name == YY___BUILTIN_FABS) {
 		ir_ref ref;
 
-		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 		if (args[0].type->kind != C_TYPE_DOUBLE) {
-			c_do_check_cvt(&c_type_double, &args[0], 1);
+			c_do_check_cvt(rcc, &c_type_double, &args[0], 1);
 		}
-		ref = ir_ABS(args[0].u.type, c_value_ref(&args[0]));
+		ref = ir_ABS(args[0].u.type, c_value_ref(rcc, &args[0]));
 		c_value_set_rval(val, args[0].type, args[0].u.type, ref);
 	} else if (name == YY___BUILTIN_FABSF) {
 		ir_ref ref;
 
-		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 		if (args[0].type->kind != C_TYPE_FLOAT) {
-			c_do_check_cvt(&c_type_float, &args[0], 1);
+			c_do_check_cvt(rcc, &c_type_float, &args[0], 1);
 		}
-		ref = ir_ABS(args[0].u.type, c_value_ref(&args[0]));
+		ref = ir_ABS(args[0].u.type, c_value_ref(rcc, &args[0]));
 		c_value_set_rval(val, args[0].type, args[0].u.type, ref);
 	} else if (name == YY___BUILTIN_BSWAP16) {
 		ir_val v;
 
 		if (args[0].type->kind != C_TYPE_U16 && args[0].type->kind != C_TYPE_I16) {
-			c_do_check_cvt(&c_type_u16, &args[0], 1);
+			c_do_check_cvt(rcc, &c_type_u16, &args[0], 1);
 		}
 		v.u64 = 8;
 		c_value_set_rval(val, args[0].type, args[0].u.type,
-			ir_ROL(args[0].u.type, c_value_ref(&args[0]), ir_const(active_ctx, v, args[0].u.type)));
+			ir_ROL(args[0].u.type, c_value_ref(rcc, &args[0]), ir_const(rcc->active_ctx, v, args[0].u.type)));
 	} else if (name == YY___BUILTIN_BSWAP32) {
 		if (args[0].type->kind != C_TYPE_U32 && args[0].type->kind != C_TYPE_I32) {
-			c_do_check_cvt(&c_type_u32, &args[0], 1);
+			c_do_check_cvt(rcc, &c_type_u32, &args[0], 1);
 		}
-		c_value_set_rval(val, args[0].type, args[0].u.type, ir_BSWAP(args[0].u.type, c_value_ref(&args[0])));
+		c_value_set_rval(val, args[0].type, args[0].u.type, ir_BSWAP(args[0].u.type, c_value_ref(rcc, &args[0])));
 	} else if (name == YY___BUILTIN_BSWAP64) {
-		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 		if (args[0].type->kind != C_TYPE_U64 && args[0].type->kind != C_TYPE_I64) {
-			c_do_check_cvt(&c_type_u64, &args[0], 1);
+			c_do_check_cvt(rcc, &c_type_u64, &args[0], 1);
 		}
-		c_value_set_rval(val, args[0].type, args[0].u.type, ir_BSWAP(args[0].u.type, c_value_ref(&args[0])));
+		c_value_set_rval(val, args[0].type, args[0].u.type, ir_BSWAP(args[0].u.type, c_value_ref(rcc, &args[0])));
 	} else if (name == YY___BUILTIN_POPCOUNT) {
-		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 		if (args[0].type->kind != C_TYPE_I32) {
-			c_do_check_cvt(&c_type_i32, &args[0], 1);
+			c_do_check_cvt(rcc, &c_type_i32, &args[0], 1);
 		}
-		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTPOP(args[0].u.type, c_value_ref(&args[0])));
+		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTPOP(args[0].u.type, c_value_ref(rcc, &args[0])));
 	} else if (name == YY___BUILTIN_POPCOUNTL) {
-		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 		if (args[0].type->kind != C_TYPE_IL) {
-			c_do_check_cvt(&c_type_il, &args[0], 1);
+			c_do_check_cvt(rcc, &c_type_il, &args[0], 1);
 		}
-		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTPOP(args[0].u.type, c_value_ref(&args[0])));
+		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTPOP(args[0].u.type, c_value_ref(rcc, &args[0])));
 	} else if (name == YY___BUILTIN_POPCOUNTLL) {
-		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 		if (args[0].type->kind != C_TYPE_ILL) {
-			c_do_check_cvt(&c_type_ill, &args[0], 1);
+			c_do_check_cvt(rcc, &c_type_ill, &args[0], 1);
 		}
-		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTPOP(args[0].u.type, c_value_ref(&args[0])));
+		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTPOP(args[0].u.type, c_value_ref(rcc, &args[0])));
 	} else if (name == YY___BUILTIN_CLZ) {
-		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 		if (args[0].type->kind != C_TYPE_I32) {
-			c_do_check_cvt(&c_type_i32, &args[0], 1);
+			c_do_check_cvt(rcc, &c_type_i32, &args[0], 1);
 		}
-		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTLZ(args[0].u.type, c_value_ref(&args[0])));
+		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTLZ(args[0].u.type, c_value_ref(rcc, &args[0])));
 	} else if (name == YY___BUILTIN_CLZL) {
-		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 		if (args[0].type->kind != C_TYPE_IL) {
-			c_do_check_cvt(&c_type_il, &args[0], 1);
+			c_do_check_cvt(rcc, &c_type_il, &args[0], 1);
 		}
-		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTLZ(args[0].u.type, c_value_ref(&args[0])));
+		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTLZ(args[0].u.type, c_value_ref(rcc, &args[0])));
 	} else if (name == YY___BUILTIN_CLZLL) {
-		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 		if (args[0].type->kind != C_TYPE_ILL) {
-			c_do_check_cvt(&c_type_ill, &args[0], 1);
+			c_do_check_cvt(rcc, &c_type_ill, &args[0], 1);
 		}
-		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTLZ(args[0].u.type, c_value_ref(&args[0])));
+		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTLZ(args[0].u.type, c_value_ref(rcc, &args[0])));
 	} else if (name == YY___BUILTIN_CTZ) {
-		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 		if (args[0].type->kind != C_TYPE_I32) {
-			c_do_check_cvt(&c_type_i32, &args[0], 1);
+			c_do_check_cvt(rcc, &c_type_i32, &args[0], 1);
 		}
-		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTTZ(args[0].u.type, c_value_ref(&args[0])));
+		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTTZ(args[0].u.type, c_value_ref(rcc, &args[0])));
 	} else if (name == YY___BUILTIN_CTZL) {
-		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 		if (args[0].type->kind != C_TYPE_IL) {
-			c_do_check_cvt(&c_type_il, &args[0], 1);
+			c_do_check_cvt(rcc, &c_type_il, &args[0], 1);
 		}
-		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTTZ(args[0].u.type, c_value_ref(&args[0])));
+		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTTZ(args[0].u.type, c_value_ref(rcc, &args[0])));
 	} else if (name == YY___BUILTIN_CTZLL) {
-		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 		if (args[0].type->kind != C_TYPE_ILL) {
-			c_do_check_cvt(&c_type_ill, &args[0], 1);
+			c_do_check_cvt(rcc, &c_type_ill, &args[0], 1);
 		}
-		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTTZ(args[0].u.type, c_value_ref(&args[0])));
+		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTTZ(args[0].u.type, c_value_ref(rcc, &args[0])));
 	} else if (name == YY___BUILTIN_FFS) {
 		ir_val val0, val1;
 		ir_ref ref;
 		ir_type type;
 
-		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 		if (args[0].type->kind != C_TYPE_I32) {
-			c_do_check_cvt(&c_type_i32, &args[0], 1);
+			c_do_check_cvt(rcc, &c_type_i32, &args[0], 1);
 		}
-		ref = c_value_ref(&args[0]);
+		ref = c_value_ref(rcc, &args[0]);
 		val0.u64 = 0;
 		val1.u64 = 1;
 		type = args[0].u.type;
 		c_value_set_rval(val, args[0].type, type,
 			ref = ir_COND(type, ref,
-				ir_ADD(type, ir_CTTZ(type, ref), ir_const(active_ctx, val1, type)),
-				ir_const(active_ctx, val0, type)));
+				ir_ADD(type, ir_CTTZ(type, ref), ir_const(rcc->active_ctx, val1, type)),
+				ir_const(rcc->active_ctx, val0, type)));
 	} else if (name == YY___BUILTIN_FFSL) {
 		ir_val val0, val1;
 		ir_ref ref;
 		ir_type type;
 
-		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 		if (args[0].type->kind != C_TYPE_IL) {
-			c_do_check_cvt(&c_type_il, &args[0], 1);
+			c_do_check_cvt(rcc, &c_type_il, &args[0], 1);
 		}
-		ref = c_value_ref(&args[0]);
+		ref = c_value_ref(rcc, &args[0]);
 		val0.u64 = 0;
 		val1.u64 = 1;
 		type = args[0].u.type;
 		c_value_set_rval(val, args[0].type, type,
 			ref = ir_COND(type, ref,
-				ir_ADD(type, ir_CTTZ(type, ref), ir_const(active_ctx, val1, type)),
-				ir_const(active_ctx, val0, type)));
+				ir_ADD(type, ir_CTTZ(type, ref), ir_const(rcc->active_ctx, val1, type)),
+				ir_const(rcc->active_ctx, val0, type)));
 	} else if (name == YY___BUILTIN_FFSLL) {
 		ir_val val0, val1;
 		ir_ref ref;
 		ir_type type;
 
-		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 		if (args[0].type->kind != C_TYPE_ILL) {
-			c_do_check_cvt(&c_type_ill, &args[0], 1);
+			c_do_check_cvt(rcc, &c_type_ill, &args[0], 1);
 		}
-		ref = c_value_ref(&args[0]);
+		ref = c_value_ref(rcc, &args[0]);
 		val0.u64 = 0;
 		val1.u64 = 1;
 		type = args[0].u.type;
 		c_value_set_rval(val, args[0].type, type,
 			ref = ir_COND(type, ref,
-				ir_ADD(type, ir_CTTZ(type, ref), ir_const(active_ctx, val1, type)),
-				ir_const(active_ctx, val0, type)));
+				ir_ADD(type, ir_CTTZ(type, ref), ir_const(rcc->active_ctx, val1, type)),
+				ir_const(rcc->active_ctx, val0, type)));
 	} else if (name >= YY___BUILTIN_ADD_OVERFLOW && name <= YY___BUILTIN_UMULLL_OVERFLOW) {
 		ir_ref ref, overflow;
 		const c_type *t;
 
-		if (num_args != 3) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (num_args != 3) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 		if (name == YY___BUILTIN_ADD_OVERFLOW || name == YY___BUILTIN_SUB_OVERFLOW || name == YY___BUILTIN_MUL_OVERFLOW) {
 			if (args[2].type->kind != C_TYPE_POINTER || !C_IS_TYPE_INT(args[2].type->pointer.type)) {
-				yy_error_fmt("incompatible types of arguments in %s() call", yy_sym2str(name));
+				yy_error_fmt("incompatible types of arguments in %s() call", yy_sym2str(rcc, name));
 			}
 			t = args[2].type->pointer.type;
 			// TODO: support for cases when operands and/or result have different size and/or signess ???
 		} else if (name == YY___BUILTIN_ADD_OVERFLOW_P || name == YY___BUILTIN_SUB_OVERFLOW_P || name == YY___BUILTIN_MUL_OVERFLOW_P) {
 			if (!C_IS_TYPE_INT(args[2].type)) {
-				yy_error_fmt("incompatible types of arguments in %s() call", yy_sym2str(name));
+				yy_error_fmt("incompatible types of arguments in %s() call", yy_sym2str(rcc, name));
 			}
 			t = args[2].type;
 			// TODO: support for cases when operands and/or result have different size and/or signess ???
@@ -4705,54 +4684,54 @@ void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 				t = NULL;
 			}
 			if (args[2].type->kind != C_TYPE_POINTER || args[2].type->pointer.type->kind != t->kind) {
-				yy_error_fmt("incompatible types of arguments in %s() call", yy_sym2str(name));
+				yy_error_fmt("incompatible types of arguments in %s() call", yy_sym2str(rcc, name));
 			}
 		}
 
 		if (args[0].type->kind != t->kind) {
-			c_do_check_cvt(t, &args[0], 1);
+			c_do_check_cvt(rcc, t, &args[0], 1);
 		}
 		if (args[1].type->kind != t->kind) {
-			c_do_check_cvt(t, &args[1], 2);
+			c_do_check_cvt(rcc, t, &args[1], 2);
 		}
 
 		if (name >= YY___BUILTIN_ADD_OVERFLOW && name <= YY___BUILTIN_UADDLL_OVERFLOW) {
-			ref = ir_ADD_OV(args[0].u.type, c_value_ref(&args[0]), c_value_ref(&args[1]));
+			ref = ir_ADD_OV(args[0].u.type, c_value_ref(rcc, &args[0]), c_value_ref(rcc, &args[1]));
 		} else if (name >= YY___BUILTIN_SUB_OVERFLOW && name <= YY___BUILTIN_USUBLL_OVERFLOW) {
-			ref = ir_SUB_OV(args[0].u.type, c_value_ref(&args[0]), c_value_ref(&args[1]));
+			ref = ir_SUB_OV(args[0].u.type, c_value_ref(rcc, &args[0]), c_value_ref(rcc, &args[1]));
 		} else {
 			IR_ASSERT(name >= YY___BUILTIN_MUL_OVERFLOW && name <= YY___BUILTIN_UMULLL_OVERFLOW);
-			ref = ir_MUL_OV(args[0].u.type, c_value_ref(&args[0]), c_value_ref(&args[1]));
+			ref = ir_MUL_OV(args[0].u.type, c_value_ref(rcc, &args[0]), c_value_ref(rcc, &args[1]));
 		}
 		overflow = ir_OVERFLOW(ref);
 
 		if (name != YY___BUILTIN_ADD_OVERFLOW_P && name != YY___BUILTIN_SUB_OVERFLOW_P && name != YY___BUILTIN_MUL_OVERFLOW_P) {
 			if (t->kind != args[2].type->pointer.type->kind) {
 				if (t->size > args[2].type->pointer.type->size) {
-					ref = ir_TRUNC(c_type2ir(args[2].type->pointer.type), ref);
+					ref = ir_TRUNC(c_type2ir(rcc, args[2].type->pointer.type), ref);
 				} else if (t->size == args[2].type->pointer.type->size) {
-					ref = ir_BITCAST(c_type2ir(args[2].type->pointer.type), ref);
+					ref = ir_BITCAST(c_type2ir(rcc, args[2].type->pointer.type), ref);
 				} else if (C_IS_TYPE_SIGNED(t)) {
-					ref = ir_SEXT(c_type2ir(args[2].type->pointer.type), ref);
+					ref = ir_SEXT(c_type2ir(rcc, args[2].type->pointer.type), ref);
 				} else {
-					ref = ir_ZEXT(c_type2ir(args[2].type->pointer.type), ref);
+					ref = ir_ZEXT(c_type2ir(rcc, args[2].type->pointer.type), ref);
 				}
 			}
 
-			if (c_value_is_ref(&args[2]) && active_ctx->ir_base[args[2].u.ref].op == IR_VADDR) {
-				ir_VSTORE(active_ctx->ir_base[args[2].u.ref].op1, ref);
+			if (c_value_is_ref(&args[2]) && rcc->active_ctx->ir_base[args[2].u.ref].op == IR_VADDR) {
+				ir_VSTORE(rcc->active_ctx->ir_base[args[2].u.ref].op1, ref);
 			} else {
-				ir_STORE(c_value_ref(&args[2]), ref);
+				ir_STORE(c_value_ref(rcc, &args[2]), ref);
 			}
 		}
 
 		c_value_set_rval(val, &c_type_bool, IR_BOOL, overflow);
 	} else if (name == YY___BUILTIN_EXPECT) {
 		if (num_args != 2) yy_error("wrong number of arguments in __builtin_expect() call");
-		c_value_set_rval(val, args[0].type, args[0].u.type, c_value_ref(&args[0]));
+		c_value_set_rval(val, args[0].type, args[0].u.type, c_value_ref(rcc, &args[0]));
 		if (c_value_is_const(&args[1]) && C_IS_TYPE_INT(args[1].type)) {
-			c_last_expect_ref = val->u.ref;
-			c_last_expect_val = args[1].u.val.u64 != 0;
+			rcc->c_last_expect_ref = val->u.ref;
+			rcc->c_last_expect_val = args[1].u.val.u64 != 0;
 		} else {
 			yy_warning("second argument of __builtin_expect() must be an integer constant");
 		}
@@ -4761,7 +4740,7 @@ void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 		c_value_set_rval(val, &c_type_void, IR_VOID, IR_UNUSED);
 	} else if (name == YY___BUILTIN_HUGE_VAL || name == YY___BUILTIN_INF) {
 		ir_val v;
-		if (num_args != 0) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (num_args != 0) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 #ifdef INFINITY
 		v.d = INFINITY;
 #else
@@ -4770,7 +4749,7 @@ void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 		c_value_set_const(val, &c_type_double, IR_DOUBLE, v);
 	} else if (name == YY___BUILTIN_HUGE_VALF || name == YY___BUILTIN_INFF) {
 		ir_val v;
-		if (num_args != 0) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
+		if (num_args != 0) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 #ifdef INFINITY
 		v.f = INFINITY;
 #else
@@ -4780,23 +4759,23 @@ void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 		c_value_set_const(val, &c_type_float, IR_FLOAT, v);
 	} else if (name == YY___BUILTIN_NAN) {
 		ir_val v;
-		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
-		if (args[0].type != &c_type_string) yy_error_fmt("wrong argument in %s() call", yy_sym2str(name));
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
+		if (args[0].type != &c_type_string) yy_error_fmt("wrong argument in %s() call", yy_sym2str(rcc, name));
 		v.d = nan((char*)args[0].u.val.ptr);
 		c_value_set_const(val, &c_type_double, IR_DOUBLE, v);
 	} else if (name == YY___BUILTIN_NANF) {
 		ir_val v;
-		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
-		if (args[0].type != &c_type_string) yy_error_fmt("wrong argument in %s() call", yy_sym2str(name));
+		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
+		if (args[0].type != &c_type_string) yy_error_fmt("wrong argument in %s() call", yy_sym2str(rcc, name));
 		v.f = nanf((char*)args[0].u.val.ptr);
 		v.u32_hi = 0;
 		c_value_set_const(val, &c_type_float, IR_FLOAT, v);
 	} else if (name == YY___BUILTIN_ISUNORDERED) {
 		ir_ref ref;
 
-		if (num_args != 2) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(name));
-		if (!C_IS_TYPE_FP(args[0].type) || !C_IS_TYPE_FP(args[1].type)) yy_error_fmt("wrong arguments in %s() call", yy_sym2str(name));
-		ref = ir_fold2(active_ctx, IR_OPT(IR_UNORDERED, IR_BOOL), c_value_ref(&args[0]), c_value_ref(&args[1]));
+		if (num_args != 2) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
+		if (!C_IS_TYPE_FP(args[0].type) || !C_IS_TYPE_FP(args[1].type)) yy_error_fmt("wrong arguments in %s() call", yy_sym2str(rcc, name));
+		ref = ir_fold2(rcc->active_ctx, IR_OPT(IR_UNORDERED, IR_BOOL), c_value_ref(rcc, &args[0]), c_value_ref(rcc, &args[1]));
 		c_value_set_rval(val, &c_type_bool, IR_BOOL, ref);
 	} else {
 		IR_ASSERT(0);
@@ -4804,7 +4783,7 @@ void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args)
 	if (num_args > C_ALLOCA_PARAMS) ir_mem_free(args);
 }
 
-void c_do_builtin_constant_p(c_value *val, c_value *arg)
+void c_do_builtin_constant_p(rcc_ctx *rcc, c_value *val, c_value *arg)
 {
 	ir_val v;
 
@@ -4812,15 +4791,15 @@ void c_do_builtin_constant_p(c_value *val, c_value *arg)
 		v.u64 = 1;
 	} else {
 		v.u64 = 0;
-		if (c_value_is_lval(arg)) c_value_rval(arg);
-		if (IR_IS_CONST_REF(arg->u.ref) && !IR_IS_SYM_CONST(active_ctx->ir_base[arg->u.ref].op)) {
+		if (c_value_is_lval(arg)) c_value_rval(rcc, arg);
+		if (IR_IS_CONST_REF(arg->u.ref) && !IR_IS_SYM_CONST(rcc->active_ctx->ir_base[arg->u.ref].op)) {
 			v.u64 = 1;
 		}
 	}
 	c_value_set_const(val, &c_type_i32, IR_I32, v);
 }
 
-void c_do_builtin_va_arg(c_value *val, c_value *list, const c_type *type)
+void c_do_builtin_va_arg(rcc_ctx *rcc, c_value *val, c_value *list, const c_type *type)
 {
 	ir_type t;
 	ir_ref ref;
@@ -4830,14 +4809,14 @@ void c_do_builtin_va_arg(c_value *val, c_value *list, const c_type *type)
 		ir_type types[MAX_ABI_TYPES];
 		int n;
 
-		if ((type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(type)) {
+		if ((type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(rcc, type)) {
 			yy_error("second argument to \"__builtin_va_arg\" is of incomplete type");
 		}
 		n = c_abi_lower_struct_arg(type, types);
 		if (n == 1) {
 			t = types[0];
-			ref = ir_VA_ARG(c_va_list_addr(list), t);
-			alloca = c_do_alloca(type->size, c_attr2align(type->attr), 0);
+			ref = ir_VA_ARG(c_va_list_addr(rcc, list), t);
+			alloca = c_do_alloca(rcc, type->size, c_attr2align(type->attr), 0);
 			ir_STORE(alloca, ref);
 			c_value_set_lval(val, type, IR_ADDR, alloca);
 		} else {
@@ -4850,24 +4829,24 @@ void c_do_builtin_va_arg(c_value *val, c_value *list, const c_type *type)
 				yy_warning("passing structure with alignnment greater than 16 is not implemented yet");
 				align = 16;
 			}
-			ref = ir_VA_ARG_EX(c_va_list_addr(list), IR_ADDR, type->size, align);
+			ref = ir_VA_ARG_EX(c_va_list_addr(rcc, list), IR_ADDR, type->size, align);
 			c_value_set_lval(val, type, IR_ADDR, ref);
 		}
 	} else {
 		if (type->kind == C_TYPE_VOID) yy_error("second argument to \"__builtin_va_arg\" is of incomplete type \"void\"");
-		t = c_type2ir(type);
-		ref = ir_VA_ARG(c_va_list_addr(list), t);
+		t = c_type2ir(rcc, type);
+		ref = ir_VA_ARG(c_va_list_addr(rcc, list), t);
 		c_value_set_rval(val, type, t, ref);
 	}
 }
 
-static ir_ref c_do_convert_builtin(c_value *func, int32_t num_args, ir_ref *arg_refs)
+static ir_ref c_do_convert_builtin(rcc_ctx *rcc, c_value *func, int32_t num_args, ir_ref *arg_refs)
 {
 	if (c_value_is_ref(func)) {
-		const ir_insn *func_insn = &active_ctx->ir_base[func->u.ref];
+		const ir_insn *func_insn = &rcc->active_ctx->ir_base[func->u.ref];
 		size_t name_len;
-		const char *name = ir_get_strl(active_ctx, func_insn->val.name, &name_len);
-		c_name sym_name = yy_hash_find(name, name_len);
+		const char *name = ir_get_strl(rcc->active_ctx, func_insn->val.name, &name_len);
+		c_name sym_name = yy_hash_find(rcc, name, name_len);
 		if (sym_name == YY_ALLOCA) {
 			if (num_args == 1) {
 				return ir_ALLOCA(arg_refs[0]);
@@ -4898,7 +4877,7 @@ static ir_ref c_do_convert_builtin(c_value *func, int32_t num_args, ir_ref *arg_
 	return 0;
 }
 
-static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, ir_ref *args)
+static ir_ref ir_inline_call(rcc_ctx *rcc, ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, ir_ref *args)
 {
 	ir_ref *buf = alloca(sizeof(ir_ref) * (func_ctx->consts_count + func_ctx->insns_count * 2 - 1));
 	ir_ref *xlat = buf + func_ctx->consts_count - 1;
@@ -4923,7 +4902,7 @@ static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, i
 
 			val.str = ir_strl(ctx, str, len);
 		} else if (op == IR_LABEL) {
-			val.u64 = c_create_label_str(ctx, ++c_label_num);
+			val.u64 = c_create_label_str(ctx, ++rcc->c_label_num);
 		}
 		if (op == IR_FUNC || op == IR_FUNC_ADDR) {
 			ir_ref proto = insn->proto;
@@ -5011,7 +4990,7 @@ static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, i
 				ir_ref src = arg_insn->op1;
 				ir_ref op3 = arg_insn->op3;
 				MAKE_NOP(arg_insn);
-				ir_memcpy(ctx, dst, src, size, op3);
+				ir_memcpy(rcc, dst, src, size, op3);
 				xlat2[i] = xlat[i] = dst;
 				xlat2[1] = xlat[1] = ctx->control;
 			}
@@ -5181,7 +5160,7 @@ static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, i
 					ir_val val;
 
 					val.u64 = 0;
-					ref = ir_const(active_ctx, val, func_ctx->ret_type);
+					ref = ir_const(rcc->active_ctx, val, func_ctx->ret_type);
 					ir_END_PHI_list(ret, ref);
 					add_phi = 1;
 				} else {
@@ -5228,7 +5207,7 @@ static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, i
 			ir_val val;
 
 			val.u64 = 0;
-			ret = ir_const(active_ctx, val, func_ctx->ret_type);
+			ret = ir_const(rcc->active_ctx, val, func_ctx->ret_type);
 		}
 	}
 
@@ -5237,11 +5216,11 @@ static ir_ref ir_inline_call(ir_ctx *ctx, ir_ctx *func_ctx, uint32_t num_args, i
 		ctx->control = ir_emit2(ctx, IR_BLOCK_END, ctx->control, block_begin);
 	}
 
-	c_last_call_func_type = NULL;
+	rcc->c_last_call_func_type = NULL;
 	return ret;
 }
 
-void c_do_call(c_value *func, int32_t num_args, c_value *args, c_value *res)
+void c_do_call(rcc_ctx *rcc, c_value *func, int32_t num_args, c_value *args, c_value *res)
 {
 	const c_type *func_type, *ret_type;
 	ir_type _ret_type;
@@ -5250,15 +5229,15 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args, c_value *res)
 	int j = 0;
 	uint8_t inlining = C_VAL_INLINE;
 
-	c_last_call_func_type = func->type;
-	c_value_rval(func);
+	rcc->c_last_call_func_type = func->type;
+	c_value_rval(rcc, func);
 	if (func->type->kind == C_TYPE_FUNC) {
 		func_type = func->type;
 	} else if (func->type->kind == C_TYPE_POINTER
 	 && func->type->pointer.type->kind == C_TYPE_FUNC) {
 		func_type = func->type->pointer.type;
 	} else {
-		if (yy_flags & PP_EVAL_EXPRESSION) {
+		if (rcc->yy_flags & PP_EVAL_EXPRESSION) {
 			ir_val val;
 			val.u64 = 0;
 			c_value_set_const(func, &c_type_i32, IR_I32, val);
@@ -5267,9 +5246,9 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args, c_value *res)
 		yy_error("called object is not a function or function pointer");
 	}
 	IR_ASSERT(func->u.type == IR_ADDR);
-	if ((func_type->func.ret_type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(func_type->func.ret_type)) {
+	if ((func_type->func.ret_type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(rcc, func_type->func.ret_type)) {
 		yy_error_fmt("invalid use of undefined \"%s %s\"",
-			c_type_kind2str(func_type->func.ret_type->kind), yy_sym2str(func_type->func.ret_type->tag));
+			c_type_kind2str(func_type->func.ret_type->kind), yy_sym2str(rcc, func_type->func.ret_type->tag));
 	}
 	ret_type = func_type->func.ret_type;
 	if (ret_type->kind == C_TYPE_STRUCT || ret_type->kind == C_TYPE_UNION) {
@@ -5278,15 +5257,15 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args, c_value *res)
 
 		if (n == 1) {
 			_ret_type = types[0];
-			ret_struct = c_do_alloca(ret_type->size, c_attr2align(ret_type->attr), 0);
+			ret_struct = c_do_alloca(rcc, ret_type->size, c_attr2align(ret_type->attr), 0);
 		} else {
 			IR_ASSERT(n == 0);
 			_ret_type = IR_ADDR;
 			j = 1;
-			ret_struct = c_do_alloca(ret_type->size, c_attr2align(ret_type->attr), 0);
+			ret_struct = c_do_alloca(rcc, ret_type->size, c_attr2align(ret_type->attr), 0);
 		}
 	} else {
-		_ret_type = c_type2ir(ret_type);
+		_ret_type = c_type2ir(rcc, ret_type);
 	}
 	if (num_args != func_type->func.num_params) {
 		if (func_type->attr & C_ATTR_OLD_FUNC) {
@@ -5294,18 +5273,18 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args, c_value *res)
 		} else if (num_args < func_type->func.num_params) {
 			if (c_value_is_ref(func)
 			 && IR_IS_CONST_REF(func->u.ref)
-			 && active_ctx->ir_base[func->u.ref].op == IR_FUNC) {
+			 && rcc->active_ctx->ir_base[func->u.ref].op == IR_FUNC) {
 				yy_error_fmt("too few arguments to function \"%s\"",
-					ir_get_str(active_ctx, active_ctx->ir_base[func->u.ref].val.str));
+					ir_get_str(rcc->active_ctx, rcc->active_ctx->ir_base[func->u.ref].val.str));
 			} else {
 				yy_error("too few arguments");
 			}
 		} else if (!(func_type->attr & C_ATTR_VARIADIC)) {
 			if (c_value_is_ref(func)
 			 && IR_IS_CONST_REF(func->u.ref)
-			 && active_ctx->ir_base[func->u.ref].op == IR_FUNC) {
+			 && rcc->active_ctx->ir_base[func->u.ref].op == IR_FUNC) {
 				yy_error_fmt("too many arguments to function \"%s\"",
-					ir_get_str(active_ctx, active_ctx->ir_base[func->u.ref].val.str));
+					ir_get_str(rcc->active_ctx, rcc->active_ctx->ir_base[func->u.ref].val.str));
 			} else {
 				yy_error("too many arguments");
 			}
@@ -5319,20 +5298,20 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args, c_value *res)
 			arg_refs[0] = ret_struct;
 		}
 		for (i = 0; i < num_args; i++) {
-			c_value_rval(&args[i]);
+			c_value_rval(rcc, &args[i]);
 			if (i < func_type->func.num_params) {
 				if (func_type->func.params[i].type != args[i].type) {
-					c_do_check_cvt(func_type->func.params[i].type, &args[i], i + 1);
+					c_do_check_cvt(rcc, func_type->func.params[i].type, &args[i], i + 1);
 				}
 			} else {
 				if (args[i].type->kind == C_TYPE_FLOAT) {
-					c_do_fp2fp(&c_type_double, IR_DOUBLE, &args[i]);
+					c_do_fp2fp(rcc, &c_type_double, IR_DOUBLE, &args[i]);
 				} else if ((C_IS_TYPE_INT(args[i].type) || args[i].type->kind == C_TYPE_ENUM)
 				 && args[i].type->size < 4) {
 					if (C_IS_TYPE_SIGNED(args[i].type)) {
-						c_do_sext(&c_type_i32, IR_I32, &args[i]);
+						c_do_sext(rcc, &c_type_i32, IR_I32, &args[i]);
 					} else {
-						c_do_zext(&c_type_u32, IR_U32, &args[i]);
+						c_do_zext(rcc, &c_type_u32, IR_U32, &args[i]);
 					}
 				}
 			}
@@ -5363,11 +5342,11 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args, c_value *res)
 						yy_warning("passing structure with alignnment greater than 16 is not implemented yet");
 						align = 16;
 					}
-					arg_refs[i + j] = ir_emit3(active_ctx, IR_OPT(IR_ARGVAL, IR_ADDR), args[i].u.ref,
+					arg_refs[i + j] = ir_emit3(rcc->active_ctx, IR_OPT(IR_ARGVAL, IR_ADDR), args[i].u.ref,
 						args[i].type->size, align);
 				}
 			} else {
-				arg_refs[i + j] = c_value_ref(&args[i]);
+				arg_refs[i + j] = c_value_ref(rcc, &args[i]);
 			}
 		}
 	} else if (j) {
@@ -5377,18 +5356,18 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args, c_value *res)
 	if ((func->u.op & inlining)
 	 && res->u.proto != IR_TAILCALL
 	 && (!(func->type->attr & C_ATTR_NORETURN) || func->type->func.ret_type->kind == C_TYPE_VOID)
-	 && active_ctx->fixed_regset == ((ir_ctx*)func->u.val.ptr)->fixed_regset
-	 && active_ctx->fixed_save_regset == ((ir_ctx*)func->u.val.ptr)->fixed_save_regset) {
-		ref = ir_inline_call(active_ctx, (ir_ctx*)func->u.val.ptr, num_args + j, arg_refs);
+	 && rcc->active_ctx->fixed_regset == ((ir_ctx*)func->u.val.ptr)->fixed_regset
+	 && rcc->active_ctx->fixed_save_regset == ((ir_ctx*)func->u.val.ptr)->fixed_save_regset) {
+		ref = ir_inline_call(rcc, rcc->active_ctx, (ir_ctx*)func->u.val.ptr, num_args + j, arg_refs);
 	} else if (!(func->u.op & C_VAL_BUILTIN)) {
-		ref = c_value_ref(func);
-		if (!IR_IS_CONST_REF(ref) && active_ctx->ir_base[ref].op != IR_PROTO) {
+		ref = c_value_ref(rcc, func);
+		if (!IR_IS_CONST_REF(ref) && rcc->active_ctx->ir_base[ref].op != IR_PROTO) {
 			const c_type *type = func->type;
 			if (type->kind == C_TYPE_POINTER) type = type->pointer.type;
-			ref = ir_emit2(active_ctx, IR_OPT(IR_PROTO, IR_ADDR), ref, c_type2proto(type, 0));
+			ref = ir_emit2(rcc->active_ctx, IR_OPT(IR_PROTO, IR_ADDR), ref, c_type2proto(rcc, type, 0));
 		}
 		ref = ir_CALL_N(_ret_type, ref, num_args + j, arg_refs);
-		c_last_call_func_type = func->type;
+		rcc->c_last_call_func_type = func->type;
 		if (func->type->attr & C_ATTR_NORETURN) {
 			ir_val val;
 
@@ -5399,16 +5378,16 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args, c_value *res)
 			return;
 		}
 	} else {
-		ref = c_do_convert_builtin(func, num_args + j, arg_refs);
+		ref = c_do_convert_builtin(rcc, func, num_args + j, arg_refs);
 		if (!ref) {
-			ref = c_value_ref(func);
-			if (!IR_IS_CONST_REF(ref) && active_ctx->ir_base[ref].op != IR_PROTO) {
+			ref = c_value_ref(rcc, func);
+			if (!IR_IS_CONST_REF(ref) && rcc->active_ctx->ir_base[ref].op != IR_PROTO) {
 				const c_type *type = func->type;
 				if (type->kind == C_TYPE_POINTER) type = type->pointer.type;
-				ref = ir_emit2(active_ctx, IR_OPT(IR_PROTO, IR_ADDR), ref, c_type2proto(type, 0));
+				ref = ir_emit2(rcc->active_ctx, IR_OPT(IR_PROTO, IR_ADDR), ref, c_type2proto(rcc, type, 0));
 			}
 			ref = ir_CALL_N(_ret_type, ref, num_args + j, arg_refs);
-			c_last_call_func_type = func->type;
+			rcc->c_last_call_func_type = func->type;
 		}
 	}
 	if (ret_type->kind == C_TYPE_STRUCT || ret_type->kind == C_TYPE_UNION) {
@@ -5424,7 +5403,7 @@ void c_do_call(c_value *func, int32_t num_args, c_value *args, c_value *res)
 	if (num_args > C_ALLOCA_PARAMS) ir_mem_free(args);
 }
 
-static const c_type *c_common_type(yy_sym sym, c_value *op1, c_value *op2)
+static const c_type *c_common_type(rcc_ctx *rcc, yy_sym sym, c_value *op1, c_value *op2)
 {
 	const c_type *op1_type = op1->type;
 	const c_type *op2_type = op2->type;
@@ -5435,21 +5414,21 @@ static const c_type *c_common_type(yy_sym sym, c_value *op1, c_value *op2)
 		if (sym == YY__PLUS) {
 			if (C_IS_TYPE_KIND_INT(t2) || t2 == C_TYPE_ENUM) {
 				if (op2_type->size != op1_type->size) {
-					c_do_cvt(&c_type_size_t, IR_SIZE_T, op2);
+					c_do_cvt(rcc, &c_type_size_t, IR_SIZE_T, op2);
 				}
-				if (op1_type->kind == C_TYPE_ARRAY) return c_create_pointer_type(op1_type->array.type);
+				if (op1_type->kind == C_TYPE_ARRAY) return c_create_pointer_type(rcc, op1_type->array.type);
 				return op1_type;
 			}
 		} else if (sym == YY__MINUS) {
 			if (C_IS_TYPE_KIND_INT(t2) || t2 == C_TYPE_ENUM) {
 				if (op2_type->size != op1_type->size) {
-					c_do_cvt(&c_type_size_t, IR_SIZE_T, op2);
+					c_do_cvt(rcc, &c_type_size_t, IR_SIZE_T, op2);
 				}
-				if (op1_type->kind == C_TYPE_ARRAY) return c_create_pointer_type(op1_type->array.type);
+				if (op1_type->kind == C_TYPE_ARRAY) return c_create_pointer_type(rcc, op1_type->array.type);
 				return op1_type;
 			} else if ((t2 == C_TYPE_POINTER || t2 == C_TYPE_ARRAY)
 			 && c_compatible_types(op1_type->pointer.type, op2_type->pointer.type, 1, 0)) {
-				if (op1_type->kind == C_TYPE_ARRAY) return c_create_pointer_type(op1_type->array.type);
+				if (op1_type->kind == C_TYPE_ARRAY) return c_create_pointer_type(rcc, op1_type->array.type);
 				return op1_type;
 			}
 		} else if (sym == YY__LESS || sym == YY__LESS_EQUAL || sym == YY__GREATER || sym == YY__GREATER_EQUAL
@@ -5464,7 +5443,7 @@ static const c_type *c_common_type(yy_sym sym, c_value *op1, c_value *op2)
 					yy_warning("comparison of distinct pointer types lacks a cast");
 				}
 				if (sym == YY__COLON && op1_type->kind == C_TYPE_ARRAY) {
-					return c_create_pointer_type(op1_type->array.type);
+					return c_create_pointer_type(rcc, op1_type->array.type);
 				}
 				// TODO: select best type ???
 				return op1_type;
@@ -5488,9 +5467,9 @@ static const c_type *c_common_type(yy_sym sym, c_value *op1, c_value *op2)
 		if (sym == YY__PLUS) {
 			if (C_IS_TYPE_KIND_INT(t1) || t1 == C_TYPE_ENUM) {
 				if (op1_type->size != op2_type->size) {
-					c_do_cvt(&c_type_size_t, IR_SIZE_T, op1);
+					c_do_cvt(rcc, &c_type_size_t, IR_SIZE_T, op1);
 				}
-				if (op2_type->kind == C_TYPE_ARRAY) return c_create_pointer_type(op2_type->array.type);
+				if (op2_type->kind == C_TYPE_ARRAY) return c_create_pointer_type(rcc, op2_type->array.type);
 				return op2_type;
 			}
 		} else if (sym == YY__LESS || sym == YY__LESS_EQUAL || sym == YY__GREATER || sym == YY__GREATER_EQUAL
@@ -5513,7 +5492,7 @@ static const c_type *c_common_type(yy_sym sym, c_value *op1, c_value *op2)
 		return NULL;
 	} else if (t1 == C_TYPE_FUNC) {
 		if (t2 == C_TYPE_FUNC && c_compatible_types(op1_type, op2_type, 1, 0)) {
-			if (sym == YY__COLON) return c_create_pointer_type(op1_type);
+			if (sym == YY__COLON) return c_create_pointer_type(rcc, op1_type);
 			return op1_type;
 		} else if (sym == YY__LESS || sym == YY__LESS_EQUAL || sym == YY__GREATER || sym == YY__GREATER_EQUAL
 			|| sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL || YY__COLON) {
@@ -5552,14 +5531,14 @@ static const c_type *c_common_type(yy_sym sym, c_value *op1, c_value *op2)
 			return op1_type;
 		} else if (C_IS_TYPE_KIND_FP(t2)) {
 			if (op1_type->size >= op2_type->size) {
-				c_do_fp2fp(op1_type, op1->u.type, op2);
+				c_do_fp2fp(rcc, op1_type, op1->u.type, op2);
 				return op1_type;
 			} else {
-				c_do_fp2fp(op2_type, op2->u.type, op1);
+				c_do_fp2fp(rcc, op2_type, op2->u.type, op1);
 				return op2_type;
 			}
 		} else if (C_IS_TYPE_KIND_INT(t2) || t2 == C_TYPE_ENUM) {
-			c_do_int2fp(op1_type, op1->u.type, op2);
+			c_do_int2fp(rcc, op1_type, op1->u.type, op2);
 			return op1_type;
 		}
 	} else if (C_IS_TYPE_KIND_FP(t2)) {
@@ -5567,7 +5546,7 @@ static const c_type *c_common_type(yy_sym sym, c_value *op1, c_value *op2)
 		 || sym == YY__LESS_LESS || sym == YY__GREATER_GREATER) {
 			return NULL;
 		} else if (C_IS_TYPE_KIND_INT(t1) || t1 == C_TYPE_ENUM) {
-			c_do_int2fp(op2_type, op2->u.type, op1);
+			c_do_int2fp(rcc, op2_type, op2->u.type, op1);
 			return op2_type;
 		}
 	} else if (t1 == C_TYPE_ENUM) {
@@ -5606,8 +5585,8 @@ common_int_type:
 			 || (sym != YY__LESS_LESS && sym != YY__GREATER_GREATER
 			  && op2_type->size > 4 && C_IS_TYPE_KIND_UNSIGNED(t2)
 			  && (!C_IS_BIT_FIELD(op2->u.proto) || C_BIT_FIELD_SIZE(op2->u.proto) >= 32))) {
-				if (op1_type->size != 8 || C_IS_TYPE_KIND_SIGNED(t1)) c_do_cvt(&c_type_u64, IR_U64, op1);
-				if (op2_type->size != 8 || C_IS_TYPE_KIND_SIGNED(t2)) c_do_cvt(&c_type_u64, IR_U64, op2);
+				if (op1_type->size != 8 || C_IS_TYPE_KIND_SIGNED(t1)) c_do_cvt(rcc, &c_type_u64, IR_U64, op1);
+				if (op2_type->size != 8 || C_IS_TYPE_KIND_SIGNED(t2)) c_do_cvt(rcc, &c_type_u64, IR_U64, op2);
 				if (sizeof(long long) == sizeof(uint64_t)
 				 && (op1_type->kind == C_TYPE_ILL
 				  || op1_type->kind == C_TYPE_ULL
@@ -5618,8 +5597,8 @@ common_int_type:
 					return &c_type_u64;
 				}
 			} else {
-				if (op1_type->size != 8 || C_IS_TYPE_KIND_UNSIGNED(t1)) c_do_cvt(&c_type_i64, IR_I64, op1);
-				if (op2_type->size != 8 || C_IS_TYPE_KIND_UNSIGNED(t2)) c_do_cvt(&c_type_i64, IR_I64, op2);
+				if (op1_type->size != 8 || C_IS_TYPE_KIND_UNSIGNED(t1)) c_do_cvt(rcc, &c_type_i64, IR_I64, op1);
+				if (op2_type->size != 8 || C_IS_TYPE_KIND_UNSIGNED(t2)) c_do_cvt(rcc, &c_type_i64, IR_I64, op2);
 				if (sizeof(long long) == sizeof(int64_t)
 				 && (op1_type->kind == C_TYPE_ILL
 				  || op1_type->kind == C_TYPE_ULL
@@ -5636,8 +5615,8 @@ common_int_type:
 			 || (sym != YY__LESS_LESS && sym != YY__GREATER_GREATER
 			  && op2_type->size == 4 && C_IS_TYPE_KIND_UNSIGNED(t2)
 			  && (!C_IS_BIT_FIELD(op2->u.proto) || C_BIT_FIELD_SIZE(op2->u.proto) >= 32))) {
-				if (op1_type->size != 4 || C_IS_TYPE_KIND_SIGNED(t1)) c_do_cvt(&c_type_u32, IR_U32, op1);
-				if (op2_type->size != 4 || C_IS_TYPE_KIND_SIGNED(t2)) c_do_cvt(&c_type_u32, IR_U32, op2);
+				if (op1_type->size != 4 || C_IS_TYPE_KIND_SIGNED(t1)) c_do_cvt(rcc, &c_type_u32, IR_U32, op1);
+				if (op2_type->size != 4 || C_IS_TYPE_KIND_SIGNED(t2)) c_do_cvt(rcc, &c_type_u32, IR_U32, op2);
 				if (sizeof(long) == sizeof(uint32_t)
 				 && (op1_type->kind == C_TYPE_IL
 				  || op1_type->kind == C_TYPE_UL
@@ -5648,8 +5627,8 @@ common_int_type:
 					return &c_type_u32;
 				}
 			} else {
-				if (op1_type->size != 4 || C_IS_TYPE_KIND_UNSIGNED(t1)) c_do_cvt(&c_type_i32, IR_I32, op1);
-				if (op2_type->size != 4 || C_IS_TYPE_KIND_UNSIGNED(t2)) c_do_cvt(&c_type_i32, IR_I32, op2);
+				if (op1_type->size != 4 || C_IS_TYPE_KIND_UNSIGNED(t1)) c_do_cvt(rcc, &c_type_i32, IR_I32, op1);
+				if (op2_type->size != 4 || C_IS_TYPE_KIND_UNSIGNED(t2)) c_do_cvt(rcc, &c_type_i32, IR_I32, op2);
 				if (sizeof(long) == sizeof(int32_t)
 				 && (op1_type->kind == C_TYPE_IL
 				  || op1_type->kind == C_TYPE_UL
@@ -5671,7 +5650,7 @@ common_int_type:
 	return NULL;
 }
 
-static void c_do_add(const c_type *type, c_value *op1, c_value *op2)
+static void c_do_add(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op2)
 {
 	ir_val val;
 	ir_ref ref;
@@ -5683,9 +5662,9 @@ static void c_do_add(const c_type *type, c_value *op1, c_value *op2)
 		if (element_type->kind == C_TYPE_VOID) {
 			element_size = 1;
 		} else if ((op1->type->pointer.type->flags & C_TYPE_INCOMPLETE)
-		 && !c_fix_incomplete_type(op1->type->pointer.type)) {
+		 && !c_fix_incomplete_type(rcc, op1->type->pointer.type)) {
 			yy_error_fmt("invalid use of undefined \"%s %s\"",
-				c_type_kind2str(op1->type->pointer.type->kind), yy_sym2str(op1->type->pointer.type->tag));
+				c_type_kind2str(op1->type->pointer.type->kind), yy_sym2str(rcc, op1->type->pointer.type->tag));
 		} else {
 			element_type = op1->type->pointer.type;
 			element_size = element_type->size;
@@ -5698,24 +5677,24 @@ static void c_do_add(const c_type *type, c_value *op1, c_value *op2)
 		} else {
 			if (C_IS_TYPE_SIGNED(op2->type)) {
 				if (op2->type->kind != c_type_ssize_t.kind) {
-					c_do_cvt(&c_type_ssize_t, IR_SSIZE_T, op2);
+					c_do_cvt(rcc, &c_type_ssize_t, IR_SSIZE_T, op2);
 				}
 				if (element_size == 1 && !(element_type->attr & C_ATTR_VLA)) {
-					ref = c_value_ref(op2);
+					ref = c_value_ref(rcc, op2);
 				} else {
-					ref = ir_MUL(IR_SSIZE_T, c_value_ref(op2), c_type_ssize(element_type));
+					ref = ir_MUL(IR_SSIZE_T, c_value_ref(rcc, op2), c_type_ssize(rcc, element_type));
 				}
 			} else {
 				if (op2->type->kind != c_type_size_t.kind) {
-					c_do_cvt(&c_type_size_t, IR_SIZE_T, op2);
+					c_do_cvt(rcc, &c_type_size_t, IR_SIZE_T, op2);
 				}
 				if (element_size == 1 && !(element_type->attr & C_ATTR_VLA)) {
-					ref = c_value_ref(op2);
+					ref = c_value_ref(rcc, op2);
 				} else {
-					ref = ir_MUL(IR_SIZE_T, c_value_ref(op2), c_type_size(element_type));
+					ref = ir_MUL(IR_SIZE_T, c_value_ref(rcc, op2), c_type_size(rcc, element_type));
 				}
 			}
-			ref = ir_ADD_A(c_value_ref(op1), ref);
+			ref = ir_ADD_A(c_value_ref(rcc, op1), ref);
 			c_value_set_rval(op1, type, IR_ADDR, ref);
 		}
 	} else if (op2->type->kind == C_TYPE_POINTER || op2->type->kind == C_TYPE_ARRAY) {
@@ -5723,9 +5702,9 @@ static void c_do_add(const c_type *type, c_value *op1, c_value *op2)
 		if (element_type->kind == C_TYPE_VOID) {
 			element_size = 1;
 		} else if ((op2->type->pointer.type->flags & C_TYPE_INCOMPLETE)
-		 && !c_fix_incomplete_type(op2->type->pointer.type)) {
+		 && !c_fix_incomplete_type(rcc, op2->type->pointer.type)) {
 			yy_error_fmt("invalid use of undefined \"%s %s\"",
-				c_type_kind2str(op2->type->pointer.type->kind), yy_sym2str(op2->type->pointer.type->tag));
+				c_type_kind2str(op2->type->pointer.type->kind), yy_sym2str(rcc, op2->type->pointer.type->tag));
 		} else {
 			element_type = op2->type->pointer.type;
 			element_size = element_type->size;
@@ -5738,24 +5717,24 @@ static void c_do_add(const c_type *type, c_value *op1, c_value *op2)
 		} else {
 			if (C_IS_TYPE_SIGNED(op1->type)) {
 				if (op1->type->kind != c_type_ssize_t.kind) {
-					c_do_cvt(&c_type_ssize_t, IR_SSIZE_T, op1);
+					c_do_cvt(rcc, &c_type_ssize_t, IR_SSIZE_T, op1);
 				}
 				if (element_size == 1 && !(element_type->attr & C_ATTR_VLA)) {
-					ref = c_value_ref(op1);
+					ref = c_value_ref(rcc, op1);
 				} else {
-					ref = ir_MUL(IR_SSIZE_T, c_value_ref(op1), c_type_ssize(element_type));
+					ref = ir_MUL(IR_SSIZE_T, c_value_ref(rcc, op1), c_type_ssize(rcc, element_type));
 				}
 			} else {
 				if (op1->type->kind != c_type_size_t.kind) {
-					c_do_cvt(&c_type_size_t, IR_SIZE_T, op1);
+					c_do_cvt(rcc, &c_type_size_t, IR_SIZE_T, op1);
 				}
 				if (element_size == 1 && !(element_type->attr & C_ATTR_VLA)) {
-					ref = c_value_ref(op1);
+					ref = c_value_ref(rcc, op1);
 				} else {
-					ref = ir_MUL(IR_SIZE_T, c_value_ref(op1), c_type_size(element_type));
+					ref = ir_MUL(IR_SIZE_T, c_value_ref(rcc, op1), c_type_size(rcc, element_type));
 				}
 			}
-			ref = ir_ADD_A(c_value_ref(op2), ref);
+			ref = ir_ADD_A(c_value_ref(rcc, op2), ref);
 			c_value_set_rval(op1, type, IR_ADDR, ref);
 		}
 	} else if (c_value_is_const(op1) && c_value_is_const(op2)) {
@@ -5769,15 +5748,15 @@ static void c_do_add(const c_type *type, c_value *op1, c_value *op2)
 			case IR_DOUBLE: val.d = op1->u.val.d + op2->u.val.d; break;
 			default: IR_ASSERT(0); return;
 		}
-		c_value_set_const(op1, type, c_type2ir(type), val);
+		c_value_set_const(op1, type, c_type2ir(rcc, type), val);
 	} else {
-		ir_type t = c_type2ir(type);
-		ref = ir_ADD(t, c_value_ref(op1), c_value_ref(op2));
+		ir_type t = c_type2ir(rcc, type);
+		ref = ir_ADD(t, c_value_ref(rcc, op1), c_value_ref(rcc, op2));
 		c_value_set_rval(op1, type, t, ref);
 	}
 }
 
-static void c_do_sub(const c_type *type, c_value *op1, c_value *op2)
+static void c_do_sub(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op2)
 {
 	ir_val val;
 	ir_ref ref;
@@ -5789,9 +5768,9 @@ static void c_do_sub(const c_type *type, c_value *op1, c_value *op2)
 		if (element_type->kind == C_TYPE_VOID) {
 			element_size = 1;
 		} else if ((op1->type->pointer.type->flags & C_TYPE_INCOMPLETE)
-		 && !c_fix_incomplete_type(op1->type->pointer.type)) {
+		 && !c_fix_incomplete_type(rcc, op1->type->pointer.type)) {
 			yy_error_fmt("invalid use of undefined \"%s %s\"",
-				c_type_kind2str(op1->type->pointer.type->kind), yy_sym2str(op1->type->pointer.type->tag));
+				c_type_kind2str(op1->type->pointer.type->kind), yy_sym2str(rcc, op1->type->pointer.type->tag));
 		} else {
 			element_type = op1->type->pointer.type;
 			element_size = element_type->size;
@@ -5804,9 +5783,9 @@ static void c_do_sub(const c_type *type, c_value *op1, c_value *op2)
 				val.i64 = (op1->u.val.addr - op2->u.val.addr) / element_size;
 				c_value_set_const(op1, &c_type_ssize_t, IR_SSIZE_T, val);
 			 } else {
-				ref = ir_SUB(IR_SSIZE_T, c_value_ref(op1), c_value_ref(op2));
+				ref = ir_SUB(IR_SSIZE_T, c_value_ref(rcc, op1), c_value_ref(rcc, op2));
 				if (element_size != 1 || (element_type->attr & C_ATTR_VLA)) {
-					ref = ir_DIV(IR_SSIZE_T, ref, c_type_ssize(element_type));
+					ref = ir_DIV(IR_SSIZE_T, ref, c_type_ssize(rcc, element_type));
 				}
 				type = &c_type_ssize_t;
 				c_value_set_rval(op1, type, IR_SSIZE_T, ref);
@@ -5820,24 +5799,24 @@ static void c_do_sub(const c_type *type, c_value *op1, c_value *op2)
 			} else {
 				if (C_IS_TYPE_SIGNED(op2->type)) {
 					if (op2->type->kind != c_type_ssize_t.kind) {
-						c_do_cvt(&c_type_ssize_t, IR_SSIZE_T, op2);
+						c_do_cvt(rcc, &c_type_ssize_t, IR_SSIZE_T, op2);
 					}
 					if (element_size == 1 && !(element_type->attr & C_ATTR_VLA)) {
-						ref = c_value_ref(op2);
+						ref = c_value_ref(rcc, op2);
 					} else {
-						ref = ir_MUL(IR_SSIZE_T, c_value_ref(op2), c_type_ssize(element_type));
+						ref = ir_MUL(IR_SSIZE_T, c_value_ref(rcc, op2), c_type_ssize(rcc, element_type));
 					}
 				} else {
 					if (op2->type->kind != c_type_size_t.kind) {
-						c_do_cvt(&c_type_size_t, IR_SIZE_T, op2);
+						c_do_cvt(rcc, &c_type_size_t, IR_SIZE_T, op2);
 					}
 					if (element_size == 1 && !(element_type->attr & C_ATTR_VLA)) {
-						ref = c_value_ref(op2);
+						ref = c_value_ref(rcc, op2);
 					} else {
-						ref = ir_MUL(IR_SIZE_T, c_value_ref(op2), c_type_size(element_type));
+						ref = ir_MUL(IR_SIZE_T, c_value_ref(rcc, op2), c_type_size(rcc, element_type));
 					}
 				}
-				ref = ir_SUB_A(c_value_ref(op1), ref);
+				ref = ir_SUB_A(c_value_ref(rcc, op1), ref);
 				c_value_set_rval(op1, type, IR_ADDR, ref);
 			}
 		}
@@ -5853,15 +5832,15 @@ static void c_do_sub(const c_type *type, c_value *op1, c_value *op2)
 			case IR_DOUBLE: val.d = op1->u.val.d - op2->u.val.d; break;
 			default: IR_ASSERT(0); return;
 		}
-		c_value_set_const(op1, type, c_type2ir(type), val);
+		c_value_set_const(op1, type, c_type2ir(rcc, type), val);
 	} else {
-		ir_type t = c_type2ir(type);
-		ref = ir_SUB(t, c_value_ref(op1), c_value_ref(op2));
+		ir_type t = c_type2ir(rcc, type);
+		ref = ir_SUB(t, c_value_ref(rcc, op1), c_value_ref(rcc, op2));
 		c_value_set_rval(op1, type, t, ref);
 	}
 }
 
-static void c_do_mul(const c_type *type, c_value *op1, c_value *op2)
+static void c_do_mul(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op2)
 {
 	if (c_value_is_const(op1) && c_value_is_const(op2)) {
 		ir_val val;
@@ -5875,23 +5854,23 @@ static void c_do_mul(const c_type *type, c_value *op1, c_value *op2)
 			case IR_DOUBLE: val.d = op1->u.val.d * op2->u.val.d; break;
 			default: IR_ASSERT(0); return;
 		}
-		c_value_set_const(op1, type, c_type2ir(type), val);
+		c_value_set_const(op1, type, c_type2ir(rcc, type), val);
 	} else {
-		ir_type t = c_type2ir(type);
+		ir_type t = c_type2ir(rcc, type);
 
-		c_value_set_rval(op1, type, t, ir_MUL(t, c_value_ref(op1), c_value_ref(op2)));
+		c_value_set_rval(op1, type, t, ir_MUL(t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 	}
 }
 
-static void c_do_div(const c_type *type, c_value *op1, c_value *op2)
+static void c_do_div(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op2)
 {
-	if (c_value_is_const(op1) && c_value_is_const(op2) && (op2->u.val.u64 != 0 || !active_scope)) {
+	if (c_value_is_const(op1) && c_value_is_const(op2) && (op2->u.val.u64 != 0 || !rcc->active_scope)) {
 		ir_val val;
 
 		if (IR_IS_TYPE_INT(op1->u.type) && c_value_is_const(op2) && op2->u.val.u64 == 0) {
-			if (c_dead_code) {
+			if (rcc->c_dead_code) {
 				val.u64 = 0;
-				c_value_set_const(op1, type, c_type2ir(type), val);
+				c_value_set_const(op1, type, c_type2ir(rcc, type), val);
 				return;
 			}
 			yy_error("division by zero");
@@ -5899,9 +5878,9 @@ static void c_do_div(const c_type *type, c_value *op1, c_value *op2)
 		switch (op1->u.type) {
 			case IR_I32:
 				if (UNEXPECTED(op2->u.val.i32 == -1 && op1->u.val.u32 == 0x80000000)) {
-					if (c_dead_code) {
+					if (rcc->c_dead_code) {
 						val.u64 = 0;
-						c_value_set_const(op1, type, c_type2ir(type), val);
+						c_value_set_const(op1, type, c_type2ir(rcc, type), val);
 						return;
 					}
 					yy_warning("integer overflow in expression");
@@ -5915,9 +5894,9 @@ static void c_do_div(const c_type *type, c_value *op1, c_value *op2)
 				break;
 			case IR_I64:
 				if (UNEXPECTED(op2->u.val.i64 == -1 && op1->u.val.u64 == 0x8000000000000000ULL)) {
-					if (c_dead_code) {
+					if (rcc->c_dead_code) {
 						val.u64 = 0;
-						c_value_set_const(op1, type, c_type2ir(type), val);
+						c_value_set_const(op1, type, c_type2ir(rcc, type), val);
 						return;
 					}
 					yy_warning("integer overflow in expression");
@@ -5940,23 +5919,23 @@ static void c_do_div(const c_type *type, c_value *op1, c_value *op2)
 				IR_ASSERT(0);
 				return;
 		}
-		c_value_set_const(op1, type, c_type2ir(type), val);
+		c_value_set_const(op1, type, c_type2ir(rcc, type), val);
 	} else {
-		ir_type t = c_type2ir(type);
+		ir_type t = c_type2ir(rcc, type);
 
-		c_value_set_rval(op1, type, t, ir_DIV(t, c_value_ref(op1), c_value_ref(op2)));
+		c_value_set_rval(op1, type, t, ir_DIV(t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 	}
 }
 
-static void c_do_mod(const c_type *type, c_value *op1, c_value *op2)
+static void c_do_mod(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op2)
 {
-	if (c_value_is_const(op1) && c_value_is_const(op2) && (op2->u.val.u64 != 0 || !active_scope)) {
+	if (c_value_is_const(op1) && c_value_is_const(op2) && (op2->u.val.u64 != 0 || !rcc->active_scope)) {
 		ir_val val;
 
 		if (c_value_is_const(op2) && op2->u.val.u64 == 0) {
-			if (c_dead_code) {
+			if (rcc->c_dead_code) {
 				val.u64 = 0;
-				c_value_set_const(op1, type, c_type2ir(type), val);
+				c_value_set_const(op1, type, c_type2ir(rcc, type), val);
 				return;
 			}
 			yy_error("division by zero");
@@ -5968,15 +5947,15 @@ static void c_do_mod(const c_type *type, c_value *op1, c_value *op2)
 			case IR_U64: val.u64 = op1->u.val.u64 % op2->u.val.u64; break;
 			default: IR_ASSERT(0); return;
 		}
-		c_value_set_const(op1, type, c_type2ir(type), val);
+		c_value_set_const(op1, type, c_type2ir(rcc, type), val);
 	} else {
-		ir_type t = c_type2ir(type);
+		ir_type t = c_type2ir(rcc, type);
 
-		c_value_set_rval(op1, type, t, ir_MOD(t, c_value_ref(op1), c_value_ref(op2)));
+		c_value_set_rval(op1, type, t, ir_MOD(t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 	}
 }
 
-static void c_do_shl(const c_type *type, c_value *op1, c_value *op2)
+static void c_do_shl(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op2)
 {
 	if (c_value_is_const(op1) && c_value_is_const(op2)) {
 		ir_val val;
@@ -5994,14 +5973,14 @@ static void c_do_shl(const c_type *type, c_value *op1, c_value *op2)
 			case IR_U64: val.u64 = op1->u.val.u64 << (op2->u.val.u64 & mask); break;
 			default: IR_ASSERT(0); return;
 		}
-		c_value_set_const(op1, type, c_type2ir(type), val);
+		c_value_set_const(op1, type, c_type2ir(rcc, type), val);
 	} else {
-		ir_type t = c_type2ir(type);
-		c_value_set_rval(op1, type, t, ir_SHL(t, c_value_ref(op1), c_value_ref(op2)));
+		ir_type t = c_type2ir(rcc, type);
+		c_value_set_rval(op1, type, t, ir_SHL(t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 	}
 }
 
-static void c_do_shr(const c_type *type, c_value *op1, c_value *op2)
+static void c_do_shr(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op2)
 {
 	if (c_value_is_const(op1) && c_value_is_const(op2)) {
 		ir_val val;
@@ -6019,19 +5998,19 @@ static void c_do_shr(const c_type *type, c_value *op1, c_value *op2)
 			case IR_U64: val.u64 = op1->u.val.u64 >> (op2->u.val.u64 & mask); break;
 			default: IR_ASSERT(0); return;
 		}
-		c_value_set_const(op1, type, c_type2ir(type), val);
+		c_value_set_const(op1, type, c_type2ir(rcc, type), val);
 	} else {
-		ir_type t = c_type2ir(type);
+		ir_type t = c_type2ir(rcc, type);
 
 		if (C_IS_TYPE_SIGNED(type)) {
-			c_value_set_rval(op1, type, t, ir_SAR(t, c_value_ref(op1), c_value_ref(op2)));
+			c_value_set_rval(op1, type, t, ir_SAR(t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 		} else {
-			c_value_set_rval(op1, type, t, ir_SHR(t, c_value_ref(op1), c_value_ref(op2)));
+			c_value_set_rval(op1, type, t, ir_SHR(t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 		}
 	}
 }
 
-static void c_do_and(const c_type *type, c_value *op1, c_value *op2)
+static void c_do_and(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op2)
 {
 	if (c_value_is_const(op1) && c_value_is_const(op2)) {
 		ir_val val;
@@ -6043,15 +6022,15 @@ static void c_do_and(const c_type *type, c_value *op1, c_value *op2)
 			case IR_U64: val.u64 = op1->u.val.u64 & op2->u.val.u64; break;
 			default: IR_ASSERT(0); return;
 		}
-		c_value_set_const(op1, type, c_type2ir(type), val);
+		c_value_set_const(op1, type, c_type2ir(rcc, type), val);
 	} else {
-		ir_type t = c_type2ir(type);
+		ir_type t = c_type2ir(rcc, type);
 
-		c_value_set_rval(op1, type, t, ir_AND(t, c_value_ref(op1), c_value_ref(op2)));
+		c_value_set_rval(op1, type, t, ir_AND(t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 	}
 }
 
-static void c_do_xor(const c_type *type, c_value *op1, c_value *op2)
+static void c_do_xor(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op2)
 {
 	if (c_value_is_const(op1) && c_value_is_const(op2)) {
 		ir_val val;
@@ -6063,15 +6042,15 @@ static void c_do_xor(const c_type *type, c_value *op1, c_value *op2)
 			case IR_U64: val.u64 = op1->u.val.u64 ^ op2->u.val.u64; break;
 			default: IR_ASSERT(0); return;
 		}
-		c_value_set_const(op1, type, c_type2ir(type), val);
+		c_value_set_const(op1, type, c_type2ir(rcc, type), val);
 	} else {
-		ir_type t = c_type2ir(type);
+		ir_type t = c_type2ir(rcc, type);
 
-		c_value_set_rval(op1, type, t, ir_XOR(t, c_value_ref(op1), c_value_ref(op2)));
+		c_value_set_rval(op1, type, t, ir_XOR(t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 	}
 }
 
-static void c_do_or(const c_type *type, c_value *op1, c_value *op2)
+static void c_do_or(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op2)
 {
 	if (c_value_is_const(op1) && c_value_is_const(op2)) {
 		ir_val val;
@@ -6083,15 +6062,15 @@ static void c_do_or(const c_type *type, c_value *op1, c_value *op2)
 			case IR_U64: val.u64 = op1->u.val.u64 | op2->u.val.u64; break;
 			default: IR_ASSERT(0); return;
 		}
-		c_value_set_const(op1, type, c_type2ir(type), val);
+		c_value_set_const(op1, type, c_type2ir(rcc, type), val);
 	} else {
-		ir_type t = c_type2ir(type);
+		ir_type t = c_type2ir(rcc, type);
 
-		c_value_set_rval(op1, type, t, ir_OR(t, c_value_ref(op1), c_value_ref(op2)));
+		c_value_set_rval(op1, type, t, ir_OR(t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 	}
 }
 
-static void c_do_lt(const c_type *type, c_value *op1, c_value *op2)
+static void c_do_lt(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op2)
 {
 	if (c_value_is_const(op1) && c_value_is_const(op2)) {
 		ir_val val;
@@ -6114,14 +6093,14 @@ static void c_do_lt(const c_type *type, c_value *op1, c_value *op2)
 		c_value_set_const(op1, &c_type_bool, IR_BOOL, val);
 	} else {
 		if (C_IS_TYPE_SIGNED(type) || C_IS_TYPE_FP(type)) {
-			c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_LT(c_value_ref(op1), c_value_ref(op2)));
+			c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_LT(c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 		} else {
-			c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_ULT(c_value_ref(op1), c_value_ref(op2)));
+			c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_ULT(c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 		}
 	}
 }
 
-static void c_do_gt(const c_type *type, c_value *op1, c_value *op2)
+static void c_do_gt(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op2)
 {
 	if (c_value_is_const(op1) && c_value_is_const(op2)) {
 		ir_val val;
@@ -6144,14 +6123,14 @@ static void c_do_gt(const c_type *type, c_value *op1, c_value *op2)
 		c_value_set_const(op1, &c_type_bool, IR_BOOL, val);
 	} else {
 		if (C_IS_TYPE_SIGNED(type) || C_IS_TYPE_FP(type)) {
-			c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_GT(c_value_ref(op1), c_value_ref(op2)));
+			c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_GT(c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 		} else {
-			c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_UGT(c_value_ref(op1), c_value_ref(op2)));
+			c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_UGT(c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 		}
 	}
 }
 
-static void c_do_le(const c_type *type, c_value *op1, c_value *op2)
+static void c_do_le(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op2)
 {
 	if (c_value_is_const(op1) && c_value_is_const(op2)) {
 		ir_val val;
@@ -6174,14 +6153,14 @@ static void c_do_le(const c_type *type, c_value *op1, c_value *op2)
 		c_value_set_const(op1, &c_type_bool, IR_BOOL, val);
 	} else {
 		if (C_IS_TYPE_SIGNED(type) || C_IS_TYPE_FP(type)) {
-			c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_LE(c_value_ref(op1), c_value_ref(op2)));
+			c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_LE(c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 		} else {
-			c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_ULE(c_value_ref(op1), c_value_ref(op2)));
+			c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_ULE(c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 		}
 	}
 }
 
-static void c_do_ge(const c_type *type, c_value *op1, c_value *op2)
+static void c_do_ge(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op2)
 {
 	if (c_value_is_const(op1) && c_value_is_const(op2)) {
 		ir_val val;
@@ -6204,14 +6183,14 @@ static void c_do_ge(const c_type *type, c_value *op1, c_value *op2)
 		c_value_set_const(op1, &c_type_bool, IR_BOOL, val);
 	} else {
 		if (C_IS_TYPE_SIGNED(type) || C_IS_TYPE_FP(type)) {
-			c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_GE(c_value_ref(op1), c_value_ref(op2)));
+			c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_GE(c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 		} else {
-			c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_UGE(c_value_ref(op1), c_value_ref(op2)));
+			c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_UGE(c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 		}
 	}
 }
 
-static void c_do_eq(const c_type *type, c_value *op1, c_value *op2)
+static void c_do_eq(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op2)
 {
 	if (c_value_is_const(op1) && c_value_is_const(op2)) {
 		ir_val val;
@@ -6233,11 +6212,11 @@ static void c_do_eq(const c_type *type, c_value *op1, c_value *op2)
 		}
 		c_value_set_const(op1, &c_type_bool, IR_BOOL, val);
 	} else {
-		c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_EQ(c_value_ref(op1), c_value_ref(op2)));
+		c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_EQ(c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 	}
 }
 
-static void c_do_ne(const c_type *type, c_value *op1, c_value *op2)
+static void c_do_ne(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op2)
 {
 	if (c_value_is_const(op1) && c_value_is_const(op2)) {
 		ir_val val;
@@ -6259,40 +6238,40 @@ static void c_do_ne(const c_type *type, c_value *op1, c_value *op2)
 		}
 		c_value_set_const(op1, &c_type_bool, IR_BOOL, val);
 	} else {
-		c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_NE(c_value_ref(op1), c_value_ref(op2)));
+		c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_NE(c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 	}
 }
 
-void c_do_binary_op(yy_sym sym, c_value *op1, c_value *op2)
+void c_do_binary_op(rcc_ctx *rcc, yy_sym sym, c_value *op1, c_value *op2)
 {
 	const c_type *type;
 
-	c_value_rval(op1);
-	c_value_rval(op2);
-	type = c_common_type(sym, op1, op2);
-	if (!type) yy_error_fmt("invalid operands to binary \"%s\"", yy_sym2str(sym));
+	c_value_rval(rcc, op1);
+	c_value_rval(rcc, op2);
+	type = c_common_type(rcc, sym, op1, op2);
+	if (!type) yy_error_fmt("invalid operands to binary \"%s\"", yy_sym2str(rcc, sym));
 	switch (sym) {
-		case YY__PLUS:            c_do_add(type, op1, op2); break;
-		case YY__MINUS:           c_do_sub(type, op1, op2); break;
-		case YY__STAR:            c_do_mul(type, op1, op2); break;
-		case YY__SLASH:           c_do_div(type, op1, op2); break;
-		case YY__PERCENT:         c_do_mod(type, op1, op2); break;
-		case YY__LESS_LESS:       c_do_shl(type, op1, op2); break;
-		case YY__GREATER_GREATER: c_do_shr(type, op1, op2); break;
-		case YY__AND:             c_do_and(type, op1, op2); break;
-		case YY__UPARROW:         c_do_xor(type, op1, op2); break;
-		case YY__BAR:             c_do_or(type, op1, op2); break;
-		case YY__LESS:            c_do_lt(type, op1, op2); break;
-		case YY__GREATER:         c_do_gt(type, op1, op2); break;
-		case YY__LESS_EQUAL:      c_do_le(type, op1, op2); break;
-		case YY__GREATER_EQUAL:   c_do_ge(type, op1, op2); break;
-		case YY__EQUAL_EQUAL:     c_do_eq(type, op1, op2); break;
-		case YY__BANG_EQUAL:      c_do_ne(type, op1, op2); break;
+		case YY__PLUS:            c_do_add(rcc, type, op1, op2); break;
+		case YY__MINUS:           c_do_sub(rcc, type, op1, op2); break;
+		case YY__STAR:            c_do_mul(rcc, type, op1, op2); break;
+		case YY__SLASH:           c_do_div(rcc, type, op1, op2); break;
+		case YY__PERCENT:         c_do_mod(rcc, type, op1, op2); break;
+		case YY__LESS_LESS:       c_do_shl(rcc, type, op1, op2); break;
+		case YY__GREATER_GREATER: c_do_shr(rcc, type, op1, op2); break;
+		case YY__AND:             c_do_and(rcc, type, op1, op2); break;
+		case YY__UPARROW:         c_do_xor(rcc, type, op1, op2); break;
+		case YY__BAR:             c_do_or(rcc, type, op1, op2); break;
+		case YY__LESS:            c_do_lt(rcc, type, op1, op2); break;
+		case YY__GREATER:         c_do_gt(rcc, type, op1, op2); break;
+		case YY__LESS_EQUAL:      c_do_le(rcc, type, op1, op2); break;
+		case YY__GREATER_EQUAL:   c_do_ge(rcc, type, op1, op2); break;
+		case YY__EQUAL_EQUAL:     c_do_eq(rcc, type, op1, op2); break;
+		case YY__BANG_EQUAL:      c_do_ne(rcc, type, op1, op2); break;
 		default: IR_ASSERT(0);
 	}
 }
 
-void c_do_assign_op(yy_sym sym, c_value *op1, c_value *op2)
+void c_do_assign_op(rcc_ctx *rcc, yy_sym sym, c_value *op1, c_value *op2)
 {
 	if (!c_value_is_lval(op1) || op1->type->kind == C_TYPE_FUNC) {
 		yy_error("lvalue required as left operand of assignment");
@@ -6300,7 +6279,7 @@ void c_do_assign_op(yy_sym sym, c_value *op1, c_value *op2)
 	if (sym != YY__EQUAL) {
 		c_value tmp = *op1;
 
-		c_value_rval(&tmp);
+		c_value_rval(rcc, &tmp);
 		switch (sym) {
 			case YY__STAR_EQUAL:            sym = YY__STAR; break;
 			case YY__SLASH_EQUAL:           sym = YY__SLASH; break;
@@ -6314,32 +6293,32 @@ void c_do_assign_op(yy_sym sym, c_value *op1, c_value *op2)
 			case YY__BAR_EQUAL:             sym = YY__BAR; break;
 			default: IR_ASSERT(0);
 		}
-		c_do_binary_op(sym, &tmp, op2);
+		c_do_binary_op(rcc, sym, &tmp, op2);
 		*op2 = tmp;
 	} else {
-		c_value_rval(op2);
+		c_value_rval(rcc, op2);
 	}
-	if (op1->type != op2->type) c_do_check_cvt(op1->type, op2, -1);
+	if (op1->type != op2->type) c_do_check_cvt(rcc, op1->type, op2, -1);
 	if (op1->type->attr & C_ATTR_CONST) yy_error_fmt("%s of read-only location", "assignment");
 	if (C_IS_TYPE_SCALAR_OR_PTR(op1->type)) {
-		ir_ref ref = c_do_store(op1, op2);
+		ir_ref ref = c_do_store(rcc, op1, op2);
 
-		if (!IR_IS_CONST_REF(ref) || IR_IS_SYM_CONST(active_ctx->ir_base[ref].op)) {
+		if (!IR_IS_CONST_REF(ref) || IR_IS_SYM_CONST(rcc->active_ctx->ir_base[ref].op)) {
 			c_value_set_rval(op1, op1->type, op1->u.type, ref);
 		} else {
-			c_value_set_const(op1, op1->type, op1->u.type, active_ctx->ir_base[ref].val);
+			c_value_set_const(op1, op1->type, op1->u.type, rcc->active_ctx->ir_base[ref].val);
 		}
 	} else {
 		IR_ASSERT(op1->type->size == op2->type->size);
 		if (op1->type->size) {
-			ir_memcpy(active_ctx, op1->u.ref, c_value_ref(op2),
-				ir_const_size_t(active_ctx, op2->type->size), c_attr2align(op2->type->attr));
+			ir_memcpy(rcc, op1->u.ref, c_value_ref(rcc, op2),
+				ir_const_size_t(rcc->active_ctx, op2->type->size), c_attr2align(op2->type->attr));
 		}
 	}
 }
 
 
-static void c_do_bool(c_value *res, c_value *op1)
+static void c_do_bool(rcc_ctx *rcc, c_value *res, c_value *op1)
 {
 	ir_val val;
 
@@ -6351,52 +6330,52 @@ static void c_do_bool(c_value *res, c_value *op1)
 	} else {
 		val.u64 = 0;
 		c_value_set_rval(res, &c_type_bool, IR_BOOL,
-			ir_NE(c_value_ref(op1), ir_const(active_ctx, val, op1->u.type)));
+			ir_NE(c_value_ref(rcc, op1), ir_const(rcc->active_ctx, val, op1->u.type)));
 	}
 }
 
 /* wrappers to support __builtin_expect() */
-static void c_ir_IF_TRUE(ir_ref ref)
+static void c_ir_IF_TRUE(rcc_ctx *rcc, ir_ref ref)
 {
-	if (!c_last_expect_ref
-	 || c_last_expect_ref != active_ctx->ir_base[ref].op2
-	 || c_last_expect_val) {
+	if (!rcc->c_last_expect_ref
+	 || rcc->c_last_expect_ref != rcc->active_ctx->ir_base[ref].op2
+	 || rcc->c_last_expect_val) {
 		ir_IF_TRUE(ref);
 	} else {
 		ir_IF_TRUE_cold(ref);
 	}
 }
 
-static void c_ir_IF_FALSE(ir_ref ref)
+static void c_ir_IF_FALSE(rcc_ctx *rcc, ir_ref ref)
 {
-	if (!c_last_expect_ref
-	 || c_last_expect_ref != active_ctx->ir_base[ref].op2
-	 || !c_last_expect_val) {
+	if (!rcc->c_last_expect_ref
+	 || rcc->c_last_expect_ref != rcc->active_ctx->ir_base[ref].op2
+	 || !rcc->c_last_expect_val) {
 		ir_IF_FALSE(ref);
 	} else {
 		ir_IF_FALSE_cold(ref);
 	}
 }
 
-#define c_ir_MERGE_WITH_EMPTY_TRUE(_if)     do {ir_ref end = ir_END(); c_ir_IF_TRUE(_if); ir_MERGE_2(end, ir_END());} while (0)
-#define c_ir_MERGE_WITH_EMPTY_FALSE(_if)    do {ir_ref end = ir_END(); c_ir_IF_FALSE(_if); ir_MERGE_2(end, ir_END());} while (0)
+#define c_ir_MERGE_WITH_EMPTY_TRUE(_if)     do {ir_ref end = ir_END(); c_ir_IF_TRUE(rcc, _if); ir_MERGE_2(end, ir_END());} while (0)
+#define c_ir_MERGE_WITH_EMPTY_FALSE(_if)    do {ir_ref end = ir_END(); c_ir_IF_FALSE(rcc, _if); ir_MERGE_2(end, ir_END());} while (0)
 
-ir_ref c_do_bool_and_start(c_value *op1)
+ir_ref c_do_bool_and_start(rcc_ctx *rcc, c_value *op1)
 {
 	if (op1->type->kind == C_TYPE_VOID || op1->type->kind == C_TYPE_STRUCT || op1->type->kind == C_TYPE_UNION) {
 		yy_error("scalar is required");
 	}
 	if (c_value_is_const(op1)) {
 		if (c_value_is_true(op1)) return IR_UNUSED;
-		c_dead_code = 1;
+		rcc->c_dead_code = 1;
 	}
-	c_do_bool(op1, op1);
-	ir_ref ref = ir_IF(c_value_ref(op1));
-	c_ir_IF_TRUE(ref);
+	c_do_bool(rcc, op1, op1);
+	ir_ref ref = ir_IF(c_value_ref(rcc, op1));
+	c_ir_IF_TRUE(rcc, ref);
 	return ref;
 }
 
-void c_do_bool_and_end(c_value *op1, c_value *op2, ir_ref if_ref)
+void c_do_bool_and_end(rcc_ctx *rcc, c_value *op1, c_value *op2, ir_ref if_ref)
 {
 	ir_val val;
 
@@ -6406,8 +6385,8 @@ void c_do_bool_and_end(c_value *op1, c_value *op2, ir_ref if_ref)
 	if (if_ref) {
 		ir_ref ref;
 
-		c_do_bool(op2, op2);
-		ref = c_value_ref(op2);
+		c_do_bool(rcc, op2, op2);
+		ref = c_value_ref(rcc, op2);
 		c_ir_MERGE_WITH_EMPTY_FALSE(if_ref);
 		if (c_value_is_const(op1) && c_value_is_const(op2)) {
 			if (c_value_is_true(op1) && c_value_is_true(op2)) {
@@ -6421,26 +6400,26 @@ void c_do_bool_and_end(c_value *op1, c_value *op2, ir_ref if_ref)
 			c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_PHI_2(IR_BOOL, ref, IR_FALSE));
 		}
 	} else {
-		c_do_bool(op1, op2);
+		c_do_bool(rcc, op1, op2);
 	}
 }
 
-ir_ref c_do_bool_or_start(c_value *op1)
+ir_ref c_do_bool_or_start(rcc_ctx *rcc, c_value *op1)
 {
 	if (op1->type->kind == C_TYPE_VOID || op1->type->kind == C_TYPE_STRUCT || op1->type->kind == C_TYPE_UNION) {
 		yy_error("scalar is required");
 	}
 	if (c_value_is_const(op1)) {
 		if(!c_value_is_true(op1)) return IR_UNUSED;
-		c_dead_code = 1;
+		rcc->c_dead_code = 1;
 	}
-	c_do_bool(op1, op1);
-	ir_ref ref = ir_IF(c_value_ref(op1));
-	c_ir_IF_FALSE(ref);
+	c_do_bool(rcc, op1, op1);
+	ir_ref ref = ir_IF(c_value_ref(rcc, op1));
+	c_ir_IF_FALSE(rcc, ref);
 	return ref;
 }
 
-void c_do_bool_or_end(c_value *op1, c_value *op2, ir_ref if_ref)
+void c_do_bool_or_end(rcc_ctx *rcc, c_value *op1, c_value *op2, ir_ref if_ref)
 {
 	ir_val val;
 
@@ -6450,8 +6429,8 @@ void c_do_bool_or_end(c_value *op1, c_value *op2, ir_ref if_ref)
 	if (if_ref) {
 		ir_ref ref;
 
-		c_do_bool(op2, op2);
-		ref = c_value_ref(op2);
+		c_do_bool(rcc, op2, op2);
+		ref = c_value_ref(rcc, op2);
 		c_ir_MERGE_WITH_EMPTY_TRUE(if_ref);
 		if ((c_value_is_const(op1) && c_value_is_true(op1))
 		 || (c_value_is_const(op2) && c_value_is_true(op2))) {
@@ -6465,11 +6444,11 @@ void c_do_bool_or_end(c_value *op1, c_value *op2, ir_ref if_ref)
 			c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_PHI_2(IR_BOOL, ref, IR_TRUE));
 		}
 	} else {
-		c_do_bool(op1, op2);
+		c_do_bool(rcc, op1, op2);
 	}
 }
 
-void c_do_cond_op(c_value *cond, c_value *op1, c_value *op2)
+void c_do_cond_op(rcc_ctx *rcc, c_value *cond, c_value *op1, c_value *op2)
 {
 	const c_type *type;
 
@@ -6477,7 +6456,7 @@ void c_do_cond_op(c_value *cond, c_value *op1, c_value *op2)
 		*op1 = *cond;
 	}
 	if (op1->type->kind == op2->type->kind && op1->type->kind == C_TYPE_VOID) return;
-	type = c_common_type(YY__COLON, op1, op2);
+	type = c_common_type(rcc, YY__COLON, op1, op2);
 	if (!type) yy_error("type mismatch in conditional expression");
 
 	if (type != &c_type_void && (op1->type != type || op2->type != type)) {
@@ -6512,20 +6491,20 @@ void c_do_cond_op(c_value *cond, c_value *op1, c_value *op2)
 			/* Merge qualifiers */
 			if ((t1->attr & (C_ATTR_CONST|C_ATTR_VOLATILE))
 			 != (t2->attr & (C_ATTR_CONST|C_ATTR_VOLATILE))) {
-				c_type *t = ir_arena_alloc(&c_arena, sizeof(c_type));
+				c_type *t = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
 				*t = *type;
-				t->pointer.type = ir_arena_alloc(&c_arena, sizeof(c_type));
+				t->pointer.type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
 				*((c_type*)(t->pointer.type)) = *type->pointer.type;
 				((c_type*)(t->pointer.type))->attr |= (t1->attr | t2->attr) & (C_ATTR_CONST|C_ATTR_VOLATILE);
-				if (active_scope) {
+				if (rcc->active_scope) {
 					t->flags &= ~C_TYPE_GLOBAL;
 					((c_type*)(t->pointer.type))->flags &= ~C_TYPE_GLOBAL;
 				}
 				type = t;
 		    }
 		}
-		if (op1->type != type) c_do_cvt(type, c_type2ir(type), op1);
-		if (op2->type != type) c_do_cvt(type, c_type2ir(type), op2);
+		if (op1->type != type) c_do_cvt(rcc, type, c_type2ir(rcc, type), op1);
+		if (op2->type != type) c_do_cvt(rcc, type, c_type2ir(rcc, type), op2);
 	}
 	// TODO: We might need PHI decause of dominance ???
 	if (c_value_is_const(cond)) {
@@ -6534,37 +6513,37 @@ void c_do_cond_op(c_value *cond, c_value *op1, c_value *op2)
 				*cond = *op1;
 				cond->type = type;
 			} else {
-				c_value_set_rval(cond, type, c_type2ir(type), c_value_ref(op1));
+				c_value_set_rval(cond, type, c_type2ir(rcc, type), c_value_ref(rcc, op1));
 			}
 		} else {
 			if (c_value_is_const(op2)) {
 				*cond = *op2;
 				cond->type = type;
 			} else {
-				c_value_set_rval(cond, type, c_type2ir(type), c_value_ref(op2));
+				c_value_set_rval(cond, type, c_type2ir(rcc, type), c_value_ref(rcc, op2));
 			}
 		}
 	} else if (type != &c_type_void) {
-		ir_type t = c_type2ir(type);
+		ir_type t = c_type2ir(rcc, type);
 #if 1
-		c_value_set_rval(cond, type, t, ir_PHI_2(t, c_value_ref(op1), c_value_ref(op2)));
+		c_value_set_rval(cond, type, t, ir_PHI_2(t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 #else
-		c_value_set_rval(cond, type, t, ir_COND(t, c_value_ref(cond), c_value_ref(op1), c_value_ref(op2)));
+		c_value_set_rval(cond, type, t, ir_COND(t, c_value_ref(rcc, cond), c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 #endif
 	} else {
 		c_value_set_rval(cond, type, IR_VOID, IR_UNUSED);
 	}
 }
 
-void c_do_statement_expression(c_scope *scope, c_value *val)
+void c_do_statement_expression(rcc_ctx *rcc, c_scope *scope, c_value *val)
 {
-	if (!active_func_scope) yy_error("statement expression allowed only inside a function");
-	c_push_scope(scope);
+	if (!rcc->active_func_scope) yy_error("statement expression allowed only inside a function");
+	c_push_scope(rcc, scope);
 	scope->checkpoint = NULL; /* we must not free type of result value */
 	c_value_set_rval(val, &c_type_void, IR_VOID, IR_UNUSED);
 }
 
-ir_ref c_do_if(c_value *cond)
+ir_ref c_do_if(rcc_ctx *rcc, c_value *cond)
 {
 	ir_ref ref;
 
@@ -6573,50 +6552,50 @@ ir_ref c_do_if(c_value *cond)
 	} else if (C_IS_TYPE_FP(cond->type)) {
 		ir_val val;
 		val.u64 = 0;
-		ref = ir_NE(c_value_ref(cond), ir_const(active_ctx, val, cond->u.type));
+		ref = ir_NE(c_value_ref(rcc, cond), ir_const(rcc->active_ctx, val, cond->u.type));
 	} else {
-		ref = c_value_ref(cond);
+		ref = c_value_ref(rcc, cond);
 	}
-	if (IR_IS_CONST_REF(ref) && !ir_const_is_true(&active_ctx->ir_base[ref])) c_dead_code = 1;
+	if (IR_IS_CONST_REF(ref) && !ir_const_is_true(&rcc->active_ctx->ir_base[ref])) rcc->c_dead_code = 1;
 	ref = ir_IF(ref);
-	active_ctx->ir_base[ref].op3 = IR_UNUSED;
-	c_ir_IF_TRUE(ref);
+	rcc->active_ctx->ir_base[ref].op3 = IR_UNUSED;
+	c_ir_IF_TRUE(rcc, ref);
 	return ref;
 }
 
-void c_do_if_else(ir_ref if_ref, bool orig_dead_code)
+void c_do_if_else(rcc_ctx *rcc, ir_ref if_ref, bool orig_dead_code)
 {
 	ir_ref end_true_ref = ir_END();
-	active_ctx->ir_base[if_ref].op3 = end_true_ref;
-	c_ir_IF_FALSE(if_ref);
+	rcc->active_ctx->ir_base[if_ref].op3 = end_true_ref;
+	c_ir_IF_FALSE(rcc, if_ref);
 	if (!orig_dead_code) {
-		ir_ref cond = active_ctx->ir_base[if_ref].op2;
-		c_dead_code = (IR_IS_CONST_REF(cond) && ir_const_is_true(&active_ctx->ir_base[cond]));
+		ir_ref cond = rcc->active_ctx->ir_base[if_ref].op2;
+		rcc->c_dead_code = (IR_IS_CONST_REF(cond) && ir_const_is_true(&rcc->active_ctx->ir_base[cond]));
 	}
 }
 
-void c_do_if_end(ir_ref if_ref, bool orig_dead_code)
+void c_do_if_end(rcc_ctx *rcc, ir_ref if_ref, bool orig_dead_code)
 {
-	ir_ref end_true_ref = active_ctx->ir_base[if_ref].op3;
+	ir_ref end_true_ref = rcc->active_ctx->ir_base[if_ref].op3;
 
 	if (end_true_ref) {
-		active_ctx->ir_base[if_ref].op3 = IR_UNUSED;
+		rcc->active_ctx->ir_base[if_ref].op3 = IR_UNUSED;
 		ir_MERGE_2(end_true_ref, ir_END());
 	} else {
 		c_ir_MERGE_WITH_EMPTY_FALSE(if_ref);
 	}
-	c_dead_code = orig_dead_code;
+	rcc->c_dead_code = orig_dead_code;
 }
 
-void c_do_switch(c_loop *loop, c_value *cond)
+void c_do_switch(rcc_ctx *rcc, c_loop *loop, c_value *cond)
 {
 	const c_type *t;
 
-	c_value_rval(cond);
+	c_value_rval(rcc, cond);
 	t = cond->type;
 	if (C_IS_TYPE_INT(t) || t->kind == C_TYPE_ENUM) {
 		if (t->size < 4) {
-			c_do_cvt(&c_type_i32, IR_I32, cond);
+			c_do_cvt(rcc, &c_type_i32, IR_I32, cond);
 		}
 	} else {
 		yy_error("switch quantity not an integer");
@@ -6624,20 +6603,20 @@ void c_do_switch(c_loop *loop, c_value *cond)
 	loop->is_switch = 1;
 	loop->switch_type = cond->type;
 	loop->start = IR_UNUSED;
-	loop->check = ir_SWITCH(c_value_ref(cond));
+	loop->check = ir_SWITCH(c_value_ref(rcc, cond));
 	loop->next = IR_UNUSED;
 	loop->break_list = IR_UNUSED;
 	loop->continue_list = IR_UNUSED;
-	loop->scope = active_scope;
-	loop->prev = active_loop;
+	loop->scope = rcc->active_scope;
+	loop->prev = rcc->active_loop;
 	loop->case_labels = NULL;
-	active_loop = loop;
+	rcc->active_loop = loop;
 	ir_BEGIN(IR_UNUSED);
 }
 
-static c_loop *c_find_switch(void)
+static c_loop *c_find_switch(rcc_ctx *rcc)
 {
-	c_loop *loop = active_loop;
+	c_loop *loop = rcc->active_loop;
 
 	while (loop) {
 		if (loop->is_switch) return loop;
@@ -6738,7 +6717,7 @@ static void c_case_labels_balance(c_loop *loop, c_case_labels *q)
 	loop->case_labels->color = 0;
 }
 
-static void c_case_labels_add_i(c_loop *loop, ir_val min, ir_val max)
+static void c_case_labels_add_i(rcc_ctx *rcc, c_loop *loop, ir_val min, ir_val max)
 {
 	c_case_labels *q, *p = loop->case_labels;
 
@@ -6791,7 +6770,7 @@ static void c_case_labels_add_i(c_loop *loop, ir_val min, ir_val max)
 	}
 }
 
-static void c_case_labels_add_u(c_loop *loop, ir_val min, ir_val max)
+static void c_case_labels_add_u(rcc_ctx *rcc, c_loop *loop, ir_val min, ir_val max)
 {
 	c_case_labels *q, *p = loop->case_labels;
 
@@ -6851,35 +6830,35 @@ static void c_case_labels_free(c_case_labels *p)
 	ir_mem_free(p);
 }
 
-void c_do_case(c_value *v)
+void c_do_case(rcc_ctx *rcc, c_value *v)
 {
-	c_loop *loop = c_find_switch();
+	c_loop *loop = c_find_switch(rcc);
 	ir_ref prev = IR_UNUSED;
 
 	if (!loop) yy_error("case label not within a switch statement");
 	if (!c_value_is_const(v) || (!C_IS_TYPE_INT(v->type) && v->type->kind != C_TYPE_ENUM)) {
 		yy_error("case label does not reduce to an integer constant");
 	}
-	if (active_ctx->control) {
+	if (rcc->active_ctx->control) {
 		prev = ir_END();
 	}
 	if (loop->switch_type != v->type) {
-		c_do_cvt(loop->switch_type, c_type2ir(loop->switch_type), v);
+		c_do_cvt(rcc, loop->switch_type, c_type2ir(rcc, loop->switch_type), v);
 	}
 	if (C_IS_TYPE_SIGNED(loop->switch_type)) {
-		c_case_labels_add_i(loop, v->u.val, v->u.val);
+		c_case_labels_add_i(rcc, loop, v->u.val, v->u.val);
 	} else {
-		c_case_labels_add_u(loop, v->u.val, v->u.val);
+		c_case_labels_add_u(rcc, loop, v->u.val, v->u.val);
 	}
-	ir_CASE_VAL(loop->check, c_value_ref(v));
+	ir_CASE_VAL(loop->check, c_value_ref(rcc, v));
 	if (prev) {
 		ir_MERGE_2(prev, ir_END());
 	}
 }
 
-void c_do_case_range(c_value *v1, c_value *v2)
+void c_do_case_range(rcc_ctx *rcc, c_value *v1, c_value *v2)
 {
-	c_loop *loop = c_find_switch();
+	c_loop *loop = c_find_switch(rcc);
 	ir_ref list = IR_UNUSED;
 
 	if (!loop) yy_error("case label not within a switch statement");
@@ -6887,28 +6866,28 @@ void c_do_case_range(c_value *v1, c_value *v2)
 	 || !c_value_is_const(v2) || (!C_IS_TYPE_INT(v2->type) && v2->type->kind != C_TYPE_ENUM)) {
 		yy_error("case labels do not reduce to integer constants");
 	}
-	if (active_ctx->control) {
+	if (rcc->active_ctx->control) {
 		ir_END_list(list);
 	}
 	if (loop->switch_type != v1->type) {
-		c_do_cvt(loop->switch_type, c_type2ir(loop->switch_type), v1);
+		c_do_cvt(rcc, loop->switch_type, c_type2ir(rcc, loop->switch_type), v1);
 	}
 	if (loop->switch_type != v2->type) {
-		c_do_cvt(loop->switch_type, c_type2ir(loop->switch_type), v2);
+		c_do_cvt(rcc, loop->switch_type, c_type2ir(rcc, loop->switch_type), v2);
 	}
 	if (C_IS_TYPE_SIGNED(loop->switch_type)) {
 		if (v1->u.val.i64 <= v2->u.val.i64) {
-			c_case_labels_add_i(loop, v1->u.val, v2->u.val);
+			c_case_labels_add_i(rcc, loop, v1->u.val, v2->u.val);
 			if (v2->u.val.i64 - v1->u.val.i64 < 64) {
 				int64_t i;
 
 				for (i = v1->u.val.i64; i <= v2->u.val.i64; i++) {
 					v1->u.val.i64 = i;
-					ir_CASE_VAL(loop->check, c_value_ref(v1));
+					ir_CASE_VAL(loop->check, c_value_ref(rcc, v1));
 					ir_END_list(list);
 				}
 			} else {
-				ir_CASE_RANGE(loop->check, c_value_ref(v1), c_value_ref(v2));
+				ir_CASE_RANGE(loop->check, c_value_ref(rcc, v1), c_value_ref(rcc, v2));
 				ir_END_list(list);
 			}
 		} else {
@@ -6916,17 +6895,17 @@ void c_do_case_range(c_value *v1, c_value *v2)
 		}
 	} else {
 		if (v1->u.val.u64 <= v2->u.val.u64) {
-			c_case_labels_add_u(loop, v1->u.val, v2->u.val);
+			c_case_labels_add_u(rcc, loop, v1->u.val, v2->u.val);
 			if (v2->u.val.u64 - v1->u.val.u64 < 64) {
 				uint64_t i;
 
 				for (i = v1->u.val.u64; i <= v2->u.val.u64; i++) {
 					v1->u.val.u64 = i;
-					ir_CASE_VAL(loop->check, c_value_ref(v1));
+					ir_CASE_VAL(loop->check, c_value_ref(rcc, v1));
 					ir_END_list(list);
 				}
 			} else {
-				ir_CASE_RANGE(loop->check, c_value_ref(v1), c_value_ref(v2));
+				ir_CASE_RANGE(loop->check, c_value_ref(rcc, v1), c_value_ref(rcc, v2));
 				ir_END_list(list);
 			}
 		} else {
@@ -6936,45 +6915,45 @@ void c_do_case_range(c_value *v1, c_value *v2)
 	ir_MERGE_list(list);
 }
 
-void c_do_case_default(void)
+void c_do_case_default(rcc_ctx *rcc)
 {
-	c_loop *loop = c_find_switch();
+	c_loop *loop = c_find_switch(rcc);
 	ir_ref prev = IR_UNUSED;
 
 	if (!loop) yy_error("\"default\" label not within a switch statement");
 	if (loop->next) yy_error("multiple default labels in one switch");
-	if (active_ctx->control) {
+	if (rcc->active_ctx->control) {
 		prev = ir_END();
 	}
 	ir_CASE_DEFAULT(loop->check);
 	if (prev) {
 		ir_MERGE_2(prev, ir_END());
 	}
-	loop->next = active_ctx->control;
+	loop->next = rcc->active_ctx->control;
 }
 
-void c_do_switch_end(c_loop *loop)
+void c_do_switch_end(rcc_ctx *rcc, c_loop *loop)
 {
 	if (loop->case_labels) {
 		c_case_labels_free(loop->case_labels);
 	}
 	if (!loop->next) {
-		if (active_ctx->control) {
+		if (rcc->active_ctx->control) {
 			ir_END_list(loop->break_list);
 		}
 		ir_CASE_DEFAULT(loop->check);
 		ir_END_list(loop->break_list);
 	}
 	if (loop->break_list) {
-		if (active_ctx->control) {
+		if (rcc->active_ctx->control) {
 			ir_END_list(loop->break_list);
 		}
 		ir_MERGE_list(loop->break_list);
 	}
-	active_loop = loop->prev;
+	rcc->active_loop = loop->prev;
 }
 
-void c_do_loop_start(c_loop *loop)
+void c_do_loop_start(rcc_ctx *rcc, c_loop *loop)
 {
 	loop->is_switch = 0;
 	loop->start = ir_LOOP_BEGIN(ir_END());
@@ -6982,12 +6961,12 @@ void c_do_loop_start(c_loop *loop)
 	loop->next = IR_UNUSED;
 	loop->break_list = IR_UNUSED;
 	loop->continue_list = IR_UNUSED;
-	loop->scope = active_scope;
-	loop->prev = active_loop;
-	active_loop = loop;
+	loop->scope = rcc->active_scope;
+	loop->prev = rcc->active_loop;
+	rcc->active_loop = loop;
 }
 
-void c_do_loop_check(c_loop *loop, c_value *cond)
+void c_do_loop_check(rcc_ctx *rcc, c_loop *loop, c_value *cond)
 {
 	ir_ref ref;
 
@@ -6996,15 +6975,15 @@ void c_do_loop_check(c_loop *loop, c_value *cond)
 	} else if (C_IS_TYPE_FP(cond->type)) {
 		ir_val val;
 		val.u64 = 0;
-		ref = ir_NE(c_value_ref(cond), ir_const(active_ctx, val, cond->u.type));
+		ref = ir_NE(c_value_ref(rcc, cond), ir_const(rcc->active_ctx, val, cond->u.type));
 	} else {
-		ref = c_value_ref(cond);
+		ref = c_value_ref(rcc, cond);
 	}
 	loop->check = ir_IF(ref);
-	c_ir_IF_TRUE(loop->check);
+	c_ir_IF_TRUE(rcc, loop->check);
 }
 
-void c_do_loop_continue_label(c_loop *loop)
+void c_do_loop_continue_label(rcc_ctx *rcc, c_loop *loop)
 {
 	if (loop->continue_list) {
 		ir_END_list(loop->continue_list);
@@ -7013,41 +6992,41 @@ void c_do_loop_continue_label(c_loop *loop)
 	}
 }
 
-void c_do_loop_end(c_loop *loop)
+void c_do_loop_end(rcc_ctx *rcc, c_loop *loop)
 {
 	if (loop->continue_list) {
 		ir_END_list(loop->continue_list);
 		ir_MERGE_list(loop->continue_list);
 	}
 	ir_ref end = ir_LOOP_END();
-	active_ctx->ir_base[loop->start].op2 = end;
-	c_ir_IF_FALSE(loop->check);
+	rcc->active_ctx->ir_base[loop->start].op2 = end;
+	c_ir_IF_FALSE(rcc, loop->check);
 	if (loop->break_list) {
 		ir_END_list(loop->break_list);
 		ir_MERGE_list(loop->break_list);
 	}
-	active_loop = loop->prev;
+	rcc->active_loop = loop->prev;
 }
 
-void c_do_for_next_start(c_loop *loop)
+void c_do_for_next_start(rcc_ctx *rcc, c_loop *loop)
 {
 	/* store "control" link in BEGIN.op2 */
-	loop->next = active_ctx->control =
-		ir_emit3(active_ctx, IR_BEGIN, IR_UNUSED, active_ctx->control, active_ctx->flags);
+	loop->next = rcc->active_ctx->control =
+		ir_emit3(rcc->active_ctx, IR_BEGIN, IR_UNUSED, rcc->active_ctx->control, rcc->active_ctx->flags);
 	/* disable FOLDING */
-	active_ctx->flags &= ~IR_OPT_FOLDING;
+	rcc->active_ctx->flags &= ~IR_OPT_FOLDING;
 }
 
-void c_do_for_next_end(c_loop *loop)
+void c_do_for_next_end(rcc_ctx *rcc, c_loop *loop)
 {
 	ir_ref end = ir_END();
 	/* restore "control" link from BEGIN.op2 */
-	active_ctx->control = active_ctx->ir_base[loop->next].op2;
+	rcc->active_ctx->control = rcc->active_ctx->ir_base[loop->next].op2;
 	/* restore FOLDING */
-	active_ctx->flags = active_ctx->ir_base[loop->next].op3;
+	rcc->active_ctx->flags = rcc->active_ctx->ir_base[loop->next].op3;
 	/* store END of "next" block in BEGIN.op2 */
-	active_ctx->ir_base[loop->next].op2 = end;
-			active_ctx->ir_base[loop->next].op3 = IR_UNUSED;
+	rcc->active_ctx->ir_base[loop->next].op2 = end;
+			rcc->active_ctx->ir_base[loop->next].op3 = IR_UNUSED;
 }
 
 /* This function is usef to move FOR NEXT cofe "for(;;NEXT)" to the end of the loop body */
@@ -7129,7 +7108,7 @@ static ir_ref ir_repeat_code_block(ir_ctx *ctx, ir_ref start, ir_ref end, ir_ref
 	return xlat[insn->op1 - start];
 }
 
-void c_do_for_end(c_loop *loop)
+void c_do_for_end(rcc_ctx *rcc, c_loop *loop)
 {
 	if (loop->continue_list) {
 		ir_END_list(loop->continue_list);
@@ -7138,16 +7117,16 @@ void c_do_for_end(c_loop *loop)
 
 	if (loop->next) {
 		ir_ref start = loop->next;
-		ir_ref end = active_ctx->ir_base[loop->next].op2;
-		active_ctx->control = ir_repeat_code_block(active_ctx, start, end, active_ctx->control);
-		memset(&active_ctx->ir_base[start], 0, sizeof(ir_insn) * ((end - start) + 1));
+		ir_ref end = rcc->active_ctx->ir_base[loop->next].op2;
+		rcc->active_ctx->control = ir_repeat_code_block(rcc->active_ctx, start, end, rcc->active_ctx->control);
+		memset(&rcc->active_ctx->ir_base[start], 0, sizeof(ir_insn) * ((end - start) + 1));
 	}
 
 	ir_ref end = ir_LOOP_END();
-	active_ctx->ir_base[loop->start].op2 = end;
+	rcc->active_ctx->ir_base[loop->start].op2 = end;
 
 	if (loop->check) {
-		c_ir_IF_FALSE(loop->check);
+		c_ir_IF_FALSE(rcc, loop->check);
 		if (loop->break_list) {
 			ir_END_list(loop->break_list);
 			ir_MERGE_list(loop->break_list);
@@ -7157,12 +7136,12 @@ void c_do_for_end(c_loop *loop)
 	} else {
 		ir_BEGIN(IR_UNUSED);
 	}
-	active_loop = loop->prev;
+	rcc->active_loop = loop->prev;
 }
 
-static c_loop *c_find_loop(void)
+static c_loop *c_find_loop(rcc_ctx *rcc)
 {
-	c_loop *loop = active_loop;
+	c_loop *loop = rcc->active_loop;
 
 	while (loop) {
 		if (!loop->is_switch) return loop;
@@ -7171,21 +7150,21 @@ static c_loop *c_find_loop(void)
 	return NULL;
 }
 
-void c_do_continue(void)
+void c_do_continue(rcc_ctx *rcc)
 {
-	c_loop *loop = c_find_loop();
+	c_loop *loop = c_find_loop(rcc);
 
 	if (!loop) yy_error("continue statement not within a loop");
-	c_leave_scope(loop->scope);
+	c_leave_scope(rcc, loop->scope);
 	ir_END_list(loop->continue_list);
 	ir_BEGIN(IR_UNUSED);
 }
 
-void c_do_break(void)
+void c_do_break(rcc_ctx *rcc)
 {
-	if (!active_loop) yy_error("break statement not within loop or switch");
-	c_leave_scope(active_loop->scope);
-	ir_END_list(active_loop->break_list);
+	if (!rcc->active_loop) yy_error("break statement not within loop or switch");
+	c_leave_scope(rcc, rcc->active_loop->scope);
+	ir_END_list(rcc->active_loop->break_list);
 	ir_BEGIN(IR_UNUSED);
 }
 
@@ -7205,22 +7184,22 @@ static bool c_is_no_local_address(const ir_insn *insn)
 	return 0;
 }
 
-static bool c_may_tailcall(ir_ref ref, bool musttail)
+static bool c_may_tailcall(rcc_ctx *rcc, ir_ref ref, bool musttail)
 {
-	const ir_insn *insn = &active_ctx->ir_base[ref];
+	const ir_insn *insn = &rcc->active_ctx->ir_base[ref];
 	const c_type *t1;
 	const c_type *t2;
 	const c_param *p1, *p2;
 	uint32_t n;
 	uint32_t attr1, attr2;
 
-	if (!c_last_call_func_type || insn->op != IR_CALL) {
+	if (!rcc->c_last_call_func_type || insn->op != IR_CALL) {
 		if (musttail) yy_error("cannot tail-call: return value must be a call");
 		return 0;
 	}
 
-	t1 = c_last_call_func_type;
-	t2 = active_func->value.type;
+	t1 = rcc->c_last_call_func_type;
+	t2 = rcc->active_func->value.type;
 	if (t1->kind == C_TYPE_POINTER) t1 = t1->pointer.type;
 	IR_ASSERT(t1->kind == C_TYPE_FUNC && t2->kind == C_TYPE_FUNC);
 
@@ -7256,8 +7235,8 @@ static bool c_may_tailcall(ir_ref ref, bool musttail)
 	}
 
 	/* check for VLA arrays */
-	c_scope *scope = active_scope;
-	while (scope != active_func_scope) {
+	c_scope *scope = rcc->active_scope;
+	while (scope != rcc->active_func_scope) {
 		IR_ASSERT(scope);
 		if (scope->vla_block) {
 			if (musttail) yy_error("cannot tail-call: blocked by VLA");
@@ -7272,7 +7251,7 @@ static bool c_may_tailcall(ir_ref ref, bool musttail)
 	}
 
 	n = ir_insn_inputs_to_len(insn->inputs_count);
-	if (active_ctx->insns_count != ref + (ir_ref)n) {
+	if (rcc->active_ctx->insns_count != ref + (ir_ref)n) {
 		if (musttail) yy_error("cannot tail-call: other reasons");
 		return 0;
 	}
@@ -7281,13 +7260,13 @@ static bool c_may_tailcall(ir_ref ref, bool musttail)
 	n = insn->inputs_count;
 	for (uint32_t i = 3; i <= n; i++) {
 		ir_ref input = ir_insn_op(insn, i);
-		if (!IR_IS_CONST_REF(input) && active_ctx->ir_base[input].type == IR_ADDR) {
+		if (!IR_IS_CONST_REF(input) && rcc->active_ctx->ir_base[input].type == IR_ADDR) {
 			if (musttail) {
-				if (c_is_local_address(&active_ctx->ir_base[input])) {
+				if (c_is_local_address(&rcc->active_ctx->ir_base[input])) {
 					yy_error("cannot tail-call: passing address of local variable");
 					return 0;
 				}
-			} else if (!c_is_no_local_address(&active_ctx->ir_base[input])) {
+			} else if (!c_is_no_local_address(&rcc->active_ctx->ir_base[input])) {
 				return 0;
 			}
 		}
@@ -7296,22 +7275,22 @@ static bool c_may_tailcall(ir_ref ref, bool musttail)
 	return 1;
 }
 
-void c_do_return(c_value *val)
+void c_do_return(rcc_ctx *rcc, c_value *val)
 {
-	IR_ASSERT(active_func);
-	c_leave_scope(active_func_scope);
+	IR_ASSERT(rcc->active_func);
+	c_leave_scope(rcc, rcc->active_func_scope);
 	if (val && c_value_is_set(val) && val->type->kind != C_TYPE_VOID) {
-		if (!active_ctx->ret_type) {
+		if (!rcc->active_ctx->ret_type) {
 			yy_error("\"return\" with a value, in function returning void");
-		} else if (active_func->value.type->func.ret_type != val->type) {
-			c_do_check_cvt(active_func->value.type->func.ret_type, val, 0);
+		} else if (rcc->active_func->value.type->func.ret_type != val->type) {
+			c_do_check_cvt(rcc, rcc->active_func->value.type->func.ret_type, val, 0);
 		}
 		if (c_value_is_ref(val)
-		 && active_ctx->ir_base[val->u.ref].op == IR_CALL
-		 && active_ctx->insns_count ==
-			val->u.ref + (ir_ref)ir_insn_inputs_to_len(active_ctx->ir_base[val->u.ref].inputs_count)
-		 && c_may_tailcall(val->u.ref, 0)) {
-			active_ctx->ir_base[val->u.ref].op = IR_TAILCALL;
+		 && rcc->active_ctx->ir_base[val->u.ref].op == IR_CALL
+		 && rcc->active_ctx->insns_count ==
+			val->u.ref + (ir_ref)ir_insn_inputs_to_len(rcc->active_ctx->ir_base[val->u.ref].inputs_count)
+		 && c_may_tailcall(rcc, val->u.ref, 0)) {
+			rcc->active_ctx->ir_base[val->u.ref].op = IR_TAILCALL;
 			ir_UNREACHABLE();
 		} else if (val->type->kind == C_TYPE_STRUCT || val->type->kind == C_TYPE_UNION) {
 			ir_type types[MAX_ABI_TYPES];
@@ -7322,20 +7301,20 @@ void c_do_return(c_value *val)
 			} else {
 				IR_ASSERT(n == 0);
 				ir_ref ret_param = 2; /* 2 - reference to the first IR_PARAM */
-				ir_memcpy(active_ctx, ret_param, val->u.ref,
-					ir_const_size_t(active_ctx, val->type->size), c_attr2align(val->type->attr));
+				ir_memcpy(rcc, ret_param, val->u.ref,
+					ir_const_size_t(rcc->active_ctx, val->type->size), c_attr2align(val->type->attr));
 				ir_RETURN(ret_param);
 			}
 		} else {
-			ir_RETURN(c_value_ref(val));
+			ir_RETURN(c_value_ref(rcc, val));
 		}
 	} else {
-		if (active_ctx->ret_type) yy_error("\"return\" with no value, in function returning non-void");
-		if (active_ctx->ir_base[active_ctx->control].op == IR_CALL
-		 && active_ctx->insns_count ==
-			active_ctx->control + (ir_ref)ir_insn_inputs_to_len(active_ctx->ir_base[active_ctx->control].inputs_count)
-		 && c_may_tailcall(active_ctx->control, 0)) {
-			active_ctx->ir_base[active_ctx->control].op = IR_TAILCALL;
+		if (rcc->active_ctx->ret_type) yy_error("\"return\" with no value, in function returning non-void");
+		if (rcc->active_ctx->ir_base[rcc->active_ctx->control].op == IR_CALL
+		 && rcc->active_ctx->insns_count ==
+			rcc->active_ctx->control + (ir_ref)ir_insn_inputs_to_len(rcc->active_ctx->ir_base[rcc->active_ctx->control].inputs_count)
+		 && c_may_tailcall(rcc, rcc->active_ctx->control, 0)) {
+			rcc->active_ctx->ir_base[rcc->active_ctx->control].op = IR_TAILCALL;
 			ir_UNREACHABLE();
 		} else {
 			ir_RETURN(IR_UNUSED);
@@ -7345,53 +7324,53 @@ void c_do_return(c_value *val)
 	ir_BEGIN(IR_UNUSED);
 }
 
-void c_do_tailcall(c_value *val)
+void c_do_tailcall(rcc_ctx *rcc, c_value *val)
 {
-	IR_ASSERT(active_func);
+	IR_ASSERT(rcc->active_func);
 	if (!val || !c_value_is_ref(val)) {
 		yy_error("cannot tail-call: return value must be a call");
-	} else if (!c_may_tailcall(val->u.ref, 1)) {
-		c_do_return(val);
+	} else if (!c_may_tailcall(rcc, val->u.ref, 1)) {
+		c_do_return(rcc, val);
 	}
-	c_leave_scope(active_func_scope);
+	c_leave_scope(rcc, rcc->active_func_scope);
 
 	IR_ASSERT(val
 		&& c_value_is_ref(val)
-		&& active_ctx->ir_base[val->u.ref].op == IR_CALL
-		&& active_ctx->insns_count ==
-			val->u.ref + (ir_ref)ir_insn_inputs_to_len(active_ctx->ir_base[val->u.ref].inputs_count));
+		&& rcc->active_ctx->ir_base[val->u.ref].op == IR_CALL
+		&& rcc->active_ctx->insns_count ==
+			val->u.ref + (ir_ref)ir_insn_inputs_to_len(rcc->active_ctx->ir_base[val->u.ref].inputs_count));
 
-	active_ctx->ir_base[val->u.ref].op = IR_TAILCALL;
+	rcc->active_ctx->ir_base[val->u.ref].op = IR_TAILCALL;
 	ir_UNREACHABLE();
 
 	/* start an unreachable block  (it's going to be optimized out) */
 	ir_BEGIN(IR_UNUSED);
 }
 
-void c_do_goto(c_name name)
+void c_do_goto(rcc_ctx *rcc, c_name name)
 {
 	c_label *label;
 
 	IR_ASSERT(name);
-	label = yy_hash.data[name].label;
+	label = rcc->yy_hash.data[name].label;
 	if (!label) {
-		label = c_new_label(name, active_func_scope, NULL, active_scope == active_func_scope);
+		label = c_new_label(rcc, name, rcc->active_func_scope, NULL, rcc->active_scope == rcc->active_func_scope);
 	}
 
-	if (active_scope->last_vla_block) {
-		ir_ref goto_vla_block = active_scope->last_vla_block;
+	if (rcc->active_scope->last_vla_block) {
+		ir_ref goto_vla_block = rcc->active_scope->last_vla_block;
 
 		if (!label->dst) {
 			/* Forward GOTO. Insert BLOCK_END that may be patched or removed later */
 			ir_BLOCK_END(goto_vla_block);
 		} else if (!label->vla_block) {
 			/* GOTO to label at non-VLA scope => free all VLA data */
-			IR_ASSERT(c_prologue_end);
-			ir_BLOCK_END(c_prologue_end);
+			IR_ASSERT(rcc->c_prologue_end);
+			ir_BLOCK_END(rcc->c_prologue_end);
 		} else if (goto_vla_block != label->vla_block) {
 			/* GOTO to label at the other VLA scope. ... */
 			ir_ref vla_block = goto_vla_block;
-			c_scope *scope = active_scope;
+			c_scope *scope = rcc->active_scope;
 
 			while (scope) {
 				if (scope->vla_block) {
@@ -7401,34 +7380,34 @@ void c_do_goto(c_name name)
 				scope = scope->prev;
 			}
 			if (!scope) {
-				yy_error_fmt("jump to label \"%s\" into scope with variable modified type", yy_sym2str(name));
+				yy_error_fmt("jump to label \"%s\" into scope with variable modified type", yy_sym2str(rcc, name));
 			} else {
 				/* GOTO to label at some enclosing VLA scope => free nested VLA */
 				ir_BLOCK_END(vla_block);
 			}
 		}
 	} else if (label->vla_block) {
-		yy_error_fmt("jump to label \"%s\" into scope with variable modified type", yy_sym2str(name));
+		yy_error_fmt("jump to label \"%s\" into scope with variable modified type", yy_sym2str(rcc, name));
 	}
 
 	ir_END_list(label->src_list);
 	ir_BEGIN(IR_UNUSED);
 }
 
-c_label *c_do_set_label(c_name name)
+c_label *c_do_set_label(rcc_ctx *rcc, c_name name)
 {
 	c_label *label;
 
 	IR_ASSERT(name);
-	label = yy_hash.data[name].label;
+	label = rcc->yy_hash.data[name].label;
 	if (!label) {
-		label = c_new_label(name, active_func_scope, NULL, active_scope == active_func_scope);
+		label = c_new_label(rcc, name, rcc->active_func_scope, NULL, rcc->active_scope == rcc->active_func_scope);
 	} else if (label->dst) {
-		yy_error_fmt("duplicate label \"%s\"", yy_sym2str(name));
+		yy_error_fmt("duplicate label \"%s\"", yy_sym2str(rcc, name));
 		return NULL;
 	}
 
-	label->vla_block = active_scope->last_vla_block;
+	label->vla_block = rcc->active_scope->last_vla_block;
 	if (label->src_list) {
 		ir_ref ref = label->src_list;
 		uint32_t n = 0;
@@ -7436,20 +7415,20 @@ c_label *c_do_set_label(c_name name)
 
 		/* count inputs count */
 		do {
-			ir_insn *insn = &active_ctx->ir_base[ref];
+			ir_insn *insn = &rcc->active_ctx->ir_base[ref];
 
 			IR_ASSERT(insn->op == IR_END);
 			/* fix BLOCK_END instructions inseted by forward GOTO */
-			ir_insn *prev = &active_ctx->ir_base[insn->op1];
+			ir_insn *prev = &rcc->active_ctx->ir_base[insn->op1];
 			if (prev->op == IR_BLOCK_END) {
 				ir_ref goto_vla_block = prev->op2;
 
 				if (!label->vla_block) {
-					IR_ASSERT(c_prologue_end);
-					prev->op2 = c_prologue_end;
+					IR_ASSERT(rcc->c_prologue_end);
+					prev->op2 = rcc->c_prologue_end;
 				} else if (label->vla_block > goto_vla_block) {
 					/* label at a VLA scope started after the GOTO => error */
-					yy_error_fmt("jump to label \"%s\" into scope with variable modified type", yy_sym2str(name));
+					yy_error_fmt("jump to label \"%s\" into scope with variable modified type", yy_sym2str(rcc, name));
 				} else if (label->vla_block == goto_vla_block) {
 					/* label at the same VLA scope as GOTO => delete BLOCK_END */
 					insn->op1 = prev->op1;
@@ -7460,7 +7439,7 @@ c_label *c_do_set_label(c_name name)
 					prev->op2 = label->vla_block;
 				}
 			} else if (label->vla_block) {
-				yy_error_fmt("jump to label \"%s\" into scope with variable modified type", yy_sym2str(name));
+				yy_error_fmt("jump to label \"%s\" into scope with variable modified type", yy_sym2str(rcc, name));
 			}
 			ref = insn->op2;
 			n++;
@@ -7472,7 +7451,7 @@ c_label *c_do_set_label(c_name name)
 		n = 0;
 		srcs[n++] = ir_END();
 		do {
-			ir_insn *insn = &active_ctx->ir_base[ref];
+			ir_insn *insn = &rcc->active_ctx->ir_base[ref];
 
 			srcs[n] = ref;
 			IR_ASSERT(insn->op == IR_END);
@@ -7487,47 +7466,47 @@ c_label *c_do_set_label(c_name name)
 	} else {
 		ir_MERGE_2(ir_END(), IR_UNUSED);
 	}
-	label->dst = active_ctx->control;
+	label->dst = rcc->active_ctx->control;
 
 	if (label->value_block) {
 		/* remember label block strat in BEGIN node corresponding to label address */
-		IR_ASSERT(active_ctx->ir_base[label->value_block].op == IR_BEGIN);
-		active_ctx->ir_base[label->value_block].op1 = label->dst;
+		IR_ASSERT(rcc->active_ctx->ir_base[label->value_block].op == IR_BEGIN);
+		rcc->active_ctx->ir_base[label->value_block].op1 = label->dst;
 	}
 
 	return label;
 }
 
-void c_do_set_label_attrs(c_label *label, c_dcl *attrs)
+void c_do_set_label_attrs(rcc_ctx *rcc, c_label *label, c_dcl *attrs)
 {
 	if (attrs->attr & C_ATTR_UNUSED) {
 		label->is_unused = 1;
 	}
 }
 
-void c_do_finish_label(c_name name, c_label *label)
+void c_do_finish_label(rcc_ctx *rcc, c_name name, c_label *label)
 {
 	if (label->dst) {
 		ir_ref end, *ops;
-		ir_insn *insn = &active_ctx->ir_base[label->dst];
+		ir_insn *insn = &rcc->active_ctx->ir_base[label->dst];
 
 		IR_ASSERT(insn->op == IR_MERGE);
 		if (!label->src_list) {
 			insn->inputs_count--;
 			if (insn->inputs_count == 1) {
 				if (!label->is_unused) {
-					yy_warning_fmt("label \"%s\" defined but not used", yy_sym2str(name));
+					yy_warning_fmt("label \"%s\" defined but not used", yy_sym2str(rcc, name));
 				}
 				insn->op = IR_BEGIN;
 			}
 		} else {
-			if (!active_ctx->ir_base[label->src_list].op2) {
+			if (!rcc->active_ctx->ir_base[label->src_list].op2) {
 				/* one element list */
 				end = label->src_list;
 			} else {
 				ir_ref prev = IR_UNUSED;
 
-				if (active_ctx->control) {
+				if (rcc->active_ctx->control) {
 					prev = ir_END(); // TODO: try to avoid this contol split ???
 				}
 				ir_MERGE_list(label->src_list);
@@ -7536,39 +7515,39 @@ void c_do_finish_label(c_name name, c_label *label)
 					ir_BEGIN(prev);
 				}
 			}
-			insn = &active_ctx->ir_base[label->dst];
+			insn = &rcc->active_ctx->ir_base[label->dst];
 			ops = insn->ops;
 			ops[insn->inputs_count] = end;
 		}
 	} else if (label->src_list) {
-		yy_error_fmt("label \"l1\" used but not defined", yy_sym2str(name));
+		yy_error_fmt("label \"l1\" used but not defined", yy_sym2str(rcc, name));
 	}
 }
 
-void c_do_label_value(c_value *res, c_name label_name)
+void c_do_label_value(rcc_ctx *rcc, c_value *res, c_name label_name)
 {
 	c_label *label;
 
 	IR_ASSERT(label_name);
-	label = yy_hash.data[label_name].label;
+	label = rcc->yy_hash.data[label_name].label;
 	if (!label) {
-		label = c_new_label(label_name, active_func_scope, NULL, active_scope == active_func_scope);
+		label = c_new_label(rcc, label_name, rcc->active_func_scope, NULL, rcc->active_scope == rcc->active_func_scope);
 	}
 	if (!label->value_sym) {
 		ir_ref end = ir_END();
 
-		label->value_sym = ir_const_label(active_ctx, c_create_label_str(active_ctx, ++c_label_num));
-		c_computed_goto_targets = active_ctx->control = label->value_block =
-			ir_emit3(active_ctx, IR_BEGIN, label->dst, label->value_sym, c_computed_goto_targets);
+		label->value_sym = ir_const_label(rcc->active_ctx, c_create_label_str(rcc->active_ctx, ++rcc->c_label_num));
+		rcc->c_computed_goto_targets = rcc->active_ctx->control = label->value_block =
+			ir_emit3(rcc->active_ctx, IR_BEGIN, label->dst, label->value_sym, rcc->c_computed_goto_targets);
 		ir_END_list(label->src_list);
 		ir_BEGIN(end);
 	}
 	c_value_set_rval(res, &c_type_ptr, IR_ADDR, label->value_sym);
 }
 
-void c_do_computed_goto(c_value *v)
+void c_do_computed_goto(rcc_ctx *rcc, c_value *v)
 {
-	ir_END_PHI_list(c_computed_goto, c_value_ref(v));
+	ir_END_PHI_list(rcc->c_computed_goto, c_value_ref(rcc, v));
 	ir_BEGIN(IR_UNUSED);
 }
 
@@ -7607,14 +7586,14 @@ repeat:
 	}
 }
 
-static void c_do_init_patch_flexible_alloca(ir_ref ref, size_t len)
+static void c_do_init_patch_flexible_alloca(rcc_ctx *rcc, ir_ref ref, size_t len)
 {
-	ir_insn *insn = &active_ctx->ir_base[ref];
+	ir_insn *insn = &rcc->active_ctx->ir_base[ref];
 	ir_ref size_ref;
 
 	IR_ASSERT(ref > 0);
 	IR_ASSERT(insn->op == IR_ALLOCA);
-	insn->op2 = size_ref = ir_const_size_t(active_ctx, len);
+	insn->op2 = size_ref = ir_const_size_t(rcc->active_ctx, len);
 	insn++;
 	if (insn->op == IR_CALL
 	 && insn->inputs_count == 5
@@ -7626,7 +7605,7 @@ static void c_do_init_patch_flexible_alloca(ir_ref ref, size_t len)
 	}
 }
 
-void c_do_init_obj(c_sym *obj, c_value *val)
+void c_do_init_obj(rcc_ctx *rcc, c_sym *obj, c_value *val)
 {
 	if (obj->kind != C_SYM_VAR) {
 		if (obj->kind == C_SYM_FUNC) yy_error("function is initialized like a variable");
@@ -7637,7 +7616,7 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 		IR_ASSERT(obj->value.type->kind == C_TYPE_ARRAY);
 		yy_error("variable length array may not be initialized except with an empty initializer");
 	}
-	c_value_rval(val);
+	c_value_rval(rcc, val);
 	if (obj->value.type != val->type) {
 		if (c_value_is_const_str(val)
 		 && obj->value.type->kind == C_TYPE_ARRAY
@@ -7649,19 +7628,19 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 			size_t len = c_value_str_size(val);
 			if (obj->value.type->attr & C_ATTR_FLEXIBLE) {
 				/* Convert "flexible" array to regular */
-				c_type *type = ir_arena_alloc(&c_arena, sizeof(c_type));
+				c_type *type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
 
 				*type = *obj->value.type;
-				if (active_scope) type->flags &= ~C_TYPE_GLOBAL;
+				if (rcc->active_scope) type->flags &= ~C_TYPE_GLOBAL;
 				type->size = len;
 				type->array.length = len / val->type->array.type->size;
 				type->attr &= ~C_ATTR_FLEXIBLE;
 				obj->value.type = type;
 				if (c_value_is_const(&obj->value)
 				 || (c_value_is_ref(&obj->value) && IR_IS_CONST_REF(obj->value.u.ref))) {
-					c_do_grow_flexible(obj, 0, obj->value.type->size);
+					c_do_grow_flexible(rcc, obj, 0, obj->value.type->size);
 				} else {
-					c_do_init_patch_flexible_alloca(obj->value.u.ref, len);
+					c_do_init_patch_flexible_alloca(rcc, obj->value.u.ref, len);
 				}
 			} else if (len > (size_t)obj->value.type->array.length * val->type->array.type->size) {
 				if (len - val->type->array.type->size == (size_t)obj->value.type->array.length * val->type->array.type->size) {
@@ -7674,37 +7653,37 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 			}
 			if (c_value_is_const(&obj->value)
 			 || (c_value_is_ref(&obj->value) && IR_IS_CONST_REF(obj->value.u.ref))) {
-				if (!c_value_is_const(val) && !c_linker_fix_reloc(obj, 0, val)) {
+				if (!c_value_is_const(val) && !c_linker_fix_reloc(rcc, obj, 0, val)) {
 					yy_error("initializer element is not constant");
 				}
 				IR_ASSERT(obj->value.u.type == IR_ADDR);
 				memcpy((char*)obj->value.u.val.ptr, str, len);
 				if (obj->tmp_data) {
-					c_do_end_flexible(obj, obj->value.type->size);
+					c_do_end_flexible(rcc, obj, obj->value.type->size);
 				}
 			} else {
 				IR_ASSERT(obj->value.u.ref > 0);
-				IR_ASSERT(active_ctx->ir_base[obj->value.u.ref].op == IR_ALLOCA);
-				ir_memcpy(active_ctx,
+				IR_ASSERT(rcc->active_ctx->ir_base[obj->value.u.ref].op == IR_ALLOCA);
+				ir_memcpy(rcc,
 					obj->value.u.ref,
-					c_create_str_sym(val),
-					ir_const_size_t(active_ctx, len),
+					c_create_str_sym(rcc, val),
+					ir_const_size_t(rcc->active_ctx, len),
 					c_attr2align(obj->value.type->attr));
 			}
 			return;
 		}
 
 		const c_type *val_type = val->type;
-		c_do_check_cvt(obj->value.type, val, -2);
+		c_do_check_cvt(rcc, obj->value.type, val, -2);
 		if ((obj->value.type->attr & C_ATTR_FLEXIBLE) && !(val_type->attr & C_ATTR_FLEXIBLE)) {
 			size_t size = val_type->size;
 
 			if (obj->value.type->kind == C_TYPE_ARRAY) {
 				/* Convert "flexible" array to regular */
-				c_type *type = ir_arena_alloc(&c_arena, sizeof(c_type));
+				c_type *type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
 
 				*type = *obj->value.type;
-				if (active_scope) type->flags |= C_TYPE_GLOBAL;
+				if (rcc->active_scope) type->flags |= C_TYPE_GLOBAL;
 				type->array.length = size / type->array.type->size;
 				type->size = size;
 				type->attr &= ~C_ATTR_FLEXIBLE;
@@ -7712,9 +7691,9 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 			}
 			if (c_value_is_const(&obj->value)
 			 || (c_value_is_ref(&obj->value) && IR_IS_CONST_REF(obj->value.u.ref))) {
-				c_do_grow_flexible(obj, 0, obj->value.type->size);
+				c_do_grow_flexible(rcc, obj, 0, obj->value.type->size);
 			} else {
-				c_do_init_patch_flexible_alloca(obj->value.u.ref, size);
+				c_do_init_patch_flexible_alloca(rcc, obj->value.u.ref, size);
 			}
 		}
 	}
@@ -7723,28 +7702,28 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 				&& obj->value.u.type == IR_ADDR
 				&& obj->value.u.val.ptr)
 			|| (c_value_is_ref(&obj->value)
-				&& active_scope
+				&& rcc->active_scope
 				&& IR_IS_CONST_REF(obj->value.u.ref)
-				&& active_ctx->ir_base[obj->value.u.ref].op == IR_SYM
+				&& rcc->active_ctx->ir_base[obj->value.u.ref].op == IR_SYM
 				&& obj->value.u.val.ptr));
-		if (!c_value_is_const(val) && !c_linker_fix_reloc(obj, 0, val)) {
+		if (!c_value_is_const(val) && !c_linker_fix_reloc(rcc, obj, 0, val)) {
 			yy_error("initializer element is not constant");
 		}
 		c_do_init(obj->value.u.val.ptr, val);
 	} else if (C_IS_TYPE_SCALAR_OR_PTR(obj->value.type)) {
 		IR_ASSERT(c_value_is_ref(&obj->value));
-		if (active_ctx->ir_base[obj->value.u.ref].op == IR_VAR) {
-			ir_VSTORE(obj->value.u.ref, c_value_ref(val));
+		if (rcc->active_ctx->ir_base[obj->value.u.ref].op == IR_VAR) {
+			ir_VSTORE(obj->value.u.ref, c_value_ref(rcc, val));
 		} else if (c_value_is_reg(&obj->value)) {
-			ir_RSTORE(obj->value.u.ref, c_value_ref(val));
+			ir_RSTORE(obj->value.u.ref, c_value_ref(rcc, val));
 		} else {
-			ir_STORE(obj->value.u.ref, c_value_ref(val));
+			ir_STORE(obj->value.u.ref, c_value_ref(rcc, val));
 		}
 	} else {
 		IR_ASSERT(obj->value.type->size == val->type->size);
 		if (c_value_is_const(&obj->value)
 		 || (c_value_is_ref(&obj->value) && IR_IS_CONST_REF(obj->value.u.ref))) {
-			if (!c_value_is_const(val) && !c_linker_fix_reloc(obj, 0, val)) {
+			if (!c_value_is_const(val) && !c_linker_fix_reloc(rcc, obj, 0, val)) {
 				yy_error("initializer element is not constant");
 			}
 			IR_ASSERT(obj->value.u.type == IR_ADDR);
@@ -7752,20 +7731,20 @@ void c_do_init_obj(c_sym *obj, c_value *val)
 			memcpy((char*)obj->value.u.val.ptr, val->u.val.ptr, val->type->size);
 		} else {
 			IR_ASSERT(obj->value.u.ref > 0);
-			IR_ASSERT(active_ctx->ir_base[obj->value.u.ref].op == IR_ALLOCA);
-			ir_memcpy(active_ctx,
+			IR_ASSERT(rcc->active_ctx->ir_base[obj->value.u.ref].op == IR_ALLOCA);
+			ir_memcpy(rcc,
 				obj->value.u.ref,
-				c_value_ref(val),
-				ir_const_size_t(active_ctx, val->type->size),
+				c_value_ref(rcc, val),
+				ir_const_size_t(rcc->active_ctx, val->type->size),
 				c_attr2align(val->type->attr));
 		}
 	}
 	if (obj->tmp_data) {
-		c_do_end_flexible(obj, obj->value.type->size);
+		c_do_end_flexible(rcc, obj, obj->value.type->size);
 	}
 }
 
-void c_do_init_first(c_sym *obj, c_init *init, const c_type *type, size_t offset)
+void c_do_init_first(rcc_ctx *rcc, c_sym *obj, c_init *init, const c_type *type, size_t offset)
 {
 	if (obj->value.type->attr & C_ATTR_VLA) {
 		IR_ASSERT(obj->value.type->kind == C_TYPE_ARRAY);
@@ -7777,7 +7756,7 @@ void c_do_init_first(c_sym *obj, c_init *init, const c_type *type, size_t offset
 	init->stack[0].pos = 0;
 }
 
-void c_do_init_dim(c_sym *obj, c_init *init, c_value *dim)
+void c_do_init_dim(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *dim)
 {
 	const c_type *type = init->stack[init->level].type;
 
@@ -7793,7 +7772,7 @@ void c_do_init_dim(c_sym *obj, c_init *init, c_value *dim)
 	init->stack[init->level].pos = 0;
 }
 
-static bool c_find_struct_field_ex(const c_type *type, c_name name, c_init *init)
+static bool c_find_struct_field_ex(rcc_ctx *rcc, const c_type *type, c_name name, c_init *init)
 {
 	int32_t i;
 	c_field *f;
@@ -7811,25 +7790,25 @@ static bool c_find_struct_field_ex(const c_type *type, c_name name, c_init *init
 			init->stack[init->level].pos = i;
 			init->level++;
 			init->stack[init->level].type = f->type;
-			if (c_find_struct_field_ex(f->type, name, init)) return 1;
+			if (c_find_struct_field_ex(rcc, f->type, name, init)) return 1;
 			init->level--;
 		}
 	}
 	return 0;
 }
 
-void c_do_init_field(c_sym *obj, c_init *init, c_name field_name)
+void c_do_init_field(rcc_ctx *rcc, c_sym *obj, c_init *init, c_name field_name)
 {
 	const c_type *type = init->stack[init->level].type;
 
 	if (type->kind != C_TYPE_STRUCT && type->kind != C_TYPE_UNION) {
 		yy_error("field name not in struct or union initializer");
-	} else if (!c_find_struct_field_ex(type, field_name, init)) {
-		yy_error_fmt("struct or union has no member named \"%s\"", yy_sym2str(field_name));
+	} else if (!c_find_struct_field_ex(rcc, type, field_name, init)) {
+		yy_error_fmt("struct or union has no member named \"%s\"", yy_sym2str(rcc, field_name));
 	}
 }
 
-void c_do_init_next(c_sym *obj, c_init *init)
+void c_do_init_next(rcc_ctx *rcc, c_sym *obj, c_init *init)
 {
 	const c_type *type;
 	int64_t pos;
@@ -7862,7 +7841,7 @@ void c_do_init_next(c_sym *obj, c_init *init)
 	}
 }
 
-void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
+void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val, size_t *size)
 {
 	const c_type *type = init->stack[init->level].type;
 	const c_type *last_array_type = NULL;
@@ -7991,23 +7970,23 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 			if (c_value_is_const(&obj->value)
 			 || (c_value_is_ref(&obj->value) && IR_IS_CONST_REF(obj->value.u.ref))) {
 				if (new_size > *size) {
-					c_do_grow_flexible(obj, *size, new_size);
+					c_do_grow_flexible(rcc, obj, *size, new_size);
 					*size = new_size;
 				}
 				memcpy((char*)obj->value.u.val.ptr + offset, str, len);
 			} else {
 				IR_ASSERT(obj->value.u.ref > 0);
-				IR_ASSERT(active_ctx->ir_base[obj->value.u.ref].op == IR_ALLOCA);
+				IR_ASSERT(rcc->active_ctx->ir_base[obj->value.u.ref].op == IR_ALLOCA);
 				if (new_size > *size) *size = new_size;
-				ir_memcpy(active_ctx,
-					ir_ADD_A(obj->value.u.ref, ir_const_size_t(active_ctx, offset)),
-					c_create_str_sym(val),
-					ir_const_size_t(active_ctx, len),
+				ir_memcpy(rcc,
+					ir_ADD_A(obj->value.u.ref, ir_const_size_t(rcc->active_ctx, offset)),
+					c_create_str_sym(rcc, val),
+					ir_const_size_t(rcc->active_ctx, len),
 					c_attr2align(type->attr));
 			}
 			return;
 		}
-		c_do_check_cvt(type, val, -1);
+		c_do_check_cvt(rcc, type, val, -1);
 	}
 
 	new_size = *size;
@@ -8035,12 +8014,12 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 		IR_ASSERT(offset + type->size <= obj->value.type->size || C_IS_BIT_FIELD(bit_field));
 	}
 	if (c_value_is_const(&obj->value) || (c_value_is_ref(&obj->value) && IR_IS_CONST_REF(obj->value.u.ref))) {
-		if (!c_value_is_const(val) && !c_linker_fix_reloc(obj, offset, val)) {
+		if (!c_value_is_const(val) && !c_linker_fix_reloc(rcc, obj, offset, val)) {
 			yy_error("initializer element is not constant");
 		}
 		IR_ASSERT(/*obj->value.u.type == IR_ADDR &&*/ obj->value.u.val.ptr);
 		if (new_size > *size) {
-			c_do_grow_flexible(obj, *size, new_size);
+			c_do_grow_flexible(rcc, obj, *size, new_size);
 			*size = new_size;
 		}
 		if (!C_IS_BIT_FIELD(bit_field)) {
@@ -8076,40 +8055,40 @@ void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size)
 		if (new_size > *size) *size = new_size;
 		if (type->kind == C_TYPE_STRUCT || type->kind == C_TYPE_UNION) {
 			IR_ASSERT(!C_IS_BIT_FIELD(bit_field));
-			IR_ASSERT(active_ctx->ir_base[obj->value.u.ref].op == IR_ALLOCA);
+			IR_ASSERT(rcc->active_ctx->ir_base[obj->value.u.ref].op == IR_ALLOCA);
 			if (type->size) {
-				ir_memcpy(active_ctx,
-					ir_ADD_A(obj->value.u.ref, ir_const_size_t(active_ctx, offset)),
-					c_value_ref(val),
-					ir_const_size_t(active_ctx, type->size),
+				ir_memcpy(rcc,
+					ir_ADD_A(obj->value.u.ref, ir_const_size_t(rcc->active_ctx, offset)),
+					c_value_ref(rcc, val),
+					ir_const_size_t(rcc->active_ctx, type->size),
 					c_attr2align(type->attr));
 			}
-		} else if (active_ctx->ir_base[obj->value.u.ref].op == IR_VAR) {
+		} else if (rcc->active_ctx->ir_base[obj->value.u.ref].op == IR_VAR) {
 			IR_ASSERT(!C_IS_BIT_FIELD(bit_field));
-			ir_VSTORE(obj->value.u.ref, c_value_ref(val));
+			ir_VSTORE(obj->value.u.ref, c_value_ref(rcc, val));
 		} else if (c_value_is_reg(&obj->value)) {
 			IR_ASSERT(!C_IS_BIT_FIELD(bit_field));
-			ir_RSTORE(obj->value.u.ref, c_value_ref(val));
+			ir_RSTORE(obj->value.u.ref, c_value_ref(rcc, val));
 		} else {
-			IR_ASSERT(active_ctx->ir_base[obj->value.u.ref].op == IR_ALLOCA);
+			IR_ASSERT(rcc->active_ctx->ir_base[obj->value.u.ref].op == IR_ALLOCA);
 			if (!C_IS_BIT_FIELD(bit_field)) {
 				ir_STORE(
-					ir_ADD_A(obj->value.u.ref, ir_const_size_t(active_ctx, offset)),
-					c_value_ref(val));
+					ir_ADD_A(obj->value.u.ref, ir_const_size_t(rcc->active_ctx, offset)),
+					c_value_ref(rcc, val));
 			} else if (!C_IS_BIT_FIELD_PACKED(bit_field)) {
-				c_do_store_bit_field(
-					ir_ADD_A(obj->value.u.ref, ir_const_size_t(active_ctx, offset)),
+				c_do_store_bit_field(rcc,
+					ir_ADD_A(obj->value.u.ref, ir_const_size_t(rcc->active_ctx, offset)),
 					C_BIT_FIELD_START(bit_field), C_BIT_FIELD_SIZE(bit_field), val);
 			} else {
-				c_do_store_bit_field_packed(
-					ir_ADD_A(obj->value.u.ref, ir_const_size_t(active_ctx, offset)),
+				c_do_store_bit_field_packed(rcc,
+					ir_ADD_A(obj->value.u.ref, ir_const_size_t(rcc->active_ctx, offset)),
 					C_BIT_FIELD_START(bit_field), C_BIT_FIELD_SIZE(bit_field), val);
 			}
 		}
 	}
 }
 
-const c_type *c_do_init_nested(c_sym *obj, c_init *init, bool b, size_t *offset_ptr)
+const c_type *c_do_init_nested(rcc_ctx *rcc, c_sym *obj, c_init *init, bool b, size_t *offset_ptr)
 {
 	const c_type *type = init->stack[init->level].type;
 	size_t offset;
@@ -8155,15 +8134,15 @@ const c_type *c_do_init_nested(c_sym *obj, c_init *init, bool b, size_t *offset_
 	return type;
 }
 
-void c_do_init_end(c_sym *obj, size_t size)
+void c_do_init_end(rcc_ctx *rcc, c_sym *obj, size_t size)
 {
 	if (obj->value.type->attr & C_ATTR_FLEXIBLE) {
 		if (obj->value.type->kind == C_TYPE_ARRAY) {
 			/* Convert "flexible" array to regular */
-			c_type *type = ir_arena_alloc(&c_arena, sizeof(c_type));
+			c_type *type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
 
 			*type = *obj->value.type;
-			if (active_scope) type->flags |= C_TYPE_GLOBAL;
+			if (rcc->active_scope) type->flags |= C_TYPE_GLOBAL;
 			type->array.length = size / type->array.type->size;
 			type->size = size;
 			type->attr &= ~C_ATTR_FLEXIBLE;
@@ -8171,32 +8150,32 @@ void c_do_init_end(c_sym *obj, size_t size)
 		}
 		if (!c_value_is_const(&obj->value)
 		 && (!c_value_is_ref(&obj->value) || !IR_IS_CONST_REF(obj->value.u.ref))) {
-			c_do_init_patch_flexible_alloca(obj->value.u.ref, size);
+			c_do_init_patch_flexible_alloca(rcc, obj->value.u.ref, size);
 		}
 	}
 	if (obj->tmp_data) {
-		c_do_end_flexible(obj, size);
+		c_do_end_flexible(rcc, obj, size);
 	}
 }
 
-void c_do_init_expr_start(c_sym *obj, const c_type *type)
+void c_do_init_expr_start(rcc_ctx *rcc, c_sym *obj, const c_type *type)
 {
-	if ((type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(type)) {
+	if ((type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(rcc, type)) {
 		yy_error_fmt("invalid use of undefined \"%s %s\"",
-			c_type_kind2str(type->kind), yy_sym2str(type->tag));
+			c_type_kind2str(type->kind), yy_sym2str(rcc, type->tag));
 	}
 	memset(obj, 0, sizeof(c_sym));
 	obj->kind = C_SYM_VAR;
-	if (active_func && !c_static_data) {
-		ir_ref size = ir_const_size_t(active_ctx, type->size);
-		ir_ref addr = c_do_alloca(type->size, c_attr2align(type->attr), 0);
-		ir_memzero(active_ctx, addr, size, c_attr2align(type->attr));
+	if (rcc->active_func && !rcc->c_static_data) {
+		ir_ref size = ir_const_size_t(rcc->active_ctx, type->size);
+		ir_ref addr = c_do_alloca(rcc, type->size, c_attr2align(type->attr), 0);
+		ir_memzero(rcc, addr, size, c_attr2align(type->attr));
 		c_value_set_rval(&obj->value, type, IR_ADDR, addr);
 	} else {
 		c_dcl d = {.type = type, .flags = C_DCL_DEFINITION, .attr = 0};
-		c_name sym_name = c_create_static_var(YY_UNDEF, &d);
+		c_name sym_name = c_create_static_var(rcc, YY_UNDEF, &d);
 		size_t len;
-		const char *str = yy_sym2strl(sym_name, &len);
+		const char *str = yy_sym2strl(rcc, sym_name, &len);
 		ir_ref ref;
 		void *addr;
 
@@ -8204,31 +8183,31 @@ void c_do_init_expr_start(c_sym *obj, const c_type *type)
 			obj->tmp_data = 1;
 			addr = ir_mem_calloc(1, type->size);
 		} else {
-			addr = c_linker_allocate_data(NULL, type->size);
+			addr = c_linker_allocate_data(rcc, NULL, type->size);
 		}
 
-		yy_hash.data[sym_name].sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
-		yy_hash.data[sym_name].sym->value.u.val.ptr = addr;
-		ref = ir_const_sym(active_ctx, ir_strl(active_ctx, str, len));
+		rcc->yy_hash.data[sym_name].sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
+		rcc->yy_hash.data[sym_name].sym->value.u.val.ptr = addr;
+		ref = ir_const_sym(rcc->active_ctx, ir_strl(rcc->active_ctx, str, len));
 		if (type->kind == C_TYPE_ARRAY) {
-			c_value_set_rval(&obj->value, type, c_type2ir(type), ref);
+			c_value_set_rval(&obj->value, type, c_type2ir(rcc, type), ref);
 		} else {
-			c_value_set_lval(&obj->value, type, c_type2ir(type), ref);
+			c_value_set_lval(&obj->value, type, c_type2ir(rcc, type), ref);
 		}
 		obj->value.u.val.ptr = addr; /* keep address in addition to ref */
 	}
 }
 
-void c_do_init_expr_end(c_value *v, c_sym *obj, size_t size)
+void c_do_init_expr_end(rcc_ctx *rcc, c_value *v, c_sym *obj, size_t size)
 {
-	c_do_init_end(obj, size);
+	c_do_init_end(rcc, obj, size);
 	if (c_value_is_const(&obj->value)) {
-		c_value_set_const(v, obj->value.type, c_type2ir(obj->value.type), obj->value.u.val);
-	} else if ((!active_scope || c_static_data)
+		c_value_set_const(v, obj->value.type, c_type2ir(rcc, obj->value.type), obj->value.u.val);
+	} else if ((!rcc->active_scope || rcc->c_static_data)
 	 && obj->value.type->kind != C_TYPE_ARRAY
 	 && obj->value.type->kind != C_TYPE_STRUCT
 	 && obj->value.type->kind != C_TYPE_UNION) {
-		ir_type t = c_type2ir(obj->value.type);
+		ir_type t = c_type2ir(rcc, obj->value.type);
 		ir_val val;
 
 		val.u64 = 0;
@@ -8250,58 +8229,58 @@ void c_do_init_expr_end(c_value *v, c_sym *obj, size_t size)
 		}
 		c_value_set_const(v, obj->value.type, t, val);
 	} else if (obj->value.type->kind != C_TYPE_ARRAY) {
-		c_value_set_lval(v, obj->value.type, c_type2ir(obj->value.type), obj->value.u.ref);
+		c_value_set_lval(v, obj->value.type, c_type2ir(rcc, obj->value.type), obj->value.u.ref);
 		if (IR_IS_CONST_REF(obj->value.u.ref)) v->u.val.ptr = obj->value.u.val.ptr;
 	} else {
-		c_value_set_rval(v, obj->value.type, c_type2ir(obj->value.type), obj->value.u.ref);
+		c_value_set_rval(v, obj->value.type, c_type2ir(rcc, obj->value.type), obj->value.u.ref);
 		if (IR_IS_CONST_REF(obj->value.u.ref)) v->u.val.ptr = obj->value.u.val.ptr;
 	}
 }
 
-void c_do_generic_start(c_generic *g)
+void c_do_generic_start(rcc_ctx *rcc, c_generic *g)
 {
 	memset(g, 0, sizeof(c_generic));
-	g->old_control = c_do_nocode();
-	g->last_control = active_ctx->control;
+	g->old_control = c_do_nocode(rcc);
+	g->last_control = rcc->active_ctx->control;
 }
 
-void c_do_generic_type(c_generic *g, const c_type *type)
+void c_do_generic_type(rcc_ctx *rcc, c_generic *g, const c_type *type)
 {
 	if (type->attr & (C_ATTR_CONST|C_ATTR_VOLATILE)) {
 		/* remove top-level qualifiers */
-		c_type *t = ir_arena_alloc(&c_arena, sizeof(c_type));
+		c_type *t = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
 		*t = *type;
-		if (active_scope) t->flags &= ~C_TYPE_GLOBAL;
+		if (rcc->active_scope) t->flags &= ~C_TYPE_GLOBAL;
 		t->attr &= ~(C_ATTR_CONST|C_ATTR_VOLATILE);
 		type = t;
 	}
 	if (type->kind == C_TYPE_FUNC) {
-		type = c_create_pointer_type(type);
+		type = c_create_pointer_type(rcc, type);
 	}
 	g->type = type;
 }
 
-void c_do_generic_case(c_generic *g, const c_type *type, c_value *v)
+void c_do_generic_case(rcc_ctx *rcc, c_generic *g, const c_type *type, c_value *v)
 {
 	if (c_compatible_types(g->type, type, 0, 0)) {
 		if (c_value_is_set(&g->matched_value)) yy_error("duplicate matched type case in \"_Generic\"");
 		g->matched_value = *v;
 		g->matched_control_start = g->last_control;
-		g->matched_control_end = active_ctx->control;
+		g->matched_control_end = rcc->active_ctx->control;
 	}
-	g->last_control = active_ctx->control;
+	g->last_control = rcc->active_ctx->control;
 }
 
-void c_do_generic_default(c_generic *g, c_value *v)
+void c_do_generic_default(rcc_ctx *rcc, c_generic *g, c_value *v)
 {
 	if (c_value_is_set(&g->default_value)) yy_error("duplicate \"default\" case in \"_Generic\"");
 	g->default_value = *v;
 	g->default_control_start = g->last_control;
-	g->default_control_end = active_ctx->control;
-	g->last_control = active_ctx->control;
+	g->default_control_end = rcc->active_ctx->control;
+	g->last_control = rcc->active_ctx->control;
 }
 
-void c_do_generic_end(c_value *res, c_generic *g)
+void c_do_generic_end(rcc_ctx *rcc, c_value *res, c_generic *g)
 {
 	if (!c_value_is_set(&g->matched_value)) {
 		if (!c_value_is_set(&g->default_value)) yy_error("no matched type case in \"_Generic\"");
@@ -8311,31 +8290,31 @@ void c_do_generic_end(c_value *res, c_generic *g)
 	}
 	*res = g->matched_value;
 	if (g->matched_control_start != g->matched_control_end) {
-		ir_ref ref = active_ctx->control;
+		ir_ref ref = rcc->active_ctx->control;
 
 		if (ref != g->matched_control_end) {
-			while (active_ctx->ir_base[ref].op1 != g->matched_control_end) {
-				ref = active_ctx->ir_base[ref].op1;
+			while (rcc->active_ctx->ir_base[ref].op1 != g->matched_control_end) {
+				ref = rcc->active_ctx->ir_base[ref].op1;
 				IR_ASSERT(ref);
 			}
 			/* cut control from unreachable block */
-			active_ctx->ir_base[ref].op1 = g->matched_control_start;
+			rcc->active_ctx->ir_base[ref].op1 = g->matched_control_start;
 		} else {
 			/* remove contol tail from unreachable block */
-			active_ctx->control = g->matched_control_start;
+			rcc->active_ctx->control = g->matched_control_start;
 		}
 		ref = g->matched_control_end;
-		while (active_ctx->ir_base[ref].op1 != g->matched_control_start) {
-			ref = active_ctx->ir_base[ref].op1;
+		while (rcc->active_ctx->ir_base[ref].op1 != g->matched_control_start) {
+			ref = rcc->active_ctx->ir_base[ref].op1;
 			IR_ASSERT(ref);
 		}
-		active_ctx->ir_base[ref].op1 = g->old_control;
+		rcc->active_ctx->ir_base[ref].op1 = g->old_control;
 		g->old_control = g->matched_control_end;
 	}
-	c_do_end_nocode(g->old_control);
+	c_do_end_nocode(rcc, g->old_control);
 }
 
-static void c_check_incomplete_vmt(const c_type *t)
+static void c_check_incomplete_vmt(rcc_ctx *rcc, const c_type *t)
 {
 	while (1) {
 		if (t->kind == C_TYPE_ARRAY || t->kind == C_TYPE_POINTER) {
@@ -8351,10 +8330,10 @@ static void c_check_incomplete_vmt(const c_type *t)
 			IR_ASSERT(t->kind == C_TYPE_ARRAY);
 			if (!t->array.length) yy_error("[*] not allowed in other than function prototype scope");
 			if (t->array.vla_tokens) {
-				parse_vla_param_again(t->array.vla_tokens, &val);
-				c_value_ref(&val);
+				parse_vla_param_again(rcc, t->array.vla_tokens, &val);
+				c_value_ref(rcc, &val);
 				if (val.type->kind != c_type_size_t.kind) {
-					c_do_cvt(&c_type_size_t, IR_SIZE_T, &val);
+					c_do_cvt(rcc, &c_type_size_t, IR_SIZE_T, &val);
 				}
 				((c_type*)t)->array.length = val.u.ref;
 			}
@@ -8362,7 +8341,7 @@ static void c_check_incomplete_vmt(const c_type *t)
 	}
 }
 
-void c_do_func_start(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
+void c_do_func_start(rcc_ctx *rcc, c_name name, c_dcl *d, c_scope *scope)
 {
 	c_sym *func;
 	const c_type *type = d->type;
@@ -8370,17 +8349,17 @@ void c_do_func_start(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 	int32_t i, j = 0;
 
 	d->flags |= C_DCL_DEFINITION;
-	func = c_declare(name, d);
+	func = c_declare(rcc, name, d);
 	IR_ASSERT(func);
-	active_func = func;
-	active_func_name = name;
-	c_prologue_end = IR_UNUSED;
-	c_last_expect_ref = IR_UNUSED;
-	c_computed_goto = IR_UNUSED;
-	c_computed_goto_targets = IR_UNUSED;
-	c_last_call_func_type = NULL;
+	rcc->active_func = func;
+	rcc->active_func_name = name;
+	rcc->c_prologue_end = IR_UNUSED;
+	rcc->c_last_expect_ref = IR_UNUSED;
+	rcc->c_computed_goto = IR_UNUSED;
+	rcc->c_computed_goto_targets = IR_UNUSED;
+	rcc->c_last_call_func_type = NULL;
 
-	c_push_scope(scope);
+	c_push_scope(rcc, scope);
 
 	flags = 0;
 	if (d->flags & C_DCL_STATIC) {
@@ -8390,43 +8369,42 @@ void c_do_func_start(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 		flags |= IR_VARARG_FUNC;
 	}
 
-	flags |= c_type_call_conv(type);
-	rcc_ir_init(ctx, flags);
+	flags |= c_type_call_conv(rcc, type);
+	rcc_ir_init(rcc, flags);
 
 	if (type->func.ret_type->kind == C_TYPE_STRUCT || type->func.ret_type->kind == C_TYPE_UNION) {
 		ir_type types[MAX_ABI_TYPES];
 		int n = c_abi_lower_struct_ret(type->func.ret_type, types);
 
 		if (n == 1) {
-			ctx->ret_type = types[0];
+			rcc->active_ctx->ret_type = types[0];
 		} else {
 			IR_ASSERT(n == 0);
-			ctx->ret_type = IR_ADDR;
+			rcc->active_ctx->ret_type = IR_ADDR;
 			j = 1;
 		}
 	} else {
-		ctx->ret_type = c_type2ir(type->func.ret_type);
+		rcc->active_ctx->ret_type = c_type2ir(rcc, type->func.ret_type);
 	}
 
-	active_ctx = ctx;
-	active_func_scope = active_scope;
+	rcc->active_func_scope = rcc->active_scope;
 
 	ir_START();
-	if ((type->func.ret_type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(type->func.ret_type)) {
+	if ((type->func.ret_type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(rcc, type->func.ret_type)) {
 		yy_error("return type is an incomplete type");
 	}
 	if (j) {
-		ir_param(active_ctx, IR_ADDR, 1, "$ret", 1);
+		ir_param(rcc->active_ctx, IR_ADDR, 1, "$ret", 1);
 	}
 	for (i = 0; i < type->func.num_params; i++) {
 		c_param *p = &type->func.params[i];
 		const c_type *t = p->type;
 
 		if (!t) {
-			yy_warning_fmt("type of \"%s\" defaults to \"int\"", yy_sym2str(p->name));
+			yy_warning_fmt("type of \"%s\" defaults to \"int\"", yy_sym2str(rcc, p->name));
 			t = p->type = &c_type_i32;
 		}
-		if ((t->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(t)) {
+		if ((t->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(rcc, t)) {
 			yy_error_fmt("parameter %d has incomplete type", i + 1);
 		}
 		if (t->kind == C_TYPE_STRUCT || t->kind == C_TYPE_UNION) {
@@ -8434,18 +8412,18 @@ void c_do_func_start(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 			int n = c_abi_lower_struct_arg(t, types);
 
 			if (n == 1) {
-				ir_param(active_ctx, types[0], 1, yy_sym2str(p->name), i + j + 1);
+				ir_param(rcc->active_ctx, types[0], 1, yy_sym2str(rcc, p->name), i + j + 1);
 			} else {
 				IR_ASSERT(n == 0);
-				ir_param(active_ctx, IR_ADDR, 1, yy_sym2str(p->name), i + j + 1);
-				if (!active_ctx->value_params) {
-					active_ctx->value_params = ir_mem_calloc(type->func.num_params + j, sizeof(ir_value_param));
+				ir_param(rcc->active_ctx, IR_ADDR, 1, yy_sym2str(rcc, p->name), i + j + 1);
+				if (!rcc->active_ctx->value_params) {
+					rcc->active_ctx->value_params = ir_mem_calloc(type->func.num_params + j, sizeof(ir_value_param));
 				}
-				active_ctx->value_params[i + j].size = t->size;
-				active_ctx->value_params[i + j].align = c_attr2align(t->attr);
+				rcc->active_ctx->value_params[i + j].size = t->size;
+				rcc->active_ctx->value_params[i + j].align = c_attr2align(t->attr);
 			}
 		} else {
-			ir_param(active_ctx, c_type2ir(t), 1, yy_sym2str(p->name), i + j + 1);
+			ir_param(rcc->active_ctx, c_type2ir(rcc, t), 1, yy_sym2str(rcc, p->name), i + j + 1);
 		}
 	}
 	for (i = 0; i < type->func.num_params; i++) {
@@ -8459,12 +8437,12 @@ void c_do_func_start(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 			if (!t->array.length) yy_error("[*] not allowed in other than function prototype scope");
 			((c_type*)t)->attr &= ~C_ATTR_VLA;
 			if (t->array.vla_tokens) {
-				parse_vla_param_again(t->array.vla_tokens, &val);
+				parse_vla_param_again(rcc, t->array.vla_tokens, &val);
 			}
 		}
 
 		if (t->attr & C_ATTR_VMT) {
-			c_check_incomplete_vmt(t);
+			c_check_incomplete_vmt(rcc, t);
 		}
 
 		if (p->name) {
@@ -8475,7 +8453,7 @@ void c_do_func_start(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 			dcl.flags = C_DCL_PARAM;
 			dcl.attr = 0;
 			dcl.type = t;
-			obj = c_declare(name, &dcl);
+			obj = c_declare(rcc, name, &dcl);
 			IR_ASSERT(obj &&  obj->kind == C_SYM_VAR && c_value_is_ref(&obj->value));
 			if (t->kind == C_TYPE_STRUCT || t->kind == C_TYPE_UNION) {
 				ir_type types[MAX_ABI_TYPES];
@@ -8506,18 +8484,18 @@ void c_do_func_start(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 	}
 
 	ir_BLOCK_BEGIN();
-	c_prologue_end = active_ctx->control;
+	rcc->c_prologue_end = rcc->active_ctx->control;
 }
 
-static bool c_is_dead_end(ir_insn *insn)
+static bool c_is_dead_end(rcc_ctx *rcc, ir_insn *insn)
 {
 	while (insn->op == IR_BEGIN) {
 		if (!insn->op1) return 1;
-		insn = &active_ctx->ir_base[insn->op1];
+		insn = &rcc->active_ctx->ir_base[insn->op1];
 		if (insn->op != IR_END) {
 			return 0;
 		}
-		insn = &active_ctx->ir_base[insn->op1];
+		insn = &rcc->active_ctx->ir_base[insn->op1];
 	}
 	if (insn->op == IR_MERGE) {
 		ir_ref input, *p, n;
@@ -8525,12 +8503,12 @@ static bool c_is_dead_end(ir_insn *insn)
 		n = insn->inputs_count;
 		for (p = insn->ops + 1; n > 0; p++, n--) {
 			input = *p;
-			insn = &active_ctx->ir_base[input];
+			insn = &rcc->active_ctx->ir_base[input];
 			if (insn->op != IR_END) {
 				return 0;
 			}
-			insn = &active_ctx->ir_base[insn->op1];
-			if (!c_is_dead_end(insn)) {
+			insn = &rcc->active_ctx->ir_base[insn->op1];
+			if (!c_is_dead_end(rcc, insn)) {
 				return 0;
 			}
 		}
@@ -8540,10 +8518,13 @@ static bool c_is_dead_end(ir_insn *insn)
 	return 1;
 }
 
-void c_do_func_end(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
+void c_do_func_end(rcc_ctx *rcc, c_name name, c_dcl *d, c_scope *scope)
 {
-	c_pop_scope(scope);
+	ir_ctx *ctx;
 
+	c_pop_scope(rcc, scope);
+
+	ctx = rcc->active_ctx;
 	if (ctx->control) {
 		if (ctx->control == ctx->insns_count - 1
 		 && ctx->ir_base[ctx->control].op == IR_BEGIN
@@ -8553,7 +8534,7 @@ void c_do_func_end(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 		} else if (ctx->ret_type) {
 			ir_val val;
 
-			if (!c_is_dead_end(&ctx->ir_base[ctx->control])) {
+			if (!c_is_dead_end(rcc, &ctx->ir_base[ctx->control])) {
 				yy_warning("control reaches end of non-void function");
 			}
 			val.u64 = 0;
@@ -8563,25 +8544,25 @@ void c_do_func_end(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 		}
 	}
 
-	if (c_computed_goto) {
-		ir_ref ref = ir_PHI_list(c_computed_goto);
+	if (rcc->c_computed_goto) {
+		ir_ref ref = ir_PHI_list(rcc->c_computed_goto);
 		ir_ref goto_ref = ir_IGOTO(ref);
 
-		if (c_computed_goto_targets) {
-			ir_ref ref = c_computed_goto_targets;
+		if (rcc->c_computed_goto_targets) {
+			ir_ref ref = rcc->c_computed_goto_targets;
 			do {
-				ir_insn *insn = &active_ctx->ir_base[ref];
+				ir_insn *insn = &rcc->active_ctx->ir_base[ref];
 				IR_ASSERT(insn->op == IR_BEGIN);
 				ref = insn->op3;
 				insn->op1 = goto_ref;
 				insn->op3 = IR_UNUSED;
 			} while (ref);
-			c_computed_goto_targets = IR_UNUSED;
+			rcc->c_computed_goto_targets = IR_UNUSED;
 		}
-	} else if (c_computed_goto_targets) {
-		ir_ref ref = c_computed_goto_targets;
+	} else if (rcc->c_computed_goto_targets) {
+		ir_ref ref = rcc->c_computed_goto_targets;
 		do {
-			ir_insn *insn = &active_ctx->ir_base[ref];
+			ir_insn *insn = &rcc->active_ctx->ir_base[ref];
 			ir_ref i, n;
 			ir_insn *merge;
 
@@ -8591,7 +8572,7 @@ void c_do_func_end(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 			IR_ASSERT(IR_IS_CONST_REF(insn->op2));
 
 			/* re-link BEGIN node corresponding to label address */
-			merge = &active_ctx->ir_base[insn->op1];
+			merge = &rcc->active_ctx->ir_base[insn->op1];
 			IR_ASSERT(merge->op == IR_MERGE);
 			insn->op1 = merge->op1;
 			n = merge->inputs_count;
@@ -8602,41 +8583,40 @@ void c_do_func_end(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx)
 			ir_insn_set_op(merge, i, IR_UNUSED);
 			merge->inputs_count = i - 1;
 		} while (ref);
-		c_computed_goto_targets = IR_UNUSED;
+		rcc->c_computed_goto_targets = IR_UNUSED;
 	}
 
-	rcc_ir_compile(name, ctx, active_func);
+	rcc_ir_compile(rcc, name, rcc->active_func);
 
-	active_func = NULL; // TODO: nested functions ???
-	active_func_name = 0; // TODO: nested functions ???
-	active_func_scope = NULL;
-	active_ctx = global_ctx;
+	rcc->active_func = NULL; // TODO: nested functions ???
+	rcc->active_func_name = 0; // TODO: nested functions ???
+	rcc->active_func_scope = NULL;
 }
 
-yy_sym c_get_current_func_name(void)
+yy_sym c_get_current_func_name(rcc_ctx *rcc)
 {
-	return active_func_name;
+	return rcc->active_func_name;
 }
 
-void c_do_compile_start(void)
+void c_do_compile_start(rcc_ctx *rcc)
 {
-	c_dead_code = 0;
-	c_static_data = 0;
+	rcc->c_dead_code = 0;
+	rcc->c_static_data = 0;
 
-	active_func = NULL;
-	active_func_scope = NULL;
-	active_scope = NULL;
-	active_loop = NULL;
-	active_func_name = 0;
-	c_static_sym_num = 0;
-	c_static_str_num = 0;
-	c_fixed_regset = 0;
-	c_label_num = 0;
+	rcc->active_func = NULL;
+	rcc->active_func_scope = NULL;
+	rcc->active_scope = NULL;
+	rcc->active_loop = NULL;
+	rcc->active_func_name = 0;
+	rcc->c_static_var_num = 0;
+	rcc->c_static_str_num = 0;
+	rcc->c_fixed_regset = 0;
+	rcc->c_label_num = 0;
 
-	ir_strtab_init(&c_strtab, 256, 0);
+	ir_strtab_init(&rcc->c_strtab, 256, 0);
 }
 
-void c_do_compile_end(void)
+void c_do_compile_end(rcc_ctx *rcc)
 {
-	ir_strtab_free(&c_strtab);
+	ir_strtab_free(&rcc->c_strtab);
 }

@@ -448,8 +448,11 @@ YY_LAST = 0x7fffffff,
 #define YY_FLAGS_DEFAULT     (YY_SKIP_WS|YY_SKIP_EOL|YY_SKIP_COMMENTS)
 #define YY_FLAGS_PP_DEFAULT  (PP_PREPROCESS|YY_SKIP_COMMENTS|YY_ACCEPT_PP_NUMBER|YY_ACCEPT_PUNCTUATOR)
 
+/* C compiler context/state */
+typedef struct _rcc_ctx rcc_ctx;
+
 /* C scanner */
-yy_sym yy_next(void);
+yy_sym yy_next(rcc_ctx *rcc);
 
 /* C symbol table */
 typedef struct _pp_macro pp_macro;
@@ -479,10 +482,10 @@ typedef struct {
 	uint32_t                 mask;
 } yy_hashtab;
 
-void yy_hash_init(void);
-void yy_hash_free(void);
-yy_sym yy_hash_find(const char *str, size_t len);
-yy_sym yy_hash_lookup(const char *str, size_t len);
+void yy_hash_init(rcc_ctx *rcc);
+void yy_hash_free(rcc_ctx *rcc);
+yy_sym yy_hash_find(rcc_ctx *rcc, const char *str, size_t len);
+yy_sym yy_hash_lookup(rcc_ctx *rcc, const char *str, size_t len);
 
 /* Dynamic Strings */
 typedef struct {
@@ -490,11 +493,11 @@ typedef struct {
 	size_t  len;
 } yy_dyn_str;
 
-void yy_dyn_str_init(yy_dyn_str *dyn_str, const char *str, size_t len);
-void yy_dyn_str_init0(yy_dyn_str *dyn_str, const char *str, size_t len);
-char *yy_dyn_str_grow(yy_dyn_str *dyn_str, size_t len);
-void yy_dyn_str_append(yy_dyn_str *dyn_str, const char *str, size_t len);
-void yy_dyn_str_append0(yy_dyn_str *dyn_str, const char *str, size_t len);
+void yy_dyn_str_init(rcc_ctx *rcc, yy_dyn_str *dyn_str, const char *str, size_t len);
+void yy_dyn_str_init0(rcc_ctx *rcc, yy_dyn_str *dyn_str, const char *str, size_t len);
+char *yy_dyn_str_grow(rcc_ctx *rcc, yy_dyn_str *dyn_str, size_t len);
+void yy_dyn_str_append(rcc_ctx *rcc, yy_dyn_str *dyn_str, const char *str, size_t len);
+void yy_dyn_str_append0(rcc_ctx *rcc, yy_dyn_str *dyn_str, const char *str, size_t len);
 
 /* C preprocessor */
 #define PP_SUBST_STACK_SIZE  32
@@ -544,16 +547,18 @@ typedef struct {
 	uint32_t                 len;
 } pp_list;
 
-bool pp_add_include_dir(const char *path);
-void pp_add_sys_include_dirs(void);
+bool pp_add_include_dir(rcc_ctx *rcc, const char *path);
+void pp_add_sys_include_dirs(rcc_ctx *rcc);
 
-void pp_start(void);
-void pp_dtor(void);
-void pp_macro_define(yy_sym name, uint32_t flags, uint32_t num_args, yy_sym *tokens);
-bool pp_macro_expand(pp_macro *macro, yy_sym sym);
-void pp_parse_directive(void);
-void pp_pop_include(void);
-void pp_preprocess(FILE *f);
+void pp_start(rcc_ctx *rcc);
+void pp_dtor(rcc_ctx *rcc);
+pp_subst_stream *pp_push_stream(rcc_ctx *rcc);
+pp_subst_stream *pp_pop_stream(rcc_ctx *rcc);
+void pp_macro_define(rcc_ctx *rcc, yy_sym name, uint32_t flags, uint32_t num_args, yy_sym *tokens);
+bool pp_macro_expand(rcc_ctx *rcc, pp_macro *macro, yy_sym sym);
+void pp_parse_directive(rcc_ctx *rcc);
+void pp_pop_include(rcc_ctx *rcc);
+void pp_preprocess(rcc_ctx *rcc, FILE *f);
 void pp_list_grow(pp_list *l, uint32_t size);
 
 /* C Semantic & IR Code Generation */
@@ -991,209 +996,317 @@ extern const c_type c_type_const_ptr;
 #define C_POP_TAG    0x1
 #define C_POP_LABEL  0x2
 
-void c_push_scope(c_scope *scope);
-void c_pop_scope(c_scope *scope);
-void c_pop_scope_light(c_scope *scope);
+void c_push_scope(rcc_ctx *rcc, c_scope *scope);
+void c_pop_scope(rcc_ctx *rcc, c_scope *scope);
+void c_pop_scope_light(rcc_ctx *rcc, c_scope *scope);
 
-void c_wrong_type_specifiers(uint32_t flags, yy_sym sym);
-const c_type *c_resolve_type(c_dcl *dcl);
-const c_type *c_resolve_type_name(c_name name);
-void c_resolve_sym_name(c_value *res, c_name name, yy_sym sym);
-c_type *c_resolve_tag(c_name name, c_dcl *dcl, bool define, const c_type *underlying_type);
-c_type *c_make_struct_type(c_dcl *dcl, c_name tag);
-c_type *c_make_enum_type(c_dcl *dcl, c_name tag, const c_type *underlying_type);
-const c_type *c_underlying_enum_type(c_dcl *dcl);
-void c_make_pointer_type(c_dcl *dcl);
-void c_make_array_type(c_dcl *dcl, c_dcl *dim, c_value *len, uint64_t attr, bool is_param);
-void c_make_func_type(c_dcl *dcl, c_param *params, int32_t num_params, uint32_t attr);
-void c_make_nested_type(c_dcl *dcl, c_dcl *nested);
-void c_finish_struct_type(c_type *type, c_dcl *d);
-void c_finish_enum_type(c_type *dcl, c_dcl *d, int64_t min, uint64_t max);
-void c_validate_func_params(c_name name, c_dcl *dcl);
+void c_wrong_type_specifiers(rcc_ctx *rcc, uint32_t flags, yy_sym sym);
+const c_type *c_resolve_type(rcc_ctx *rcc, c_dcl *dcl);
+const c_type *c_resolve_type_name(rcc_ctx *rcc, c_name name);
+void c_resolve_sym_name(rcc_ctx *rcc, c_value *res, c_name name, yy_sym sym);
+c_type *c_resolve_tag(rcc_ctx *rcc, c_name name, c_dcl *dcl, bool define, const c_type *underlying_type);
+c_type *c_make_struct_type(rcc_ctx *rcc, c_dcl *dcl, c_name tag);
+c_type *c_make_enum_type(rcc_ctx *rcc, c_dcl *dcl, c_name tag, const c_type *underlying_type);
+const c_type *c_underlying_enum_type(rcc_ctx *rcc, c_dcl *dcl);
+void c_make_pointer_type(rcc_ctx *rcc, c_dcl *dcl);
+void c_make_array_type(rcc_ctx *rcc, c_dcl *dcl, c_dcl *dim, c_value *len, uint64_t attr, bool is_param);
+void c_make_func_type(rcc_ctx *rcc, c_dcl *dcl, c_param *params, int32_t num_params, uint32_t attr);
+void c_make_nested_type(rcc_ctx *rcc, c_dcl *dcl, c_dcl *nested);
+void c_finish_struct_type(rcc_ctx *rcc, c_type *type, c_dcl *d);
+void c_finish_enum_type(rcc_ctx *rcc, c_type *dcl, c_dcl *d, int64_t min, uint64_t max);
+void c_validate_func_params(rcc_ctx *rcc, c_name name, c_dcl *dcl);
 
-c_sym *c_declare(c_name name, c_dcl *dcl);
-void c_declare_struct_field(c_type *type, c_name name, c_dcl *field, c_value *bits);
-void c_declare_enum_val(const c_type *type, c_name name, c_dcl *attr, c_value *val, int64_t *min, uint64_t *max, c_value *last);
-void c_declare_func_param(c_param **params, int32_t *num_params, c_name name, c_dcl *param);
-void c_declare_func_param_name(c_param **params, int32_t *num_params, c_name name);
-void c_declare_func_param_type(const c_type *type, c_name name, c_dcl *param);
-void c_declare_local_label(c_name name);
-void c_empty_declaration(c_dcl *d);
+c_sym *c_declare(rcc_ctx *rcc, c_name name, c_dcl *dcl);
+void c_declare_struct_field(rcc_ctx *rcc, c_type *type, c_name name, c_dcl *field, c_value *bits);
+void c_declare_enum_val(rcc_ctx *rcc, const c_type *type, c_name name, c_dcl *attr, c_value *val, int64_t *min, uint64_t *max, c_value *last);
+void c_declare_func_param(rcc_ctx *rcc, c_param **params, int32_t *num_params, c_name name, c_dcl *param);
+void c_declare_func_param_name(rcc_ctx *rcc, c_param **params, int32_t *num_params, c_name name);
+void c_declare_func_param_type(rcc_ctx *rcc, const c_type *type, c_name name, c_dcl *param);
+void c_declare_local_label(rcc_ctx *rcc, c_name name);
+void c_empty_declaration(rcc_ctx *rcc, c_dcl *d);
 
-void c_gcc_attribute_aligned(c_dcl *d, c_name attr, c_value *v);
-void c_gcc_attribute_packed(c_dcl *d, c_name attr);
-yy_sym c_gcc_attribute(c_dcl *dcl, c_name attr, yy_sym sym);
-void c_gcc_attribute_alias(c_dcl *d, c_name attr, c_value *v);
-void c_asm_alias(c_dcl *d, c_value *v);
-yy_sym c_declspec(c_dcl *dcl, c_name attr, yy_sym sym);
+void c_gcc_attribute_aligned(rcc_ctx *rcc, c_dcl *d, c_name attr, c_value *v);
+void c_gcc_attribute_packed(rcc_ctx *rcc, c_dcl *d, c_name attr);
+yy_sym c_gcc_attribute(rcc_ctx *rcc, c_dcl *dcl, c_name attr, yy_sym sym);
+void c_gcc_attribute_alias(rcc_ctx *rcc, c_dcl *d, c_name attr, c_value *v);
+void c_asm_alias(rcc_ctx *rcc, c_dcl *d, c_value *v);
+yy_sym c_declspec(rcc_ctx *rcc, c_dcl *dcl, c_name attr, yy_sym sym);
 
-void c_sizeof_type(c_value *res, const c_type *type);
-void c_sizeof_expr(c_value *res, yy_sym op, c_value *expr, ir_ref old_control);
-void c_alignof_type(c_value *res, const c_type *type);
-void c_alignas_expr(c_dcl *dcl, c_value *expr);
-const c_type *c_typeof_expr(c_value *expr, ir_ref old_control);
+void c_sizeof_type(rcc_ctx *rcc, c_value *res, const c_type *type);
+void c_sizeof_expr(rcc_ctx *rcc, c_value *res, yy_sym op, c_value *expr, ir_ref old_control);
+void c_alignof_type(rcc_ctx *rcc, c_value *res, const c_type *type);
+void c_alignas_expr(rcc_ctx *rcc, c_dcl *dcl, c_value *expr);
+const c_type *c_typeof_expr(rcc_ctx *rcc, c_value *expr, ir_ref old_control);
 
-void c_static_assert(c_value *expr, c_value *msg);
+void c_static_assert(rcc_ctx *rcc, c_value *expr, c_value *msg);
 
-ir_type c_type2ir(const c_type *t);
-c_sym *c_global_sym(c_sym *sym);
-yy_sym c_get_current_func_name(void);
+ir_type c_type2ir(rcc_ctx *rcc, const c_type *t);
+c_sym *c_global_sym(rcc_ctx *rcc, c_sym *sym);
+yy_sym c_get_current_func_name(rcc_ctx *rcc);
 
-void c_type2proto_ex(const c_type *t, uint32_t *flags_ptr, ir_type *ret_type_ptr,
-                                      uint32_t *params_count_ptr, uint8_t *param_types);
+void c_type2proto_ex(rcc_ctx *rcc, const c_type *t,
+                     uint32_t *flags_ptr, ir_type *ret_type_ptr,
+                     uint32_t *params_count_ptr, uint8_t *param_types);
 
 /* IR Code Generation */
-void c_value_rval(c_value *val);
+void c_value_rval(rcc_ctx *rcc, c_value *val);
 
-ir_ref c_do_nocode(void);
-void c_do_end_nocode(ir_ref old_control);
-ir_ref c_do_alloca(size_t size, uint32_t align, bool zero);
-void c_do_cast(const c_type *t, c_value *v);
-void c_do_post_op(yy_sym sym, c_value *v);
-void c_do_pre_op(yy_sym sym, c_value *v);
-void c_do_addr(c_value *v);
-void c_do_deref(c_value *v);
-void c_do_unary_plus(c_value *v);
-void c_do_neg(c_value *v);
-void c_do_not(c_value *v);
-void c_do_bool_not(c_value *v);
-void c_do_array_dim(c_value *v, c_value *dim);
-void c_do_struct_field(c_value *v, c_name field);
-void c_do_struct_field_deref(c_value *v, c_name field);
+ir_ref c_do_nocode(rcc_ctx *rcc);
+void c_do_end_nocode(rcc_ctx *rcc, ir_ref old_control);
+ir_ref c_do_alloca(rcc_ctx *rcc, size_t size, uint32_t align, bool zero);
+void c_do_cast(rcc_ctx *rcc, const c_type *t, c_value *v);
+void c_do_post_op(rcc_ctx *rcc, yy_sym sym, c_value *v);
+void c_do_pre_op(rcc_ctx *rcc, yy_sym sym, c_value *v);
+void c_do_addr(rcc_ctx *rcc, c_value *v);
+void c_do_deref(rcc_ctx *rcc, c_value *v);
+void c_do_unary_plus(rcc_ctx *rcc, c_value *v);
+void c_do_neg(rcc_ctx *rcc, c_value *v);
+void c_do_not(rcc_ctx *rcc, c_value *v);
+void c_do_bool_not(rcc_ctx *rcc, c_value *v);
+void c_do_array_dim(rcc_ctx *rcc, c_value *v, c_value *dim);
+void c_do_struct_field(rcc_ctx *rcc, c_value *v, c_name field);
+void c_do_struct_field_deref(rcc_ctx *rcc, c_value *v, c_name field);
 c_value *c_do_grow_actual_parameters(c_value *args, int32_t num_args);
-void c_do_builtin(c_value *val, c_name name, int32_t num_args, c_value *args);
-void c_do_builtin_constant_p(c_value *val, c_value *arg);
-void c_do_builtin_va_arg(c_value *val, c_value *list, const c_type *type);
-void c_do_call(c_value *func, int32_t num_args, c_value *args, c_value *res);
-void c_do_binary_op(yy_sym sym, c_value *v, c_value *op2);
-void c_do_assign_op(yy_sym sym, c_value *v, c_value *op2);
-ir_ref c_do_bool_and_start(c_value *v);
-void c_do_bool_and_end(c_value *v, c_value *op2, ir_ref if_ref);
-ir_ref c_do_bool_or_start(c_value *v);
-void c_do_bool_or_end(c_value *v, c_value *op2, ir_ref if_ref);
-void c_do_cond_op(c_value *v, c_value *op2, c_value *op3);
-void c_do_statement_expression(c_scope *scope, c_value *v);
+void c_do_builtin(rcc_ctx *rcc, c_value *val, c_name name, int32_t num_args, c_value *args);
+void c_do_builtin_constant_p(rcc_ctx *rcc, c_value *val, c_value *arg);
+void c_do_builtin_va_arg(rcc_ctx *rcc, c_value *val, c_value *list, const c_type *type);
+void c_do_call(rcc_ctx *rcc, c_value *func, int32_t num_args, c_value *args, c_value *res);
+void c_do_binary_op(rcc_ctx *rcc, yy_sym sym, c_value *v, c_value *op2);
+void c_do_assign_op(rcc_ctx *rcc, yy_sym sym, c_value *v, c_value *op2);
+ir_ref c_do_bool_and_start(rcc_ctx *rcc, c_value *v);
+void c_do_bool_and_end(rcc_ctx *rcc, c_value *v, c_value *op2, ir_ref if_ref);
+ir_ref c_do_bool_or_start(rcc_ctx *rcc, c_value *v);
+void c_do_bool_or_end(rcc_ctx *rcc, c_value *v, c_value *op2, ir_ref if_ref);
+void c_do_cond_op(rcc_ctx *rcc, c_value *v, c_value *op2, c_value *op3);
+void c_do_statement_expression(rcc_ctx *rcc, c_scope *scope, c_value *v);
 
-ir_ref c_do_if(c_value *cond);
-void c_do_if_else(ir_ref _if, bool orig_dead_code);
-void c_do_if_end(ir_ref _if, bool orig_dead_code);
-void c_do_switch(c_loop *loop, c_value *cond);
-void c_do_case(c_value *v);
-void c_do_case_range(c_value *v1, c_value *v2);
-void c_do_case_default(void);
-void c_do_switch_end(c_loop *loop);
-void c_do_loop_start(c_loop *loop);
-void c_do_loop_check(c_loop *loop, c_value *cond);
-void c_do_loop_continue_label(c_loop *loop);
-void c_do_loop_end(c_loop *loop);
-void c_do_for_next_start(c_loop *loop);
-void c_do_for_next_end(c_loop *loop);
-void c_do_for_end(c_loop *loop);
-void c_do_continue(void);
-void c_do_break(void);
-void c_do_return(c_value *v);
-void c_do_tailcall(c_value *v);
-void c_do_goto(c_name name);
-c_label *c_do_set_label(c_name name);
-void c_do_set_label_attrs(c_label *label, c_dcl *attrs);
-void c_do_finish_label(c_name name, c_label *label);
-void c_do_label_value(c_value *res, c_name label);
-void c_do_computed_goto(c_value *v);
+ir_ref c_do_if(rcc_ctx *rcc, c_value *cond);
+void c_do_if_else(rcc_ctx *rcc, ir_ref _if, bool orig_dead_code);
+void c_do_if_end(rcc_ctx *rcc, ir_ref _if, bool orig_dead_code);
+void c_do_switch(rcc_ctx *rcc, c_loop *loop, c_value *cond);
+void c_do_case(rcc_ctx *rcc, c_value *v);
+void c_do_case_range(rcc_ctx *rcc, c_value *v1, c_value *v2);
+void c_do_case_default(rcc_ctx *rcc);
+void c_do_switch_end(rcc_ctx *rcc, c_loop *loop);
+void c_do_loop_start(rcc_ctx *rcc, c_loop *loop);
+void c_do_loop_check(rcc_ctx *rcc, c_loop *loop, c_value *cond);
+void c_do_loop_continue_label(rcc_ctx *rcc, c_loop *loop);
+void c_do_loop_end(rcc_ctx *rcc, c_loop *loop);
+void c_do_for_next_start(rcc_ctx *rcc, c_loop *loop);
+void c_do_for_next_end(rcc_ctx *rcc, c_loop *loop);
+void c_do_for_end(rcc_ctx *rcc, c_loop *loop);
+void c_do_continue(rcc_ctx *rcc);
+void c_do_break(rcc_ctx *rcc);
+void c_do_return(rcc_ctx *rcc, c_value *v);
+void c_do_tailcall(rcc_ctx *rcc, c_value *v);
+void c_do_goto(rcc_ctx *rcc, c_name name);
+c_label *c_do_set_label(rcc_ctx *rcc, c_name name);
+void c_do_set_label_attrs(rcc_ctx *rcc, c_label *label, c_dcl *attrs);
+void c_do_finish_label(rcc_ctx *rcc, c_name name, c_label *label);
+void c_do_label_value(rcc_ctx *rcc, c_value *res, c_name label);
+void c_do_computed_goto(rcc_ctx *rcc, c_value *v);
 
-void c_do_init_obj(c_sym *obj, c_value *v);
-void c_do_init_dim(c_sym *obj, c_init *init, c_value *dim);
-void c_do_init_field(c_sym *obj, c_init *init, c_name field);
-void c_do_init_first(c_sym *obj, c_init *init, const c_type *t, size_t offset);
-void c_do_init_next(c_sym *obj, c_init *init);
-void c_do_init_set(c_sym *obj, c_init *init, c_value *val, size_t *size);
-const c_type *c_do_init_nested(c_sym *obj, c_init *init, bool b, size_t *offset_ptr);
-void c_do_init_end(c_sym *obj, size_t size);
+void c_do_init_obj(rcc_ctx *rcc, c_sym *obj, c_value *v);
+void c_do_init_dim(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *dim);
+void c_do_init_field(rcc_ctx *rcc, c_sym *obj, c_init *init, c_name field);
+void c_do_init_first(rcc_ctx *rcc, c_sym *obj, c_init *init, const c_type *t, size_t offset);
+void c_do_init_next(rcc_ctx *rcc, c_sym *obj, c_init *init);
+void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val, size_t *size);
+const c_type *c_do_init_nested(rcc_ctx *rcc, c_sym *obj, c_init *init, bool b, size_t *offset_ptr);
+void c_do_init_end(rcc_ctx *rcc, c_sym *obj, size_t size);
 
-void c_do_init_expr_start(c_sym *obj, const c_type *t);
-void c_do_init_expr_end(c_value *v, c_sym *obj, size_t size);
+void c_do_init_expr_start(rcc_ctx *rcc, c_sym *obj, const c_type *t);
+void c_do_init_expr_end(rcc_ctx *rcc, c_value *v, c_sym *obj, size_t size);
 
-void c_do_generic_start(c_generic *g);
-void c_do_generic_type(c_generic *g, const c_type *t);
-void c_do_generic_case(c_generic *g, const c_type *t, c_value *v);
-void c_do_generic_default(c_generic *g, c_value *v);
-void c_do_generic_end(c_value *res, c_generic *g);
+void c_do_generic_start(rcc_ctx *rcc, c_generic *g);
+void c_do_generic_type(rcc_ctx *rcc, c_generic *g, const c_type *t);
+void c_do_generic_case(rcc_ctx *rcc, c_generic *g, const c_type *t, c_value *v);
+void c_do_generic_default(rcc_ctx *rcc, c_generic *g, c_value *v);
+void c_do_generic_end(rcc_ctx *rcc, c_value *res, c_generic *g);
 
-void c_do_func_start(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx);
-void c_do_func_end(c_name name, c_dcl *d, c_scope *scope, ir_ctx *ctx);
+void c_do_func_start(rcc_ctx *rcc, c_name name, c_dcl *d, c_scope *scope);
+void c_do_func_end(rcc_ctx *rcc, c_name name, c_dcl *d, c_scope *scope);
 
-void c_do_compile_start(void);
-void c_do_compile_end(void);
+void c_do_compile_start(rcc_ctx *rcc);
+void c_do_compile_end(rcc_ctx *rcc);
 
 /* C Parser */
-bool parse_pp_expr(void);
-void parse_vla_param_again(yy_sym *vla_tokens, c_value *val);
-void rcc_parse(void);
+bool parse_pp_expr(rcc_ctx *rcc);
+void parse_vla_param_again(rcc_ctx *rcc, yy_sym *vla_tokens, c_value *val);
+void rcc_parse(rcc_ctx *rcc);
 
 /* Error Reporting */
-void yy_error(const char *msg) yy_noreturn;
-void yy_error_fmt(const char *fmt, ...) yy_noreturn;
-void yy_warning(const char *msg);
-void yy_warning_fmt(const char *fmt, ...);
+#define yy_error(_msg)                 yy_error_(rcc, _msg)
+#define yy_error_fmt(_msg, ...)        yy_error_fmt_(rcc, _msg, __VA_ARGS__)
+#define yy_warning(_msg)               yy_warning_(rcc, _msg)
+#define yy_warning_fmt(_msg, ...)      yy_warning_fmt_(rcc, _msg, __VA_ARGS__)
+
+void yy_error_(rcc_ctx *rcc, const char *msg) yy_noreturn;
+void yy_error_fmt_(rcc_ctx *rcc, const char *fmt, ...) yy_noreturn;
+void yy_warning_(rcc_ctx *rcc, const char *msg);
+void yy_warning_fmt_(rcc_ctx *rcc, const char *fmt, ...);
 
 /* Linker */
-void *c_linker_allocate_data(const char *name, size_t size);
-bool  c_linker_fix_reloc(c_sym *obj, size_t obj_offset, c_value *val);
+void *c_linker_allocate_data(rcc_ctx *rcc, const char *name, size_t size);
+bool  c_linker_fix_reloc(rcc_ctx *rcc, c_sym *obj, size_t obj_offset, c_value *val);
 
 /* IR compiler */
-void rcc_ir_init(ir_ctx *ctx, uint32_t flags);
-void rcc_ir_compile(c_name name, ir_ctx *ctx, c_sym *sym);
+void rcc_ir_init(rcc_ctx *rcc, uint32_t flags);
+void rcc_ir_compile(rcc_ctx *rcc, c_name name, c_sym *sym);
 
-/* C compiler state */
-extern const char           *yy_pos;            /* pointer to current scanned character          */
-extern const char           *yy_text;           /* pointer to start of the current scanned token */
-extern const char           *yy_linepos;        /* pointer to start of the current scanned line  */
-extern size_t                yy_len;            /* length of the value of terminal token */
-extern int32_t               yy_line;           /* line number */
-extern yy_sym                yy_file_name;      /* interned file name */
-extern const char           *yy_buf;
-extern const char           *yy_end;
+/* C compiler context/state */
+#define INCLUDE_STACK_SIZE   32
+#define IFDEF_STACK_SIZE     256
+#define PACK_STACK_SIZE      16
+#define PP_MAX_INCLUDE_PATHS 31
 
-extern yy_hashtab            yy_hash;
-extern ir_arena             *yy_arena;
-extern uint32_t              yy_flags;
+typedef struct {
+	const char              *pos;
+	const char              *text;
+	const char              *linepos;
+	size_t                   len;
+	int                      line;
+	yy_sym                   file_name;
+	const char              *buf;
+	const char              *end;
+	uint32_t                 if_level;
+	uint32_t                 state;
+	yy_sym                   macro;
+	int                      next_dir;
+} pp_include_state;
 
-extern pp_list               pp_list_cache[PP_LIST_CACHE_SIZE];
-extern uint32_t              pp_list_cache_idx;
+#define STDINC_SIZE          16
 
-extern pp_subst_stream       pp_subst_stack[PP_SUBST_STACK_SIZE];
-extern uint32_t              pp_subst_level;
+typedef struct _c_stdinc_t {
+	yy_sym      name;
+	uint32_t    content_len;
+	const char *content;
+} c_stdinc_t;
 
-extern uint32_t              pp_ifdef_level;          /* ifdef nesting level */
-extern uint32_t              pp_include_level;        /* include nesting level */
-extern uint32_t              pp_include_ifndef_state; /* state to catch includes protected by #ifndef macro */
+typedef struct _rcc_loader {
+	ir_loader          l;
+	rcc_ctx           *rcc;
+} rcc_loader;
 
-extern uint8_t               pp_pack;
+struct _rcc_ctx {
+	/* C Scanner */
+	const char           *yy_pos;            /* pointer to current scanned character          */
+	const char           *yy_text;           /* pointer to start of the current scanned token */
+	const char           *yy_linepos;        /* pointer to start of the current scanned line  */
+	size_t                yy_len;            /* length of the value of terminal token */
+	int32_t               yy_line;           /* line number */
+	yy_sym                yy_file_name;      /* interned file name */
+	const char           *yy_buf;
+	const char           *yy_end;
 
-extern ir_arena             *c_arena;
-extern bool                  c_dead_code;
-extern bool                  c_static_data;
-extern ir_ref                c_prologue_end;
-extern uint64_t              c_fixed_regset;
-extern c_sym                *active_func;
-extern c_name                active_func_name;
-extern ir_ctx               *active_ctx;
-extern ir_ctx               *global_ctx;
+	yy_hashtab            yy_hash;
+	ir_arena             *yy_arena;
+	uint32_t              yy_flags;
+
+	/* C Preprocessor */
+	pp_list               pp_list_cache[PP_LIST_CACHE_SIZE];
+	uint32_t              pp_list_cache_idx;
+
+	pp_subst_stream       pp_subst_stack[PP_SUBST_STACK_SIZE];
+	pp_include_state      pp_include_stack[INCLUDE_STACK_SIZE];
+	uint8_t               pp_ifdef_stack[IFDEF_STACK_SIZE];
+
+	pp_subst_stream      *pp_stream;
+	uint32_t              pp_ifdef_level;          /* ifdef nesting level */
+	uint32_t              pp_include_level;        /* include nesting level */
+	uint32_t              pp_include_ifdef_level;  /* ifdef nesting level for the current include */
+	uint32_t              pp_include_ifndef_state; /* state to catch includes protected by #ifndef macro */
+
+	uint32_t              pp_counter;              /* __COUNTER__ value */
+
+	uint8_t               pp_pack;
+	uint8_t               pp_pack_stack_pos;
+	uint8_t               pp_pack_stack[PACK_STACK_SIZE];
+
+	yy_sym                pp_include_ifndef_macro; /* macro that protects the current include */
+	ir_hashtab           *pp_include_hash;         /* map include file-name -> protection macro */
+
+	int                   pp_last_search_dir;
+	int                   pp_next_search_dir;
+
+	uint32_t              pp_recursion_level;      /* used for debug only */
+
+	int                   pp_include_paths_count;
+	const char           *pp_include_paths[PP_MAX_INCLUDE_PATHS + 1];
+
+	yy_sym                pp_out_file_name;
+	uint32_t              pp_out_level;
+	int32_t               pp_out_line;
+	FILE                 *pp_out_file;
+
+	/* Stndard headers */
+	c_stdinc_t            c_stdinc[STDINC_SIZE];
+
+	/* C -> IR Translator */
+	ir_arena             *c_arena;                 /* Arena to keeps C types, symbols, tags, etc */
+	c_scope              *active_scope;            /* The current inner-most C declaration scope */
+	c_loop               *active_loop;             /* The current inner-most C loop or switch statement */
+	c_scope              *active_func_scope;       /* The scope of the current function */
+	c_sym                *active_func;             /* C symbol of the current function */
+	c_name                active_func_name;        /* The current function name (id) */
+
+	uint32_t              c_static_var_num;        /* Number of static variables in the current compiled file */
+	uint32_t              c_static_str_num;        /* Number of unique C strings in the current compiled file */
+
+	bool                  c_dead_code;
+	bool                  c_static_data;
+	uint64_t              c_fixed_regset;          /* Set of CPU registers excluded from regular register-allocation */
+	const c_type         *c_last_call_func_type;   /* Type of the last called funtion (used for tail-call) */
+
+	ir_ctx               *active_ctx;
+	ir_ctx               *global_ctx;
+	ir_ref                c_prologue_end;
+	ir_ref                c_computed_goto;
+	ir_ref                c_computed_goto_targets;
+	uint32_t              c_label_num;             /* Number of generated IR_LABEL instructions (label as value) */
+	ir_ref                c_last_expect_ref;
+	bool                  c_last_expect_val;
+
+	ir_strtab             c_strtab;                /* Hash to keep a single data object for the identical C strings */
+
+	/* Linker */
+	rcc_loader            c_linker;
+	ir_arena             *c_linker_arena;
+
+	/* Main Compiler Driver */
+	uint32_t              c_flags;                 /* compiler actions (see C_RUN, C_DUMP_* in rcc.c) */
+	uint32_t              c_opt_flags;             /* optimization level and flags (see C_OPT_* in rcc.c) */
+
+	uint32_t              ir_flags;                /* IR context flags (see IR_* defines in ir.h) */
+	uint32_t              ir_mflags;               /* CPU specific flags (see IR_X86_... in ir.h) */
+	uint64_t              ir_debug_regset;
+	uint32_t              ir_save_flags;           /* modificators for IR dumps (see IR_SAVE_* in ir.h) */
+	ir_code_buffer        code_buffer;             /* pre-allocated JIT code area */
+	bool                  protected;               /* code_buffer is write-proteted */
+	ir_list               codegen_queue;           /* delayed code-generation queue */
+	FILE                 *output;                  /* the main output file */
+
+	struct {
+		uint32_t          yy_num_syms;             /* number of symbols in "yy_hash" */
+		void             *c_arena_checkpoint;      /* checkpoint to restore "c_arena" state */
+	} reset_state;                                 /* used to restore RCC state between compilation of few files */
+};
 
 /* Standard include files */
-void c_stdinc_init(void);
-void c_stdinc_builtin(void);
-const char *c_stdinc_find(yy_sym name, size_t *len);
+void c_stdinc_init(rcc_ctx *rcc);
+void c_stdinc_builtin(rcc_ctx *rcc);
+const char *c_stdinc_find(rcc_ctx *rcc, yy_sym name, size_t *len);
 
 /* inline helpers */
-IR_ALWAYS_INLINE const char *yy_sym2str(yy_sym sym)
+IR_ALWAYS_INLINE const char *yy_sym2str(rcc_ctx *rcc, yy_sym sym)
 {
-	return yy_hash.data[sym].str;
+	return rcc->yy_hash.data[sym].str;
 }
 
-IR_ALWAYS_INLINE const char *yy_sym2strl(yy_sym sym, size_t *len)
+IR_ALWAYS_INLINE const char *yy_sym2strl(rcc_ctx *rcc, yy_sym sym, size_t *len)
 {
-	*len = yy_hash.data[sym].len;
-	return yy_hash.data[sym].str;
+	*len = rcc->yy_hash.data[sym].len;
+	return rcc->yy_hash.data[sym].str;
 }
 
 IR_ALWAYS_INLINE yy_sym *pp_save_ptr(yy_sym *tokens, const void *ptr)
@@ -1207,11 +1320,18 @@ IR_ALWAYS_INLINE yy_sym *pp_save_ptr(yy_sym *tokens, const void *ptr)
 	return tokens;
 }
 
-IR_ALWAYS_INLINE yy_sym *pp_save_val(yy_sym *tokens)
+IR_ALWAYS_INLINE yy_sym *pp_save_str(yy_sym *tokens, const char *text, size_t len)
 {
-	IR_ASSERT(yy_len < 0x7fffffff);
-	*tokens++ = (int32_t)yy_len;
-	return pp_save_ptr(tokens, yy_text);
+	IR_ASSERT(len < 0x7fffffff);
+	*tokens++ = (int32_t)len;
+	return pp_save_ptr(tokens, text);
+}
+
+IR_ALWAYS_INLINE yy_sym *pp_save_val(rcc_ctx *rcc, yy_sym *tokens)
+{
+	IR_ASSERT(rcc->yy_len < 0x7fffffff);
+	*tokens++ = (int32_t)rcc->yy_len;
+	return pp_save_ptr(tokens, rcc->yy_text);
 }
 
 IR_ALWAYS_INLINE yy_sym *pp_load_ptr(yy_sym *tokens, void **ptr)
@@ -1226,18 +1346,24 @@ IR_ALWAYS_INLINE yy_sym *pp_load_ptr(yy_sym *tokens, void **ptr)
 	return tokens;
 }
 
-IR_ALWAYS_INLINE yy_sym *pp_load_val(yy_sym *tokens)
+IR_ALWAYS_INLINE yy_sym *pp_load_str(yy_sym *tokens, const char **text, size_t *len)
 {
-	yy_len = *tokens++;
-	return pp_load_ptr(tokens, (void**)&yy_text);
+	*len = *tokens++;
+	return pp_load_ptr(tokens, (void**)text);
 }
 
-IR_ALWAYS_INLINE void pp_list_init(pp_list *l)
+IR_ALWAYS_INLINE yy_sym *pp_load_val(rcc_ctx *rcc, yy_sym *tokens)
 {
-	if (pp_list_cache_idx != 0) {
-		pp_list_cache_idx--;
-		l->syms = pp_list_cache[pp_list_cache_idx].syms;
-		l->size = pp_list_cache[pp_list_cache_idx].size;
+	rcc->yy_len = *tokens++;
+	return pp_load_ptr(tokens, (void**)&rcc->yy_text);
+}
+
+IR_ALWAYS_INLINE void pp_list_init(rcc_ctx *rcc, pp_list *l)
+{
+	if (rcc->pp_list_cache_idx != 0) {
+		rcc->pp_list_cache_idx--;
+		l->syms = rcc->pp_list_cache[rcc->pp_list_cache_idx].syms;
+		l->size = rcc->pp_list_cache[rcc->pp_list_cache_idx].size;
 		l->len = 0;
 	} else {
 		l->size = 64; /* default initial size */
@@ -1246,12 +1372,12 @@ IR_ALWAYS_INLINE void pp_list_init(pp_list *l)
 	}
 }
 
-IR_ALWAYS_INLINE void pp_list_release(yy_sym *syms, uint32_t size)
+IR_ALWAYS_INLINE void pp_list_release(rcc_ctx *rcc, yy_sym *syms, uint32_t size)
 {
-	if (pp_list_cache_idx < PP_LIST_CACHE_SIZE) {
-		pp_list_cache[pp_list_cache_idx].syms = syms;
-		pp_list_cache[pp_list_cache_idx].size = size;
-		pp_list_cache_idx++;
+	if (rcc->pp_list_cache_idx < PP_LIST_CACHE_SIZE) {
+		rcc->pp_list_cache[rcc->pp_list_cache_idx].syms = syms;
+		rcc->pp_list_cache[rcc->pp_list_cache_idx].size = size;
+		rcc->pp_list_cache_idx++;
 	} else {
 		ir_mem_free(syms);
 	}
@@ -1278,16 +1404,31 @@ IR_ALWAYS_INLINE void pp_list_push_ptr(pp_list *l, void *ptr)
 	l->len += sizeof(void*)/sizeof(int32_t);
 }
 
-IR_ALWAYS_INLINE void pp_list_push_val(pp_list *l)
+IR_ALWAYS_INLINE void pp_list_push_val(rcc_ctx *rcc, pp_list *l)
 {
-	IR_ASSERT(yy_len < 0x7fffffff);
+	IR_ASSERT(rcc->yy_len < 0x7fffffff);
 	uint32_t len = l->len + sizeof(void*)/sizeof(int32_t) + 1;
 
 	if (len > l->size) {
 		pp_list_grow(l, len);
 	}
-	pp_save_val(l->syms + l->len);
+	pp_save_val(rcc, l->syms + l->len);
 	l->len += sizeof(void*)/sizeof(int32_t) + 1;
+}
+
+IR_ALWAYS_INLINE yy_sym *pp_list_push_val_from(pp_list *l, yy_sym *tokens)
+{
+	const char *_text;
+	size_t _len;
+	uint32_t len = l->len + sizeof(void*)/sizeof(int32_t) + 1;
+
+	if (len > l->size) {
+		pp_list_grow(l, len);
+	}
+	tokens = pp_load_str(tokens, &_text, &_len);
+	pp_save_str(l->syms + l->len, _text, _len);
+	l->len += sizeof(void*)/sizeof(int32_t) + 1;
+	return tokens;
 }
 
 IR_ALWAYS_INLINE void c_value_set_rval(c_value *res, const c_type *type, ir_type t, ir_ref ref)

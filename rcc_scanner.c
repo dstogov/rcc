@@ -12,19 +12,6 @@
 
 #include "rcc.h"
 
-const char *yy_pos;            /* pointer to current scanned character          */
-const char *yy_text;           /* pointer to start of the current scanned token */
-const char *yy_linepos;        /* pointer to start of the current scanned line  */
-size_t      yy_len;            /* length of the value of terminal token */
-int32_t     yy_line;           /* line number */
-yy_sym      yy_file_name;      /* interned file name */
-const char *yy_buf;
-const char *yy_end;
-
-yy_hashtab  yy_hash;
-ir_arena   *yy_arena;
-uint32_t    yy_flags;
-
 /* Scanner Hash Table */
 static uint32_t yy_str_hash(const char *str, size_t len)
 {
@@ -38,51 +25,56 @@ static uint32_t yy_str_hash(const char *str, size_t len)
     return h | 0x10000000;
 }
 
-void yy_hash_init(void)
+void yy_hash_init(rcc_ctx *rcc)
 {
+	yy_hashtab *hash = &rcc->yy_hash;
+
 	char *data = ir_mem_malloc(1024 * sizeof(uint32_t) + 1024 * sizeof(yy_hash_bucket));
 	memset(data, 0, 1024 * sizeof(uint32_t));
-	yy_hash.data = (yy_hash_bucket*)(data + (1024 * sizeof(uint32_t)));
-	yy_hash.count = 0;
-	yy_hash.size = 1024;
-	yy_hash.mask = (uint32_t)(-(int32_t)1024);
+	hash->data = (yy_hash_bucket*)(data + (1024 * sizeof(uint32_t)));
+	hash->count = 0;
+	hash->size = 1024;
+	hash->mask = (uint32_t)(-(int32_t)1024);
 }
 
-void yy_hash_free(void)
+void yy_hash_free(rcc_ctx *rcc)
 {
-	ir_mem_free((char*)yy_hash.data - (yy_hash.size * sizeof(uint32_t)));
+	yy_hashtab *hash = &rcc->yy_hash;
+
+	ir_mem_free((char*)hash->data - (hash->size * sizeof(uint32_t)));
 }
 
-static IR_NEVER_INLINE void yy_hash_resize(void)
+static IR_NEVER_INLINE void yy_hash_resize(yy_hashtab *hash)
 {
-	uint32_t old_size = (uint32_t)(-(int32_t)yy_hash.mask);
-	yy_hash_bucket *old_data = yy_hash.data;
+	uint32_t old_size = (uint32_t)(-(int32_t)hash->mask);
+	yy_hash_bucket *old_data = hash->data;
 	uint32_t new_size = old_size * 2;
 	yy_hash_bucket *data = ir_mem_malloc(new_size * sizeof(uint32_t) + new_size * sizeof(yy_hash_bucket));
 	yy_hash_bucket *p;
 	uint32_t i, mask;
 
 	memset(data, 0, new_size * sizeof(uint32_t));
-	yy_hash.data = data = (yy_hash_bucket*)((char*)data + (new_size * sizeof(uint32_t)));
-	yy_hash.mask = (uint32_t)(-(int32_t)new_size);
-	yy_hash.size = new_size;
+	hash->data = data = (yy_hash_bucket*)((char*)data + (new_size * sizeof(uint32_t)));
+	hash->mask = (uint32_t)(-(int32_t)new_size);
+	hash->size = new_size;
 
-	memcpy(yy_hash.data, old_data, yy_hash.count * sizeof(yy_hash_bucket));
+	memcpy(hash->data, old_data, hash->count * sizeof(yy_hash_bucket));
 	ir_mem_free((char*)old_data - (old_size * sizeof(uint32_t)));
 
-	mask = yy_hash.mask;
-	for (i = YY_FIRST_KEYWORD, p = yy_hash.data + i; i < yy_hash.count; p++, i++) {
+	mask = hash->mask;
+	for (i = YY_FIRST_KEYWORD, p = hash->data + i; i < hash->count; p++, i++) {
 		uint32_t h = p->h | mask;
 		p->next = ((uint32_t*)data)[(int32_t)h];
 		((uint32_t*)data)[(int32_t)h] = i;
 	}
 }
 
-yy_sym yy_hash_find(const char *str, size_t len)
+yy_sym yy_hash_find(rcc_ctx *rcc, const char *str, size_t len)
 {
 	uint32_t h = yy_str_hash(str, len);
-	yy_hash_bucket *data = yy_hash.data;
-	uint32_t pos = ((uint32_t*)data)[(int32_t)(h | yy_hash.mask)];
+	yy_hashtab *hash = &rcc->yy_hash;
+	yy_hash_bucket *data = hash->data;
+	uint32_t pos = ((uint32_t*)data)[(int32_t)(h | hash->mask)];
 	yy_hash_bucket *p;
 
 	while (pos != 0) {
@@ -98,10 +90,11 @@ yy_sym yy_hash_find(const char *str, size_t len)
 	return 0;
 }
 
-static yy_sym yy_hash_lookup_ex(const char *str, size_t len, uint32_t h)
+IR_ALWAYS_INLINE yy_sym _yy_hash_lookup_ex(rcc_ctx *rcc, const char *str, size_t len, uint32_t h)
 {
-	yy_hash_bucket *data = yy_hash.data;
-	uint32_t pos = ((uint32_t*)data)[(int32_t)(h | yy_hash.mask)];
+	yy_hashtab *hash = &rcc->yy_hash;
+	yy_hash_bucket *data = hash->data;
+	uint32_t pos = ((uint32_t*)data)[(int32_t)(h | hash->mask)];
 	yy_hash_bucket *p;
 
 	while (pos != 0) {
@@ -114,22 +107,22 @@ static yy_sym yy_hash_lookup_ex(const char *str, size_t len, uint32_t h)
 		pos = p->next;
 	}
 
-	if (UNEXPECTED(yy_hash.count == yy_hash.size)) {
-		yy_hash_resize();
-		data = yy_hash.data;
+	if (UNEXPECTED(hash->count == hash->size)) {
+		yy_hash_resize(hash);
+		data = hash->data;
 	}
 
-	char *holder = ir_arena_alloc(&yy_arena, len + 1);
+	char *holder = ir_arena_alloc(&rcc->yy_arena, len + 1);
 	memcpy(holder, str, len);
 	holder[len] = 0;
 	str = holder;
 
-	pos = yy_hash.count++;
+	pos = hash->count++;
 	p = data + pos;
 	p->h = h;
 	p->len = len;
 	p->str = str;
-	h |= yy_hash.mask;
+	h |= hash->mask;
 	p->next = ((uint32_t*)data)[(int32_t)h];
 	((uint32_t*)data)[(int32_t)h] = pos;
 	p->macro = NULL;
@@ -142,15 +135,20 @@ static yy_sym yy_hash_lookup_ex(const char *str, size_t len, uint32_t h)
 	return pos;
 }
 
-yy_sym yy_hash_lookup(const char *str, size_t len)
+static IR_NEVER_INLINE yy_sym yy_hash_lookup_ex(rcc_ctx *rcc, const char *str, size_t len, uint32_t h)
 {
-	return yy_hash_lookup_ex(str, len, yy_str_hash(str, len));
+	return _yy_hash_lookup_ex(rcc, str, len, h);
+}
+
+yy_sym yy_hash_lookup(rcc_ctx *rcc, const char *str, size_t len)
+{
+	return _yy_hash_lookup_ex(rcc, str, len, yy_str_hash(str, len));
 }
 
 /* Scanner */
-static void yy_scanner_error(void) yy_noreturn;
-static bool yy_at_start_of_line(void);
-static yy_sym yy_parse_pp_number(const char *str, size_t len);
+static void yy_scanner_error(rcc_ctx *rcc) yy_noreturn;
+static bool yy_at_start_of_line(rcc_ctx *rcc, const char *text);
+static yy_sym yy_parse_pp_number(rcc_ctx *rcc, const char *str, size_t len);
 
 // TODO: Trigraphs are not supported yet ???
 #define _YY_TRIGRAPHS(_) \
@@ -161,55 +159,69 @@ static yy_sym yy_parse_pp_number(const char *str, size_t len);
 	_("%:",                            YY__HASH)                  \
 	_("%:%:",                          YY__HASH_HASH)             \
 
-yy_sym yy_next(void)
+yy_sym yy_next(rcc_ctx *rcc)
 {
 	uint32_t h;
 	uint8_t ch, ch2;
 	yy_sym ret;
 	pp_macro *macro;
 	const unsigned char *pos;
+	const char *text;
+
+	if (rcc->pp_stream) {
+		pp_subst_stream *stream = rcc->pp_stream;
 
 restart_stream:
-	if (pp_subst_level > 0) {
-		pp_subst_stream *stream = &pp_subst_stack[pp_subst_level - 1];
-
 		ret = *stream->tokens++;
-		if (ret == YY_WS && (yy_flags & YY_SKIP_WS)) {
-			do {
+		if (ret <= YY_WS) {
+			if (ret == YY_WS) {
+				if (!(rcc->yy_flags & YY_SKIP_WS)) {
+					rcc->yy_text = NULL;
+					rcc->yy_len = 0;
+					return ret;
+				}
 				ret = *stream->tokens++;
-			} while (ret == YY_WS);
-		}
-		if (ret == YY_EOF) {
-			if (!stream->skip_eof) {
-				stream->tokens--;
-				return YY_EOF;
+				//IR_ASSERT(ret != YY_WS);
 			}
-			if (stream->macro) stream->macro->flags &= ~PP_MACRO_DISABLED;
-			if (stream->start) pp_list_release(stream->start, stream->size);
-			pp_subst_level--;
-			goto restart_stream;
-		} else if (ret <= YY_WS) {
-			yy_text = NULL;
-			yy_len = 0;
-		} else if (PP_HAS_VAL(ret)) {
-			stream->tokens = pp_load_val(stream->tokens);
-			if (ret == YY_PP_NUMBER && !(yy_flags & YY_ACCEPT_PP_NUMBER)) {
-				ret = yy_parse_pp_number(yy_text, yy_len);
+			if (ret == YY_EOF) {
+				if (!stream->skip_eof) {
+					stream->tokens--;
+					return YY_EOF;
+				}
+				stream = pp_pop_stream(rcc);
+				if (stream) goto restart_stream;
+				pos = (const unsigned char*)rcc->yy_pos;
+				goto restart;
+			} else if (ret <= YY_WS) {
+				rcc->yy_text = NULL;
+				rcc->yy_len = 0;
+				return ret;
+			}
+		}
+		if (ret < YY_ID) {
+			stream->tokens = pp_load_val(rcc, stream->tokens);
+			if (ret == YY_PP_NUMBER && !(rcc->yy_flags & YY_ACCEPT_PP_NUMBER)) {
+				ret = yy_parse_pp_number(rcc, rcc->yy_text, rcc->yy_len);
 			}
 		} else {
 			if (PP_IS_ID(ret)) {
 				if (ret & PP_NOSUBST) {
-					if (!(yy_flags & YY_ACCEPT_NOSUBST)) ret &= ~PP_NOSUBST;
+					if (!(rcc->yy_flags & YY_ACCEPT_NOSUBST)) ret &= ~PP_NOSUBST;
 				} else {
-					macro = yy_hash.data[ret].macro;
+					macro = rcc->yy_hash.data[ret].macro;
 					if (macro) {
 						if (!(macro->flags & PP_MACRO_DISABLED)) {
-							if (!(yy_flags & YY_NO_MACRO)) {
+							if (!(rcc->yy_flags & YY_NO_MACRO)) {
 try_expand_macro:
-								if (pp_macro_expand(macro, ret)) goto restart_stream;
+								if (pp_macro_expand(rcc, macro, ret)) {
+									stream = rcc->pp_stream;
+									if (stream) goto restart_stream;
+									pos = (const unsigned char*)rcc->yy_pos;
+									goto restart;
+								}
 							}
 						} else {
-							if (yy_flags & YY_ACCEPT_NOSUBST) ret |= PP_NOSUBST;
+							if (rcc->yy_flags & YY_ACCEPT_NOSUBST) ret |= PP_NOSUBST;
 						}
 					}
 				}
@@ -218,9 +230,9 @@ try_expand_macro:
 		return ret;
 	}
 
-	pos = (const unsigned char*)yy_pos;
+	pos = (const unsigned char*)rcc->yy_pos;
 restart:
-	yy_text = (const char*)pos;
+	text = (const char*)pos;
 	ch = *pos;
 	switch (ch) {
 		case ' ': case '\t': case '\f': case '\v':
@@ -228,7 +240,7 @@ restart:
 			do {
 				ch = *++pos;
 			} while (ch == '\t' || ch == '\v' || ch == '\f' || ch == ' ');
-			if (yy_flags & YY_SKIP_WS) goto restart;
+			if (rcc->yy_flags & YY_SKIP_WS) goto restart;
 			ret = YY_WS;
 			goto ret_ws;
 		case '\r':
@@ -238,9 +250,9 @@ restart:
 		case '\n':
 			pos++;
 new_line:
-			yy_line++;
-			yy_linepos = (const char*)pos;
-			if (yy_flags & YY_SKIP_EOL) goto restart;
+			rcc->yy_line++;
+			rcc->yy_linepos = (const char*)pos;
+			if (rcc->yy_flags & YY_SKIP_EOL) goto restart;
 			ret = YY_EOL;
 			goto ret_ws;
 		case 'A': case 'B': case 'C': case 'D': case 'E': case 'F': case 'G': case 'H':
@@ -259,12 +271,13 @@ identifier2:
 				ch = *++pos;
 			} while ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '$' || ch >= 0x80);
 
-			pp_include_ifndef_state = 0;
-			yy_pos = (const char*)pos;
-			yy_len = yy_pos - yy_text;
-			ret = yy_hash_lookup_ex(yy_text, yy_len, h | 0x10000000);
-			if (!(yy_flags & YY_NO_MACRO)) {
-				macro = yy_hash.data[ret].macro;
+			rcc->pp_include_ifndef_state = 0;
+			rcc->yy_pos = (const char*)pos;
+			rcc->yy_text = text;
+			rcc->yy_len = rcc->yy_pos - rcc->yy_text;
+			ret = yy_hash_lookup_ex(rcc, rcc->yy_text, rcc->yy_len, h | 0x10000000);
+			if (!(rcc->yy_flags & YY_NO_MACRO)) {
+				macro = rcc->yy_hash.data[ret].macro;
 				if (macro) {
 					IR_ASSERT(!(macro->flags & PP_MACRO_DISABLED));
 					goto try_expand_macro;
@@ -322,12 +335,12 @@ float_mumber_cont:
 						ch = *++pos;
 					}
 					if (ch < '0' || ch > '9') {
-						if (yy_flags & YY_ACCEPT_PP_NUMBER) {
+						if (rcc->yy_flags & YY_ACCEPT_PP_NUMBER) {
 							goto pp_number;
 						}
 wrong_number:
 						pos++;
-						yy_error_fmt("invalid number %.*s", (int)((const char*)pos - yy_text), yy_text);
+						yy_error_fmt("invalid number %.*s", (int)((const char*)pos - text), text);
 						goto restart;
 					}
 					do {
@@ -372,7 +385,7 @@ number_suffix:
 					ch = *++pos;
 				}
 			}
-			if (yy_flags & YY_ACCEPT_PP_NUMBER) {
+			if (rcc->yy_flags & YY_ACCEPT_PP_NUMBER) {
 				if ((ch >= 'a' && ch <= 'z')
 				 || (ch >= 'A' && ch <= 'Z')
 				 || (ch >= '0' && ch <= '9')
@@ -400,7 +413,7 @@ pp_number:
 				ch = *++pos;
 				if (ch == '.' || ch == 'P' || ch == 'p') goto hex_float;
 				if ((ch < '0' || ch > '9') && (ch < 'A' || ch > 'F') && (ch < 'a' || ch > 'f')) {
-					if (yy_flags & YY_ACCEPT_PP_NUMBER) {
+					if (rcc->yy_flags & YY_ACCEPT_PP_NUMBER) {
 						goto pp_number;
 					}
 					goto wrong_number;
@@ -422,7 +435,7 @@ hex_float:
 							ch = *++pos;
 						}
 						if (ch < '0' || ch > '9') {
-							if (yy_flags & YY_ACCEPT_PP_NUMBER) {
+							if (rcc->yy_flags & YY_ACCEPT_PP_NUMBER) {
 								goto pp_number;
 							}
 							goto wrong_number;
@@ -442,7 +455,7 @@ hex_float:
 			} else if (ch == 'B' || ch == 'b') {
 				ch = *++pos;
 				if (ch != '0' && ch != '1') {
-					if (yy_flags & YY_ACCEPT_PP_NUMBER) {
+					if (rcc->yy_flags & YY_ACCEPT_PP_NUMBER) {
 						goto pp_number;
 					}
 					goto wrong_number;
@@ -458,7 +471,7 @@ hex_float:
 					ch = *++pos;
 				}
 				if (ch == '8' || ch == '9') {
-					if (yy_flags & YY_ACCEPT_PP_NUMBER) {
+					if (rcc->yy_flags & YY_ACCEPT_PP_NUMBER) {
 						goto pp_number;
 					}
 					goto wrong_number;
@@ -475,15 +488,18 @@ character:
 					ch = *++pos;
 					if (ch == '\r') {
 						if (pos[1] == '\n') pos++;
-						yy_line++;
-						yy_linepos = (const char*)pos + 1;
+						rcc->yy_line++;
+						rcc->yy_linepos = (const char*)pos + 1;
 					} else if (ch == '\n') {
-						yy_line++;
-						yy_linepos = (const char*)pos + 1;
+						rcc->yy_line++;
+						rcc->yy_linepos = (const char*)pos + 1;
 					}
 				} else if (ch == '\'') {
 					break;
 				} else if (ch == '\r' || ch == '\n') {
+					rcc->yy_pos = (const char*)pos;
+					rcc->yy_text = text;
+					rcc->yy_len = rcc->yy_pos - rcc->yy_text;
 					yy_error("unterminated character");
 					goto restart;
 				}
@@ -499,15 +515,18 @@ string:
 					ch = *++pos;
 					if (ch == '\r') {
 						if (pos[1] == '\n') pos++;
-						yy_line++;
-						yy_linepos = (const char*)pos + 1;
+						rcc->yy_line++;
+						rcc->yy_linepos = (const char*)pos + 1;
 					} else if (ch == '\n') {
-						yy_line++;
-						yy_linepos = (const char*)pos + 1;
+						rcc->yy_line++;
+						rcc->yy_linepos = (const char*)pos + 1;
 					}
 				} else if (ch == '"') {
 					break;
 				} else if (ch == '\r' || ch == '\n') {
+					rcc->yy_pos = (const char*)pos;
+					rcc->yy_text = text;
+					rcc->yy_len = rcc->yy_pos - rcc->yy_text;
 					yy_error("unterminated string");
 					goto restart;
 				}
@@ -637,18 +656,18 @@ string:
 					if (ch == '\r') {
 						ch = *++pos;
 						if (ch == '\n') pos++;
-						yy_line++;
-						yy_linepos = (const char*)pos;
+						rcc->yy_line++;
+						rcc->yy_linepos = (const char*)pos;
 						break;
 					} else if (ch == '\n') {
 						pos++;
-						yy_line++;
-						yy_linepos = (const char*)pos;
+						rcc->yy_line++;
+						rcc->yy_linepos = (const char*)pos;
 						break;
 					}
 				}
-				if (yy_flags & YY_SKIP_COMMENTS) {
-					if (yy_flags & YY_SKIP_EOL) goto restart;
+				if (rcc->yy_flags & YY_SKIP_COMMENTS) {
+					if (rcc->yy_flags & YY_SKIP_EOL) goto restart;
 					ret = YY_EOL;
 				} else {
 					ret = YY_ONE_LINE_COMMENT;
@@ -664,17 +683,17 @@ string:
 						}
 					} else if (ch == '\r') {
 						if (pos[1] == '\n') pos++;
-						yy_line++;
-						yy_linepos = (const char*)pos + 1;
+						rcc->yy_line++;
+						rcc->yy_linepos = (const char*)pos + 1;
 						if (pos[1] == '\0') goto error;
 					} else if (ch == '\n') {
 						if (pos[1] == '\n') pos++;
-						yy_line++;
-						yy_linepos = (const char*)pos + 1;
+						rcc->yy_line++;
+						rcc->yy_linepos = (const char*)pos + 1;
 						if (pos[1] == '\0') goto error;
 					}
 				}
-				if (yy_flags & YY_SKIP_COMMENTS) goto restart;
+				if (rcc->yy_flags & YY_SKIP_COMMENTS) goto restart;
 				ret = YY_COMMENT;
 				goto ret_ws;
 			} else {
@@ -766,25 +785,27 @@ string:
 			if (ch == '#') {
 				pos++;
 				ret = YY__HASH_HASH;
-			} else if (!(yy_flags & YY_NO_DIRECTIVE) && (yy_text == yy_linepos || yy_at_start_of_line())) {
-				yy_pos = (const char*)pos;
-				yy_len = yy_pos - yy_text;
-				pp_parse_directive();
-				pos = (const unsigned char*)yy_pos;
-				IR_ASSERT(pp_subst_level == 0);
+			} else if (!(rcc->yy_flags & YY_NO_DIRECTIVE)
+					&& (text == rcc->yy_linepos || yy_at_start_of_line(rcc, text))) {
+				rcc->yy_pos = (const char*)pos;
+				rcc->yy_text = text;
+				rcc->yy_len = rcc->yy_pos - rcc->yy_text;
+				pp_parse_directive(rcc);
+				pos = (const unsigned char*)rcc->yy_pos;
+				IR_ASSERT(!rcc->pp_stream);
 				goto restart;
 			} else {
 				ret = YY__HASH;
 			}
 			break;
 		case '\0':
-			if ((const char*)pos < yy_end) goto error;
-			if (pp_include_level != 0) {
-				pp_pop_include();
-				pos = (const unsigned char*)yy_pos;
-				if (yy_flags & YY_SKIP_EOL) goto restart;
+			if ((const char*)pos < rcc->yy_end) goto error;
+			if (rcc->pp_include_level != 0) {
+				pp_pop_include(rcc);
+				pos = (const unsigned char*)rcc->yy_pos;
+				if (rcc->yy_flags & YY_SKIP_EOL) goto restart;
 				/* insert EOL if EOF wasn't at new line */
-				yy_text = (const char*)pos;
+				rcc->yy_text = (const char*)pos;
 				ret = YY_EOL;
 				break;
 			}
@@ -794,59 +815,61 @@ string:
 			if (pos[1] == '\r') {
 				pos += 2;
 				if (*pos == '\n') pos++;
-				yy_line++;
-				yy_linepos = (const char*)pos;
-				if (yy_flags & YY_SKIP_WS) goto restart;
+				rcc->yy_line++;
+				rcc->yy_linepos = (const char*)pos;
+				if (rcc->yy_flags & YY_SKIP_WS) goto restart;
 				ret = YY_WS;
 				goto ret_ws;
 			} else if (pos[1] == '\n') {
 				pos += 2;
-				yy_line++;
-				yy_linepos = (const char*)pos;
-				if (yy_flags & YY_SKIP_WS) goto restart;
+				rcc->yy_line++;
+				rcc->yy_linepos = (const char*)pos;
+				if (rcc->yy_flags & YY_SKIP_WS) goto restart;
 				ret = YY_WS;
 				goto ret_ws;
 			}
 			goto error;
 		default:
 			if (ch >= 0x80) goto identifier;
-			if (yy_flags & YY_ACCEPT_PUNCTUATOR) {
+			if (rcc->yy_flags & YY_ACCEPT_PUNCTUATOR) {
 				ret = YY_PP_PUNCTUATOR;
 				pos++;
 				break;
 			}
 error:
-			if ((yy_flags & YY_ACCEPT_PUNCTUATOR) && (const char*)pos == yy_text) {
+			if ((rcc->yy_flags & YY_ACCEPT_PUNCTUATOR) && (const char*)pos == text) {
 				ret = YY_PP_PUNCTUATOR;
 				pos++;
 				break;
 			}
-			yy_pos = (const char*)pos;
-			yy_len = yy_pos - yy_text;
-			yy_scanner_error();
+			rcc->yy_pos = (const char*)pos;
+			rcc->yy_text = text;
+			rcc->yy_len = rcc->yy_pos - rcc->yy_text;
+			yy_scanner_error(rcc);
 			pos++;
 			goto restart;
 	}
 
-	pp_include_ifndef_state = 0;
+	rcc->pp_include_ifndef_state = 0;
 ret_ws:
-	yy_pos = (const char*)pos;
-	yy_len = yy_pos - yy_text;
+	rcc->yy_pos = (const char*)pos;
+	rcc->yy_text = text;
+	rcc->yy_len = rcc->yy_pos - rcc->yy_text;
 	return ret;
 }
 
 /* Scanner Helpers */
-static IR_NEVER_INLINE bool yy_at_start_of_line(void)
+static IR_NEVER_INLINE bool yy_at_start_of_line(rcc_ctx *rcc, const char *text)
 {
-	if (yy_text == yy_linepos) {
+	if (text == rcc->yy_linepos) {
 		return 1;
-	} else if (yy_text > yy_linepos) {
-		const char *p = yy_linepos;
+	} else if (text > rcc->yy_linepos) {
+		const char *p = rcc->yy_linepos;
 		do {
 			if (*p != ' ' && *p != '\t' && *p != '\v' && *p != '\f') {
 				return 0;
 			}
-		} while (++p != yy_text);
+		} while (++p != text);
 		return 1;
 	} else {
 		/*something wrong */
@@ -855,7 +878,7 @@ static IR_NEVER_INLINE bool yy_at_start_of_line(void)
 	}
 }
 
-static IR_NEVER_INLINE yy_sym yy_parse_pp_number(const char *str, size_t len)
+static IR_NEVER_INLINE yy_sym yy_parse_pp_number(rcc_ctx *rcc, const char *str, size_t len)
 {
 	const char *p = str;
 	const char *end = p + len;
@@ -1000,23 +1023,23 @@ static const char *yy_escape_string(char *buf, size_t size, const unsigned char 
 	return buf;
 }
 
-static void yy_error_line(void)
+static void yy_error_line(rcc_ctx *rcc)
 {
 	size_t line_len, pos, i;
 	const char *s;
 
-	s = strpbrk(yy_linepos, "\r\n");
+	s = strpbrk(rcc->yy_linepos, "\r\n");
 	if (s) {
-		line_len = s - yy_linepos;
+		line_len = s - rcc->yy_linepos;
 	} else {
-		line_len = strlen(yy_linepos);
+		line_len = strlen(rcc->yy_linepos);
 	}
-	fprintf(stderr, "%5d |%.*s\n", yy_line, (int)line_len, yy_linepos);
-	pos = yy_text - yy_linepos;
+	fprintf(stderr, "%5d |%.*s\n", rcc->yy_line, (int)line_len, rcc->yy_linepos);
+	pos = rcc->yy_text - rcc->yy_linepos;
 	if (pos <= line_len) {
 		fprintf(stderr, "      |");
 		for (i = 0; i < pos; i++) {
-			if (yy_linepos[i] == '\t') {
+			if (rcc->yy_linepos[i] == '\t') {
 				fputc('\t', stderr);
 			} else {
 				fputc(' ', stderr);
@@ -1026,70 +1049,72 @@ static void yy_error_line(void)
 	}
 }
 
-static void yy_error_pos(void)
+static void yy_error_pos(rcc_ctx *rcc)
 {
 	fflush(stdout);
-	if (yy_text >= yy_linepos && yy_text <= yy_pos) {
-		fprintf(stderr, "%s:%d:%d: ", yy_sym2str(yy_file_name), yy_line, (int)(yy_text - yy_linepos + 1));
+	if (rcc->yy_text >= rcc->yy_linepos && rcc->yy_text <= rcc->yy_pos) {
+		fprintf(stderr, "%s:%d:%d: ", yy_sym2str(rcc, rcc->yy_file_name),
+			rcc->yy_line, (int)(rcc->yy_text - rcc->yy_linepos + 1));
 	} else {
-		fprintf(stderr, "%s:%d: ", yy_sym2str(yy_file_name), yy_line);
+		fprintf(stderr, "%s:%d: ", yy_sym2str(rcc, rcc->yy_file_name), rcc->yy_line);
 	}
 }
 
-void yy_error(const char *msg)
+void yy_error_(rcc_ctx *rcc, const char *msg)
 {
-	yy_error_pos();
+	yy_error_pos(rcc);
 	fprintf(stderr, "error: %s\n", msg);
-	if (0) yy_error_line();
+	if (0) yy_error_line(rcc);
 	exit(1);
 }
 
-void yy_error_fmt(const char *fmt, ...)
+void yy_error_fmt_(rcc_ctx *rcc, const char *fmt, ...)
 {
 	va_list args;
 
-	yy_error_pos();
+	yy_error_pos(rcc);
 	va_start(args, fmt);
 	fprintf(stderr, "error: ");
 	vfprintf(stderr, fmt, args);
 	fprintf(stderr, "\n");
 	va_end(args);
-	if (0) yy_error_line();
+	if (0) yy_error_line(rcc);
 	exit(1);
 }
 
-void yy_warning(const char *msg)
+void yy_warning_(rcc_ctx *rcc, const char *msg)
 {
-	if (yy_flags & YY_NO_WARNINGS) return;
-	yy_error_pos();
+	if (rcc->yy_flags & YY_NO_WARNINGS) return;
+	yy_error_pos(rcc);
 	fprintf(stderr, "warning: %s\n", msg);
-	if (0) yy_error_line();
+	if (0) yy_error_line(rcc);
 }
 
 
-void yy_warning_fmt(const char *fmt, ...)
+void yy_warning_fmt_(rcc_ctx *rcc, const char *fmt, ...)
 {
 	va_list args;
 
-	if (yy_flags & YY_NO_WARNINGS) return;
-	yy_error_pos();
+	if (rcc->yy_flags & YY_NO_WARNINGS) return;
+	yy_error_pos(rcc);
 	va_start(args, fmt);
 	fprintf(stderr, "warning: ");
 	vfprintf(stderr, fmt, args);
 	fprintf(stderr, "\n");
 	va_end(args);
-	if (0) yy_error_line();
+	if (0) yy_error_line(rcc);
 }
 
-static IR_NEVER_INLINE void yy_scanner_error(void)
+static IR_NEVER_INLINE void yy_scanner_error(rcc_ctx *rcc)
 {
 	char buf[64];
 
-	if (yy_pos >= yy_end) {
+	if (rcc->yy_pos >= rcc->yy_end) {
 		yy_error("unexpected <EOF>");
-	} else if (yy_pos == yy_text) {
-		yy_error_fmt("unexpected character '%s'",  yy_escape_char(buf, yy_text[0]));
+	} else if (rcc->yy_pos == rcc->yy_text) {
+		yy_error_fmt("unexpected character '%s'",  yy_escape_char(buf, rcc->yy_text[0]));
 	} else {
-		yy_error_fmt("unexpected sequence '%s'", yy_escape_string(buf, sizeof(buf), (const unsigned char*)yy_text, yy_len + 1));
+		yy_error_fmt("unexpected sequence '%s'",
+			yy_escape_string(buf, sizeof(buf), (const unsigned char*)rcc->yy_text, rcc->yy_len + 1));
 	}
 }

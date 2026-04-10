@@ -418,70 +418,66 @@ static const char c_limits_h[] =
 
 #define STDINC_COUNT 6
 
-static struct {
-	yy_sym      name;
-	uint32_t    content_len;
-	const char *content;
-} c_stdinc[STDINC_COUNT];
-
-void c_stdinc_init(void)
+void c_stdinc_init(rcc_ctx *rcc)
 {
 	yy_sym sym;
 
-	c_stdinc[0].name = yy_hash_lookup("stdarg.h", sizeof("stdarg.h") - 1);
-	c_stdinc[0].content = c_stdarg_h;
-	c_stdinc[0].content_len = sizeof(c_stdarg_h) - 1;
+	IR_ASSERT(STDINC_COUNT < STDINC_SIZE);
 
-	c_stdinc[1].name = yy_hash_lookup("stddef.h", sizeof("stddef.h") - 1);
-	c_stdinc[1].content = c_stddef_h;
-	c_stdinc[1].content_len = sizeof(c_stddef_h) - 1;
+	rcc->c_stdinc[0].name = yy_hash_lookup(rcc, "stdarg.h", sizeof("stdarg.h") - 1);
+	rcc->c_stdinc[0].content = c_stdarg_h;
+	rcc->c_stdinc[0].content_len = sizeof(c_stdarg_h) - 1;
 
-	c_stdinc[2].name = yy_hash_lookup("stdbool.h", sizeof("stdbool.h") - 1);
-	c_stdinc[2].content = c_stdbool_h;
-	c_stdinc[2].content_len = sizeof(c_stdbool_h) - 1;
+	rcc->c_stdinc[1].name = yy_hash_lookup(rcc, "stddef.h", sizeof("stddef.h") - 1);
+	rcc->c_stdinc[1].content = c_stddef_h;
+	rcc->c_stdinc[1].content_len = sizeof(c_stddef_h) - 1;
 
-	c_stdinc[3].name = yy_hash_lookup("float.h", sizeof("float.h") - 1);
-	c_stdinc[3].content = c_float_h;
-	c_stdinc[3].content_len = sizeof(c_float_h) - 1;
+	rcc->c_stdinc[2].name = yy_hash_lookup(rcc, "stdbool.h", sizeof("stdbool.h") - 1);
+	rcc->c_stdinc[2].content = c_stdbool_h;
+	rcc->c_stdinc[2].content_len = sizeof(c_stdbool_h) - 1;
 
-	c_stdinc[4].name = yy_hash_lookup("alloca.h", sizeof("alloca.h") - 1);
-	c_stdinc[4].content = c_alloca_h;
-	c_stdinc[4].content_len = sizeof(c_alloca_h) - 1;
+	rcc->c_stdinc[3].name = yy_hash_lookup(rcc, "float.h", sizeof("float.h") - 1);
+	rcc->c_stdinc[3].content = c_float_h;
+	rcc->c_stdinc[3].content_len = sizeof(c_float_h) - 1;
 
-	c_stdinc[5].name = yy_hash_lookup("limits.h", sizeof("limits.h") - 1);
-	c_stdinc[5].content = c_limits_h;
-	c_stdinc[5].content_len = sizeof(c_limits_h) - 1;
+	rcc->c_stdinc[4].name = yy_hash_lookup(rcc, "alloca.h", sizeof("alloca.h") - 1);
+	rcc->c_stdinc[4].content = c_alloca_h;
+	rcc->c_stdinc[4].content_len = sizeof(c_alloca_h) - 1;
 
-	yy_file_name = yy_hash_lookup("builtin", sizeof("builtin") - 1);
-	yy_pos = yy_text = yy_linepos = yy_buf = c_boot;
-	yy_len = 0;
-	yy_line = 1;
-	yy_end = yy_buf + sizeof(c_boot) - 1;
+	rcc->c_stdinc[5].name = yy_hash_lookup(rcc, "limits.h", sizeof("limits.h") - 1);
+	rcc->c_stdinc[5].content = c_limits_h;
+	rcc->c_stdinc[5].content_len = sizeof(c_limits_h) - 1;
+
+	rcc->yy_file_name = yy_hash_lookup(rcc, "builtin", sizeof("builtin") - 1);
+	rcc->yy_pos = rcc->yy_text = rcc->yy_linepos = rcc->yy_buf = c_boot;
+	rcc->yy_len = 0;
+	rcc->yy_line = 1;
+	rcc->yy_end = rcc->yy_buf + sizeof(c_boot) - 1;
 
 	do {
-		sym = yy_next();
+		sym = yy_next(rcc);
 	} while (sym != YY_EOF);
 }
 
-void c_stdinc_builtin(void)
+void c_stdinc_builtin(rcc_ctx *rcc)
 {
-	yy_file_name = yy_hash_lookup("builtin", sizeof("builtin") - 1);
-	yy_pos = yy_text = yy_linepos = yy_buf = c_builtin;
-	yy_len = 0;
-	yy_line = 1;
-	yy_end = yy_buf + sizeof(c_builtin) - 1;
+	rcc->yy_file_name = yy_hash_lookup(rcc, "builtin", sizeof("builtin") - 1);
+	rcc->yy_pos = rcc->yy_text = rcc->yy_linepos = rcc->yy_buf = c_builtin;
+	rcc->yy_len = 0;
+	rcc->yy_line = 1;
+	rcc->yy_end = rcc->yy_buf + sizeof(c_builtin) - 1;
 
-	rcc_parse();
+	rcc_parse(rcc);
 }
 
-const char *c_stdinc_find(yy_sym name, size_t *len)
+const char *c_stdinc_find(rcc_ctx *rcc, yy_sym name, size_t *len)
 {
 	int i;
 
 	for (i = 0; i < STDINC_COUNT; i++) {
-		if (c_stdinc[i].name == name) {
-			*len = c_stdinc[i].content_len;
-			return c_stdinc[i].content;
+		if (rcc->c_stdinc[i].name == name) {
+			*len = rcc->c_stdinc[i].content_len;
+			return rcc->c_stdinc[i].content;
 		}
 	}
 	return NULL;
