@@ -1048,7 +1048,7 @@ unary_expression(rcc_ctx *rcc, c_value *val):
 			)
 		|                                                  {ir_ref old = c_do_nocode(rcc);}
                                                            {c_value_clear(&v);}
-			unary_expression(rcc, &v)                      {c_sizeof_expr(rcc, &v, op, &v, old);}
+			unary_expression(rcc, &v)                      {c_sizeof_expr(rcc, op, &v, old);}
 		)
 	|	"_Alignof"
 		"(" type_name(rcc, &t) ")"                         {c_alignof_type(rcc, &v, t);}
@@ -1070,7 +1070,7 @@ unary_expression(rcc_ctx *rcc, c_value *val):
 			)
 		|	                                               {ir_ref old = c_do_nocode(rcc);}
                                                            {c_value_clear(&v);}
-			unary_expression(rcc, &v)                      {c_sizeof_expr(rcc, &v, op, &v, old);}
+			unary_expression(rcc, &v)                      {c_sizeof_expr(rcc, op, &v, old);}
 		)
 	|	"&&" ID(rcc, &name)                                {c_do_label_value(rcc, &v, name);}
 	|                                                      {name = sym;}
@@ -1144,12 +1144,12 @@ unary_expression(rcc_ctx *rcc, c_value *val):
 		"__builtin_constant_p"
 		"("                                                {c_value_clear(&v);}
 		assignment_expression(rcc, &v)                     {c_do_end_nocode(rcc, old);}
-		")"                                                {c_do_builtin_constant_p(rcc, &v, &v);}
+		")"                                                {c_do_builtin_constant_p(rcc, &v);}
 	|	"__builtin_va_arg"
 		"("                                                {c_value_clear(&v);}
 		assignment_expression(rcc, &v)
 		","
-		type_name(rcc, &t)                                 {c_do_builtin_va_arg(rcc, &v, &v, t);}
+		type_name(rcc, &t)                                 {c_do_builtin_va_arg(rcc, &v, t);}
 		")"
 	)
 	(                                                      {c_value dim;}
@@ -1160,7 +1160,7 @@ unary_expression(rcc_ctx *rcc, c_value *val):
 	|	"->" ID(rcc, &name)                                {c_do_struct_field_deref(rcc, &v, name);}
 	|	                                                   {yy_sym post_op = sym;}
 		("++"|"--")                                        {c_do_post_op(rcc, post_op, &v);}
-	)*+                                                    {if (old_control) c_sizeof_expr(rcc, &v, op, &v, old_control);}
+	)*+                                                    {if (old_control) c_sizeof_expr(rcc, op, &v, old_control);}
 	                                                       {*val = v;}
 ;
 

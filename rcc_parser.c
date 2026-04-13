@@ -2234,7 +2234,7 @@ static yy_sym parse_unary_expression(yy_sym sym, rcc_ctx *rcc, c_value *val) {
 			ir_ref old = c_do_nocode(rcc);
 			c_value_clear(&v);
 			sym = parse_unary_expression(sym, rcc, &v);
-			c_sizeof_expr(rcc, &v, op, &v, old);
+			c_sizeof_expr(rcc, op, &v, old);
 		} else {
 			yy_error_sym("unexpected", sym);
 		}
@@ -2293,7 +2293,7 @@ static yy_sym parse_unary_expression(yy_sym sym, rcc_ctx *rcc, c_value *val) {
 			ir_ref old = c_do_nocode(rcc);
 			c_value_clear(&v);
 			sym = parse_unary_expression(sym, rcc, &v);
-			c_sizeof_expr(rcc, &v, op, &v, old);
+			c_sizeof_expr(rcc, op, &v, old);
 		} else {
 			yy_error_sym("unexpected", sym);
 		}
@@ -2327,7 +2327,7 @@ static yy_sym parse_unary_expression(yy_sym sym, rcc_ctx *rcc, c_value *val) {
 			yy_error_sym("')' expected, got", sym);
 		}
 		sym = get_sym();
-		c_do_builtin_constant_p(rcc, &v, &v);
+		c_do_builtin_constant_p(rcc, &v);
 	} else if (sym == YY___BUILTIN_VA_ARG) {
 		sym = get_sym();
 		if (sym != YY__LPAREN) {
@@ -2341,7 +2341,7 @@ static yy_sym parse_unary_expression(yy_sym sym, rcc_ctx *rcc, c_value *val) {
 		}
 		sym = get_sym();
 		sym = parse_type_name(sym, rcc, &t);
-		c_do_builtin_va_arg(rcc, &v, &v, t);
+		c_do_builtin_va_arg(rcc, &v, t);
 		if (sym != YY__RPAREN) {
 			yy_error_sym("')' expected, got", sym);
 		}
@@ -2381,7 +2381,7 @@ static yy_sym parse_unary_expression(yy_sym sym, rcc_ctx *rcc, c_value *val) {
 			c_do_post_op(rcc, post_op, &v);
 		}
 	}
-	if (old_control) c_sizeof_expr(rcc, &v, op, &v, old_control);
+	if (old_control) c_sizeof_expr(rcc, op, &v, old_control);
 	*val = v;
 	return sym;
 }

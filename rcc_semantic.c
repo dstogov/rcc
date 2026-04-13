@@ -2873,7 +2873,7 @@ void c_do_end_nocode(rcc_ctx *rcc, ir_ref old_control)
 	rcc->active_ctx->control = old_control;
 }
 
-void c_sizeof_expr(rcc_ctx *rcc, c_value *res, yy_sym op, c_value *expr, ir_ref old_control)
+void c_sizeof_expr(rcc_ctx *rcc, yy_sym op, c_value *expr, ir_ref old_control)
 {
 	ir_val val;
 
@@ -2887,7 +2887,7 @@ void c_sizeof_expr(rcc_ctx *rcc, c_value *res, yy_sym op, c_value *expr, ir_ref 
 		} else if (expr->type->attr & C_ATTR_VLA) {
 			IR_ASSERT(expr->type->kind == C_TYPE_ARRAY);
 			c_do_end_nocode(rcc, old_control);
-			c_value_set_rval(res, &c_type_size_t, IR_SIZE_T, c_type_size(rcc, expr->type));
+			c_value_set_rval(expr, &c_type_size_t, IR_SIZE_T, c_type_size(rcc, expr->type));
 			return;
 		} else {
 			if (expr->type->kind == C_TYPE_BOOL
@@ -2916,7 +2916,7 @@ void c_sizeof_expr(rcc_ctx *rcc, c_value *res, yy_sym op, c_value *expr, ir_ref 
 			val.u64 = c_attr2align(expr->type->attr);
 		}
 	}
-	c_value_set_const(res, &c_type_size_t, IR_SIZE_T, val);
+	c_value_set_const(expr, &c_type_size_t, IR_SIZE_T, val);
 	c_do_end_nocode(rcc, old_control);
 }
 
@@ -4783,23 +4783,23 @@ void c_do_builtin(rcc_ctx *rcc, c_value *val, c_name name, int32_t num_args, c_v
 	if (num_args > C_ALLOCA_PARAMS) ir_mem_free(args);
 }
 
-void c_do_builtin_constant_p(rcc_ctx *rcc, c_value *val, c_value *arg)
+void c_do_builtin_constant_p(rcc_ctx *rcc, c_value *val)
 {
 	ir_val v;
 
-	if (c_value_is_const(arg)) {
+	if (c_value_is_const(val)) {
 		v.u64 = 1;
 	} else {
 		v.u64 = 0;
-		if (c_value_is_lval(arg)) c_value_rval(rcc, arg);
-		if (IR_IS_CONST_REF(arg->u.ref) && !IR_IS_SYM_CONST(rcc->active_ctx->ir_base[arg->u.ref].op)) {
+		if (c_value_is_lval(val)) c_value_rval(rcc, val);
+		if (IR_IS_CONST_REF(val->u.ref) && !IR_IS_SYM_CONST(rcc->active_ctx->ir_base[val->u.ref].op)) {
 			v.u64 = 1;
 		}
 	}
 	c_value_set_const(val, &c_type_i32, IR_I32, v);
 }
 
-void c_do_builtin_va_arg(rcc_ctx *rcc, c_value *val, c_value *list, const c_type *type)
+void c_do_builtin_va_arg(rcc_ctx *rcc, c_value *val, const c_type *type)
 {
 	ir_type t;
 	ir_ref ref;
@@ -4815,7 +4815,7 @@ void c_do_builtin_va_arg(rcc_ctx *rcc, c_value *val, c_value *list, const c_type
 		n = c_abi_lower_struct_arg(type, types);
 		if (n == 1) {
 			t = types[0];
-			ref = ir_VA_ARG(c_va_list_addr(rcc, list), t);
+			ref = ir_VA_ARG(c_va_list_addr(rcc, val), t);
 			alloca = c_do_alloca(rcc, type->size, c_attr2align(type->attr), 0);
 			ir_STORE(alloca, ref);
 			c_value_set_lval(val, type, IR_ADDR, alloca);
@@ -4829,13 +4829,13 @@ void c_do_builtin_va_arg(rcc_ctx *rcc, c_value *val, c_value *list, const c_type
 				yy_warning("passing structure with alignnment greater than 16 is not implemented yet");
 				align = 16;
 			}
-			ref = ir_VA_ARG_EX(c_va_list_addr(rcc, list), IR_ADDR, type->size, align);
+			ref = ir_VA_ARG_EX(c_va_list_addr(rcc, val), IR_ADDR, type->size, align);
 			c_value_set_lval(val, type, IR_ADDR, ref);
 		}
 	} else {
 		if (type->kind == C_TYPE_VOID) yy_error("second argument to \"__builtin_va_arg\" is of incomplete type \"void\"");
 		t = c_type2ir(rcc, type);
-		ref = ir_VA_ARG(c_va_list_addr(rcc, list), t);
+		ref = ir_VA_ARG(c_va_list_addr(rcc, val), t);
 		c_value_set_rval(val, type, t, ref);
 	}
 }
