@@ -8620,3 +8620,18 @@ void c_do_compile_end(rcc_ctx *rcc)
 {
 	ir_strtab_free(&rcc->c_strtab);
 }
+
+static void c_inline_asm(rcc_ctx *rcc, c_value *str)
+{
+	yy_error("asm support not implemented yet");
+}
+
+void c_do_asm(rcc_ctx *rcc, c_value *str, c_asm_operand *ops, int n_out, int n_in, int n_labels, c_value *clobbered, int n)
+{
+	c_inline_asm(rcc, str);
+}
+
+void c_do_global_asm(rcc_ctx *rcc, c_value *str)
+{
+	c_inline_asm(rcc, str);
+}

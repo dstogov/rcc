@@ -1130,6 +1130,19 @@ void c_do_func_end(rcc_ctx *rcc, c_name name, c_dcl *d, c_scope *scope);
 void c_do_compile_start(rcc_ctx *rcc);
 void c_do_compile_end(rcc_ctx *rcc);
 
+/* Inline assembler */
+#define C_MAX_ASM_OPERANDS 32
+#define C_MAX_ASM_REGS     32
+
+typedef struct _c_asm_operand {
+	c_name  id;
+	c_value constraint;
+	c_value val;
+} c_asm_operand;
+
+void c_do_global_asm(rcc_ctx *rcc, c_value *asm_str);
+void c_do_asm(rcc_ctx *rcc, c_value *asm_str, c_asm_operand *ops, int n_out, int n_in, int n_labels, c_value *clobbered, int n);
+
 /* C Parser */
 bool parse_pp_expr(rcc_ctx *rcc);
 void parse_vla_param_again(rcc_ctx *rcc, yy_sym *vla_tokens, c_value *val);

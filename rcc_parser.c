@@ -211,10 +211,10 @@ static yy_sym parse_statement(yy_sym sym, rcc_ctx *rcc);
 static yy_sym parse_labels(yy_sym sym, rcc_ctx *rcc);
 static yy_sym parse_c_statement(yy_sym sym, rcc_ctx *rcc);
 static yy_sym parse_asm_argument(yy_sym sym, rcc_ctx *rcc);
-static yy_sym parse_asm_operands(yy_sym sym, rcc_ctx *rcc);
-static yy_sym parse_asm_operand(yy_sym sym, rcc_ctx *rcc);
-static yy_sym parse_asm_clobbers(yy_sym sym, rcc_ctx *rcc);
-static yy_sym parse_asm_goto_operands(yy_sym sym, rcc_ctx *rcc);
+static yy_sym parse_asm_operands(yy_sym sym, rcc_ctx *rcc, c_asm_operand *ops, int *n);
+static yy_sym parse_asm_operand(yy_sym sym, rcc_ctx *rcc, c_asm_operand *ops, int *n);
+static yy_sym parse_asm_clobbers(yy_sym sym, rcc_ctx *rcc, c_value *clobbered, int *n);
+static yy_sym parse_asm_goto_operands(yy_sym sym, rcc_ctx *rcc, c_asm_operand *ops, int *n);
 static yy_sym parse_strings(yy_sym sym, rcc_ctx *rcc, c_value *val);
 static yy_sym parse_actual_parameters(yy_sym sym, rcc_ctx *rcc, c_value *func, c_value *res);
 static yy_sym parse_builtin_parameters(yy_sym sym, rcc_ctx *rcc, c_value *val, c_name name);
@@ -263,14 +263,13 @@ static int synpred__star(yy_sym sym) {
 static yy_sym parse_translation_unit(yy_sym sym, rcc_ctx *rcc) {
 	while (sym == YY_ASM || sym == YY___ASM || sym == YY___ASM__ || sym == YY___EXTENSION__ || sym == YY__STATIC_ASSERT || sym == YY_TYPEDEF || sym == YY_EXTERN || sym == YY_STATIC || sym == YY_AUTO || sym == YY_REGISTER || sym == YY__THREAD_LOCAL || sym == YY_VOID || sym == YY_CHAR || sym == YY_SHORT || sym == YY_INT || sym == YY_LONG || sym == YY_FLOAT || sym == YY_DOUBLE || sym == YY_SIGNED || sym == YY___SIGNED || sym == YY___SIGNED__ || sym == YY_UNSIGNED || sym == YY__BOOL || sym == YY__COMPLEX || sym == YY___COMPLEX || sym == YY___COMPLEX__ || sym == YY__ATOMIC || sym == YY_TYPEOF || sym == YY___TYPEOF || sym == YY___TYPEOF__ || sym == YY_STRUCT || sym == YY_UNION || sym == YY_ENUM || C_IS_ID(sym) || sym == YY_CONST || sym == YY___CONST || sym == YY___CONST__ || sym == YY_RESTRICT || sym == YY___RESTRICT || sym == YY___RESTRICT__ || sym == YY_VOLATILE || sym == YY___VOLATILE || sym == YY___VOLATILE__ || sym == YY_INLINE || sym == YY___INLINE || sym == YY___INLINE__ || sym == YY__NORETURN || sym == YY__ALIGNAS || sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__ || sym == YY___DECLSPEC || sym == YY__STAR || sym == YY__LPAREN || sym == YY__SEMICOLON) {
 		if (sym == YY_ASM || sym == YY___ASM || sym == YY___ASM__) {
+			c_value asm_str;
 			sym = get_sym();
 			if (sym != YY__LPAREN) {
 				yy_error_sym("'(' expected, got", sym);
 			}
 			sym = get_sym();
-			do {
-				sym = parse_STRING(sym, rcc);
-			} while (sym == YY_STRING);
+			sym = parse_strings(sym, rcc, &asm_str);
 			if (sym != YY__RPAREN) {
 				yy_error_sym("')' expected, got", sym);
 			}
@@ -279,7 +278,7 @@ static yy_sym parse_translation_unit(yy_sym sym, rcc_ctx *rcc) {
 				yy_error_sym("';' expected, got", sym);
 			}
 			sym = get_sym();
-			/*???*/yy_error("asm support not implemented yet");
+			c_do_global_asm(rcc, &asm_str);
 		} else {
 			if (sym == YY___EXTENSION__) {
 				sym = get_sym();
@@ -1855,7 +1854,6 @@ static yy_sym parse_c_statement(yy_sym sym, rcc_ctx *rcc) {
 		c_do_return(rcc, &val);
 	} else if (sym == YY_ASM || sym == YY___ASM || sym == YY___ASM__) {
 		sym = get_sym();
-		/*???*/yy_error("asm support not implemented yet");
 		while (sym == YY_VOLATILE || sym == YY_INLINE || sym == YY_GOTO) {
 			sym = get_sym();
 		}
@@ -1879,97 +1877,104 @@ static yy_sym parse_c_statement(yy_sym sym, rcc_ctx *rcc) {
 }
 
 static yy_sym parse_asm_argument(yy_sym sym, rcc_ctx *rcc) {
-	sym = parse_STRING(sym, rcc);
+	c_value asm_str;
+	c_asm_operand ops[C_MAX_ASM_OPERANDS];
+	c_value clobbered[C_MAX_ASM_REGS];
+	int n_out = 0, n_in = 0, n_labels = 0, n_clob = 0, n = 0;
+	sym = parse_strings(sym, rcc, &asm_str);
 	if (sym == YY__COLON) {
 		sym = get_sym();
-		if (sym == YY_STRING || sym == YY__LBRACK) {
-			sym = parse_asm_operands(sym, rcc);
+		if (sym == YY__LBRACK || sym == YY_STRING) {
+			sym = parse_asm_operands(sym, rcc, ops, &n);
 		}
+		n_out = n;
 		if (sym == YY__COLON) {
 			sym = get_sym();
-			if (sym == YY_STRING || sym == YY__LBRACK) {
-				sym = parse_asm_operands(sym, rcc);
+			if (sym == YY__LBRACK || sym == YY_STRING) {
+				sym = parse_asm_operands(sym, rcc, ops, &n);
 			}
+			n_in = n - n_out;
 			if (sym == YY__COLON) {
 				sym = get_sym();
 				if (sym == YY_STRING) {
-					sym = parse_asm_clobbers(sym, rcc);
+					sym = parse_asm_clobbers(sym, rcc, clobbered, &n_clob);
 				}
 				if (sym == YY__COLON) {
 					sym = get_sym();
-					sym = parse_asm_goto_operands(sym, rcc);
+					sym = parse_asm_goto_operands(sym, rcc, ops, &n);
 				}
+				n_labels = n - n_in;
 			}
 		}
 	}
+	c_do_asm(rcc, &asm_str, ops, n_out, n_in, n_labels, clobbered, n_clob);
 	return sym;
 }
 
-static yy_sym parse_asm_operands(yy_sym sym, rcc_ctx *rcc) {
-	sym = parse_asm_operand(sym, rcc);
+static yy_sym parse_asm_operands(yy_sym sym, rcc_ctx *rcc, c_asm_operand *ops, int *n) {
+	sym = parse_asm_operand(sym, rcc, ops, n);
 	while (sym == YY__COMMA) {
 		sym = get_sym();
-		sym = parse_asm_operand(sym, rcc);
+		sym = parse_asm_operand(sym, rcc, ops, n);
 	}
 	return sym;
 }
 
-static yy_sym parse_asm_operand(yy_sym sym, rcc_ctx *rcc) {
-	c_name name;
-	c_value v;
-	c_value_clear(&v);
-	if (sym == YY_STRING) {
-		sym = parse_STRING(sym, rcc);
-		if (sym != YY__LPAREN) {
-			yy_error_sym("'(' expected, got", sym);
-		}
+static yy_sym parse_asm_operand(yy_sym sym, rcc_ctx *rcc, c_asm_operand *ops, int *n) {
+	if (*n >= C_MAX_ASM_OPERANDS) yy_error("too many asm opernads");
+	if (sym == YY__LBRACK) {
 		sym = get_sym();
-		sym = parse_expression(sym, rcc, &v);
-		if (sym != YY__RPAREN) {
-			yy_error_sym("')' expected, got", sym);
-		}
-		sym = get_sym();
-	} else if (sym == YY__LBRACK) {
-		sym = get_sym();
-		sym = parse_ID(sym, rcc, &name);
+		sym = parse_ID(sym, rcc, &ops[*n].id);
 		if (sym != YY__RBRACK) {
 			yy_error_sym("']' expected, got", sym);
 		}
 		sym = get_sym();
-		sym = parse_STRING(sym, rcc);
-		if (sym != YY__LPAREN) {
-			yy_error_sym("'(' expected, got", sym);
-		}
-		sym = get_sym();
-		sym = parse_expression(sym, rcc, &v);
-		if (sym != YY__RPAREN) {
-			yy_error_sym("')' expected, got", sym);
-		}
-		sym = get_sym();
+	} else if (sym == YY_STRING) {
+		ops[*n].id = 0;
 	} else {
 		yy_error_sym("unexpected", sym);
 	}
+	sym = parse_strings(sym, rcc, &ops[*n].constraint);
+	if (sym != YY__LPAREN) {
+		yy_error_sym("'(' expected, got", sym);
+	}
+	sym = get_sym();
+	sym = parse_expression(sym, rcc, &ops[*n].val);
+	if (sym != YY__RPAREN) {
+		yy_error_sym("')' expected, got", sym);
+	}
+	sym = get_sym();
+	(*n)++;
 	return sym;
 }
 
-static yy_sym parse_asm_clobbers(yy_sym sym, rcc_ctx *rcc) {
+static yy_sym parse_asm_clobbers(yy_sym sym, rcc_ctx *rcc, c_value *clobbered, int *n) {
+	if (*n >= C_MAX_ASM_REGS) yy_error("too many asm clobbered registers");
+	yy_read_string(rcc, &clobbered[*n], rcc->yy_text, rcc->yy_len);
 	sym = parse_STRING(sym, rcc);
+	(*n)++;
 	if (sym != YY__COMMA) {
 		yy_error_sym("',' expected, got", sym);
 	}
 	sym = get_sym();
+	if (*n >= C_MAX_ASM_REGS) yy_error("too many asm clobbered registers");
+	yy_read_string(rcc, &clobbered[*n], rcc->yy_text, rcc->yy_len);
 	sym = parse_STRING(sym, rcc);
+	(*n)++;
 	return sym;
 }
 
-static yy_sym parse_asm_goto_operands(yy_sym sym, rcc_ctx *rcc) {
-	c_name name;
-	sym = parse_ID(sym, rcc, &name);
+static yy_sym parse_asm_goto_operands(yy_sym sym, rcc_ctx *rcc, c_asm_operand *ops, int *n) {
+	if (*n >= C_MAX_ASM_OPERANDS) yy_error("too many asm opernads");
+	sym = parse_ID(sym, rcc, &ops[*n].id);
+	(*n)++;
 	if (sym != YY__COMMA) {
 		yy_error_sym("',' expected, got", sym);
 	}
 	sym = get_sym();
-	sym = parse_ID(sym, rcc, &name);
+	if (*n >= C_MAX_ASM_OPERANDS) yy_error("too many asm opernads");
+	sym = parse_ID(sym, rcc, &ops[*n].id);
+	(*n)++;
 	return sym;
 }
 
@@ -1977,7 +1982,7 @@ static yy_sym parse_strings(yy_sym sym, rcc_ctx *rcc, c_value *val) {
 	const char *str = rcc->yy_text;
 	size_t len = rcc->yy_len;
 	sym = parse_STRING(sym, rcc);
-	if (sym == YY__RPAREN || sym == YY__LBRACK || sym == YY__LPAREN || sym == YY__POINT || sym == YY__MINUS_GREATER || sym == YY__PLUS_PLUS || sym == YY__MINUS_MINUS || sym == YY__BAR_BAR || sym == YY__AND_AND || sym == YY__BAR || sym == YY__UPARROW || sym == YY__AND || sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL || sym == YY__LESS || sym == YY__GREATER || sym == YY__LESS_EQUAL || sym == YY__GREATER_EQUAL || sym == YY__LESS_LESS || sym == YY__GREATER_GREATER || sym == YY__PLUS || sym == YY__MINUS || sym == YY__STAR || sym == YY__SLASH || sym == YY__PERCENT || sym == YY__QUERY || sym == YY__EQUAL || sym == YY__STAR_EQUAL || sym == YY__SLASH_EQUAL || sym == YY__PERCENT_EQUAL || sym == YY__PLUS_EQUAL || sym == YY__MINUS_EQUAL || sym == YY__LESS_LESS_EQUAL || sym == YY__GREATER_GREATER_EQUAL || sym == YY__AND_EQUAL || sym == YY__UPARROW_EQUAL || sym == YY__BAR_EQUAL || sym == YY__RBRACK || sym == YY__COMMA || sym == YY__SEMICOLON || sym == YY__RBRACE || sym == YY__COLON || sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__ || sym == YY___DECLSPEC || sym == YY__POINT_POINT_POINT) {
+	if (sym == YY__RPAREN || sym == YY__COLON || sym == YY__LPAREN || sym == YY__LBRACK || sym == YY__POINT || sym == YY__MINUS_GREATER || sym == YY__PLUS_PLUS || sym == YY__MINUS_MINUS || sym == YY__BAR_BAR || sym == YY__AND_AND || sym == YY__BAR || sym == YY__UPARROW || sym == YY__AND || sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL || sym == YY__LESS || sym == YY__GREATER || sym == YY__LESS_EQUAL || sym == YY__GREATER_EQUAL || sym == YY__LESS_LESS || sym == YY__GREATER_GREATER || sym == YY__PLUS || sym == YY__MINUS || sym == YY__STAR || sym == YY__SLASH || sym == YY__PERCENT || sym == YY__QUERY || sym == YY__EQUAL || sym == YY__STAR_EQUAL || sym == YY__SLASH_EQUAL || sym == YY__PERCENT_EQUAL || sym == YY__PLUS_EQUAL || sym == YY__MINUS_EQUAL || sym == YY__LESS_LESS_EQUAL || sym == YY__GREATER_GREATER_EQUAL || sym == YY__AND_EQUAL || sym == YY__UPARROW_EQUAL || sym == YY__BAR_EQUAL || sym == YY__RBRACK || sym == YY__COMMA || sym == YY__SEMICOLON || sym == YY__RBRACE || sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__ || sym == YY___DECLSPEC || sym == YY__POINT_POINT_POINT) {
 		yy_read_string(rcc, val, str, len);
 	} else if (sym == YY_STRING) {
 		uint32_t num_strings = 1;
