@@ -210,7 +210,7 @@ static yy_sym parse_expression_statement(yy_sym sym, rcc_ctx *rcc, c_value *val)
 static yy_sym parse_statement(yy_sym sym, rcc_ctx *rcc);
 static yy_sym parse_labels(yy_sym sym, rcc_ctx *rcc);
 static yy_sym parse_c_statement(yy_sym sym, rcc_ctx *rcc);
-static yy_sym parse_asm_argument(yy_sym sym, rcc_ctx *rcc);
+static yy_sym parse_asm_argument(yy_sym sym, rcc_ctx *rcc, uint32_t asm_attr);
 static yy_sym parse_asm_operands(yy_sym sym, rcc_ctx *rcc, c_asm_operand *ops, int *n);
 static yy_sym parse_asm_operand(yy_sym sym, rcc_ctx *rcc, c_asm_operand *ops, int *n);
 static yy_sym parse_asm_clobbers(yy_sym sym, rcc_ctx *rcc, c_value *clobbered, int *n);
@@ -1853,15 +1853,25 @@ static yy_sym parse_c_statement(yy_sym sym, rcc_ctx *rcc) {
 		sym = get_sym();
 		c_do_return(rcc, &val);
 	} else if (sym == YY_ASM || sym == YY___ASM || sym == YY___ASM__) {
+		uint32_t asm_attr = 0;
 		sym = get_sym();
 		while (sym == YY_VOLATILE || sym == YY_INLINE || sym == YY_GOTO) {
-			sym = get_sym();
+			if (sym == YY_VOLATILE) {
+				sym = get_sym();
+				asm_attr |= C_ASM_VOLATILE;
+			} else if (sym == YY_INLINE) {
+				sym = get_sym();
+				asm_attr |= C_ASM_INLINE;
+			} else {
+				sym = get_sym();
+				asm_attr |= C_ASM_GOTO;
+			}
 		}
 		if (sym != YY__LPAREN) {
 			yy_error_sym("'(' expected, got", sym);
 		}
 		sym = get_sym();
-		sym = parse_asm_argument(sym, rcc);
+		sym = parse_asm_argument(sym, rcc, asm_attr);
 		if (sym != YY__RPAREN) {
 			yy_error_sym("')' expected, got", sym);
 		}
@@ -1876,7 +1886,7 @@ static yy_sym parse_c_statement(yy_sym sym, rcc_ctx *rcc) {
 	return sym;
 }
 
-static yy_sym parse_asm_argument(yy_sym sym, rcc_ctx *rcc) {
+static yy_sym parse_asm_argument(yy_sym sym, rcc_ctx *rcc, uint32_t asm_attr) {
 	c_value asm_str;
 	c_asm_operand ops[C_MAX_ASM_OPERANDS];
 	c_value clobbered[C_MAX_ASM_REGS];
@@ -1907,7 +1917,7 @@ static yy_sym parse_asm_argument(yy_sym sym, rcc_ctx *rcc) {
 			}
 		}
 	}
-	c_do_asm(rcc, &asm_str, ops, n_out, n_in, n_labels, clobbered, n_clob);
+	c_do_asm(rcc, asm_attr, &asm_str, ops, n_out, n_in, n_labels, clobbered, n_clob);
 	return sym;
 }
 
@@ -1953,14 +1963,13 @@ static yy_sym parse_asm_clobbers(yy_sym sym, rcc_ctx *rcc, c_value *clobbered, i
 	yy_read_string(rcc, &clobbered[*n], rcc->yy_text, rcc->yy_len);
 	sym = parse_STRING(sym, rcc);
 	(*n)++;
-	if (sym != YY__COMMA) {
-		yy_error_sym("',' expected, got", sym);
+	while (sym == YY__COMMA) {
+		sym = get_sym();
+		if (*n >= C_MAX_ASM_REGS) yy_error("too many asm clobbered registers");
+		yy_read_string(rcc, &clobbered[*n], rcc->yy_text, rcc->yy_len);
+		sym = parse_STRING(sym, rcc);
+		(*n)++;
 	}
-	sym = get_sym();
-	if (*n >= C_MAX_ASM_REGS) yy_error("too many asm clobbered registers");
-	yy_read_string(rcc, &clobbered[*n], rcc->yy_text, rcc->yy_len);
-	sym = parse_STRING(sym, rcc);
-	(*n)++;
 	return sym;
 }
 
@@ -1968,13 +1977,12 @@ static yy_sym parse_asm_goto_operands(yy_sym sym, rcc_ctx *rcc, c_asm_operand *o
 	if (*n >= C_MAX_ASM_OPERANDS) yy_error("too many asm opernads");
 	sym = parse_ID(sym, rcc, &ops[*n].id);
 	(*n)++;
-	if (sym != YY__COMMA) {
-		yy_error_sym("',' expected, got", sym);
+	while (sym == YY__COMMA) {
+		sym = get_sym();
+		if (*n >= C_MAX_ASM_OPERANDS) yy_error("too many asm opernads");
+		sym = parse_ID(sym, rcc, &ops[*n].id);
+		(*n)++;
 	}
-	sym = get_sym();
-	if (*n >= C_MAX_ASM_OPERANDS) yy_error("too many asm opernads");
-	sym = parse_ID(sym, rcc, &ops[*n].id);
-	(*n)++;
 	return sym;
 }
 

@@ -1134,6 +1134,10 @@ void c_do_compile_end(rcc_ctx *rcc);
 #define C_MAX_ASM_OPERANDS 32
 #define C_MAX_ASM_REGS     32
 
+#define C_ASM_VOLATILE     (1<<0)
+#define C_ASM_INLINE       (1<<1)
+#define C_ASM_GOTO         (1<<2)
+
 typedef struct _c_asm_operand {
 	c_name  id;
 	c_value constraint;
@@ -1141,7 +1145,7 @@ typedef struct _c_asm_operand {
 } c_asm_operand;
 
 void c_do_global_asm(rcc_ctx *rcc, c_value *asm_str);
-void c_do_asm(rcc_ctx *rcc, c_value *asm_str, c_asm_operand *ops, int n_out, int n_in, int n_labels, c_value *clobbered, int n);
+void c_do_asm(rcc_ctx *rcc, uint32_t asm_attr, c_value *asm_str, c_asm_operand *ops, int n_out, int n_in, int n_labels, c_value *clobbered, int n);
 
 /* C Parser */
 bool parse_pp_expr(rcc_ctx *rcc);

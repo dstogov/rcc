@@ -8626,7 +8626,7 @@ static void c_inline_asm(rcc_ctx *rcc, c_value *str)
 	yy_error("asm support not implemented yet");
 }
 
-void c_do_asm(rcc_ctx *rcc, c_value *str, c_asm_operand *ops, int n_out, int n_in, int n_labels, c_value *clobbered, int n)
+void c_do_asm(rcc_ctx *rcc, uint32_t asm_attr, c_value *str, c_asm_operand *ops, int n_out, int n_in, int n_labels, c_value *clobbered, int n)
 {
 	c_inline_asm(rcc, str);
 }
