@@ -8716,10 +8716,6 @@ next:
 //			case 'Y' /* floating point constant zero */
 //			case 'Q' /* a memory address which uses a single base register with no offset */
 //			case 'U' /* Upl, Upa, Ush, Ump */
-		} else if (*p == 'w' || *p == 'x' || *p == 'y'
-		 || (*p == 'U' && *(p+1) == 'p' && *(p+1) == 'l')
-		 || (*p == 'U' && *(p+1) == 'p' && *(p+1) == 'a')) {
-			goto error;
 #elif defined(IR_TARGET_X86) || defined(IR_TARGET_X64)
 //			case 'A': /* eax:rdx */
 			case 'a': /* rax */
