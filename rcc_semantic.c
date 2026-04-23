@@ -2537,7 +2537,7 @@ void c_gcc_attribute_alias(rcc_ctx *rcc, c_dcl *d, c_name attr, c_value *val)
 	}
 }
 
-static int8_t c_parse_reg_var(rcc_ctx *rcc, const char *str)
+static int8_t c_parse_reg_name(rcc_ctx *rcc, const char *str, bool variable)
 {
 	int8_t reg = 0;
 	const char *s = str;
@@ -2658,7 +2658,9 @@ static int8_t c_parse_reg_var(rcc_ctx *rcc, const char *str)
 	}
 	if (*s != 0) goto error;
 
-	if (reg == 4) yy_error_fmt("cannot use register \"%s\" for variable", s);
+	if (variable) {
+		if (reg == 4) yy_error_fmt("cannot use register \"%s\" for variable", str);
+	}
 
 	return reg;
 
@@ -2741,7 +2743,9 @@ error:
 	}
 	if (*s != 0) goto error;
 
-	if (reg == 4) yy_error_fmt("cannot use register \"%s\" for variable", s);
+	if (variable) {
+		if (reg == 4) yy_error_fmt("cannot use register \"%s\" for variable", str);
+	}
 
 	return reg;
 
@@ -2769,10 +2773,12 @@ error:
 	}
 	if (*s != 0) goto error;
 
-	if (reg == IR_REG_INT_TMP
-	 || reg == IR_REG_X18
-	 || (reg >= IR_REG_X29 && reg <= IR_REG_X31)) {
-		yy_error_fmt("cannot use register \"%s\" for variable", s);
+	if (variable) {
+		if (reg == IR_REG_INT_TMP
+		 || reg == IR_REG_X18
+		 || (reg >= IR_REG_X29 && reg <= IR_REG_X31)) {
+			yy_error_fmt("cannot use register \"%s\" for variable", str);
+		}
 	}
 
 	return reg;
@@ -2791,7 +2797,7 @@ void c_asm_alias(rcc_ctx *rcc, c_dcl *d, c_value *val)
 
 	if ((d->flags & C_DCL_STORAGE_CLASS) == C_DCL_REGISTER) {
 		d->flags |= C_DCL_REG_VAR;
-		d->reg = c_parse_reg_var(rcc, (const char*)val->u.val.ptr);
+		d->reg = c_parse_reg_name(rcc, (const char*)val->u.val.ptr, 1);
 	} else if ((d->flags & (C_DCL_EXTERN|C_DCL_STATIC))
 	 || !rcc->active_scope
 	 || (d->type && d->type->kind == C_TYPE_FUNC)) {
@@ -7502,6 +7508,7 @@ void c_do_finish_label(rcc_ctx *rcc, c_name name, c_label *label)
 		} else {
 			if (!rcc->active_ctx->ir_base[label->src_list].op2) {
 				/* one element list */
+				IR_ASSERT(rcc->active_ctx->ir_base[label->src_list].op == IR_END);
 				end = label->src_list;
 			} else {
 				ir_ref prev = IR_UNUSED;
@@ -8598,6 +8605,375 @@ yy_sym c_get_current_func_name(rcc_ctx *rcc)
 	return rcc->active_func_name;
 }
 
+void c_do_asm_operand_constraint(rcc_ctx *rcc, c_asm *a, bool out, int n, c_name name, c_value *constraint)
+{
+	c_asm_operand *op = &a->ops[n];
+	const char *p, *s;
+	int num;
+
+	op->flags = out ? C_ASM_OP_OUTPUT : C_ASM_OP_INPUT;
+	op->id = name;
+	op->constraint_str = p = s = constraint->u.val.ptr;
+	op->constraint_len = constraint->u.ref - 1;
+
+	while (*p == ' ') p++;
+	if (out) {
+		if (*p != '=' && *p != '+') {
+			yy_error_fmt("invalid asm output constraint \"%s\" (lacks \"=\")", s);
+		}
+		if (*p == '+') op->flags |= C_ASM_OP_INOUT;
+		p++;
+	} else {
+		if (*p == '=' || *p == '+') {
+			yy_error_fmt("invalid asm input constraint \"%s\" (contains \"%c\")", s, *p);
+		}
+	}
+
+next:
+	while (*p == ' ') p++;
+	while (*p) {
+		switch (*p) {
+			case '&':
+				if (!out) goto error;
+				op->flags |= C_ASM_OP_CLOBBERED;
+				p++;
+				goto next;
+			case '%':
+			case '-':
+				// TODO : ???
+				p++;
+				goto next;
+			case 'r':
+				op->flags |= C_ASM_OP_REG_INT;
+				break;
+			case '{':
+				p++;
+				while (*p) {
+					if (!*p) goto error;
+					if (*p == '}') break;
+					p++;
+				}
+				// TODO: int8_t reg = c_parse_reg_name(rcc, val->u.val.ptr, 0);
+				break;
+			case 'm':
+			case 'o':
+			case 'V':
+			case '<':
+			case '>':
+				op->flags |= C_ASM_OP_MEM;
+				break;
+			case 'i': /* immediate integer operand */
+			case 'n': /* immediate integer operand (not a word wide) */
+			case 's': /* immediate integer operand (not an integer) */
+				op->flags |= C_ASM_OP_IMM_INT;
+				break;
+			case 'E': /* immediate floating operand (double) */
+			case 'F': /* immediate floating operand (double or vector) */
+				op->flags |= C_ASM_OP_IMM_FP;
+				break;
+			case 'g': /* any integer */
+				if (out) {
+					op->flags |= C_ASM_OP_REG_INT | C_ASM_OP_MEM;
+				} else {
+					op->flags |= C_ASM_OP_REG_INT | C_ASM_OP_IMM_INT | C_ASM_OP_MEM;
+				}
+				break;
+			case 'X': /* any */
+				if (out) {
+					op->flags |= C_ASM_OP_REG_INT | C_ASM_OP_REG_FP | C_ASM_OP_MEM;
+				} else {
+					op->flags |= C_ASM_OP_ANY;
+				}
+				break;
+			case '0': case '1': case '2': case '3': case '4':
+			case '5': case '6': case '7': case '8': case '9':
+				num = *p - '0';
+				if (*(p+1) >= '0' && *(p+1) <= '9') {
+					p++;
+					num = num * 10 + *p - '0';
+				}
+				if (num >= n) goto error;
+				// TODO: ???
+				op->flags |= a->ops[num].flags & (C_ASM_OP_REG_INT|C_ASM_OP_REG_FP);
+				break;
+#if defined(IR_TARGET_AARCH64)
+//			case 'k': /* stack pointer */
+			case 'w': /* floating point register or SVE */
+			case 'x': /* floating point register or SVE (restricted to 0..15) */
+			case 'y': /* floating point register or SVE (restricted to 0..7) */
+				op->flags |= C_ASM_OP_REG_FP;
+				break;
+			case 'I': /* integer constant that is valid as an immediate operand in an ADD instruction */
+			case 'J': /* integer constant that is valid as an immediate operand in a SUB instruction (once negated) */
+			case 'K': /* integer constant that can be used with a 32-bit logical instruction */
+			case 'L': /* integer constant that can be used with a 64-bit logical instruction */
+			case 'M': /* integer constant that is valid as an immediate operand in a 32-bit MOV pseudo instruction */
+			case 'N': /* integer constant that is valid as an immediate operand in a 64-bit MOV pseudo instruction */
+			case 'Z': /* integer constant zero */
+				op->flags |= C_ASM_OP_IMM_INT;
+				break;
+//			case 'S' /* an absolute symbolic address or a label reference */
+//			case 'Y' /* floating point constant zero */
+//			case 'Q' /* a memory address which uses a single base register with no offset */
+//			case 'U' /* Upl, Upa, Ush, Ump */
+		} else if (*p == 'w' || *p == 'x' || *p == 'y'
+		 || (*p == 'U' && *(p+1) == 'p' && *(p+1) == 'l')
+		 || (*p == 'U' && *(p+1) == 'p' && *(p+1) == 'a')) {
+			goto error;
+#elif defined(IR_TARGET_X86) || defined(IR_TARGET_X64)
+//			case 'A': /* eax:rdx */
+			case 'a': /* rax */
+			case 'b': /* ebx */
+			case 'c': /* rcx */
+			case 'd': /* rdx */
+			case 'S': /* rsi */
+			case 'D': /* rdi */
+			case 'q': /* any register accessible as rl (al, bl, ...) */
+//			case 'Q': /* any register accessible as rh (ah, bh, ...) */
+			case 'R': /* legacy register */
+			case 'U': /* call clobbered integer register */
+				op->flags |= C_ASM_OP_REG_INT;
+				break;
+			case 'f': /* 80387 floating point stack register */
+			case 't': /* 80387 floating point top stack register */
+			case 'u': /* second from top of 80387 floating-point stack (%st(1)) */
+			case 'y': /* MMX register */
+			case 'x': /* SSE register */
+			case 'v': /* EVEX encodable SSE register (%xmm0-%xmm31) */
+				op->flags |= C_ASM_OP_REG_FP;
+				break;
+			case 'Y': /* "Yz" - first SSE register (%xmm0). */
+				if (*(p+1) != 'z') goto error;
+				p++;
+				op->flags |= C_ASM_OP_REG_FP;
+				break;
+			case 'I': /* integer constant in the range 0..31, for 32-bit shifts */
+			case 'J': /* integer constant in the range 0 … 63, for 64-bit shifts */
+			case 'K': /* signed 8-bit integer constant */
+			case 'L': /* 0xFF or 0xFFFF, for andsi as a zero-extending move */
+			case 'M': /* 0, 1, 2, or 3 (shifts for the lea instruction) */
+			case 'N': /* unsigned 8-bit integer constant (for in and out instructions) */
+			case 'e': /* 32-bit signed integer constant, or a symbolic reference known to fit that range (for immediate operands in sign-extending x86-64 instructions). */
+			case 'Z': /* 32-bit unsigned integer constant, or a symbolic reference known to fit that range (for immediate operands in zero-extending x86-64 instructions). */
+//			case 'W': /* We, Wz, Wd, Ws */
+//			case 'T': /* Tv, Tz */
+				op->flags |= C_ASM_OP_IMM_INT;
+				break;
+			case 'G': /* 80387 floating point constant */
+			case 'C': /* SSE constant zero operand */
+				op->flags |= C_ASM_OP_IMM_FP;
+				break;
+#endif
+			default:
+				goto error;
+		}
+		p++;
+		while (*p == ' ') p++;
+		if (*p == ',') p++;
+	}
+
+	if (out) {
+		if (op->flags & (C_ASM_OP_IMM_INT|C_ASM_OP_IMM_FP)) {
+			goto error;
+		} else if (op->flags & (C_ASM_OP_REG_INT|C_ASM_OP_REG_FP)) {
+			a->flags |= C_ASM_HAS_OUT_REGS;
+		}
+	}
+	return;
+
+error:
+	yy_error_fmt("invalid %s asm constraint \"%s\"", out ? "output" : "input", s);
+}
+
+void c_do_asm_operand_val(rcc_ctx *rcc, c_asm *a, bool out, int n, c_value *val)
+{
+	if (out && !c_value_is_lval(val)) {
+		yy_error("lvalue required as asm output operand");
+	}
+	a->ops[n].val = *val;
+}
+
+void c_do_asm_operand_label(rcc_ctx *rcc, c_asm *a, int n, c_name label)
+{
+	a->flags |= C_ASM_HAS_LABELS;
+	a->ops[n].flags = C_ASM_OP_LABEL;
+	a->ops[n].id = label;
+}
+
+void c_do_asm_clobbers(rcc_ctx *rcc, c_asm *a, c_value *val)
+{
+	const char *str = val->u.val.ptr;
+
+	if (strcmp(str, "cc") == 0) {
+		a->flags |= C_ASM_CLOBBERS_CC;
+	} else if (strcmp(str, "memory") == 0) {
+		a->flags |= C_ASM_CLOBBERS_MEMORY;
+	} else if (strcmp(str, "redzone") == 0) {
+		a->flags |= C_ASM_CLOBBERS_REDZONE;
+	} else {
+		int8_t reg = c_parse_reg_name(rcc, val->u.val.ptr, 0);
+		ir_regset regset= a->clobbers;
+
+		IR_REGSET_INCL(regset, reg);
+		a->clobbers = regset;
+	}
+}
+
+static void c_do_asm_store_outs(rcc_ctx *rcc, c_asm *a, int n, int ref)
+{
+	c_asm_operand *op;
+	c_value val;
+	int i, n_out;
+
+	n_out = 0;
+	op = a->ops;
+	for (i = 0; i < n; op++, i++) {
+		if (op->flags & C_ASM_OP_OUTPUT) {
+			if (op->flags & (C_ASM_OP_REG_INT|C_ASM_OP_REG_FP)) {
+				c_value_set_rval(&val, op->val.type, op->val.u.type, ref + n_out);
+				c_do_store(rcc, &op->val, &val);
+				if (!n_out) ref += ir_insn_inputs_to_len(rcc->active_ctx->ir_base[ref].inputs_count) - 1;
+				n_out++;
+			}
+		} else {
+			break;
+		}
+	}
+}
+
+void c_do_asm(rcc_ctx *rcc, c_value *asm_str, c_asm *a, int n)
+{
+	c_asm_operand *op;
+	ir_type type = IR_VOID;
+	ir_ref ref;
+	const char *str;
+	size_t len;
+	int i, n_in, n_out;
+	ir_ref in[C_MAX_ASM_OPERANDS];
+
+	if (a->flags & C_ASM_GOTO) {
+		if (!(a->flags & C_ASM_HAS_LABELS)) yy_error("extended GCC asm with \"goto\", but without labels");
+		a->flags |= C_ASM_VOLATILE;
+	} else {
+		if (a->flags & C_ASM_HAS_LABELS) yy_error("extended GCC asm with labels, but without \"goto\"");
+	}
+
+	n_in = n_out = 0;
+	op = a->ops;
+	for (i = 0; i < n; op++, i++) {
+		if (op->flags & C_ASM_OP_OUTPUT) {
+			if (op->flags & (C_ASM_OP_REG_INT|C_ASM_OP_REG_FP)) {
+				if (!n_out) {
+					type = op->val.u.type;
+				}
+				n_out++;
+				if (op->flags & C_ASM_OP_INOUT) {
+					c_value val = op->val;
+					in[i] = c_value_ref(rcc, &val);
+					n_in++;
+				}
+			} else {
+				if ((op->flags & C_ASM_OP_MEM) && c_value_is_lval(&op->val)) {
+					in[i] = op->val.u.ref;
+				} else {
+					IR_ASSERT(0);
+				}
+				n_in++;
+			}
+		} else if (op->flags & C_ASM_OP_INPUT) {
+			if (op->flags & (C_ASM_OP_REG_INT|C_ASM_OP_REG_FP|C_ASM_OP_IMM_INT|C_ASM_OP_IMM_FP)) {
+				in[i] = c_value_ref(rcc, &op->val);
+			} else if ((op->flags & C_ASM_OP_MEM) && c_value_is_lval(&op->val)) {
+				in[i] = op->val.u.ref;
+			} else {
+				IR_ASSERT(0);
+			}
+			n_in++;
+		} else if (op->flags & C_ASM_OP_LABEL) {
+			// TODO: n_in++;
+		}
+	}
+
+	ref = ir_emit_N(rcc->active_ctx, IR_OPT(IR_ASM, type), 2 + n_in + ((n || a->clobbers) ? 1 : 0));
+	ir_set_op(rcc->active_ctx, ref, 1, rcc->active_ctx->control);
+	ir_set_op(rcc->active_ctx, ref, 2,
+		ir_const_str(rcc->active_ctx, ir_strl(rcc->active_ctx, asm_str->u.val.ptr, asm_str->u.ref)));
+	rcc->active_ctx->control = ref;
+
+	if (n || a->clobbers) {
+		yy_dyn_str args;
+		int j = 4;
+
+		yy_dyn_str_init(rcc, &args, "", 0);
+		n_out = 0;
+		op = a->ops;
+		for (i = 0; i < n; op++, i++) {
+			if (op->flags & (C_ASM_OP_INPUT|C_ASM_OP_OUTPUT)) {
+				if (i != 0) yy_dyn_str_append(rcc, &args, ";", 1);
+				if (op->id) {
+					yy_dyn_str_append(rcc, &args, "[", 1);
+					str = yy_sym2strl(rcc, op->id, &len);
+					yy_dyn_str_append(rcc, &args, str, len);
+					yy_dyn_str_append(rcc, &args, "]", 1);
+				}
+				yy_dyn_str_append(rcc, &args, op->constraint_str, op->constraint_len);
+
+				if ((op->flags & (C_ASM_OP_INPUT|C_ASM_OP_INOUT))
+				 || (op->flags & (C_ASM_OP_MEM|C_ASM_OP_REG_INT|C_ASM_OP_REG_FP)) == C_ASM_OP_MEM) {
+					ir_set_op(rcc->active_ctx, ref, j, in[i]);
+					j++;
+				}
+				if (op->flags & C_ASM_OP_OUTPUT) {
+					if (n_out) {
+						if (op->flags & (C_ASM_OP_REG_INT|C_ASM_OP_REG_FP)) {
+							rcc->active_ctx->control = ir_emit1(rcc->active_ctx, IR_OPT(IR_ASM_OUT, op->val.u.type), rcc->active_ctx->control);
+						}
+					}
+					n_out++;
+				}
+			} else if (op->flags & C_ASM_OP_LABEL) {
+				break;
+			}
+		}
+
+		yy_dyn_str_append0(rcc, &args, "", 0);
+		ir_set_op(rcc->active_ctx, ref, 3,
+			ir_const_str(rcc->active_ctx, ir_strl(rcc->active_ctx, args.str, args.len)));
+
+		if (a->flags & C_ASM_GOTO) {
+			ir_ref goto_ref = ir_emit1(rcc->active_ctx, IR_ASM_GOTO, rcc->active_ctx->control);
+			rcc->active_ctx->control = IR_UNUSED;
+
+			for (; i < n; op++, i++) {
+				IR_ASSERT(op->flags & C_ASM_OP_LABEL);
+
+				c_label *label = rcc->yy_hash.data[op->id].label;
+				if (!label) {
+					label = c_new_label(rcc, op->id, rcc->active_func_scope, NULL, rcc->active_scope == rcc->active_func_scope);
+				}
+
+				/* Rederect to actual target labels (breaking critical edges) */
+				ir_BEGIN(goto_ref);
+				if (a->flags & C_ASM_HAS_OUT_REGS) {
+					c_do_asm_store_outs(rcc, a, n, ref);
+				}
+				ir_END_list(label->src_list);
+			}
+
+			ir_BEGIN(goto_ref);
+		}
+
+		if (a->flags & C_ASM_HAS_OUT_REGS) {
+			c_do_asm_store_outs(rcc, a, n, ref);
+		}
+	}
+}
+
+void c_do_global_asm(rcc_ctx *rcc, c_value *str)
+{
+	yy_error("asm support not implemented yet");
+}
+
 void c_do_compile_start(rcc_ctx *rcc)
 {
 	rcc->c_dead_code = 0;
@@ -8619,19 +8995,4 @@ void c_do_compile_start(rcc_ctx *rcc)
 void c_do_compile_end(rcc_ctx *rcc)
 {
 	ir_strtab_free(&rcc->c_strtab);
-}
-
-static void c_inline_asm(rcc_ctx *rcc, c_value *str)
-{
-	yy_error("asm support not implemented yet");
-}
-
-void c_do_asm(rcc_ctx *rcc, uint32_t asm_attr, c_value *str, c_asm_operand *ops, int n_out, int n_in, int n_labels, c_value *clobbered, int n)
-{
-	c_inline_asm(rcc, str);
-}
-
-void c_do_global_asm(rcc_ctx *rcc, c_value *str)
-{
-	c_inline_asm(rcc, str);
 }

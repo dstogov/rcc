@@ -884,60 +884,61 @@ c_statement(rcc_ctx *rcc):                                 {c_value val;}
 	|	"continue" ";"                                     {c_do_continue(rcc);}
 	|	"break" ";"                                        {c_do_break(rcc);}
 	|	"return" expression(rcc, &val)? ";"                {c_do_return(rcc, &val);}
-	|                                                      {uint32_t asm_attr = 0;}
+	|                                                      {uint32_t asm_flags = 0;}
 		("asm"|"__asm"|"__asm__")
-		(	"volatile"                                     {asm_attr |= C_ASM_VOLATILE;}
-		|	"inline"                                       {asm_attr |= C_ASM_INLINE;}
-		|	"goto"                                         {asm_attr |= C_ASM_GOTO;}
+		(	("volatile"|"__volatile"|"__volatile__")       {asm_flags |= C_ASM_VOLATILE;}
+		|	("inline"|"__inline"|"__inline__")             {asm_flags |= C_ASM_INLINE;}
+		|	"goto"                                         {asm_flags |= C_ASM_GOTO;}
 		)*
 		"("
-		asm_argument(rcc, asm_attr)
+		asm_argument(rcc, asm_flags)
 		")" ";"
 	)
 ;
 
-asm_argument(rcc_ctx *rcc, uint32_t asm_attr):             {c_value asm_str;}
-                                                           {c_asm_operand ops[C_MAX_ASM_OPERANDS];}
-                                                           {c_value clobbered[C_MAX_ASM_REGS];}
-                                                           {int n_out = 0, n_in = 0, n_labels = 0, n_clob = 0, n = 0;}
+asm_argument(rcc_ctx *rcc, uint32_t asm_flags):            {c_value asm_str;}
+                                                           {c_asm a;}
+                                                           {a.flags = asm_flags;}
+                                                           {a.clobbers = 0;}
+                                                           {int n = 0;}
 	strings(rcc, &asm_str)
-	(":" asm_operands(rcc, ops, &n)?                       {n_out = n;}
-		(":" asm_operands(rcc, ops, &n)?                   {n_in = n - n_out;}
-			(":" asm_clobbers(rcc, clobbered, &n_clob)?
-				(":" asm_goto_operands(rcc, ops, &n))?     {n_labels = n - n_in;}
+	(":" asm_operands(rcc, &a, 1, &n)?
+		(":" asm_operands(rcc, &a, 0,  &n)?
+			(":" asm_clobbers(rcc, &a)?
+				(":" asm_goto_operands(rcc, &a, &n))?
 			)?
 		)?
-	)?                                                     {c_do_asm(rcc, asm_attr, &asm_str, ops, n_out, n_in, n_labels, clobbered, n_clob);}
+	)?                                                     {c_do_asm(rcc, &asm_str, &a, n);}
 ;
 
-asm_operands(rcc_ctx *rcc, c_asm_operand *ops, int *n):
-	asm_operand(rcc, ops, n)
-	( "," asm_operand(rcc, ops, n) )*
+asm_operands(rcc_ctx *rcc, c_asm *a, bool out, int *n):
+	asm_operand(rcc, a, out, n)
+	( "," asm_operand(rcc, a, out, n) )*
 ;
 
-asm_operand(rcc_ctx *rcc, c_asm_operand *ops, int *n):     {if (*n >= C_MAX_ASM_OPERANDS) yy_error("too many asm opernads");}
-	(   "[" ID(rcc, &ops[*n].id) "]"
-	|	/* empty */                                        {ops[*n].id = 0;}
-	)
-	strings(rcc, &ops[*n].constraint)
-	"(" expression(rcc, &ops[*n].val) ")"                  {(*n)++;}
+asm_operand(rcc_ctx *rcc, c_asm *a, bool out, int *n):     {c_name name = 0;}
+                                                           {c_value val;}
+                                                           {if (*n >= C_MAX_ASM_OPERANDS) yy_error("too many asm opernads");}
+	( "[" ID(rcc, &name) "]" )?
+	strings(rcc, &val)                                     {c_do_asm_operand_constraint(rcc, a, out, *n, name, &val);}
+	"("                                                    {c_value_clear(&val);}
+	expression(rcc, &val)                                  {c_do_asm_operand_val(rcc, a, out, (*n)++, &val);}
+	")"
 ;
 
-asm_clobbers(rcc_ctx *rcc, c_value *clobbered, int *n):
-                                                           {if (*n >= C_MAX_ASM_REGS) yy_error("too many asm clobbered registers");}
-                                                           {yy_read_string(rcc, &clobbered[*n], rcc->yy_text, rcc->yy_len);}
-	STRING(rcc)                                            {(*n)++;}
-	(	","                                                {if (*n >= C_MAX_ASM_REGS) yy_error("too many asm clobbered registers");}
-                                                           {yy_read_string(rcc, &clobbered[*n], rcc->yy_text, rcc->yy_len);}
-		STRING(rcc)                                        {(*n)++;}
+asm_clobbers(rcc_ctx *rcc, c_asm *a):                      {c_value val;}
+                                                           {yy_read_string(rcc, &val, rcc->yy_text, rcc->yy_len);}
+	STRING(rcc)                                            {c_do_asm_clobbers(rcc, a, &val);}
+	(	","                                                {yy_read_string(rcc, &val, rcc->yy_text, rcc->yy_len);}
+		STRING(rcc)                                        {c_do_asm_clobbers(rcc, a, &val);}
 	)*
 ;
 
-asm_goto_operands(rcc_ctx *rcc, c_asm_operand *ops, int *n):
+asm_goto_operands(rcc_ctx *rcc, c_asm *a, int *n):         {c_name name;}
                                                            {if (*n >= C_MAX_ASM_OPERANDS) yy_error("too many asm opernads");}
-	ID(rcc, &ops[*n].id)                                   {(*n)++;}
+	ID(rcc, &name)                                         {c_do_asm_operand_label(rcc, a, (*n)++, name);}
 	(	","                                                {if (*n >= C_MAX_ASM_OPERANDS) yy_error("too many asm opernads");}
-		ID(rcc, &ops[*n].id)                               {(*n)++;}
+		ID(rcc, &name)                                     {c_do_asm_operand_label(rcc, a, (*n)++, name);}
 	)*
 ;
 

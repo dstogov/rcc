@@ -1131,21 +1131,52 @@ void c_do_compile_start(rcc_ctx *rcc);
 void c_do_compile_end(rcc_ctx *rcc);
 
 /* Inline assembler */
-#define C_MAX_ASM_OPERANDS 32
-#define C_MAX_ASM_REGS     32
+#define C_MAX_ASM_OPERANDS 30 /* limit 30 is define in GCC info */
 
-#define C_ASM_VOLATILE     (1<<0)
-#define C_ASM_INLINE       (1<<1)
-#define C_ASM_GOTO         (1<<2)
+#define C_ASM_VOLATILE          (1<<0)
+#define C_ASM_INLINE            (1<<1)
+#define C_ASM_GOTO              (1<<2)
+#define C_ASM_CLOBBERS_CC       (1<<3)
+#define C_ASM_CLOBBERS_MEMORY   (1<<4)
+#define C_ASM_CLOBBERS_REDZONE  (1<<5)
+#define C_ASM_HAS_LABELS        (1<<6)
+#define C_ASM_HAS_OUT_REGS      (1<<7)
+
+#define C_ASM_OP_OUTPUT         (1<<0)
+#define C_ASM_OP_INPUT          (1<<1)
+#define C_ASM_OP_LABEL          (1<<2)
+#define C_ASM_OP_INOUT          (1<<3)
+
+#define C_ASM_OP_CLOBBERED      (1<<4)
+
+#define C_ASM_OP_REG_INT        (1<<8)
+#define C_ASM_OP_REG_FP         (1<<9)
+#define C_ASM_OP_IMM_INT        (1<<10)
+#define C_ASM_OP_IMM_FP         (1<<11)
+#define C_ASM_OP_MEM            (1<<12)
+
+#define C_ASM_OP_ANY            (C_ASM_OP_REG_INT|C_ASM_OP_REG_FP|C_ASM_OP_IMM_INT|C_ASM_OP_IMM_FP|C_ASM_OP_MEM)
 
 typedef struct _c_asm_operand {
-	c_name  id;
-	c_value constraint;
-	c_value val;
+	uint32_t    flags;
+	c_name      id;
+	const char *constraint_str;
+	size_t      constraint_len;
+	c_value     val;
 } c_asm_operand;
 
+typedef struct _c_asm {
+	uint32_t flags;
+	uint64_t clobbers;
+	c_asm_operand ops[C_MAX_ASM_OPERANDS];
+} c_asm;
+
+void c_do_asm_operand_constraint(rcc_ctx *rcc, c_asm *a, bool out, int n, c_name name, c_value *constraint);
+void c_do_asm_operand_val(rcc_ctx *rcc, c_asm *a, bool out, int n, c_value *val);
+void c_do_asm_clobbers(rcc_ctx *rcc, c_asm *a, c_value *val);
+void c_do_asm_operand_label(rcc_ctx *rcc, c_asm *a, int n, c_name label);
+void c_do_asm(rcc_ctx *rcc, c_value *asm_str, c_asm *a, int n);
 void c_do_global_asm(rcc_ctx *rcc, c_value *asm_str);
-void c_do_asm(rcc_ctx *rcc, uint32_t asm_attr, c_value *asm_str, c_asm_operand *ops, int n_out, int n_in, int n_labels, c_value *clobbered, int n);
 
 /* C Parser */
 bool parse_pp_expr(rcc_ctx *rcc);

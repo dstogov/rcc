@@ -210,11 +210,11 @@ static yy_sym parse_expression_statement(yy_sym sym, rcc_ctx *rcc, c_value *val)
 static yy_sym parse_statement(yy_sym sym, rcc_ctx *rcc);
 static yy_sym parse_labels(yy_sym sym, rcc_ctx *rcc);
 static yy_sym parse_c_statement(yy_sym sym, rcc_ctx *rcc);
-static yy_sym parse_asm_argument(yy_sym sym, rcc_ctx *rcc, uint32_t asm_attr);
-static yy_sym parse_asm_operands(yy_sym sym, rcc_ctx *rcc, c_asm_operand *ops, int *n);
-static yy_sym parse_asm_operand(yy_sym sym, rcc_ctx *rcc, c_asm_operand *ops, int *n);
-static yy_sym parse_asm_clobbers(yy_sym sym, rcc_ctx *rcc, c_value *clobbered, int *n);
-static yy_sym parse_asm_goto_operands(yy_sym sym, rcc_ctx *rcc, c_asm_operand *ops, int *n);
+static yy_sym parse_asm_argument(yy_sym sym, rcc_ctx *rcc, uint32_t asm_flags);
+static yy_sym parse_asm_operands(yy_sym sym, rcc_ctx *rcc, c_asm *a, bool out, int *n);
+static yy_sym parse_asm_operand(yy_sym sym, rcc_ctx *rcc, c_asm *a, bool out, int *n);
+static yy_sym parse_asm_clobbers(yy_sym sym, rcc_ctx *rcc, c_asm *a);
+static yy_sym parse_asm_goto_operands(yy_sym sym, rcc_ctx *rcc, c_asm *a, int *n);
 static yy_sym parse_strings(yy_sym sym, rcc_ctx *rcc, c_value *val);
 static yy_sym parse_actual_parameters(yy_sym sym, rcc_ctx *rcc, c_value *func, c_value *res);
 static yy_sym parse_builtin_parameters(yy_sym sym, rcc_ctx *rcc, c_value *val, c_name name);
@@ -1853,25 +1853,25 @@ static yy_sym parse_c_statement(yy_sym sym, rcc_ctx *rcc) {
 		sym = get_sym();
 		c_do_return(rcc, &val);
 	} else if (sym == YY_ASM || sym == YY___ASM || sym == YY___ASM__) {
-		uint32_t asm_attr = 0;
+		uint32_t asm_flags = 0;
 		sym = get_sym();
-		while (sym == YY_VOLATILE || sym == YY_INLINE || sym == YY_GOTO) {
-			if (sym == YY_VOLATILE) {
+		while (sym == YY_VOLATILE || sym == YY___VOLATILE || sym == YY___VOLATILE__ || sym == YY_INLINE || sym == YY___INLINE || sym == YY___INLINE__ || sym == YY_GOTO) {
+			if (sym == YY_VOLATILE || sym == YY___VOLATILE || sym == YY___VOLATILE__) {
 				sym = get_sym();
-				asm_attr |= C_ASM_VOLATILE;
-			} else if (sym == YY_INLINE) {
+				asm_flags |= C_ASM_VOLATILE;
+			} else if (sym == YY_INLINE || sym == YY___INLINE || sym == YY___INLINE__) {
 				sym = get_sym();
-				asm_attr |= C_ASM_INLINE;
+				asm_flags |= C_ASM_INLINE;
 			} else {
 				sym = get_sym();
-				asm_attr |= C_ASM_GOTO;
+				asm_flags |= C_ASM_GOTO;
 			}
 		}
 		if (sym != YY__LPAREN) {
 			yy_error_sym("'(' expected, got", sym);
 		}
 		sym = get_sym();
-		sym = parse_asm_argument(sym, rcc, asm_attr);
+		sym = parse_asm_argument(sym, rcc, asm_flags);
 		if (sym != YY__RPAREN) {
 			yy_error_sym("')' expected, got", sym);
 		}
@@ -1886,102 +1886,100 @@ static yy_sym parse_c_statement(yy_sym sym, rcc_ctx *rcc) {
 	return sym;
 }
 
-static yy_sym parse_asm_argument(yy_sym sym, rcc_ctx *rcc, uint32_t asm_attr) {
+static yy_sym parse_asm_argument(yy_sym sym, rcc_ctx *rcc, uint32_t asm_flags) {
 	c_value asm_str;
-	c_asm_operand ops[C_MAX_ASM_OPERANDS];
-	c_value clobbered[C_MAX_ASM_REGS];
-	int n_out = 0, n_in = 0, n_labels = 0, n_clob = 0, n = 0;
+	c_asm a;
+	a.flags = asm_flags;
+	a.clobbers = 0;
+	int n = 0;
 	sym = parse_strings(sym, rcc, &asm_str);
 	if (sym == YY__COLON) {
 		sym = get_sym();
 		if (sym == YY__LBRACK || sym == YY_STRING) {
-			sym = parse_asm_operands(sym, rcc, ops, &n);
+			sym = parse_asm_operands(sym, rcc, &a, 1, &n);
 		}
-		n_out = n;
 		if (sym == YY__COLON) {
 			sym = get_sym();
 			if (sym == YY__LBRACK || sym == YY_STRING) {
-				sym = parse_asm_operands(sym, rcc, ops, &n);
+				sym = parse_asm_operands(sym, rcc, &a, 0, &n);
 			}
-			n_in = n - n_out;
 			if (sym == YY__COLON) {
 				sym = get_sym();
 				if (sym == YY_STRING) {
-					sym = parse_asm_clobbers(sym, rcc, clobbered, &n_clob);
+					sym = parse_asm_clobbers(sym, rcc, &a);
 				}
 				if (sym == YY__COLON) {
 					sym = get_sym();
-					sym = parse_asm_goto_operands(sym, rcc, ops, &n);
+					sym = parse_asm_goto_operands(sym, rcc, &a, &n);
 				}
-				n_labels = n - n_in;
 			}
 		}
 	}
-	c_do_asm(rcc, asm_attr, &asm_str, ops, n_out, n_in, n_labels, clobbered, n_clob);
+	c_do_asm(rcc, &asm_str, &a, n);
 	return sym;
 }
 
-static yy_sym parse_asm_operands(yy_sym sym, rcc_ctx *rcc, c_asm_operand *ops, int *n) {
-	sym = parse_asm_operand(sym, rcc, ops, n);
+static yy_sym parse_asm_operands(yy_sym sym, rcc_ctx *rcc, c_asm *a, bool out, int *n) {
+	sym = parse_asm_operand(sym, rcc, a, out, n);
 	while (sym == YY__COMMA) {
 		sym = get_sym();
-		sym = parse_asm_operand(sym, rcc, ops, n);
+		sym = parse_asm_operand(sym, rcc, a, out, n);
 	}
 	return sym;
 }
 
-static yy_sym parse_asm_operand(yy_sym sym, rcc_ctx *rcc, c_asm_operand *ops, int *n) {
+static yy_sym parse_asm_operand(yy_sym sym, rcc_ctx *rcc, c_asm *a, bool out, int *n) {
+	c_name name = 0;
+	c_value val;
 	if (*n >= C_MAX_ASM_OPERANDS) yy_error("too many asm opernads");
 	if (sym == YY__LBRACK) {
 		sym = get_sym();
-		sym = parse_ID(sym, rcc, &ops[*n].id);
+		sym = parse_ID(sym, rcc, &name);
 		if (sym != YY__RBRACK) {
 			yy_error_sym("']' expected, got", sym);
 		}
 		sym = get_sym();
-	} else if (sym == YY_STRING) {
-		ops[*n].id = 0;
-	} else {
-		yy_error_sym("unexpected", sym);
 	}
-	sym = parse_strings(sym, rcc, &ops[*n].constraint);
+	sym = parse_strings(sym, rcc, &val);
+	c_do_asm_operand_constraint(rcc, a, out, *n, name, &val);
 	if (sym != YY__LPAREN) {
 		yy_error_sym("'(' expected, got", sym);
 	}
 	sym = get_sym();
-	sym = parse_expression(sym, rcc, &ops[*n].val);
+	c_value_clear(&val);
+	sym = parse_expression(sym, rcc, &val);
+	c_do_asm_operand_val(rcc, a, out, (*n)++, &val);
 	if (sym != YY__RPAREN) {
 		yy_error_sym("')' expected, got", sym);
 	}
 	sym = get_sym();
-	(*n)++;
 	return sym;
 }
 
-static yy_sym parse_asm_clobbers(yy_sym sym, rcc_ctx *rcc, c_value *clobbered, int *n) {
-	if (*n >= C_MAX_ASM_REGS) yy_error("too many asm clobbered registers");
-	yy_read_string(rcc, &clobbered[*n], rcc->yy_text, rcc->yy_len);
+static yy_sym parse_asm_clobbers(yy_sym sym, rcc_ctx *rcc, c_asm *a) {
+	c_value val;
+	yy_read_string(rcc, &val, rcc->yy_text, rcc->yy_len);
 	sym = parse_STRING(sym, rcc);
-	(*n)++;
+	c_do_asm_clobbers(rcc, a, &val);
 	while (sym == YY__COMMA) {
 		sym = get_sym();
-		if (*n >= C_MAX_ASM_REGS) yy_error("too many asm clobbered registers");
-		yy_read_string(rcc, &clobbered[*n], rcc->yy_text, rcc->yy_len);
+		yy_read_string(rcc, &val, rcc->yy_text, rcc->yy_len);
 		sym = parse_STRING(sym, rcc);
-		(*n)++;
+		c_do_asm_clobbers(rcc, a, &val);
 	}
 	return sym;
 }
 
-static yy_sym parse_asm_goto_operands(yy_sym sym, rcc_ctx *rcc, c_asm_operand *ops, int *n) {
+static yy_sym parse_asm_goto_operands(yy_sym sym, rcc_ctx *rcc, c_asm *a, int *n) {
+	c_name name;
 	if (*n >= C_MAX_ASM_OPERANDS) yy_error("too many asm opernads");
-	sym = parse_ID(sym, rcc, &ops[*n].id);
-	(*n)++;
+	sym = parse_ID(sym, rcc, &name);
+	c_do_asm_operand_label(rcc, a, (*n)++, name);
 	while (sym == YY__COMMA) {
 		sym = get_sym();
 		if (*n >= C_MAX_ASM_OPERANDS) yy_error("too many asm opernads");
-		sym = parse_ID(sym, rcc, &ops[*n].id);
-		(*n)++;
+		sym = parse_ID(sym, rcc, &name);
+		c_do_asm_operand_label(rcc, a, (*n)++, name);
 	}
 	return sym;
 }
