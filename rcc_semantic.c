@@ -7527,7 +7527,7 @@ void c_do_finish_label(rcc_ctx *rcc, c_name name, c_label *label)
 			ops[insn->inputs_count] = end;
 		}
 	} else if (label->src_list) {
-		yy_error_fmt("label \"l1\" used but not defined", yy_sym2str(rcc, name));
+		yy_error_fmt("label \"%s\" used but not defined", yy_sym2str(rcc, name));
 	}
 }
 
