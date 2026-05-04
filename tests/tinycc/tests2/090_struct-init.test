@@ -430,6 +430,12 @@ int main()
   return 0;
 }
 --EXPECT--
+./tests/tinycc/tests2/090_struct-init.c:8:30: warning: braces around scalar initializer
+./tests/tinycc/tests2/090_struct-init.c:56:18: warning: braces around scalar initializer
+./tests/tinycc/tests2/090_struct-init.c:58:44: warning: braces around scalar initializer
+./tests/tinycc/tests2/090_struct-init.c:60:23: warning: braces around scalar initializer
+./tests/tinycc/tests2/090_struct-init.c:60:40: warning: braces around scalar initializer
+./tests/tinycc/tests2/090_struct-init.c:62:17: warning: braces around scalar initializer
 ce: 1 12
 gs: 1 2 3 4
 gs2: 1 2 3 4
