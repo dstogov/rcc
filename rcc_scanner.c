@@ -1082,27 +1082,40 @@ void yy_error_fmt_(rcc_ctx *rcc, const char *fmt, ...)
 	exit(1);
 }
 
-void yy_warning_(rcc_ctx *rcc, const char *msg)
+void yy_warning_(rcc_ctx *rcc, uint32_t kind, const char *msg)
 {
-	if (rcc->yy_flags & YY_NO_WARNINGS) return;
+	if (!((rcc->e_errors | rcc->e_warnings) & kind)) return;
 	yy_error_pos(rcc);
-	fprintf(stderr, "warning: %s\n", msg);
+	if (rcc->e_errors & kind) {
+		fprintf(stderr, "error: %s\n", msg);
+	} else {
+		fprintf(stderr, "warning: %s\n", msg);
+	}
 	if (0) yy_error_line(rcc);
+	if (rcc->e_errors & kind) {
+		exit(1);
+	}
 }
 
-
-void yy_warning_fmt_(rcc_ctx *rcc, const char *fmt, ...)
+void yy_warning_fmt_(rcc_ctx *rcc, uint32_t kind, const char *fmt, ...)
 {
 	va_list args;
 
-	if (rcc->yy_flags & YY_NO_WARNINGS) return;
+	if (!((rcc->e_errors | rcc->e_warnings) & kind)) return;
 	yy_error_pos(rcc);
 	va_start(args, fmt);
-	fprintf(stderr, "warning: ");
+	if (rcc->e_errors & kind) {
+		fprintf(stderr, "error: ");
+	} else {
+		fprintf(stderr, "warning: ");
+	}
 	vfprintf(stderr, fmt, args);
 	fprintf(stderr, "\n");
 	va_end(args);
 	if (0) yy_error_line(rcc);
+	if (rcc->e_errors & kind) {
+		exit(1);
+	}
 }
 
 static IR_NEVER_INLINE void yy_scanner_error(rcc_ctx *rcc)

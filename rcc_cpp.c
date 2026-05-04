@@ -2246,11 +2246,32 @@ pack_set:
 			rcc->pp_pack = 0;
 		}
 		if (sym != YY__RPAREN) goto error;
+	} else if (sym == YY__COMMENT) {
+		yy_sym type;
+		const char *str;
+		size_t len;
+
+		sym = yy_next(rcc);
+		if (sym != YY__LPAREN) goto error;
+		type = yy_next(rcc);
+		sym = yy_next(rcc);
+		if (sym != YY__COMMA) goto error;
+		sym = yy_next(rcc);
+		if (sym != YY_STRING) goto error;
+		str = parse_pp_string(rcc, &len);
+		sym = yy_next(rcc);
+		if (sym != YY__RPAREN) goto error;
+		if (type == YY_OPTION) {
+			rcc_parse_options(rcc, str, len);
+//		} else if (type == YY_LIB) { // TODO: add support for #pragma( comment(lib, ...) ???
+		} else {
+			/* ignore without any warning */
+		}
 	} else if (sym == YY_EOL) {
 		yy_warning("ignoring \"#pragma\"");
 		return;
 	} else {
-		yy_warning_fmt("ignoring \"#pragma %s\"", yy_sym2str(rcc, sym));
+		yy_warning_ex_fmt(E_UNSUPPORTED, "ignoring unsupported \"#pragma %s\"", yy_sym2str(rcc, sym));
 		pp_skip_until_eol(rcc);
 		return;
 	}

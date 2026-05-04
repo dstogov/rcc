@@ -104,6 +104,47 @@ const c_type c_type_const_ptr = {
 	.pointer.type = &c_type_const_void,
 };
 
+const c_type c_type_const_char          = {.kind = C_TYPE_CHAR,   .flags = C_TYPE_GLOBAL, .size = 1,  .attr = 1 | C_ATTR_CONST};
+const c_type c_type_const_u16           = {.kind = C_TYPE_U16,    .flags = C_TYPE_GLOBAL, .size = 2,  .attr = 2 | C_ATTR_CONST};
+const c_type c_type_const_u32           = {.kind = C_TYPE_U32,    .flags = C_TYPE_GLOBAL, .size = 4,  .attr = 3 | C_ATTR_CONST};
+const c_type c_type_const_i32           = {.kind = C_TYPE_I32,    .flags = C_TYPE_GLOBAL, .size = 4,  .attr = 3 | C_ATTR_CONST};
+
+const c_type c_type_const_string = {
+	.kind = C_TYPE_ARRAY,
+	.flags = C_TYPE_GLOBAL,
+	.size = sizeof(void*),
+	.attr = 1 | C_ATTR_FLEXIBLE,
+	.array.type = &c_type_const_char,
+	.array.length = 0
+};
+
+const c_type c_type_const_lstring = {
+	.kind = C_TYPE_ARRAY,
+	.flags = C_TYPE_GLOBAL,
+	.size = sizeof(void*),
+	.attr = 3 | C_ATTR_FLEXIBLE,
+	.array.type = &c_type_const_i32,
+	.array.length = 0
+};
+
+const c_type c_type_const_string_u16 = {
+	.kind = C_TYPE_ARRAY,
+	.flags = C_TYPE_GLOBAL,
+	.size = sizeof(void*),
+	.attr = 2 | C_ATTR_FLEXIBLE,
+	.array.type = &c_type_const_u16,
+	.array.length = 0
+};
+
+const c_type c_type_const_string_u32 = {
+	.kind = C_TYPE_ARRAY,
+	.flags = C_TYPE_GLOBAL,
+	.size = sizeof(void*),
+	.attr = 3 | C_ATTR_FLEXIBLE,
+	.array.type = &c_type_const_u32,
+	.array.length = 0
+};
+
 static ir_ref c_value_ref(rcc_ctx *rcc, c_value *val);
 static void c_do_cvt(rcc_ctx *rcc, const c_type *t, ir_type type, c_value *v);
 static void ir_memzero(rcc_ctx *rcc, ir_ref dst, ir_ref size, uint32_t align);
@@ -470,7 +511,7 @@ void c_resolve_sym_name(rcc_ctx *rcc, c_value *res, c_name name, yy_sym sym)
 				c_value_set_const(res, &c_type_void, IR_VOID, val);
 				return;
 			}
-			yy_warning_fmt("implicit declaration of function \"%s\"", rcc->yy_hash.data[name].str);
+			yy_warning_ex_fmt(E_IMPLICIT_FUNC_DCL, "implicit declaration of function \"%s\"", rcc->yy_hash.data[name].str);
 
 			/* Function in going to be declared in the global scope */
 			memset(&dcl, 0, sizeof(dcl));
@@ -2491,7 +2532,7 @@ yy_sym c_gcc_attribute(rcc_ctx *rcc, c_dcl *d, c_name attr, yy_sym sym)
 	) {
 		/* silently ignore some known attributes */
 	} else {
-		yy_warning_fmt("unsupported attribure \"%s\"", yy_sym2str(rcc, attr));
+		yy_warning_ex_fmt(E_UNSUPPORTED, "unsupported attribure \"%s\"", yy_sym2str(rcc, attr));
 	}
 
 	if (sym == YY__LPAREN) {
@@ -2822,7 +2863,7 @@ void c_asm_alias(rcc_ctx *rcc, c_dcl *d, c_value *val)
 
 yy_sym c_declspec(rcc_ctx *rcc, c_dcl *d, c_name attr, yy_sym sym)
 {
-	yy_warning_fmt("unsupported \"__declspec(%s)\"", yy_sym2str(rcc, attr));
+	yy_warning_ex_fmt(E_UNSUPPORTED, "unsupported \"__declspec(%s)\"", yy_sym2str(rcc, attr));
 
 	if (sym == YY__LPAREN) {
 		int level = 0;
@@ -3872,27 +3913,27 @@ check_qualifiers:
 						if (type->pointer.type->kind == C_TYPE_FUNC) {
 							/* assignement of "const void*" to a pointer to function is allowed */
 						} else if (arg < 0) {
-							yy_warning_fmt("assignment discards \"%s\" qualifier from pointer target type", "const");
+							yy_warning_ex_fmt(E_DISCARDED_QUALIFIERS, "assignment discards \"%s\" qualifier from pointer target type", "const");
 						} else if (arg > 0) {
-							yy_warning_fmt("passing argument %d discards \"%s\" qualifier from pointer target type", arg, "const");
+							yy_warning_ex_fmt(E_DISCARDED_QUALIFIERS, "passing argument %d discards \"%s\" qualifier from pointer target type", arg, "const");
 						} else {
-							yy_warning_fmt("return discards \"%s\" qualifier from pointer target type", "const");
+							yy_warning_ex_fmt(E_DISCARDED_QUALIFIERS, "return discards \"%s\" qualifier from pointer target type", "const");
 						}
 					} else if (attr & C_ATTR_VOLATILE) {
 						if (arg < 0) {
-							yy_warning_fmt("assignment discards \"%s\" qualifier from pointer target type", "volatile");
+							yy_warning_ex_fmt(E_DISCARDED_QUALIFIERS, "assignment discards \"%s\" qualifier from pointer target type", "volatile");
 						} else if (arg > 0) {
-							yy_warning_fmt("passing argument %d discards \"%s\" qualifier from pointer target type", arg, "volatile");
+							yy_warning_ex_fmt(E_DISCARDED_QUALIFIERS, "passing argument %d discards \"%s\" qualifier from pointer target type", arg, "volatile");
 						} else {
-							yy_warning_fmt("return discards \"%s\" qualifier from pointer target type", "volatile");
+							yy_warning_ex_fmt(E_DISCARDED_QUALIFIERS, "return discards \"%s\" qualifier from pointer target type", "volatile");
 						}
 					} else if (attr & C_ATTR_ATOMIC) {
 						if (arg < 0) {
-							yy_warning_fmt("assignment discards \"%s\" qualifier from pointer target type", "atomic");
+							yy_warning_ex_fmt(E_DISCARDED_QUALIFIERS, "assignment discards \"%s\" qualifier from pointer target type", "atomic");
 						} else if (arg > 0) {
-							yy_warning_fmt("passing argument %d discards \"%s\" qualifier from pointer target type", arg, "atomic");
+							yy_warning_ex_fmt(E_DISCARDED_QUALIFIERS, "passing argument %d discards \"%s\" qualifier from pointer target type", arg, "atomic");
 						} else {
-							yy_warning_fmt("return discards \"%s\" qualifier from pointer target type", "atomic");
+							yy_warning_ex_fmt(E_DISCARDED_QUALIFIERS, "return discards \"%s\" qualifier from pointer target type", "atomic");
 						}
 					}
 				}
@@ -4766,13 +4807,17 @@ void c_do_builtin(rcc_ctx *rcc, c_value *val, c_name name, int32_t num_args, c_v
 	} else if (name == YY___BUILTIN_NAN) {
 		ir_val v;
 		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
-		if (args[0].type != &c_type_string) yy_error_fmt("wrong argument in %s() call", yy_sym2str(rcc, name));
+		if (args[0].type != &c_type_string && args[0].type != &c_type_const_string) {
+			yy_error_fmt("wrong argument in %s() call", yy_sym2str(rcc, name));
+		}
 		v.d = nan((char*)args[0].u.val.ptr);
 		c_value_set_const(val, &c_type_double, IR_DOUBLE, v);
 	} else if (name == YY___BUILTIN_NANF) {
 		ir_val v;
 		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
-		if (args[0].type != &c_type_string) yy_error_fmt("wrong argument in %s() call", yy_sym2str(rcc, name));
+		if (args[0].type != &c_type_string && args[0].type != &c_type_const_string) {
+			yy_error_fmt("wrong argument in %s() call", yy_sym2str(rcc, name));
+		}
 		v.f = nanf((char*)args[0].u.val.ptr);
 		v.u32_hi = 0;
 		c_value_set_const(val, &c_type_float, IR_FLOAT, v);

@@ -3230,17 +3230,17 @@ static void yy_read_string(rcc_ctx *rcc, c_value *res, const char *str, size_t l
 
 	if (!prefix) {
 		yy_dyn_str_append(rcc, &dyn_str, "\0", 1);
-		type = &c_type_string;
+		type = (rcc->e_warnings & E_WRITE_STRINGS) ? &c_type_const_string : &c_type_string;
 	} else if (prefix == 'L') {
 		yy_dyn_str_append(rcc, &dyn_str, "\0\0\0\0", 4);
-		type = &c_type_lstring;
+		type = (rcc->e_warnings & E_WRITE_STRINGS) ? &c_type_const_lstring : &c_type_lstring;
 	} else if (prefix == 'u') {
 		yy_dyn_str_append(rcc, &dyn_str, "\0\0", 2);
-		type = &c_type_string_u16;
+		type = (rcc->e_warnings & E_WRITE_STRINGS) ? &c_type_const_string_u16 : &c_type_string_u16;
 	} else {
 		IR_ASSERT(prefix == 'U');
 		yy_dyn_str_append(rcc, &dyn_str, "\0\0\0\0", 4);
-		type = &c_type_string_u32;
+		type = (rcc->e_warnings & E_WRITE_STRINGS) ? &c_type_const_string_u32 : &c_type_string_u32;
 	}
 
 	c_value_set_const_str(res, type, IR_ADDR, dyn_str.str, dyn_str.len);
@@ -3261,17 +3261,17 @@ static void yy_read_strings(rcc_ctx *rcc, c_value *res, yy_str *strings, uint32_
 
 	if (!prefix) {
 		yy_dyn_str_append(rcc, &dyn_str, "\0", 1);
-		type = &c_type_string;
+		type = (rcc->e_warnings & E_WRITE_STRINGS) ? &c_type_const_string : &c_type_string;
 	} else if (prefix == 'L') {
 		yy_dyn_str_append(rcc, &dyn_str, "\0\0\0\0", 4);
-		type = &c_type_lstring;
+		type = (rcc->e_warnings & E_WRITE_STRINGS) ? &c_type_const_lstring : &c_type_lstring;
 	} else if (prefix == 'u') {
 		yy_dyn_str_append(rcc, &dyn_str, "\0\0", 2);
-		type = &c_type_string_u16;
+		type = (rcc->e_warnings & E_WRITE_STRINGS) ? &c_type_const_string_u16 : &c_type_string_u16;
 	} else {
 		IR_ASSERT(prefix == 'U');
 		yy_dyn_str_append(rcc, &dyn_str, "\0\0\0\0", 4);
-		type = &c_type_string_u32;
+		type = (rcc->e_warnings & E_WRITE_STRINGS) ? &c_type_const_string_u32 : &c_type_string_u32;
 	}
 
 	c_value_set_const_str(res, type, IR_ADDR, dyn_str.str, dyn_str.len);
@@ -3417,6 +3417,35 @@ bool parse_pp_expr(rcc_ctx *rcc)
 	rcc->active_ctx = old_ctx;
 
 	return ret;
+}
+
+const char* parse_pp_string(rcc_ctx *rcc, size_t *len)
+{
+	yy_dyn_str dyn_str;
+	char prefix = 0;
+
+	yy_dyn_str_init(rcc, &dyn_str, "", 0);
+	prefix = yy_strings_append(rcc, &dyn_str, prefix, rcc->yy_text, rcc->yy_len);
+
+	if (!prefix) {
+		yy_dyn_str_append(rcc, &dyn_str, "\0", 1);
+	} else if (prefix == 'L') {
+		yy_dyn_str_append(rcc, &dyn_str, "\0\0\0\0", 4);
+		// TODO: convert to UTF-8 ???
+		IR_ASSERT(0);
+	} else if (prefix == 'u') {
+		yy_dyn_str_append(rcc, &dyn_str, "\0\0", 2);
+		// TODO: convert to UTF-8 ???
+		IR_ASSERT(0);
+	} else {
+		IR_ASSERT(prefix == 'U');
+		yy_dyn_str_append(rcc, &dyn_str, "\0\0\0\0", 4);
+		// TODO: convert to UTF-8 ???
+		IR_ASSERT(0);
+	}
+
+	*len = dyn_str.len;
+	return dyn_str.str;
 }
 
 void rcc_parse(rcc_ctx *rcc)

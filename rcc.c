@@ -1632,8 +1632,16 @@ static void rcc_help(const char *cmd)
 		"  -dD                        - preprocess and generate list of #define directives\n"
 		"  -dI                        - preprocess and generate list of #include directives\n"
 		"Error Reporting Options:\n"
-		"  -w                         - inhibit all warning messages\n"
 		"  -fsyntax-only              - check the input files for syntax errors, but don't do anything beyond that\n"
+		"  -w                         - inhibit all warning messages\n"
+		"  -Wall                      - enable all warnings\n"
+		"  -Werror                    - turn warnings into errors\n"
+		"  -Werror=warning            - turn specified warning into error\n"
+		"  -W[no-]warning             - enable or disable specified warning, \"warning\" maybe one of the following:\n"
+		"      write-string                  - copying address of C string into non-const char*\n"
+		"      unsupported                   - unsupported options, pragmas, etc\n"
+		"      discarded-qualifiers          - some qulifiers are dropped\n"
+		"      implicit-function-declaration - use of a function without prototype\n"
 		"Optimization Options:\n"
 		"  -O[012]                    - optimization level (default: -O2)\n"
 		"  -f[no-]inline              - enable/disable function inlining (default: enabled at -O1)\n"
@@ -1738,11 +1746,246 @@ static void rcc_process_defines(rcc_ctx *rcc, ir_list *def, const char **argv)
 	pp_dtor(rcc);
 }
 
+static uint32_t rcc_parse_warning_kind(const char *str)
+{
+	if (strcmp(str, "write-strings") == 0) {
+		return E_WRITE_STRINGS;
+	} else if (strcmp(str, "unsupported") == 0) {
+		return E_UNSUPPORTED;
+	} else if (strcmp(str, "implicit-function-declaration") == 0) {
+		return E_IMPLICIT_FUNC_DCL;
+	} else if (strcmp(str, "discarded-qualifiers") == 0) {
+		return E_DISCARDED_QUALIFIERS;
+	} else {
+		return 0;
+	}
+}
+
+static int rcc_parse_option(rcc_ctx *rcc, const char *opt, const char *arg, bool cmd)
+{
+	if (opt[0] == '-' && opt[1] == 'O' && strlen(opt) == 3) {
+		if (opt[2] == '0') {
+			rcc->c_opt_flags = (rcc->c_opt_flags & ~C_OPT_LEVEL) | 0;
+			rcc->c_opt_flags &= ~C_OPT_INLINE;
+		} else if (opt[2] == '1') {
+			rcc->c_opt_flags = (rcc->c_opt_flags & ~C_OPT_LEVEL) | 1;
+		} else if (opt[2] == '2') {
+			rcc->c_opt_flags = (rcc->c_opt_flags & ~C_OPT_LEVEL) | 2;
+		} else {
+			goto error;
+		}
+	} else if (opt[0] == '-' && opt[1] == 'I') {
+		const char *path;
+		int ret = 0;
+
+		if (opt[2] == 0) {
+			if (!arg || arg[0] == '-') {
+				goto missing_arg;
+			}
+			path = arg;
+			ret = 1;
+		} else {
+			path = opt + 2;
+		}
+		if (!pp_add_include_dir(rcc, path)) {
+			if (cmd) {
+				fprintf(stderr, "ERROR: too many -I options");
+		    } else {
+				yy_error("too many -I options");
+			}
+			return -1;
+		}
+		return ret;
+	} else if (strcmp(opt, "-fno-inline") == 0) {
+		rcc->c_opt_flags &= ~C_OPT_INLINE;
+	} else if (strcmp(opt, "-finline") == 0) {
+		rcc->c_opt_flags |= C_OPT_INLINE;
+	} else if (strcmp(opt, "-fno-mem2ssa") == 0) {
+		rcc->c_opt_flags &= ~C_OPT_MEM2SSA;
+	} else if (strcmp(opt, "-P") == 0) {
+		rcc->yy_flags |= PP_NO_LINEMARKERS;
+	} else if (strcmp(opt, "-dM") == 0) {
+		rcc->yy_flags |= PP_NO_OUTPUT |PP_DUMP_MACROS;
+	} else if (strcmp(opt, "-dD") == 0) {
+		rcc->yy_flags |= PP_DUMP_MACROS;
+	} else if (strcmp(opt, "-dN") == 0) {
+		rcc->yy_flags |= PP_DUMP_MACROS | PP_DUMP_MACRO_NAMES;
+	} else if (strcmp(opt, "-dI") == 0) {
+		rcc->yy_flags |= PP_DUMP_INCLUDES;
+	} else if (strcmp(opt, "-w") == 0) {
+		rcc->e_warnings = E_WARNINGS_NONE;
+		rcc->e_errors = E_ERROR;
+	} else if (opt[0] == '-' && opt[1] == 'W') {
+		if (strcmp(opt + strlen("-W"), "all") == 0) {
+			rcc->e_warnings = E_WARNINGS_ALL;
+		} else if (strcmp(opt + strlen("-W"), "error") == 0) {
+			rcc->e_errors = E_ERROR | rcc->e_warnings;
+		} else if (strncmp(opt + strlen("-W"), "error=", strlen("error=")) == 0) {
+			uint32_t warn = rcc_parse_warning_kind(opt + strlen("-Werror="));
+			if (!warn) goto error;
+			rcc->e_errors |= warn;
+		} else if (strncmp(opt + strlen("-W"), "no-error=", strlen("no-error=")) == 0) {
+			uint32_t warn = rcc_parse_warning_kind(opt + strlen("-Wno-error="));
+			if (!warn) goto error;
+			rcc->e_errors &= ~warn;
+		} else {
+			size_t n = 2;
+			bool no = 0;
+			uint32_t warn;
+
+			if (strncmp(opt + n, "no-", strlen("no-")) == 0) {
+				no = 1;
+				n += strlen("no-");
+			}
+			warn = rcc_parse_warning_kind(opt + n);
+			if (!warn) goto error;
+			if (no) {
+				rcc->e_warnings &= ~warn;
+				rcc->e_errors &= ~warn;
+			} else {
+				rcc->e_warnings |= warn;
+			}
+		}
+#if defined(IR_TARGET_X86) || defined(IR_TARGET_X64)
+	} else if (strcmp(opt, "-mavx") == 0) {
+		rcc->ir_mflags |= IR_X86_AVX;
+	} else if (strcmp(opt, "-mbmi1") == 0) {
+		rcc->ir_mflags |= IR_X86_BMI1;
+	} else if (strcmp(opt, "-mno-bmi1") == 0) {
+		rcc->ir_mflags_disabled |= IR_X86_BMI1;
+#endif
+	} else if (strcmp(opt, "-muse-fp") == 0) {
+		rcc->ir_flags |= IR_USE_FRAME_POINTER;
+#if defined(IR_TARGET_X86)
+	} else if (strcmp(opt, "-mfastcall") == 0) {
+		rcc->ir_flags |= IR_CC_FASTCALL;
+#endif
+	} else if (strcmp(opt, "--save-cfg") == 0) {
+		rcc->ir_save_flags |= IR_SAVE_CFG;
+	} else if (strcmp(opt, "--save-cfg-map") == 0) {
+		rcc->ir_save_flags |= IR_SAVE_CFG | IR_SAVE_CFG_MAP;
+	} else if (strcmp(opt, "--save-rules") == 0) {
+		rcc->ir_save_flags |= IR_SAVE_RULES;
+	} else if (strcmp(opt, "--save-regs") == 0) {
+		rcc->ir_save_flags |= IR_SAVE_REGS;
+	} else if (strcmp(opt, "--save-use-lists") == 0) {
+		rcc->ir_save_flags |= IR_SAVE_USE_LISTS;
+	} else if (strcmp(opt, "--save-ir-after-load") == 0) {
+		rcc->c_flags |= C_DUMP_IR_AFTER_LOAD;
+	} else if (strcmp(opt, "--save-ir-after-use-lists") == 0) {
+		rcc->c_flags |= C_DUMP_IR_AFTER_USE_LISTS;
+	} else if (strcmp(opt, "--save-ir-after-mem2ssa") == 0) {
+		rcc->c_flags |= C_DUMP_IR_AFTER_MEM2SSA;
+	} else if (strcmp(opt, "--save-ir-after-sccp") == 0) {
+		rcc->c_flags |= C_DUMP_IR_AFTER_SCCP;
+	} else if (strcmp(opt, "--save-ir-after-cfg") == 0) {
+		rcc->c_flags |= C_DUMP_IR_AFTER_CFG;
+	} else if (strcmp(opt, "--save-ir-after-dom") == 0) {
+		rcc->c_flags |= C_DUMP_IR_AFTER_DOM;
+	} else if (strcmp(opt, "--save-ir-after-loop") == 0) {
+		rcc->c_flags |= C_DUMP_IR_AFTER_LOOP;
+	} else if (strcmp(opt, "--save-ir-after-gcm") == 0) {
+		rcc->c_flags |= C_DUMP_IR_AFTER_GCM;
+	} else if (strcmp(opt, "--save-ir-after-scheduling") == 0) {
+		rcc->c_flags |= C_DUMP_IR_AFTER_SCHEDULING;
+	} else if (strcmp(opt, "--save-ir-after-matching") == 0) {
+		rcc->c_flags |= C_DUMP_IR_AFTER_CODE_MATCHING;
+	} else if (strcmp(opt, "--save-ir-after-live-ranges") == 0) {
+		rcc->c_flags |= C_DUMP_IR_AFTER_LIVE_RANGES;
+	} else if (strcmp(opt, "--save-ir-after-coalescing") == 0) {
+		rcc->c_flags |= C_DUMP_IR_AFTER_COALESCING;
+	} else if (strcmp(opt, "--save-ir-after-regalloc") == 0) {
+		rcc->c_flags |= C_DUMP_IR_AFTER_REGALLOC;
+	} else if (strcmp(opt, "--save-ir-codegen") == 0) {
+		rcc->c_flags |= C_DUMP_IR_CODEGEN;
+	} else if (strcmp(opt, "--save-ir-final") == 0) {
+		rcc->c_flags |= C_DUMP_IR_FINAL;
+	} else if (strcmp(opt, "--save-ir-after-each-pass") == 0) {
+		rcc->c_flags |= C_DUMP_IR_AFTER_ALL;
+	} else if (strcmp(opt, "--save-live-ranges") == 0) {
+		rcc->c_flags |= C_DUMP_LIVE_RANGES;
+	} else if (strcmp(opt, "--save-dot") == 0) {
+		rcc->c_flags |= C_DUMP_DOT;
+#ifdef IR_DEBUG
+	} else if (strcmp(opt, "--debug-sccp") == 0) {
+		rcc->ir_flags |= IR_DEBUG_SCCP;
+	} else if (strcmp(opt, "--debug-gcm") == 0) {
+		rcc->ir_flags |= IR_DEBUG_GCM;
+	} else if (strcmp(opt, "--debug-gcm-split") == 0) {
+		rcc->ir_flags |= IR_DEBUG_GCM_SPLIT;
+	} else if (strcmp(opt, "--debug-scheduling") == 0) {
+		rcc->ir_flags |= IR_DEBUG_SCHEDULE;
+	} else if (strcmp(opt, "--debug-regalloc") == 0) {
+		rcc->ir_flags |= IR_DEBUG_RA;
+	} else if (strcmp(opt, "--debug-bb-scheduling") == 0) {
+		rcc->ir_flags |= IR_DEBUG_BB_SCHEDULE;
+#endif
+	} else if (strcmp(opt, "--debug-regset") == 0) {
+		if (!arg || arg[0] == '-') {
+missing_arg:
+			if (cmd) {
+				fprintf(stderr, "ERROR: option \"%s\" requires extra argument\n", opt);
+			} else {
+				yy_warning_fmt("option \"%s\" requires extra argument", opt);
+			}
+			return -1;
+		}
+		rcc->ir_debug_regset = strtoull(arg, NULL, 0);
+		return 1;
+	} else if (strcmp(opt, "-g") == 0) {
+		rcc->c_flags |= C_GDB;
+	} else {
+error:
+		if (cmd) {
+			fprintf(stderr, "ERROR: unsupported option \"%s\" (use --help)\n", opt);
+		} else {
+			yy_warning_ex_fmt(E_UNSUPPORTED, "unsupported option \"%s\"", opt);
+		}
+		return -1;
+	}
+
+	return 0;
+}
+
+void rcc_parse_options(rcc_ctx *rcc, const char *str, size_t len)
+{
+	char *p, *s = alloca(len + 1);
+	char *arg, *opt;
+
+	memcpy(s, str, len);
+	p = s;
+	while (*p == ' ' || *p == '\t') p++;
+	if (*p) {
+		arg = p;
+		while (*p && *p != ' ' && *p != '\t') p++;
+		if (*p) {
+			*p = 0;
+			p++;
+		}
+	} else {
+		arg = NULL;
+	}
+	while (arg) {
+		opt = arg;
+		while (*p == ' ' || *p == '\t') p++;
+		if (*p) {
+			arg = p;
+			while (*p && *p != ' ' && *p != '\t') p++;
+			if (*p) {
+				*p = 0;
+				p++;
+			}
+		} else {
+			arg = NULL;
+		}
+		rcc_parse_option(rcc, opt, arg, 0);
+	}
+}
+
 int main(int argc, const char **argv)
 {
 	rcc_ctx rcc_holder, *rcc = &rcc_holder;
 	bool preprocess_only = 0;
-	uint32_t preprocess_flags = 0, compiler_flags = 0;
 	int run_args = 0;
 	const char *output = NULL;
 	ir_list src, def;
@@ -1750,9 +1993,6 @@ int main(int argc, const char **argv)
 	ir_ctx ctx;
 	double start_time = 0.0;
 	int ret = 1;
-#if defined(IR_TARGET_X86) || defined(IR_TARGET_X64)
-	uint32_t mflags_disabled = 0;
-#endif
 
 	ir_consistency_check();
 
@@ -1763,6 +2003,8 @@ int main(int argc, const char **argv)
 
 	memset(rcc, 0, sizeof(rcc_ctx));
 	rcc->c_opt_flags = 2 | C_OPT_INLINE | C_OPT_MEM2SSA;
+	rcc->e_errors = E_ERRORS_DEFAULT;
+	rcc->e_warnings = E_WARNINGS_DEFAULT;
 	rcc->ir_save_flags = IR_SAVE_SAFE_NAMES;
 	rcc->ir_debug_regset = 0xffffffffffffffff;
 	rcc->protected = 1;
@@ -1770,7 +2012,9 @@ int main(int argc, const char **argv)
 	ir_list_init(&src, 16);
 	ir_list_init(&def, 16);
 	for (i = 1; i < argc; i++) {
-		if (strcmp(argv[i], "-h") == 0
+		if (argv[i][0] != '-') {
+			ir_list_push(&src, i);
+		} else if (strcmp(argv[i], "-h") == 0
 		 || strcmp(argv[i], "--help") == 0) {
 			rcc_help(argv[0]);
 			ret = 0;
@@ -1783,18 +2027,6 @@ int main(int argc, const char **argv)
 			printf("%s\n", IR_TARGET);
 			ret = 0;
 			goto exit;
-		} else if (argv[i][0] == '-' && argv[i][1] == 'O' && strlen(argv[i]) == 3) {
-			if (argv[i][2] == '0') {
-				rcc->c_opt_flags = (rcc->c_opt_flags & ~C_OPT_LEVEL) | 0;
-				rcc->c_opt_flags &= ~C_OPT_INLINE;
-			} else if (argv[i][2] == '1') {
-				rcc->c_opt_flags = (rcc->c_opt_flags & ~C_OPT_LEVEL) | 1;
-			} else if (argv[i][2] == '2') {
-				rcc->c_opt_flags = (rcc->c_opt_flags & ~C_OPT_LEVEL) | 2;
-			} else {
-				fprintf(stderr, "ERROR: Invalid usage' (use --help)\n");
-				goto exit;
-			}
 		} else if (argv[i][0] == '-' && (argv[i][1] == 'D' || argv[i][1] == 'U')) {
 			if (argv[i][2] == 0) {
 				if (i + 1 == argc || argv[i+1][0] == '-') {
@@ -1805,23 +2037,6 @@ int main(int argc, const char **argv)
 				i++;
 			} else {
 				ir_list_push(&def, i);
-			}
-		} else if (argv[i][0] == '-' && argv[i][1] == 'I') {
-			const char *path;
-
-			if (argv[i][2] == 0) {
-				if (i + 1 == argc || argv[i+1][0] == '-') {
-					fprintf(stderr, "ERROR: include directory missing after \"-%c\"\n", argv[i][1]);
-					goto exit;
-				}
-				path = argv[i+1];
-				i++;
-			} else {
-				path = argv[i] + 2;
-			}
-			if (!pp_add_include_dir(rcc, path)) {
-				fprintf(stderr, "ERROR: too many -I options");
-				goto exit;
 			}
 		} else if (argv[i][0] == '-' && argv[i][1] == 'o') {
 			if (argv[i][2] == 0) {
@@ -1834,107 +2049,8 @@ int main(int argc, const char **argv)
 			} else {
 				output = argv[i] + 2;
 			}
-		} else if (strcmp(argv[i], "-fno-inline") == 0) {
-			rcc->c_opt_flags &= ~C_OPT_INLINE;
-		} else if (strcmp(argv[i], "-finline") == 0) {
-			rcc->c_opt_flags |= C_OPT_INLINE;
-		} else if (strcmp(argv[i], "-fno-mem2ssa") == 0) {
-			rcc->c_opt_flags &= ~C_OPT_MEM2SSA;
 		} else if (strcmp(argv[i], "-E") == 0) {
 			preprocess_only = 1;
-		} else if (strcmp(argv[i], "-P") == 0) {
-			preprocess_flags |= PP_NO_LINEMARKERS;
-		} else if (strcmp(argv[i], "-dM") == 0) {
-			preprocess_flags |= PP_NO_OUTPUT |PP_DUMP_MACROS;
-		} else if (strcmp(argv[i], "-dD") == 0) {
-			preprocess_flags |= PP_DUMP_MACROS;
-		} else if (strcmp(argv[i], "-dN") == 0) {
-			preprocess_flags |= PP_DUMP_MACROS | PP_DUMP_MACRO_NAMES;
-		} else if (strcmp(argv[i], "-dI") == 0) {
-			preprocess_flags |= PP_DUMP_INCLUDES;
-		} else if (strcmp(argv[i], "-w") == 0) {
-			compiler_flags |= YY_NO_WARNINGS;
-#if defined(IR_TARGET_X86) || defined(IR_TARGET_X64)
-		} else if (strcmp(argv[i], "-mavx") == 0) {
-			rcc->ir_mflags |= IR_X86_AVX;
-		} else if (strcmp(argv[i], "-mbmi1") == 0) {
-			rcc->ir_mflags |= IR_X86_BMI1;
-		} else if (strcmp(argv[i], "-mno-bmi1") == 0) {
-			mflags_disabled |= IR_X86_BMI1;
-#endif
-		} else if (strcmp(argv[i], "-muse-fp") == 0) {
-			rcc->ir_flags |= IR_USE_FRAME_POINTER;
-#if defined(IR_TARGET_X86)
-		} else if (strcmp(argv[i], "-mfastcall") == 0) {
-			rcc->ir_flags |= IR_CC_FASTCALL;
-#endif
-		} else if (strcmp(argv[i], "--save-cfg") == 0) {
-			rcc->ir_save_flags |= IR_SAVE_CFG;
-		} else if (strcmp(argv[i], "--save-cfg-map") == 0) {
-			rcc->ir_save_flags |= IR_SAVE_CFG | IR_SAVE_CFG_MAP;
-		} else if (strcmp(argv[i], "--save-rules") == 0) {
-			rcc->ir_save_flags |= IR_SAVE_RULES;
-		} else if (strcmp(argv[i], "--save-regs") == 0) {
-			rcc->ir_save_flags |= IR_SAVE_REGS;
-		} else if (strcmp(argv[i], "--save-use-lists") == 0) {
-			rcc->ir_save_flags |= IR_SAVE_USE_LISTS;
-		} else if (strcmp(argv[i], "--save-ir-after-load") == 0) {
-			rcc->c_flags |= C_DUMP_IR_AFTER_LOAD;
-		} else if (strcmp(argv[i], "--save-ir-after-use-lists") == 0) {
-			rcc->c_flags |= C_DUMP_IR_AFTER_USE_LISTS;
-		} else if (strcmp(argv[i], "--save-ir-after-mem2ssa") == 0) {
-			rcc->c_flags |= C_DUMP_IR_AFTER_MEM2SSA;
-		} else if (strcmp(argv[i], "--save-ir-after-sccp") == 0) {
-			rcc->c_flags |= C_DUMP_IR_AFTER_SCCP;
-		} else if (strcmp(argv[i], "--save-ir-after-cfg") == 0) {
-			rcc->c_flags |= C_DUMP_IR_AFTER_CFG;
-		} else if (strcmp(argv[i], "--save-ir-after-dom") == 0) {
-			rcc->c_flags |= C_DUMP_IR_AFTER_DOM;
-		} else if (strcmp(argv[i], "--save-ir-after-loop") == 0) {
-			rcc->c_flags |= C_DUMP_IR_AFTER_LOOP;
-		} else if (strcmp(argv[i], "--save-ir-after-gcm") == 0) {
-			rcc->c_flags |= C_DUMP_IR_AFTER_GCM;
-		} else if (strcmp(argv[i], "--save-ir-after-scheduling") == 0) {
-			rcc->c_flags |= C_DUMP_IR_AFTER_SCHEDULING;
-		} else if (strcmp(argv[i], "--save-ir-after-matching") == 0) {
-			rcc->c_flags |= C_DUMP_IR_AFTER_CODE_MATCHING;
-		} else if (strcmp(argv[i], "--save-ir-after-live-ranges") == 0) {
-			rcc->c_flags |= C_DUMP_IR_AFTER_LIVE_RANGES;
-		} else if (strcmp(argv[i], "--save-ir-after-coalescing") == 0) {
-			rcc->c_flags |= C_DUMP_IR_AFTER_COALESCING;
-		} else if (strcmp(argv[i], "--save-ir-after-regalloc") == 0) {
-			rcc->c_flags |= C_DUMP_IR_AFTER_REGALLOC;
-		} else if (strcmp(argv[i], "--save-ir-codegen") == 0) {
-			rcc->c_flags |= C_DUMP_IR_CODEGEN;
-		} else if (strcmp(argv[i], "--save-ir-final") == 0) {
-			rcc->c_flags |= C_DUMP_IR_FINAL;
-		} else if (strcmp(argv[i], "--save-ir-after-each-pass") == 0) {
-			rcc->c_flags |= C_DUMP_IR_AFTER_ALL;
-		} else if (strcmp(argv[i], "--save-live-ranges") == 0) {
-			rcc->c_flags |= C_DUMP_LIVE_RANGES;
-		} else if (strcmp(argv[i], "--save-dot") == 0) {
-			rcc->c_flags |= C_DUMP_DOT;
-#ifdef IR_DEBUG
-		} else if (strcmp(argv[i], "--debug-sccp") == 0) {
-			rcc->ir_flags |= IR_DEBUG_SCCP;
-		} else if (strcmp(argv[i], "--debug-gcm") == 0) {
-			rcc->ir_flags |= IR_DEBUG_GCM;
-		} else if (strcmp(argv[i], "--debug-gcm-split") == 0) {
-			rcc->ir_flags |= IR_DEBUG_GCM_SPLIT;
-		} else if (strcmp(argv[i], "--debug-scheduling") == 0) {
-			rcc->ir_flags |= IR_DEBUG_SCHEDULE;
-		} else if (strcmp(argv[i], "--debug-regalloc") == 0) {
-			rcc->ir_flags |= IR_DEBUG_RA;
-		} else if (strcmp(argv[i], "--debug-bb-scheduling") == 0) {
-			rcc->ir_flags |= IR_DEBUG_BB_SCHEDULE;
-#endif
-		} else if (strcmp(argv[i], "--debug-regset") == 0) {
-			if (i + 1 == argc || argv[i + 1][0] == '-') {
-				fprintf(stderr, "ERROR: Invalid usage' (use --help)\n");
-				return 1;
-			}
-			rcc->ir_debug_regset = strtoull(argv[i + 1], NULL, 0);
-			i++;
 		} else if (strcmp(argv[i], "--emit-ir") == 0) {
 			rcc->c_flags |= C_DUMP_IR;
 			rcc->ir_save_flags |= IR_SAVE_CFG;
@@ -1948,8 +2064,6 @@ int main(int argc, const char **argv)
 			rcc->c_flags |= C_DUMP_SIZE;
 		} else if (strcmp(argv[i], "--dump-time") == 0) {
 			rcc->c_flags |= C_DUMP_TIME;
-		} else if (strcmp(argv[i], "-g") == 0) {
-			rcc->c_flags |= C_GDB;
 		} else if (strcmp(argv[i], "-p") == 0) {
 			rcc->c_flags |= C_PERF;
 		} else if (strcmp(argv[i], "-fsyntax-only") == 0) {
@@ -1960,11 +2074,11 @@ int main(int argc, const char **argv)
 				run_args = i + 1;
 				break;
 			}
-		} else if (argv[i][0] == '-') {
-			fprintf(stderr, "ERROR: Unknown option '%s' (use --help)\n", argv[i]);
-			goto exit;
 		} else {
-			ir_list_push(&src, i);
+			int ret = rcc_parse_option(rcc, argv[i], i + 1 == argc ? NULL : argv[i + 1], 1);
+
+			if (ret < 0) goto exit;
+			if (ret > 0) i += ret;
 		}
 	}
 
@@ -2008,7 +2122,7 @@ int main(int argc, const char **argv)
 	ir_START();
 
 	if (preprocess_only) {
-		rcc->yy_flags = YY_FLAGS_PP_DEFAULT | preprocess_flags;
+		rcc->yy_flags = YY_FLAGS_PP_DEFAULT | rcc->yy_flags;
 		rcc_init(rcc);
 		if (ir_list_len(&def)) rcc_process_defines(rcc, &def, argv);
 
@@ -2057,18 +2171,18 @@ int main(int argc, const char **argv)
 					fprintf(stderr, "ERROR: -mavx is not compatible with CPU (AVX is not supported)\n");
 					return 1;
 				}
-				if ((cpuinfo & IR_X86_BMI1) && !(mflags_disabled & IR_X86_BMI1)) {
+				if ((cpuinfo & IR_X86_BMI1) && !(rcc->ir_mflags_disabled & IR_X86_BMI1)) {
 					rcc->ir_mflags |= IR_X86_BMI1;
 				}
 			} else {
-				if (!(mflags_disabled & IR_X86_BMI1)) {
+				if (!(rcc->ir_mflags_disabled & IR_X86_BMI1)) {
 					rcc->ir_mflags |= IR_X86_BMI1;
 				}
 			}
 #endif
 		}
 
-		rcc->yy_flags = YY_FLAGS_DEFAULT | compiler_flags;
+		rcc->yy_flags = YY_FLAGS_DEFAULT | (rcc->yy_flags & YY_FLAGS_C);
 		rcc_init(rcc);
 		if (ir_list_len(&def)) rcc_process_defines(rcc, &def, argv);
 

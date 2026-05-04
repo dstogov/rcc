@@ -263,7 +263,9 @@
 	_("__BASE_FILE__",                 YY___BASE_FILE__)               \
 	_("__VA_ARGS__",                   YY___VA_ARGS__)                 \
 	_("E",                             YY_E)                           \
+	_("comment",                       YY__COMMENT)                    \
 	_("once",                          YY_ONCE)                        \
+	_("option",                        YY_OPTION)                      \
 	_("push_macro",                    YY_PUSH_MACRO)                  \
 	_("pop_macro",                     YY_POP_MACRO)                   \
 	_("pack",                          YY_PACK)                        \
@@ -442,11 +444,10 @@ YY_LAST = 0x7fffffff,
 #define PP_EVAL_EXPRESSION   (1<<13)
 #define PP_PREPROCESS        (1<<14)
 
-#define YY_NO_WARNINGS       (1<<16)
-#define YY_LANG_GNU          (1<<17)
-
 #define YY_FLAGS_DEFAULT     (YY_SKIP_WS|YY_SKIP_EOL|YY_SKIP_COMMENTS)
 #define YY_FLAGS_PP_DEFAULT  (PP_PREPROCESS|YY_SKIP_COMMENTS|YY_ACCEPT_PP_NUMBER|YY_ACCEPT_PUNCTUATOR)
+#define YY_FLAGS_PP          (PP_NO_LINEMARKERS|PP_NO_OUTPUT|PP_DUMP_MACROS|PP_DUMP_MACRO_NAMES|PP_DUMP_INCLUDES|PP_EVAL_EXPRESSION|PP_PREPROCESS)
+#define YY_FLAGS_C           0
 
 /* C compiler context/state */
 typedef struct _rcc_ctx rcc_ctx;
@@ -962,6 +963,10 @@ extern const c_type c_type_string;
 extern const c_type c_type_lstring;
 extern const c_type c_type_string_u16;
 extern const c_type c_type_string_u32;
+extern const c_type c_type_const_string;
+extern const c_type c_type_const_lstring;
+extern const c_type c_type_const_string_u16;
+extern const c_type c_type_const_string_u32;
 extern const c_type c_type_ptr;
 extern const c_type c_type_const_ptr;
 
@@ -1180,19 +1185,37 @@ void c_do_global_asm(rcc_ctx *rcc, c_value *asm_str);
 
 /* C Parser */
 bool parse_pp_expr(rcc_ctx *rcc);
+const char* parse_pp_string(rcc_ctx *rcc, size_t *len);
 void parse_vla_param_again(rcc_ctx *rcc, yy_sym *vla_tokens, c_value *val);
 void rcc_parse(rcc_ctx *rcc);
 
 /* Error Reporting */
+#define E_ERROR                        (1<<0)
+#define E_WARNING                      (1<<1)
+
+#define E_WRITE_STRINGS                (1<<2)
+#define E_UNSUPPORTED                  (1<<3)
+#define E_IMPLICIT_FUNC_DCL            (1<<4)
+#define E_DISCARDED_QUALIFIERS         (1<<5)
+
+#define E_ERRORS_DEFAULT               E_ERROR
+#define E_WARNINGS_DEFAULT             (E_WARNING|E_UNSUPPORTED|E_IMPLICIT_FUNC_DCL|E_DISCARDED_QUALIFIERS)
+
+#define E_WARNINGS_NONE                0x00000000U
+#define E_WARNINGS_ALL                 (E_WARNING|E_UNSUPPORTED|E_IMPLICIT_FUNC_DCL|E_DISCARDED_QUALIFIERS)
+
 #define yy_error(_msg)                 yy_error_(rcc, _msg)
 #define yy_error_fmt(_msg, ...)        yy_error_fmt_(rcc, _msg, __VA_ARGS__)
-#define yy_warning(_msg)               yy_warning_(rcc, _msg)
-#define yy_warning_fmt(_msg, ...)      yy_warning_fmt_(rcc, _msg, __VA_ARGS__)
+#define yy_warning(_msg)               yy_warning_(rcc, E_WARNING, _msg)
+#define yy_warning_fmt(_msg, ...)      yy_warning_fmt_(rcc, E_WARNING, _msg, __VA_ARGS__)
+
+#define yy_warning_ex(_kind, _msg)            yy_warning_(rcc, _kind, _msg)
+#define yy_warning_ex_fmt(_kind, _msg, ...)   yy_warning_fmt_(rcc, _kind, _msg, __VA_ARGS__)
 
 void yy_error_(rcc_ctx *rcc, const char *msg) yy_noreturn;
 void yy_error_fmt_(rcc_ctx *rcc, const char *fmt, ...) yy_noreturn;
-void yy_warning_(rcc_ctx *rcc, const char *msg);
-void yy_warning_fmt_(rcc_ctx *rcc, const char *fmt, ...);
+void yy_warning_(rcc_ctx *rcc, uint32_t kind, const char *msg);
+void yy_warning_fmt_(rcc_ctx *rcc, uint32_t kind, const char *fmt, ...);
 
 /* Linker */
 void *c_linker_allocate_data(rcc_ctx *rcc, const char *name, size_t size);
@@ -1317,6 +1340,10 @@ struct _rcc_ctx {
 
 	ir_strtab             c_strtab;                /* Hash to keep a single data object for the identical C strings */
 
+	/* Error Reporting */
+	uint32_t              e_errors;                /* bitset of error kinds that are treated as fatal */
+	uint32_t              e_warnings;              /* bitset of error kinds that are treated as warnings */
+
 	/* Linker */
 	rcc_loader            c_linker;
 	ir_arena             *c_linker_arena;
@@ -1327,6 +1354,7 @@ struct _rcc_ctx {
 
 	uint32_t              ir_flags;                /* IR context flags (see IR_* defines in ir.h) */
 	uint32_t              ir_mflags;               /* CPU specific flags (see IR_X86_... in ir.h) */
+	uint32_t              ir_mflags_disabled;      /* CPU specific flags (see IR_X86_... in ir.h) */
 	uint64_t              ir_debug_regset;
 	uint32_t              ir_save_flags;           /* modificators for IR dumps (see IR_SAVE_* in ir.h) */
 	ir_code_buffer        code_buffer;             /* pre-allocated JIT code area */
@@ -1339,6 +1367,8 @@ struct _rcc_ctx {
 		void             *c_arena_checkpoint;      /* checkpoint to restore "c_arena" state */
 	} reset_state;                                 /* used to restore RCC state between compilation of few files */
 };
+
+void rcc_parse_options(rcc_ctx *ctx, const char *str, size_t len);
 
 /* Standard include files */
 void c_stdinc_init(rcc_ctx *rcc);
