@@ -1,0 +1,47 @@
+--TEST--
+Initializers 035: initialization by compound literal with relocations
+--ARGS--
+--run
+--CODE--
+int printf(const char *s, ...);
+
+struct Wrap {
+	void *func;
+};
+
+int global;
+
+void inc_global (void)
+{
+	global++;
+}
+
+struct Wrap global_wrap[] = {
+	((struct Wrap) {inc_global}),
+	inc_global,
+	&inc_global,
+};
+
+void test_compound_with_relocs (void)
+{
+	struct Wrap local_wrap[] = {
+		((struct Wrap) {inc_global}),
+		inc_global,
+		&inc_global,
+	};
+	void (*p)(void);
+	p = global_wrap[0].func; p();
+	p = global_wrap[1].func; p();
+	p = global_wrap[2].func; p();
+	p = local_wrap[0].func; p();
+	p = local_wrap[1].func; p();
+	p = local_wrap[2].func; p();
+}
+
+int main() {
+	test_compound_with_relocs();
+	printf("%d\n", global);
+	return 0;
+}
+--EXPECT--
+6

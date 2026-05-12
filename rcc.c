@@ -579,20 +579,83 @@ static void c_linker_add_reloc(rcc_ctx *rcc, c_sym *obj, size_t obj_offset, c_na
 
 void c_linker_del_reloc(rcc_ctx *rcc, c_sym *obj, size_t obj_offset)
 {
-	c_reloc *prev = NULL;
-	c_reloc *reloc = obj->reloc;
+	if (c_value_is_ref(&obj->value)) {
+		size_t len;
+		const char *str = ir_get_strl(rcc->active_ctx, rcc->active_ctx->ir_base[obj->value.u.ref].val.name, &len);
+		c_name sym = yy_hash_find(rcc, str, len);
+		obj = rcc->yy_hash.data[sym].sym;
+	}
 
-	while (reloc) {
-		if (reloc->obj_offset == obj_offset) {
-			if (prev) {
-				prev->next = reloc->next;
-			} else {
-				obj->reloc = reloc->next;
+	if (obj->reloc) {
+		c_reloc *prev = NULL;
+		c_reloc *reloc = obj->reloc;
+
+
+		do {
+			if (reloc->obj_offset == obj_offset) {
+				if (prev) {
+					prev->next = reloc->next;
+				} else {
+					obj->reloc = reloc->next;
+				}
+				break;
 			}
-			break;
+			prev = reloc;
+			reloc = reloc->next;
+		} while (reloc);
+	}
+}
+
+static void c_linker_copy_relocs(rcc_ctx *rcc, c_sym *obj, size_t obj_offset, c_value *val)
+{
+	if (c_value_is_ref(&obj->value)) {
+		size_t len;
+		const char *str = ir_get_strl(rcc->active_ctx, rcc->active_ctx->ir_base[obj->value.u.ref].val.name, &len);
+		c_name sym = yy_hash_find(rcc, str, len);
+		obj = rcc->yy_hash.data[sym].sym;
+	}
+
+	if (obj->reloc) {
+		c_reloc *prev = NULL;
+		c_reloc *reloc = obj->reloc;
+		size_t end = obj_offset + val->type->size;
+
+		do {
+			if (reloc->obj_offset >= obj_offset && reloc->obj_offset < end) {
+				reloc = reloc->next;
+				if (prev) {
+					prev->next = reloc;
+				} else {
+					obj->reloc = reloc;
+				}
+			} else {
+				prev = reloc;
+				reloc = reloc->next;
+			}
+		} while (reloc);
+	}
+
+	IR_ASSERT(c_value_is_ref(val) && IR_IS_CONST_REF(val->u.ref));
+	if (rcc->active_ctx->ir_base[val->u.ref].op == IR_SYM) {
+		size_t len;
+		const char *name = ir_get_strl(rcc->active_ctx, rcc->active_ctx->ir_base[val->u.ref].val.name, &len);
+		c_name n = yy_hash_lookup(rcc, name, len);
+		c_sym *sym = rcc->yy_hash.data[n].sym;
+
+		if (sym->reloc) {
+			c_reloc *dst, *src = sym->reloc;
+
+			do {
+				dst = ir_arena_alloc(&rcc->yy_arena, sizeof(c_reloc));
+				dst->obj_offset = src->obj_offset + obj_offset;
+				dst->name = src->name;
+				dst->name_offset = src->name_offset;
+				dst->next = obj->reloc;
+				obj->reloc = dst;
+
+				src = src->next;
+			} while (src);
 		}
-		prev = reloc;
-		reloc = reloc->next;
 	}
 }
 
@@ -660,6 +723,7 @@ bool c_linker_fix_reloc(rcc_ctx *rcc, c_sym *obj, size_t obj_offset, c_value *va
 	 && IR_IS_CONST_REF(val->u.ref)
 	 && val->u.val.ptr) {
 		/* Use a copy of struct/union value */
+		c_linker_copy_relocs(rcc, obj, obj_offset, val);
 		val->u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
 		val->u.ref = IR_UNUSED;
 		return 1;

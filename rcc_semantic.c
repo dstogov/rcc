@@ -8260,6 +8260,7 @@ void c_do_init_expr_end(rcc_ctx *rcc, c_value *v, c_sym *obj, size_t size)
 	c_do_init_end(rcc, obj, size);
 	if (c_value_is_const(&obj->value)) {
 		c_value_set_const(v, obj->value.type, c_type2ir(rcc, obj->value.type), obj->value.u.val);
+#if 0
 	} else if ((!rcc->active_scope || rcc->c_static_data)
 	 && obj->value.type->kind != C_TYPE_ARRAY
 	 && obj->value.type->kind != C_TYPE_STRUCT
@@ -8285,6 +8286,7 @@ void c_do_init_expr_end(rcc_ctx *rcc, c_value *v, c_sym *obj, size_t size)
 			default: IR_ASSERT(0);
 		}
 		c_value_set_const(v, obj->value.type, t, val);
+#endif
 	} else if (obj->value.type->kind != C_TYPE_ARRAY) {
 		c_value_set_lval(v, obj->value.type, c_type2ir(rcc, obj->value.type), obj->value.u.ref);
 		if (IR_IS_CONST_REF(obj->value.u.ref)) v->u.val.ptr = obj->value.u.val.ptr;
