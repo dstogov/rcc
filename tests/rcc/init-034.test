@@ -1,0 +1,36 @@
+--TEST--
+Initializers 034: myltiple initialization of the same element with relocation
+--ARGS--
+--run
+--CODE--
+int printf(const char *s, ...);
+
+static void f1(int x)
+{
+  printf("f1(%d)\n", x);
+}
+
+static void f2(int x)
+{
+  printf("f2(%d)\n", x);
+}
+
+void* a[] = {
+    f1, f2, [1] = f1, f1, [2] = 0, f2
+
+};
+
+int main() {
+	void (*p)(int);
+	int i;
+
+	for (i = 0; i < sizeof(a)/sizeof(a[0]); i++) {
+		p = a[i];
+		if (p) p(i);
+	}
+	return 0;
+}
+--EXPECT--
+f1(0)
+f1(1)
+f2(3)

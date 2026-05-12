@@ -577,6 +577,25 @@ static void c_linker_add_reloc(rcc_ctx *rcc, c_sym *obj, size_t obj_offset, c_na
 	obj->reloc = reloc;
 }
 
+void c_linker_del_reloc(rcc_ctx *rcc, c_sym *obj, size_t obj_offset)
+{
+	c_reloc *prev = NULL;
+	c_reloc *reloc = obj->reloc;
+
+	while (reloc) {
+		if (reloc->obj_offset == obj_offset) {
+			if (prev) {
+				prev->next = reloc->next;
+			} else {
+				obj->reloc = reloc->next;
+			}
+			break;
+		}
+		prev = reloc;
+		reloc = reloc->next;
+	}
+}
+
 static bool c_linker_add_label(ir_loader *loader, const char *str, void *addr)
 {
 	rcc_ctx *rcc = ((rcc_loader*)loader)->rcc;

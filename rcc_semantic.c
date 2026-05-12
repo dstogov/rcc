@@ -8066,6 +8066,11 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val, size_t 
 		IR_ASSERT(offset + type->size <= obj->value.type->size || C_IS_BIT_FIELD(bit_field));
 	}
 	if (c_value_is_const(&obj->value) || (c_value_is_ref(&obj->value) && IR_IS_CONST_REF(obj->value.u.ref))) {
+		if (type->size == sizeof(void*)) {
+			/* Using designators it's possible to initialie the same element multiple times.
+			 * We have to remove relocations added previously. */
+			c_linker_del_reloc(rcc, obj, offset);
+		}
 		if (!c_value_is_const(val) && !c_linker_fix_reloc(rcc, obj, offset, val)) {
 			yy_error("initializer element is not constant");
 		}

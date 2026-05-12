@@ -1220,6 +1220,7 @@ void yy_warning_fmt_(rcc_ctx *rcc, uint32_t kind, const char *fmt, ...);
 /* Linker */
 void *c_linker_allocate_data(rcc_ctx *rcc, const char *name, size_t size);
 bool  c_linker_fix_reloc(rcc_ctx *rcc, c_sym *obj, size_t obj_offset, c_value *val);
+void  c_linker_del_reloc(rcc_ctx *rcc, c_sym *obj, size_t obj_offset);
 
 /* IR compiler */
 void rcc_ir_init(rcc_ctx *rcc, uint32_t flags);
