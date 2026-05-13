@@ -3,6 +3,6 @@ Initializers 009:
 --CODE--
 int a[2] = {[3]=1};
 --EXPECT--
-./tests/rcc/init-009.c:1:16: error: array index in initializer exceeds array bounds
+./tests/rcc/init-009.c:1:15: error: array index in initializer exceeds array bounds
 
 exit code = 1

@@ -1,0 +1,28 @@
+--TEST--
+Initializers 038: initialization of flexable array with array designator
+--ARGS--
+--run
+--CODE--
+#define array_size(a) (sizeof a / sizeof a[0])
+
+int printf(const char *, ...);
+
+int main()
+{
+	static char m1[][2][3] = {[0]={{3,4,5},{6,7,8}},{{9},10},"abc"};
+	char        m2[][2][3] = {[0]={{3,4,5},{6,7,8}},{{9},10},"abc"};
+	int g, i, j, k;
+	for (g = 2; g-- > 0;) {
+		printf("mdfa %s: %d -", "locl\0glob" + g * 5, sizeof m1);
+		for (i = 0; i < array_size(m1); i++)
+			for (j = 0; j < array_size(m1[0]); j++)
+				for (k = 0; k < array_size(m1[0][0]); k++)
+					printf(" %d", (g ? m1:m2)[i][j][k]);
+		printf("\n");
+	}
+	return 0;
+}
+--EXPECT--
+mdfa glob: 18 - 3 4 5 6 7 8 9 0 0 10 0 0 97 98 99 0 0 0
+mdfa locl: 18 - 3 4 5 6 7 8 9 0 0 10 0 0 97 98 99 0 0 0
+

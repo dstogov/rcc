@@ -3,6 +3,6 @@ Initializers 012:
 --CODE--
 int a[2] = {[1.5]=1};
 --EXPECT--
-./tests/rcc/init-012.c:1:18: error: array index in initializer not an integer constant
+./tests/rcc/init-012.c:1:17: error: array index in initializer not an integer constant
 
 exit code = 1

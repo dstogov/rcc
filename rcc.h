@@ -920,11 +920,13 @@ struct _c_label {
 #define C_INIT_STACK_SIZE 32
 
 typedef struct {
-	size_t             offset;
+	size_t             size;
 	uint32_t           level;
+	uint32_t           ranges;
 	struct {
 		const c_type  *type;
 		int64_t        pos;
+		int64_t        last;
 	} stack[C_INIT_STACK_SIZE];
 } c_init;
 
@@ -1112,13 +1114,15 @@ void c_do_label_value(rcc_ctx *rcc, c_value *res, c_name label);
 void c_do_computed_goto(rcc_ctx *rcc, c_value *v);
 
 void c_do_init_obj(rcc_ctx *rcc, c_sym *obj, c_value *v);
+void c_do_init_start(rcc_ctx *rcc, c_sym *obj, c_init *init);
 void c_do_init_dim(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *dim);
+void c_do_init_range(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *last);
 void c_do_init_field(rcc_ctx *rcc, c_sym *obj, c_init *init, c_name field);
-void c_do_init_first(rcc_ctx *rcc, c_sym *obj, c_init *init, const c_type *t, size_t offset);
 void c_do_init_next(rcc_ctx *rcc, c_sym *obj, c_init *init);
-void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val, size_t *size);
-const c_type *c_do_init_nested(rcc_ctx *rcc, c_sym *obj, c_init *init, bool b, size_t *offset_ptr);
-void c_do_init_end(rcc_ctx *rcc, c_sym *obj, size_t size);
+void c_do_init_rollback(rcc_ctx *rcc, c_sym *obj, c_init *init, uint32_t orig_level, uint32_t level);
+void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val);
+void c_do_init_nested(rcc_ctx *rcc, c_sym *obj, c_init *init, bool b);
+void c_do_init_end(rcc_ctx *rcc, c_sym *obj, c_init *init);
 
 void c_do_init_expr_start(rcc_ctx *rcc, c_sym *obj, const c_type *t);
 void c_do_init_expr_end(rcc_ctx *rcc, c_value *v, c_sym *obj, size_t size);

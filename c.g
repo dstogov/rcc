@@ -700,49 +700,60 @@ initializer(rcc_ctx *rcc, c_sym *obj):                     {rcc->c_static_data =
 	(                                                      {c_value v;}
                                                            {c_value_clear(&v);}
 		assignment_expression(rcc, &v)                     {c_do_init_obj(rcc, obj, &v);}
-	|	                                                   {size_t size = obj->value.type->size;}
-		initializer_contents(rcc, obj, obj->value.type, 0, &size)
-		                                                   {c_do_init_end(rcc, obj, size);}
+	|                                                      {size_t size;}
+		initializer_contents(rcc, obj, &size)
 	)                                                      {rcc->c_static_data = 0;}
 ;
 
-nested_initializer(rcc_ctx *rcc, c_sym *obj, c_init *init, bool b, size_t *size):
-                                                           {c_value v;}
-                                                           {c_value_clear(&v);}
-		assignment_expression(rcc, &v)                     {c_do_init_set(rcc, obj, init, &v, size);}
-	|                                                      {size_t offset;}
-	                                                       {const c_type *type = c_do_init_nested(rcc, obj, init, b, &offset);}
-		initializer_contents(rcc, obj, type, offset, size)
+initializer_contents(rcc_ctx *rcc, c_sym *obj, size_t *size):
+                                                           {c_init init;}
+		                                                   {c_do_init_start(rcc, obj, &init);}
+	nested_initializer_contents(rcc, obj, &init)           {c_do_init_end(rcc, obj, &init);}
+	                                                       {*size = init.size;}
 ;
 
-initializer_contents(rcc_ctx *rcc, c_sym *obj, const c_type *t, size_t offset, size_t *size):
+nested_initializer(rcc_ctx *rcc, c_sym *obj, c_init *init, bool b):
+                                                           {c_value v;}
+                                                           {c_value_clear(&v);}
+		assignment_expression(rcc, &v)                     {c_do_init_set(rcc, obj, init, &v);}
+	|                                                      {uint32_t orig_level = init->level;}
+	                                                       {c_do_init_nested(rcc, obj, init, b);}
+		nested_initializer_contents(rcc, obj, init)        {init->level = orig_level;}
+;
+
+nested_initializer_contents(rcc_ctx *rcc, c_sym *obj, c_init *init):
 	"{"
-	(                                                      {c_init init;}
-		                                                   {c_do_init_first(rcc, obj, &init, t, offset);}
-		(	nested_initializer(rcc, obj, &init, 0, size)
-		|	designated_initializer(rcc, obj, &init, size)
+	(	(	nested_initializer(rcc, obj, init, 0)
+		|	designated_initializer(rcc, obj, init)
 		)
 		(	","
 			(	&"}"                                       {break; /* manual conflict resolution */}
 				"}"
-			|                                              {c_do_init_next(rcc, obj, &init);}
-				nested_initializer(rcc, obj, &init, 0, size)
-			|	                                           {c_do_init_first(rcc, obj, &init, t, offset);}
-				designated_initializer(rcc, obj, &init, size)
+			|                                              {c_do_init_next(rcc, obj, init);}
+				nested_initializer(rcc, obj, init, 0)
+			|	designated_initializer(rcc, obj, init)
 			)
 		)*
 	)?
 	"}"
 ;
 
-designated_initializer(rcc_ctx *rcc, c_sym *obj, c_init *init, size_t *size):
-	(                                                     {c_value v;}
-		"[" constant_expression(rcc, &v) "]"              {c_do_init_dim(rcc, obj, init, &v);}
-	|	                                                  {c_name name;}
-		"." ID(rcc, &name)                                {c_do_init_field(rcc, obj, init, name);}
+designated_initializer(rcc_ctx *rcc, c_sym *obj, c_init *init):
+                                                           {uint32_t level, orig_level = init->level;}
+	(                                                      {c_value v;}
+														   {level = init->level;}
+		"[" constant_expression(rcc, &v)                   {c_do_init_dim(rcc, obj, init, &v);}
+		(
+			"..."
+			constant_expression(rcc, &v)                   {c_do_init_range(rcc, obj, init, &v);}
+		)?
+		"]"
+	|	                                                   {c_name name;}
+														   {level = init->level;}
+		"." ID(rcc, &name)                                 {c_do_init_field(rcc, obj, init, name);}
 	)+
 	"="
-	nested_initializer(rcc, obj, init, 1, size)
+	nested_initializer(rcc, obj, init, 1)                  {c_do_init_rollback(rcc, obj, init, orig_level, level);}
 ;
 
 static_assert_declaration(rcc_ctx *rcc):                   {c_value cond, msg;}
@@ -983,9 +994,9 @@ builtin_parameters(rcc_ctx *rcc, c_value *val, c_name name):
 dummy_value(rcc_ctx *rcc, const c_type *t):                {ir_ref old_control = c_do_nocode(rcc);}
                                                            {c_value val;}
 	(                                                      {c_sym obj;}
-	                                                       {size_t size = t->size;}
+                                                           {size_t size = t->size;}
 	                                                       {c_do_init_expr_start(rcc, &obj, t);}
-		initializer_contents(rcc, &obj, t, 0, &size)       {c_do_init_expr_end(rcc, &val, &obj, size);}
+		initializer_contents(rcc, &obj, &size)             {c_do_init_expr_end(rcc, &val, &obj, size);}
 /*	|	unary_expression(&val)*/
 	)                                                      {c_do_end_nocode(rcc, old_control);}
 ;
@@ -1003,8 +1014,7 @@ unary_expression(rcc_ctx *rcc, c_value *val):
 			(                                              {c_sym obj;}
                                                            {size_t size = t->size;}
                                                            {c_do_init_expr_start(rcc, &obj, t);}
-				initializer_contents(rcc, &obj, t, 0, &size)
-				                                           {c_do_init_expr_end(rcc, &v, &obj, size);}
+				initializer_contents(rcc, &obj, &size)     {c_do_init_expr_end(rcc, &v, &obj, size);}
 			|                                              {c_value_clear(&v);}
 				unary_expression(rcc, &v)                  {c_do_cast(rcc, t, &v);}
 			)

@@ -1,0 +1,21 @@
+--TEST--
+Initializers 037: multiple range designators
+--ARGS--
+--run
+--CODE--
+int printf(const char *, ...);
+int main()
+{
+	int i = 0, ret = 0;
+	struct {int x,y[3];} 
+	a[] = {[0 ... 99].x = 1, [0 ... 99].y[0 ... 2] = 2, [50 ... 52].y[1 ... 2] = 3};
+
+	for (i = 0; i < 100; i++) {
+		ret += a[i].x + a[i].y[0] + a[i].y[2];
+	}
+	printf("%d\n", ret);
+	return 0;
+}
+--EXPECT--
+503
+

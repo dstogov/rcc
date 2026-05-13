@@ -4,6 +4,6 @@ Initializers 011:
 int i = 0;
 int a[2] = {[i]=1};
 --EXPECT--
-./tests/rcc/init-011.c:2:16: error: array index in initializer not an integer constant
+./tests/rcc/init-011.c:2:15: error: array index in initializer not an integer constant
 
 exit code = 1

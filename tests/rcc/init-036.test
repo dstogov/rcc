@@ -1,0 +1,20 @@
+--TEST--
+Initializers 036: initialization with range designator evaluates expression once
+--ARGS--
+--run
+--CODE--
+int printf(const char *, ...);
+int main()
+{
+	int i = 0, ret = 0;
+	int a[] = {[0 ... 99] = ++i};
+
+	for (i = 0; i < 100; i++) {
+		ret += a[i];
+	}
+	printf("%d\n", ret);
+	return 0;
+}
+--EXPECT--
+100
+

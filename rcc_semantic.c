@@ -7796,16 +7796,20 @@ void c_do_init_obj(rcc_ctx *rcc, c_sym *obj, c_value *val)
 	}
 }
 
-void c_do_init_first(rcc_ctx *rcc, c_sym *obj, c_init *init, const c_type *type, size_t offset)
+void c_do_init_start(rcc_ctx *rcc, c_sym *obj, c_init *init)
 {
-	if (obj->value.type->attr & C_ATTR_VLA) {
-		IR_ASSERT(obj->value.type->kind == C_TYPE_ARRAY);
+	const c_type *type = obj->value.type;
+
+	if (type->attr & C_ATTR_VLA) {
+		IR_ASSERT(type->kind == C_TYPE_ARRAY);
 		yy_error("variable length array may not be initialized except with an empty initializer");
 	}
-	init->offset = offset;
+	init->size = type->size;
 	init->level = 0;
+	init->ranges = 0;
 	init->stack[0].type = type;
 	init->stack[0].pos = 0;
+	init->stack[0].last = 0;
 }
 
 void c_do_init_dim(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *dim)
@@ -7819,9 +7823,26 @@ void c_do_init_dim(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *dim)
 
 	if (init->level >= C_INIT_STACK_SIZE) yy_error("too deep initialization level");
 	init->stack[init->level].pos = dim->u.val.i64;
+	init->stack[init->level].last = 0;
 	init->level++;
 	init->stack[init->level].type = type->array.type;
 	init->stack[init->level].pos = 0;
+	init->stack[init->level].last = 0;
+}
+
+void c_do_init_range(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *last)
+{
+	const c_type *type = init->stack[init->level - 1].type;
+
+	if (!c_value_is_const(last) || !C_IS_TYPE_INT(last->type)) yy_error("array index in initializer not an integer constant");
+	if (C_IS_TYPE_SIGNED(last->type) && last->u.val.i64 < 0) yy_error("array index in initializer exceeds array bounds");
+	if (last->u.val.i64 >= type->array.length && !(type->attr & C_ATTR_FLEXIBLE)) yy_error("array index in initializer exceeds array bounds");
+	if (last->u.val.i64 < init->stack[init->level - 1].pos) yy_error("empty index range in initializer");
+
+	if (init->stack[init->level - 1].pos != last->u.val.i64) {
+		init->stack[init->level - 1].last = last->u.val.i64;
+		init->ranges++;
+	}
 }
 
 static bool c_find_struct_field_ex(rcc_ctx *rcc, const c_type *type, c_name name, c_init *init)
@@ -7833,13 +7854,16 @@ static bool c_find_struct_field_ex(rcc_ctx *rcc, const c_type *type, c_name name
 		if (f->name == name) {
 			if (init->level >= C_INIT_STACK_SIZE) yy_error("too deep initialization level");
 			init->stack[init->level].pos = i;
+			init->stack[init->level].last = 0;
 			init->level++;
 			init->stack[init->level].type = f->type;
 			init->stack[init->level].pos = 0;
+			init->stack[init->level].last = 0;
 			return 1;
 		} else if (!f->name && (f->type->kind == C_TYPE_STRUCT || f->type->kind == C_TYPE_UNION)) {
 			if (init->level >= C_INIT_STACK_SIZE) yy_error("too deep initialization level");
 			init->stack[init->level].pos = i;
+			init->stack[init->level].last = 0;
 			init->level++;
 			init->stack[init->level].type = f->type;
 			if (c_find_struct_field_ex(rcc, f->type, name, init)) return 1;
@@ -7893,7 +7917,29 @@ void c_do_init_next(rcc_ctx *rcc, c_sym *obj, c_init *init)
 	}
 }
 
-void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val, size_t *size)
+void c_do_init_rollback(rcc_ctx *rcc, c_sym *obj, c_init *init, uint32_t orig_level, uint32_t level)
+{
+	if (init->ranges) {
+		while (init->level > level) {
+			if (init->stack[init->level].last) {
+				init->ranges--;
+			}
+			init->level--;
+		}
+		while(1) {
+			if (init->stack[level].last) {
+				init->stack[level].pos = init->stack[level].last;
+				init->stack[level].last = 0;
+				init->ranges--;
+			}
+			if (level == orig_level) break;
+			level--;
+		}
+	}
+	init->level = level;
+}
+
+void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val)
 {
 	const c_type *type = init->stack[init->level].type;
 	const c_type *last_array_type = NULL;
@@ -7901,6 +7947,46 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val, size_t 
 	size_t offset, new_size;
 	uint32_t i;
 	uint16_t bit_field = 0;
+
+	if (init->ranges) {
+		typedef struct {
+			int64_t  orig_pos;
+			uint32_t level;
+		} range_pos_t;
+		uint32_t i, j, ranges = init->ranges;
+		range_pos_t *range_pos = alloca(sizeof(range_pos_t) * ranges);
+		bool done;
+
+		/* remember range positions */
+		for (i = 0, j = 0; i <= init->level; i++) {
+			if (init->stack[i].last != 0) {
+				range_pos[j].orig_pos = init->stack[i].pos;
+				range_pos[j].level = i;
+				j++;
+			}
+		}
+		IR_ASSERT(j == ranges);
+
+		/* Call c_do_init_set() for all combinations of ranges */
+		init->ranges = 0;
+		done = 0;
+		do {
+			c_do_init_set(rcc, obj, init, val);
+			for (i = ranges; i > 0; i--) {
+				j = range_pos[i - 1].level;
+				if (init->stack[j].pos == init->stack[j].last) {
+					init->stack[j].pos = range_pos[i - 1].orig_pos;
+					if (i == 1) done = 1;
+				} else {
+					init->stack[j].pos++;
+					break;
+				}
+			}
+		} while (!done);
+
+		init->ranges = ranges;
+		return;
+	}
 
 	while (1) {
 		if (type == val->type) {
@@ -7959,10 +8045,11 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val, size_t 
 		init->level++;
 		init->stack[init->level].type = type;
 		init->stack[init->level].pos = 0;
+		init->stack[init->level].last = 0;
 	}
 
 	/* recalculate offset */
-	offset = init->offset;
+	offset = 0;
 	for (i = 0; i <= init->level; i++) {
 		const c_type *t = init->stack[i].type;
 		if (t->kind == C_TYPE_ARRAY) {
@@ -7996,7 +8083,7 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val, size_t 
 
 			if (len > (size_t)type->array.length && !(type->attr & C_ATTR_FLEXIBLE)) {
 				if (len - type->array.type->size == (size_t)type->array.length) {
-					len -=  - type->array.type->size;
+					len -= type->array.type->size;
 				} else if (val->type->array.type->size == 1) {
 					yy_error("initializer-string for array of \"char\" is too long");
 				} else {
@@ -8004,7 +8091,7 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val, size_t 
 				}
 			}
 
-			new_size = *size;
+			new_size = init->size;
 			if (type->attr & C_ATTR_FLEXIBLE) {
 				if (obj->value.type == type) {
 					new_size = len;
@@ -8021,15 +8108,15 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val, size_t 
 			}
 			if (c_value_is_const(&obj->value)
 			 || (c_value_is_ref(&obj->value) && IR_IS_CONST_REF(obj->value.u.ref))) {
-				if (new_size > *size) {
-					c_do_grow_flexible(rcc, obj, *size, new_size);
-					*size = new_size;
+				if (new_size > init->size) {
+					c_do_grow_flexible(rcc, obj, init->size, new_size);
+					init->size = new_size;
 				}
 				memcpy((char*)obj->value.u.val.ptr + offset, str, len);
 			} else {
 				IR_ASSERT(obj->value.u.ref > 0);
 				IR_ASSERT(rcc->active_ctx->ir_base[obj->value.u.ref].op == IR_ALLOCA);
-				if (new_size > *size) *size = new_size;
+				if (new_size > init->size) init->size = new_size;
 				ir_memcpy(rcc,
 					ir_ADD_A(obj->value.u.ref, ir_const_size_t(rcc->active_ctx, offset)),
 					c_create_str_sym(rcc, val),
@@ -8041,7 +8128,7 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val, size_t 
 		c_do_check_cvt(rcc, type, val, -1);
 	}
 
-	new_size = *size;
+	new_size = init->size;
 	if (obj->value.type->kind == C_TYPE_ARRAY && (obj->value.type->attr & C_ATTR_FLEXIBLE)) {
 		if (last_array_type && last_array_type != obj->value.type) {
 			yy_error("initialization of flexible array member in a nested context");
@@ -8049,7 +8136,7 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val, size_t 
 		if (offset + type->size > obj->value.type->size) {
 			size_t len =
 				(offset + type->size + obj->value.type->array.type->size - 1) / obj->value.type->array.type->size;
-			if (obj->value.type->array.type->size * len > *size) {
+			if (obj->value.type->array.type->size * len > init->size) {
 				new_size = obj->value.type->array.type->size * len;
 			}
 		}
@@ -8059,7 +8146,7 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val, size_t 
 			yy_error("initialization of flexible array member in a nested context");
 		}
 		/* last element of struct */
-		if (last_array_offset + last_array_type->array.type->size > *size) {
+		if (last_array_offset + last_array_type->array.type->size > init->size) {
 			new_size = last_array_offset + last_array_type->array.type->size;
 		}
 	} else {
@@ -8075,9 +8162,9 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val, size_t 
 			yy_error("initializer element is not constant");
 		}
 		IR_ASSERT(/*obj->value.u.type == IR_ADDR &&*/ obj->value.u.val.ptr);
-		if (new_size > *size) {
-			c_do_grow_flexible(rcc, obj, *size, new_size);
-			*size = new_size;
+		if (new_size > init->size) {
+			c_do_grow_flexible(rcc, obj, init->size, new_size);
+			init->size = new_size;
 		}
 		if (!C_IS_BIT_FIELD(bit_field)) {
 			c_do_init((char*)obj->value.u.val.ptr + offset, val);
@@ -8109,7 +8196,7 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val, size_t 
 		}
 	} else {
 		IR_ASSERT(obj->value.u.ref > 0);
-		if (new_size > *size) *size = new_size;
+		if (new_size > init->size) init->size = new_size;
 		if (type->kind == C_TYPE_STRUCT || type->kind == C_TYPE_UNION) {
 			IR_ASSERT(!C_IS_BIT_FIELD(bit_field));
 			IR_ASSERT(rcc->active_ctx->ir_base[obj->value.u.ref].op == IR_ALLOCA);
@@ -8145,11 +8232,9 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val, size_t 
 	}
 }
 
-const c_type *c_do_init_nested(rcc_ctx *rcc, c_sym *obj, c_init *init, bool b, size_t *offset_ptr)
+void c_do_init_nested(rcc_ctx *rcc, c_sym *obj, c_init *init, bool b)
 {
 	const c_type *type = init->stack[init->level].type;
-	size_t offset;
-	uint32_t i;
 
 	if (!b) {
 		if (type->kind == C_TYPE_ARRAY) {
@@ -8166,32 +8251,15 @@ const c_type *c_do_init_nested(rcc_ctx *rcc, c_sym *obj, c_init *init, bool b, s
 
 	if (type->kind != C_TYPE_ARRAY && type->kind != C_TYPE_STRUCT && type->kind != C_TYPE_UNION) {
 		yy_warning("braces around scalar initializer");
+	} else if (!b) {
+		init->level++;
+		init->stack[init->level].type = type;
+		init->stack[init->level].pos = 0;
+		init->stack[init->level].last = 0;
 	}
-
-	/* recalculate offset */
-	offset = init->offset;
-	for (i = 0; i <= init->level; i++) {
-		const c_type *t = init->stack[i].type;
-		if (t->kind == C_TYPE_ARRAY) {
-			offset += t->array.type->size * init->stack[i].pos;
-		} else if (t->kind == C_TYPE_STRUCT || t->kind == C_TYPE_UNION) {
-			if (init->stack[i].pos < t->record.num_fields) {
-				c_field *f = &t->record.fields[init->stack[i].pos];
-				offset += f->offset;
-				IR_ASSERT(!C_IS_BIT_FIELD(f->bit_field) || i == init->level);
-			} else {
-				IR_ASSERT(i == init->level);
-			}
-		} else {
-			IR_ASSERT(i == init->level);
-		}
-	}
-
-	*offset_ptr = offset;
-	return type;
 }
 
-void c_do_init_end(rcc_ctx *rcc, c_sym *obj, size_t size)
+void c_do_init_end(rcc_ctx *rcc, c_sym *obj, c_init *init)
 {
 	if (obj->value.type->attr & C_ATTR_FLEXIBLE) {
 		if (obj->value.type->kind == C_TYPE_ARRAY) {
@@ -8200,18 +8268,18 @@ void c_do_init_end(rcc_ctx *rcc, c_sym *obj, size_t size)
 
 			*type = *obj->value.type;
 			if (rcc->active_scope) type->flags |= C_TYPE_GLOBAL;
-			type->array.length = size / type->array.type->size;
-			type->size = size;
+			type->array.length = init->size / type->array.type->size;
+			type->size = init->size;
 			type->attr &= ~C_ATTR_FLEXIBLE;
 			obj->value.type = type;
 		}
 		if (!c_value_is_const(&obj->value)
 		 && (!c_value_is_ref(&obj->value) || !IR_IS_CONST_REF(obj->value.u.ref))) {
-			c_do_init_patch_flexible_alloca(rcc, obj->value.u.ref, size);
+			c_do_init_patch_flexible_alloca(rcc, obj->value.u.ref, init->size);
 		}
 	}
 	if (obj->tmp_data) {
-		c_do_end_flexible(rcc, obj, size);
+		c_do_end_flexible(rcc, obj, init->size);
 	}
 }
 
@@ -8257,7 +8325,6 @@ void c_do_init_expr_start(rcc_ctx *rcc, c_sym *obj, const c_type *type)
 
 void c_do_init_expr_end(rcc_ctx *rcc, c_value *v, c_sym *obj, size_t size)
 {
-	c_do_init_end(rcc, obj, size);
 	if (c_value_is_const(&obj->value)) {
 		c_value_set_const(v, obj->value.type, c_type2ir(rcc, obj->value.type), obj->value.u.val);
 #if 0

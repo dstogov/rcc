@@ -2,8 +2,6 @@
 tinycc 090: struct init
 --ARGS--
 --run
---XFAIL--
-range designators in intializer are not supported
 --CODE--
 typedef unsigned char u8;
 typedef struct {} empty_s;
