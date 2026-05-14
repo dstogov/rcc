@@ -1,0 +1,27 @@
+--TEST--
+__attribute__((cleanup)) 001:
+--ARGS--
+--run
+--CODE--
+int printf(const char *, ...);
+
+int foo(int *n)
+{
+	printf("foo(%d)\n", *n);
+	return 1;
+}
+
+int x __attribute__((cleanup(foo))) = 1;
+
+int main()
+{
+	int y __attribute__((cleanup(foo))) = 2;
+	int __attribute__((cleanup(foo))) static a = 3;
+	int __attribute__((cleanup(foo))) auto b = 4;
+	return 0;
+}
+--EXPECT--
+./tests/rcc/cleanup-01.c:9:37: warning: __attribure__((cleanup(foo))) ignored, it only applies to local variables
+./tests/rcc/cleanup-01.c:14:45: warning: __attribure__((cleanup(foo))) ignored, it only applies to local variables
+foo(4)
+foo(2)

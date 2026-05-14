@@ -794,6 +794,7 @@ struct _c_dcl {
 	uint32_t               attr;
 	const c_type          *type;
 	c_name                 alias;
+	c_name                 cleanup_func; /* may be set for local variables */
 	int8_t                 reg;
 };
 
@@ -845,6 +846,7 @@ struct _c_sym {
 	union {
 		c_reloc               *reloc;          /* list of cross-references to other symbols */
 		ir_ctx                *ctx;            /* function IR (used for delayed code-gen or function inlining) */
+		c_name                 cleanup_func;
 	};
 };
 
@@ -883,11 +885,14 @@ struct _c_param {
 	const c_type          *type;
 };
 
+#define C_SCOPE_HAS_CLEANUP    (1<<0)
+
 struct _c_scope {
 	pp_list   list;
 	void     *checkpoint;
 	ir_ref    vla_block;
 	ir_ref    last_vla_block;
+	uint32_t  flags;
 	c_scope  *prev;
 };
 
@@ -1034,6 +1039,7 @@ void c_empty_declaration(rcc_ctx *rcc, c_dcl *d);
 
 void c_gcc_attribute_aligned(rcc_ctx *rcc, c_dcl *d, c_name attr, c_value *v);
 void c_gcc_attribute_packed(rcc_ctx *rcc, c_dcl *d, c_name attr);
+void c_gcc_attribute_cleanup(rcc_ctx *rcc, c_dcl *d, c_name attr, c_name func);
 yy_sym c_gcc_attribute(rcc_ctx *rcc, c_dcl *dcl, c_name attr, yy_sym sym);
 void c_gcc_attribute_alias(rcc_ctx *rcc, c_dcl *d, c_name attr, c_value *v);
 void c_asm_alias(rcc_ctx *rcc, c_dcl *d, c_value *v);

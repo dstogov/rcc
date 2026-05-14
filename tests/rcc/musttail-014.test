@@ -1,0 +1,25 @@
+--TEST--
+__attribute__((musttail)) 014:
+--ARGS--
+--run
+--CODE--
+int printf(const char *, ...);
+void dtor(int *x)
+{
+	printf("%d\n", *x);
+}
+int bar(int x) {
+	return x * 2;
+}
+int foo(int x) {
+	int y __attribute__((cleanup(dtor))) = 24;
+	__attribute__((musttail)) return bar(x);
+}
+int main() {
+	printf("%d\n", foo(21));
+	return 0;
+}
+--EXPECT--
+./tests/rcc/musttail-014.c:12:1: error: cannot tail-call: blocked by variable with __attribute__((cleanup))
+
+exit code = 1

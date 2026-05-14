@@ -2,8 +2,6 @@
 tinycc 003: struct
 --ARGS--
 --run
---XFAIL--
-__attribute__((cleanup)) is not supported yet
 --CODE--
 extern int printf(const char*, ...);
 
@@ -44,7 +42,7 @@ int main()
    return 0;
 }
 --EXPECT--
-03_struct.c:14: warning: attribute '__cleanup__' ignored on type
+./tests/tinycc/tests2/003_struct.c:14:2: warning: __attribure__((cleanup(fred$))) ignored, it only applies to local variables
 12
 34
 12

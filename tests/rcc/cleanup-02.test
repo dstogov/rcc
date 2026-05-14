@@ -1,0 +1,43 @@
+--TEST--
+__attribute__((cleanup)) 002:
+--ARGS--
+--run
+--CODE--
+int printf(const char *, ...);
+
+int foo(int *n)
+{
+	printf("foo(%d)\n", *n);
+	return 1;
+}
+
+void test(int n)
+{
+	if (n > 1) {
+		int y __attribute__((cleanup(foo))) = 1;
+		if (n > 2) {
+			int __attribute__((cleanup(foo))) auto b = 2;
+			return;
+		}
+		return;
+	}
+	return;
+}
+
+int main()
+{
+	printf("test(1)\n");
+	test(1);
+	printf("test(2)\n");
+	test(2);
+	printf("test(3)\n");
+	test(3);
+	return 0;
+}
+--EXPECT--
+test(1)
+test(2)
+foo(1)
+test(3)
+foo(2)
+foo(1)

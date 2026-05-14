@@ -428,6 +428,8 @@ attrib(rcc_ctx *rcc, c_dcl *d):                            {c_name name = sym;}
 	|	("always_inline"|"__always_inline__")              {d->attr |= C_ATTR_ALWAYS_INLINE;}
 	|	("cdecl"|"__cdecl__")                              {if ((d->attr & C_ATTR_CALL_CONV) && (d->attr & C_ATTR_CALL_CONV) != C_ATTR_CC_CDECL) yy_error("multiple calling conventions");}
 	                                                       {d->attr |= C_ATTR_CC_CDECL;}
+	|	("cleanup"|"__cleanup__")                          {c_name func;}
+		"(" ID(rcc, &func) ")"                             {c_gcc_attribute_cleanup(rcc, d, name, func);}
 	|	("cold"|"__cold__")                                {d->attr |= C_ATTR_COLD;}
 	|	("const"|"__const__")                              {d->attr |= C_ATTR_CONST_FUNC;}
 	|	("deprecated"|"__deprecated__")                    {d->attr |= C_ATTR_DEPRECATED;}

@@ -394,8 +394,55 @@ void c_push_scope(rcc_ctx *rcc, c_scope *scope)
 	scope->checkpoint = ir_arena_checkpoint(rcc->c_arena);
 	scope->vla_block = IR_UNUSED;
 	scope->last_vla_block = rcc->active_scope ? rcc->active_scope->last_vla_block : IR_UNUSED;
+	scope->flags = 0;
 	scope->prev = rcc->active_scope;
 	rcc->active_scope = scope;
+}
+
+static void c_do_cleanup_var(rcc_ctx *rcc, c_sym *sym)
+{
+	ir_ref ref;
+	ir_insn *insn;
+	size_t len;
+	const char *str;
+
+	IR_ASSERT(sym->kind == C_SYM_VAR && c_value_is_ref(&sym->value));
+	ref = sym->value.u.ref;
+	insn = &rcc->active_ctx->ir_base[ref];
+	IR_ASSERT(insn->op == IR_ALLOCA || insn->op == IR_VAR);
+	if (insn->op == IR_VAR) {
+		ref = ir_VADDR(ref);
+	}
+	str = yy_sym2strl(rcc, sym->cleanup_func, &len);
+	ir_CALL_1(IR_VOID,
+		ir_const_func(rcc->active_ctx,
+			ir_strl(rcc->active_ctx, str, len),
+			ir_proto_1(rcc->active_ctx, 0, IR_VOID, IR_ADDR)),
+		ref);
+}
+
+static void c_do_cleanup_vars(rcc_ctx *rcc, c_scope *scope)
+{
+	if (scope->list.syms) {
+		uint32_t n = scope->list.len;
+		yy_sym id, *p;
+		void *ptr;
+		uintptr_t kind;
+
+		while (n) {
+			n -= 1 + sizeof(void*)/sizeof(uint32_t);
+			p = scope->list.syms + n;
+			id = *p++;
+			pp_load_ptr(p, &ptr);
+			kind = ((uintptr_t)ptr) & C_POP_MASK;
+			if (kind == C_POP_SYM
+			 && rcc->yy_hash.data[id].sym->kind == C_SYM_VAR
+			 && rcc->yy_hash.data[id].sym->linkage == C_LINK_NONE
+			 && rcc->yy_hash.data[id].sym->cleanup_func) {
+				c_do_cleanup_var(rcc, rcc->yy_hash.data[id].sym);
+			}
+		}
+	}
 }
 
 void c_pop_scope_light(rcc_ctx *rcc, c_scope *scope)
@@ -430,6 +477,12 @@ void c_pop_scope_light(rcc_ctx *rcc, c_scope *scope)
 
 void c_pop_scope(rcc_ctx *rcc, c_scope *scope)
 {
+	if ((scope->flags & C_SCOPE_HAS_CLEANUP)
+	 && rcc->active_ctx->control
+	 && (rcc->active_ctx->ir_base[rcc->active_ctx->control].op != IR_BEGIN
+	  || rcc->active_ctx->ir_base[rcc->active_ctx->control].op1)) {
+		c_do_cleanup_vars(rcc, scope);
+	}
 	if (scope->vla_block
 	 && rcc->active_ctx->control
 	 && (rcc->active_ctx->ir_base[rcc->active_ctx->control].op != IR_BEGIN
@@ -484,6 +537,7 @@ static void c_leave_scope(rcc_ctx *rcc, c_scope *to)
 
 	while (scope != to) {
 		IR_ASSERT(scope);
+		if (scope->flags & C_SCOPE_HAS_CLEANUP) c_do_cleanup_vars(rcc, scope);
 		if (scope->vla_block) vla_block = scope->vla_block;
 		scope = scope->prev;
 	}
@@ -1529,6 +1583,34 @@ c_sym *c_declare(rcc_ctx *rcc, c_name name, c_dcl *d)
 
 	rcc->yy_hash.data[name].sym = sym;
 
+
+	if (d->cleanup_func) {
+		c_sym *f = rcc->yy_hash.data[d->cleanup_func].sym;
+
+		if (sym->kind != C_SYM_VAR || !sym->scope || sym->linkage != C_LINK_NONE) {
+			yy_warning_fmt("__attribure__((cleanup(%s))) ignored, it only applies to local variables",
+				yy_sym2str(rcc, d->cleanup_func));
+		} else if (c_value_is_reg(&sym->value)) {
+			yy_error_fmt("__attribure__((cleanup(%s))) cannot be applyed to register variable",
+				yy_sym2str(rcc, d->cleanup_func));
+		} else if (!f || f->value.type->kind != C_TYPE_FUNC) {
+			yy_error_fmt("__attribure__((cleanup(%s))) argument is not a function",
+				yy_sym2str(rcc, d->cleanup_func));
+		} else if (f->value.type->func.num_params != 1) {
+			yy_error_fmt("__attribure__((cleanup(%s))) function must take 1 parameter",
+				yy_sym2str(rcc, d->cleanup_func));
+		} else if (!f->value.type->func.params[0].type
+		 || f->value.type->func.params[0].type->kind != C_TYPE_POINTER
+		 || (f->value.type->func.params[0].type->pointer.type->kind != C_TYPE_VOID
+		  && !c_compatible_types(f->value.type->func.params[0].type->pointer.type, sym->value.type, 1, 0))) {
+			yy_error_fmt("__attribure__((cleanup(%s))) function parameter is incompatible with type of variable",
+				yy_sym2str(rcc, d->cleanup_func));
+		} else {
+			sym->cleanup_func = d->cleanup_func;
+			scope->flags |= C_SCOPE_HAS_CLEANUP;
+		}
+	}
+
 	return sym;
 }
 
@@ -1545,6 +1627,10 @@ void c_empty_declaration(rcc_ctx *rcc, c_dcl *d)
 		}
 	} else if (d->flags & C_TYPE_SPEC_ANY) {
 		yy_warning("useless type specifier in empty declaration");
+	}
+	if (d->cleanup_func) {
+		yy_warning_fmt("__attribure__((cleanup(%s))) ignored, it only applies to local variables",
+			yy_sym2str(rcc, d->cleanup_func));
 	}
 }
 
@@ -2517,6 +2603,15 @@ void c_gcc_attribute_packed(rcc_ctx *rcc, c_dcl *d, c_name attr)
 	} else {
 		yy_warning_fmt("\"%s\" attribure ignored", yy_sym2str(rcc, attr));
 	}
+}
+
+void c_gcc_attribute_cleanup(rcc_ctx *rcc, c_dcl *d, c_name attr, c_name func)
+{
+	if (d->cleanup_func && d->cleanup_func != func) {
+		yy_error_fmt("duplicate __attribure__((%s))", yy_sym2str(rcc, attr));
+	}
+
+	d->cleanup_func = func;
 }
 
 yy_sym c_gcc_attribute(rcc_ctx *rcc, c_dcl *d, c_name attr, yy_sym sym)
@@ -7292,8 +7387,16 @@ static bool c_may_tailcall(rcc_ctx *rcc, ir_ref ref, bool musttail)
 		if (scope->vla_block) {
 			if (musttail) yy_error("cannot tail-call: blocked by VLA");
 			return 0;
+		} else if (scope->flags & C_SCOPE_HAS_CLEANUP) {
+			if (musttail) yy_error("cannot tail-call: blocked by variable with __attribute__((cleanup))");
+			return 0;
 		}
 		scope = scope->prev;
+	}
+
+	if (scope->flags & C_SCOPE_HAS_CLEANUP) {
+		if (musttail) yy_error("cannot tail-call: blocked by variable with __attribute__((cleanup))");
+		return 0;
 	}
 
 	if (insn->inputs_count != t2->func.num_params + 2) {
@@ -7330,6 +7433,7 @@ void c_do_return(rcc_ctx *rcc, c_value *val)
 {
 	IR_ASSERT(rcc->active_func);
 	c_leave_scope(rcc, rcc->active_func_scope);
+	if (rcc->active_func_scope->flags & C_SCOPE_HAS_CLEANUP) c_do_cleanup_vars(rcc, rcc->active_func_scope);
 	if (val && c_value_is_set(val) && val->type->kind != C_TYPE_VOID) {
 		if (!rcc->active_ctx->ret_type) {
 			yy_error("\"return\" with a value, in function returning void");
@@ -7385,6 +7489,7 @@ void c_do_tailcall(rcc_ctx *rcc, c_value *val)
 		return;
 	}
 	c_leave_scope(rcc, rcc->active_func_scope);
+	if (rcc->active_func_scope->flags & C_SCOPE_HAS_CLEANUP) c_do_cleanup_vars(rcc, rcc->active_func_scope);
 
 	IR_ASSERT(val
 		&& c_value_is_ref(val)
@@ -7408,6 +7513,8 @@ void c_do_goto(rcc_ctx *rcc, c_name name)
 	if (!label) {
 		label = c_new_label(rcc, name, rcc->active_func_scope, NULL, rcc->active_scope == rcc->active_func_scope);
 	}
+
+	// TODO: clenup variables ???
 
 	if (rcc->active_scope->last_vla_block) {
 		ir_ref goto_vla_block = rcc->active_scope->last_vla_block;
@@ -7470,6 +7577,7 @@ c_label *c_do_set_label(rcc_ctx *rcc, c_name name)
 			ir_insn *insn = &rcc->active_ctx->ir_base[ref];
 
 			IR_ASSERT(insn->op == IR_END);
+			// TODO: clenup variables ???
 			/* fix BLOCK_END instructions inseted by forward GOTO */
 			ir_insn *prev = &rcc->active_ctx->ir_base[insn->op1];
 			if (prev->op == IR_BLOCK_END) {
