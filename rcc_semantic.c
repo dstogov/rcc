@@ -8574,12 +8574,9 @@ void c_do_func_start(rcc_ctx *rcc, c_name name, c_dcl *d, c_scope *scope)
 
 		if (p->name) {
 			c_name name = p->name;
-			c_dcl dcl;
+			c_dcl dcl = {.flags = C_DCL_PARAM, .attr = 0, .type = t};
 			c_sym *obj;
 
-			dcl.flags = C_DCL_PARAM;
-			dcl.attr = 0;
-			dcl.type = t;
 			obj = c_declare(rcc, name, &dcl);
 			IR_ASSERT(obj &&  obj->kind == C_SYM_VAR && c_value_is_ref(&obj->value));
 			if (t->kind == C_TYPE_STRUCT || t->kind == C_TYPE_UNION) {
