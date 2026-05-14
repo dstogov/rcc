@@ -2269,8 +2269,14 @@ int main(int argc, const char **argv)
 		if (n > 1) rcc_remember_state(rcc);
 		for (uint32_t j = 0; j < n; j++) {
 			const char *input = argv[ir_list_at(&src, j)];
+			size_t len = strlen(input);
 
 			if (j) rcc_reset_state(rcc);
+			if (len > 2 && input[len - 2] == '.' && (input[len - 1] == 's' || input[len - 1] == 'S')) {
+				rcc->yy_flags |= PP_ASM_COMMENTS;
+			} else {
+				rcc->yy_flags &= ~PP_ASM_COMMENTS;
+			}
 			if (!rcc_preprocess(rcc, input, stdout)) {
 				rcc_free(rcc);
 				ir_free(&ctx);

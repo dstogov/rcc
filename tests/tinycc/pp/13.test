@@ -2,8 +2,8 @@
 TCC 13
 --ARGS--
 -E -P
---XFAIL--
-preprocessing of assembler is not supported yet
+--EXT--
+.s
 --CODE--
 # `modelist' label. Each video mode record looks like:
 #ifdef AAA

@@ -1245,6 +1245,31 @@ static void pp_skip_until_eol(rcc_ctx *rcc)
 	} while (sym != YY_EOL);
 }
 
+static void pp_skip_asm_comments(rcc_ctx *rcc)
+{
+	const unsigned char *pos;
+	uint8_t ch;
+
+	IR_ASSERT(!rcc->pp_stream);
+	pos = (const unsigned char*)rcc->yy_pos;
+	while (1) {
+		ch = *++pos;
+		if (ch == '\r') {
+			ch = *++pos;
+			if (ch == '\n') pos++;
+			rcc->yy_line++;
+			rcc->yy_linepos = (const char*)pos;
+			break;
+		} else if (ch == '\n') {
+			pos++;
+			rcc->yy_line++;
+			rcc->yy_linepos = (const char*)pos;
+			break;
+		}
+	}
+	rcc->yy_pos = (const char*)pos;
+}
+
 static bool pp_eval_ifdef(rcc_ctx *rcc, bool ifdef, bool start_of_include)
 {
 	yy_sym id, sym = yy_next(rcc);
@@ -2613,8 +2638,12 @@ void pp_parse_directive(rcc_ctx *rcc)
 				rcc->yy_flags = save_flags;
 				return;
 			default:
-				yy_warning("invalid preprocessing directive");
-				pp_skip_until_eol(rcc);
+				if (rcc->yy_flags & PP_ASM_COMMENTS) {
+					pp_skip_asm_comments(rcc);
+				} else {
+					yy_warning("invalid preprocessing directive");
+					pp_skip_until_eol(rcc);
+				}
 				break;
 		}
 
