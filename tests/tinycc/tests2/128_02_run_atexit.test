@@ -1,5 +1,5 @@
 --TEST--
-tinycc 128: run atexit
+tinycc 128.02: run atexit
 --ARGS--
 --run
 --XFAIL--
@@ -45,33 +45,17 @@ void test(void)
     on_exit(cleanup4, "cleanup4");
 }
 
-#if defined test_128_return
 int main(int argc, char **argv)
 {
     test();
-    return 1;
+	exit(2);
+	return 0;
 } 
-
-#elif defined test_128_exit
-int main(int argc, char **argv)
-{
-    test();
-    exit(2);
-} 
-#endif
 --EXPECT--
-[test_128_return]
-cleanup5
-1 cleanup4
-1 cleanup3
-cleanup2
-cleanup1
-[returns 1]
-
-[test_128_exit]
-cleanup5
 2 cleanup4
 2 cleanup3
 cleanup2
 cleanup1
-[returns 2]
+cleanup5
+
+exit code = 2
