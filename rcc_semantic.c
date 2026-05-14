@@ -8818,7 +8818,7 @@ void c_do_func_end(rcc_ctx *rcc, c_name name, c_dcl *d, c_scope *scope)
 		rcc->c_computed_goto_targets = IR_UNUSED;
 	}
 
-	rcc_ir_compile(rcc, name, rcc->active_func);
+	rcc_ir_compile(rcc, name, d, rcc->active_func);
 
 	rcc->active_func = NULL; // TODO: nested functions ???
 	rcc->active_func_name = 0; // TODO: nested functions ???

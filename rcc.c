@@ -267,7 +267,7 @@ static void rcc_ir_codegen(rcc_ctx *rcc, c_name name, ir_ctx *ctx, c_sym *sym)
 	sym->has_code = C_CODE_DONE;
 }
 
-void rcc_ir_compile(rcc_ctx *rcc, c_name name, c_sym *sym)
+void rcc_ir_compile(rcc_ctx *rcc, c_name name, c_dcl *d, c_sym *sym)
 {
 	ir_ctx *ctx = rcc->active_ctx;
 	c_value *func = &sym->value;
@@ -429,7 +429,8 @@ void rcc_ir_compile(rcc_ctx *rcc, c_name name, c_sym *sym)
 		rcc_ir_codegen(rcc, name, ctx, sym);
 		ir_free(ctx);
 	} else {
-		if (((rcc->c_flags & C_SINGLE_FILE) ? name == YY_MAIN : sym->linkage == C_LINK_EXTERNAL)
+		if ((((rcc->c_flags & C_SINGLE_FILE) ? name == YY_MAIN : sym->linkage == C_LINK_EXTERNAL)
+		  || (d->attr2 & (C_ATTR2_CONSTRUCTOR|C_ATTR2_DESTRUCTOR)))
 		 && !sym->has_code) {
 			sym->has_code = C_CODE_SCHEDULED;
 			if (!ir_list_capasity(&rcc->codegen_queue)) ir_list_init(&rcc->codegen_queue, 32);
@@ -440,6 +441,34 @@ delay_codegen:
 		memcpy(copy, ctx, sizeof(ir_ctx));
 		sym->ctx = copy;
 	}
+
+	if (d->attr2 & C_ATTR2_CONSTRUCTOR) {
+		rcc->constructors = ir_mem_realloc(rcc->constructors, sizeof(c_name) * (rcc->constructors_count + 1));
+		rcc->constructors[rcc->constructors_count] = name;
+		rcc->constructors_count++;
+	}
+
+	if (d->attr2 & C_ATTR2_DESTRUCTOR) {
+		rcc->destructors = ir_mem_realloc(rcc->destructors, sizeof(c_name) * (rcc->destructors_count + 1));
+		rcc->destructors[rcc->destructors_count] = name;
+		rcc->destructors_count++;
+	}
+}
+
+static const void* c_linker_func_addr(rcc_ctx *rcc, c_name name)
+{
+	c_sym *sym = rcc->yy_hash.data[name].sym;
+
+	if (!sym || sym->kind != C_SYM_FUNC || !c_value_is_const(&sym->value)) {
+		c_linker_sym *link = rcc->yy_hash.data[name].link;
+
+		if (!link || !link->addr) {
+			return NULL;
+		}
+		return link->addr;
+	}
+	IR_ASSERT(sym->value.u.type == IR_ADDR && sym->value.u.val.ptr);
+	return sym->value.u.val.ptr;
 }
 
 static void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, uint32_t flags)
@@ -957,6 +986,8 @@ void rcc_free(rcc_ctx *rcc)
 		ir_mem_free(rcc->pp_list_cache[rcc->pp_list_cache_idx].syms);
 	}
 	yy_hash_free(rcc);
+	if (rcc->constructors) ir_mem_free(rcc->constructors);
+	if (rcc->destructors) ir_mem_free(rcc->destructors);
 	if (rcc->c_linker_arena) ir_arena_free(rcc->c_linker_arena);
 	if (rcc->c_arena) ir_arena_free(rcc->c_arena);
 	if (rcc->yy_arena) ir_arena_free(rcc->yy_arena);
@@ -1701,6 +1732,24 @@ static void rcc_atexit(void)
 	}
 }
 
+static uint32_t rcc_destructors_count = 0;
+static const void **rcc_destructors = NULL;
+
+static void rcc_atexit_destructors(void)
+{
+	if (rcc_destructors_count) {
+		uint32_t i;
+
+		for (i = 0; i < rcc_destructors_count; i++) {
+			void (*f)(void) = rcc_destructors[i];
+			f();
+		}
+		ir_mem_free(rcc_destructors);
+		rcc_destructors_count = 0;
+		rcc_destructors = NULL;
+	}
+}
+
 static void rcc_help(const char *cmd)
 {
 	printf(
@@ -2310,7 +2359,6 @@ int main(int argc, const char **argv)
 		if (rcc->c_flags & C_DUMP_TIME) {
 			double t = rcc_time();
 			fprintf(stderr, "\ncompilation time = %0.6f\n", t - start_time);
-			start_time = t;
 		}
 
 		if (rcc->c_flags & C_RUN) {
@@ -2319,30 +2367,46 @@ int main(int argc, const char **argv)
 			int (*func)(int, const char**) = NULL;
 
 			if (ir_list_len(&src) > 1) {
-				c_linker_sym *link;
-
 				rcc_reset_state(rcc);
 				rcc_link(rcc);
-				link = rcc->yy_hash.data[YY_MAIN].link;
+			}
 
-				if (!link || !link->addr) {
-					rcc_free(rcc);
-					ir_free(&ctx);
-					fprintf(stderr, "undefined reference to function \"main\"\n");
-					goto exit;
-				}
-				func = link->addr;
-			} else {
-				c_sym *sym = rcc->yy_hash.data[YY_MAIN].sym;
+			func = c_linker_func_addr(rcc, YY_MAIN);
 
-				if (!sym || sym->kind != C_SYM_FUNC || !c_value_is_const(&sym->value)) {
-					rcc_free(rcc);
-					ir_free(&ctx);
-					fprintf(stderr, "undefined reference to function \"main\"\n");
-					goto exit;
+			/* resolve constructors */
+			const void **rcc_constructors = NULL;
+			if (rcc->constructors_count) {
+				uint32_t i;
+
+				rcc_constructors = ir_mem_malloc(sizeof(void*) * rcc->constructors_count);
+				for (i = 0; i < rcc->constructors_count; i++) {
+					yy_sym name = rcc->constructors[i];
+					rcc_constructors[i] = c_linker_func_addr(rcc, name);
+					if (!rcc_constructors[i]) {
+						rcc_free(rcc);
+						ir_free(&ctx);
+						fprintf(stderr, "undefined reference to function \"%s\"\n", yy_sym2str(rcc, name));
+						goto exit;
+					}
 				}
-				IR_ASSERT(sym->value.u.type == IR_ADDR && sym->value.u.val.ptr);
-				func = sym->value.u.val.ptr;
+			}
+
+			/* resolve destructors */
+			if (rcc->destructors_count) {
+				uint32_t i;
+
+				rcc_destructors_count = rcc->destructors_count;
+				rcc_destructors = ir_mem_malloc(sizeof(void*) * rcc->destructors_count);
+				for (i = 0; i < rcc->destructors_count; i++) {
+					c_name name = rcc->destructors[i];
+					rcc_destructors[i] = c_linker_func_addr(rcc, name);
+					if (!rcc_destructors[i]) {
+						rcc_free(rcc);
+						ir_free(&ctx);
+						fprintf(stderr, "undefined reference to function \"%s\"\n", yy_sym2str(rcc, name));
+						goto exit;
+					}
+				}
 			}
 
 			ir_free(&ctx);
@@ -2359,8 +2423,23 @@ int main(int argc, const char **argv)
 			}
 
 			if (rcc->c_flags & C_DUMP_TIME) {
-				rcc_atexit_start = start_time;
+				rcc_atexit_start = start_time = rcc_time();
 				atexit(rcc_atexit);
+			}
+
+			/* Call constructors */
+			if (rcc->constructors_count) {
+				uint32_t i;
+
+				for (i = 0; i < rcc->constructors_count; i++) {
+					void (*f)(void) = rcc_constructors[i];
+					f();
+				}
+				ir_mem_free(rcc_constructors);
+			}
+
+			if (rcc->destructors_count) {
+				atexit(rcc_atexit_destructors);
 			}
 
 			ret = func(jit_argc, jit_argv);

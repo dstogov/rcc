@@ -12,6 +12,6 @@
 
 - inline asm
 
-- better linker
+- better linker (code relocs, asm and weak linkage, mmaped data segments: ./tests/tinycc/tests2/108_constructor.test)
 
 - TBAA

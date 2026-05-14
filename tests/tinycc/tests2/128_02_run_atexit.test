@@ -2,8 +2,6 @@
 tinycc 128.02: run atexit
 --ARGS--
 --run
---XFAIL--
-unsupported attribure "destructor"
 --CODE--
 #include <stdio.h>
 

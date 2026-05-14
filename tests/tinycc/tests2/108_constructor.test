@@ -2,8 +2,6 @@
 tinycc 108: constructor
 --ARGS--
 --run
---XFAIL--
-unsupported attribure "destructor"
 --CODE--
 extern int write (int fd, void *buf, int len);
 
@@ -23,9 +21,11 @@ int
 main (void)
 {
   write (1, "main\n", 5);
-  return 0;
+  return 1;
 }
 --EXPECT--
 constructor
 main
 destructor
+
+exit code = 1

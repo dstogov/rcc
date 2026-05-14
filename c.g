@@ -432,9 +432,11 @@ attrib(rcc_ctx *rcc, c_dcl *d):                            {c_name name = sym;}
 		"(" ID(rcc, &func) ")"                             {c_gcc_attribute_cleanup(rcc, d, name, func);}
 	|	("cold"|"__cold__")                                {d->attr |= C_ATTR_COLD;}
 	|	("const"|"__const__")                              {d->attr |= C_ATTR_CONST_FUNC;}
+	|	("constructor"|"__constructor__")                  {d->attr2 |= C_ATTR2_CONSTRUCTOR;}
 	|	("deprecated"|"__deprecated__")                    {d->attr |= C_ATTR_DEPRECATED;}
                                                            {c_value_clear(&v);}
 		( "(" constant_expression(rcc, &v) ")" )?
+	|	("destructor"|"__destructor__")                    {d->attr2 |= C_ATTR2_DESTRUCTOR;}
 	|	("fallthrough"|"__fallthrough__")                  {d->attr |= C_ATTR_FALLTHROUGH;}
 	|	("fastcall"|"__fastcall__")                        {if ((d->attr & C_ATTR_CALL_CONV) && (d->attr & C_ATTR_CALL_CONV) != C_ATTR_CC_FASTCALL) yy_error("multiple calling conventions");}
 	                                                       {d->attr |= C_ATTR_CC_FASTCALL;}

@@ -681,6 +681,9 @@ void pp_list_grow(pp_list *l, uint32_t size);
 #define C_POINTER_ATTRS \
 	(C_ATTR_CONST|C_ATTR_RESTRICT)
 
+#define C_ATTR2_CONSTRUCTOR      (1<<0)
+#define C_ATTR2_DESTRUCTOR       (1<<1)
+
 typedef enum {
 	C_TYPE_VOID,
 	C_TYPE_BOOL,
@@ -796,6 +799,7 @@ struct _c_dcl {
 	c_name                 alias;
 	c_name                 cleanup_func; /* may be set for local variables */
 	int8_t                 reg;
+	uint32_t               attr2;
 };
 
 typedef enum {
@@ -1234,7 +1238,7 @@ void  c_linker_del_reloc(rcc_ctx *rcc, c_sym *obj, size_t obj_offset);
 
 /* IR compiler */
 void rcc_ir_init(rcc_ctx *rcc, uint32_t flags);
-void rcc_ir_compile(rcc_ctx *rcc, c_name name, c_sym *sym);
+void rcc_ir_compile(rcc_ctx *rcc, c_name name, c_dcl *d, c_sym *sym);
 
 /* C compiler context/state */
 #define INCLUDE_STACK_SIZE   32
@@ -1358,6 +1362,10 @@ struct _rcc_ctx {
 	/* Linker */
 	rcc_loader            c_linker;
 	ir_arena             *c_linker_arena;
+	uint32_t              constructors_count;
+	uint32_t              destructors_count;
+	c_name               *constructors;
+	c_name               *destructors;
 
 	/* Main Compiler Driver */
 	uint32_t              c_flags;                 /* compiler actions (see C_RUN, C_DUMP_* in rcc.c) */
