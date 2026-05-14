@@ -401,24 +401,14 @@ void c_push_scope(rcc_ctx *rcc, c_scope *scope)
 
 static void c_do_cleanup_var(rcc_ctx *rcc, c_sym *sym)
 {
-	ir_ref ref;
-	ir_insn *insn;
-	size_t len;
-	const char *str;
+	c_value dummy, func, param;
 
-	IR_ASSERT(sym->kind == C_SYM_VAR && c_value_is_ref(&sym->value));
-	ref = sym->value.u.ref;
-	insn = &rcc->active_ctx->ir_base[ref];
-	IR_ASSERT(insn->op == IR_ALLOCA || insn->op == IR_VAR);
-	if (insn->op == IR_VAR) {
-		ref = ir_VADDR(ref);
-	}
-	str = yy_sym2strl(rcc, sym->cleanup_func, &len);
-	ir_CALL_1(IR_VOID,
-		ir_const_func(rcc->active_ctx,
-			ir_strl(rcc->active_ctx, str, len),
-			ir_proto_1(rcc->active_ctx, 0, IR_VOID, IR_ADDR)),
-		ref);
+	IR_ASSERT(sym->kind == C_SYM_VAR && c_value_is_ref(&sym->value) && sym->cleanup_func);
+
+	c_resolve_sym_name(rcc, &func, sym->cleanup_func, YY__LPAREN);
+	param = sym->value;
+	c_do_addr(rcc, &param);
+	c_do_call(rcc, &func, 1, &param, &dummy);
 }
 
 static void c_do_cleanup_vars(rcc_ctx *rcc, c_scope *scope)
