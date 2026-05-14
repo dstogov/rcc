@@ -2378,6 +2378,10 @@ int main(int argc, const char **argv)
 			}
 #endif
 
+			// We cannot free linker memory, because it may be used by JIT atexit() handlers.
+			// TODO: As a workaround, we disable rcc_free() only for non zero return code ???
+			if (ret) exit(ret);
+
 			rcc_free(rcc);
 			return ret;
 		} else {
