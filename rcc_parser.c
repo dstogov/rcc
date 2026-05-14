@@ -389,8 +389,8 @@ static yy_sym parse_declaration(yy_sym sym, rcc_ctx *rcc, uint32_t flags) {
 				yy_error_sym("unexpected", sym);
 			}
 		} else if (sym == YY__SEMICOLON) {
-			sym = get_sym();
 			c_empty_declaration(rcc, &d0);
+			sym = get_sym();
 		} else {
 			yy_error_sym("unexpected", sym);
 		}

@@ -255,7 +255,8 @@ declaration(rcc_ctx *rcc, uint32_t flags):                 {c_dcl d0 = {0};}
 				compound_statement(rcc)                    {c_do_func_end(rcc, name, &d, &scope);}
                 "}"                                        {rcc->active_ctx = old_ctx;}
 			)
-		|	";"                                            {c_empty_declaration(rcc, &d0);}
+		|                                                  {c_empty_declaration(rcc, &d0);}
+			";"
 		)
 	)
 ;
