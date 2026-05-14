@@ -1465,6 +1465,13 @@ static void rcc_link_internal(rcc_ctx *rcc)
 					if (rcc->c_flags & C_SINGLE_FILE) {
 						void *addr = ir_resolve_sym_name(p->str);
 						if (!addr) {
+							/* for some reason "atexit" can't be resolved by dladdr() */
+							if (p->len == sizeof("atexit")-1
+							 && memcmp(p->str, "atexit", sizeof("atexit")-1) == 0) {
+								addr = atexit;
+							}
+						}
+						if (!addr) {
 							yy_error_fmt("Unresolved symbol \"%s\"", p->str);
 						} else {
 							ir_fix_thunk((void*)p->sym->value.u.val.addr, addr);
