@@ -7382,6 +7382,7 @@ void c_do_tailcall(rcc_ctx *rcc, c_value *val)
 		yy_error("cannot tail-call: return value must be a call");
 	} else if (!c_may_tailcall(rcc, val->u.ref, 1)) {
 		c_do_return(rcc, val);
+		return;
 	}
 	c_leave_scope(rcc, rcc->active_func_scope);
 
