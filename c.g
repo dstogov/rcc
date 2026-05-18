@@ -729,12 +729,16 @@ nested_initializer(rcc_ctx *rcc, c_sym *obj, c_init *init, bool b):
 
 nested_initializer_contents(rcc_ctx *rcc, c_sym *obj, c_init *init):
 	"{"
-	(	(	nested_initializer(rcc, obj, init, 0)
+	(	(	?{!C_IS_ID(sym) || is_label(rcc, sym)}
+			gcc_field_initializer(rcc, obj, init)
+		|	nested_initializer(rcc, obj, init, 0)
 		|	designated_initializer(rcc, obj, init)
 		)
 		(	","
 			(	&"}"                                       {break; /* manual conflict resolution */}
 				"}"
+			|	?{!C_IS_ID(sym) || is_label(rcc, sym)}
+				gcc_field_initializer(rcc, obj, init)
 			|                                              {c_do_init_next(rcc, obj, init);}
 				nested_initializer(rcc, obj, init, 0)
 			|	designated_initializer(rcc, obj, init)
@@ -760,6 +764,13 @@ designated_initializer(rcc_ctx *rcc, c_sym *obj, c_init *init):
 	)+
 	"="
 	nested_initializer(rcc, obj, init, 1)                  {c_do_init_rollback(rcc, obj, init, orig_level, level);}
+;
+
+gcc_field_initializer(rcc_ctx *rcc, c_sym *obj, c_init *init):
+                                                           {uint32_t level = init->level;}
+			                                               {c_name name;}
+	ID(rcc, &name) ":"                                     {c_do_init_field(rcc, obj, init, name);}
+	nested_initializer(rcc, obj, init, 1)                  {c_do_init_rollback(rcc, obj, init, level, level);}
 ;
 
 static_assert_declaration(rcc_ctx *rcc):                   {c_value cond, msg;}
