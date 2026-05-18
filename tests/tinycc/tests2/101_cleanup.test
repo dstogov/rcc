@@ -2,8 +2,6 @@
 tinycc 101: cleanup
 --ARGS--
 --run
---XFAIL--
-__attribute__((cleanup)) is not supported yet
 --CODE--
 extern int printf(const char*, ...);
 static int glob_i = 0;
@@ -292,3 +290,5 @@ str: 2
 str: 1
 str: last goto out
 str: wololo
+
+exit code = 105

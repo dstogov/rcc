@@ -393,8 +393,13 @@ void c_push_scope(rcc_ctx *rcc, c_scope *scope)
 	scope->list.len = 0;
 	scope->checkpoint = ir_arena_checkpoint(rcc->c_arena);
 	scope->vla_block = IR_UNUSED;
-	scope->last_vla_block = rcc->active_scope ? rcc->active_scope->last_vla_block : IR_UNUSED;
-	scope->flags = 0;
+	if (rcc->active_scope) {
+		scope->last_vla_block = rcc->active_scope->last_vla_block;
+		scope->cleanup_sym = rcc->active_scope->cleanup_sym;
+	} else {
+		scope->last_vla_block = IR_UNUSED;
+		scope->cleanup_sym = NULL;
+	}
 	scope->prev = rcc->active_scope;
 	rcc->active_scope = scope;
 }
@@ -411,27 +416,11 @@ static void c_do_cleanup_var(rcc_ctx *rcc, c_sym *sym)
 	c_do_call(rcc, &func, 1, &param, &dummy);
 }
 
-static void c_do_cleanup_vars(rcc_ctx *rcc, c_scope *scope)
+static void c_do_cleanup_vars(rcc_ctx *rcc, c_sym *from, c_sym *to)
 {
-	if (scope->list.syms) {
-		uint32_t n = scope->list.len;
-		yy_sym id, *p;
-		void *ptr;
-		uintptr_t kind;
-
-		while (n) {
-			n -= 1 + sizeof(void*)/sizeof(uint32_t);
-			p = scope->list.syms + n;
-			id = *p++;
-			pp_load_ptr(p, &ptr);
-			kind = ((uintptr_t)ptr) & C_POP_MASK;
-			if (kind == C_POP_SYM
-			 && rcc->yy_hash.data[id].sym->kind == C_SYM_VAR
-			 && rcc->yy_hash.data[id].sym->linkage == C_LINK_NONE
-			 && rcc->yy_hash.data[id].sym->cleanup_func) {
-				c_do_cleanup_var(rcc, rcc->yy_hash.data[id].sym);
-			}
-		}
+	while (from != to) {
+		c_do_cleanup_var(rcc, from);
+		from = from->cleanup_next;
 	}
 }
 
@@ -467,11 +456,12 @@ void c_pop_scope_light(rcc_ctx *rcc, c_scope *scope)
 
 void c_pop_scope(rcc_ctx *rcc, c_scope *scope)
 {
-	if ((scope->flags & C_SCOPE_HAS_CLEANUP)
+	if (scope->cleanup_sym
 	 && rcc->active_ctx->control
 	 && (rcc->active_ctx->ir_base[rcc->active_ctx->control].op != IR_BEGIN
 	  || rcc->active_ctx->ir_base[rcc->active_ctx->control].op1)) {
-		c_do_cleanup_vars(rcc, scope);
+		c_do_cleanup_vars(rcc, scope->cleanup_sym,
+			rcc->active_scope->prev ? rcc->active_scope->prev->cleanup_sym : NULL);
 	}
 	if (scope->vla_block
 	 && rcc->active_ctx->control
@@ -521,12 +511,15 @@ static void c_leave_scope(rcc_ctx *rcc, c_scope *to)
 {
 	ir_ref vla_block = IR_UNUSED;
 	c_scope *scope = rcc->active_scope;
+	c_sym *cleanup_sym = scope->cleanup_sym;
 
 	while (scope != to) {
 		IR_ASSERT(scope);
-		if (scope->flags & C_SCOPE_HAS_CLEANUP) c_do_cleanup_vars(rcc, scope);
 		if (scope->vla_block) vla_block = scope->vla_block;
 		scope = scope->prev;
+	}
+	if (cleanup_sym != scope->cleanup_sym) {
+		c_do_cleanup_vars(rcc, cleanup_sym, scope->cleanup_sym);
 	}
 	if (vla_block) ir_BLOCK_END(vla_block);
 }
@@ -1139,6 +1132,38 @@ static const c_type *c_create_global_type(rcc_ctx *rcc, const c_type *type)
 	return t;
 }
 
+static const c_type *c_create_in_func_type(rcc_ctx *rcc, const c_type *type)
+{
+	c_type *t;
+	int i;
+
+	if (type->flags & (C_TYPE_GLOBAL|C_TYPE_IN_FUNC)) return type;
+	t = ir_arena_alloc(&rcc->c_func_arena, sizeof(c_type));
+	*t = *type;
+	t->flags |= C_TYPE_IN_FUNC;
+	if (t->kind == C_TYPE_POINTER) {
+		t->pointer.type = c_create_in_func_type(rcc, t->pointer.type);
+	} else if (t->kind == C_TYPE_ARRAY) {
+		t->array.type = c_create_in_func_type(rcc, t->array.type);
+	} else if (t->kind == C_TYPE_STRUCT || t->kind == C_TYPE_UNION) {
+		t->record.fields = ir_arena_alloc(&rcc->c_func_arena, sizeof(c_field) * t->record.num_fields);
+		memcpy(t->record.fields, type->record.fields, sizeof(c_field) * t->record.num_fields);
+		for (i = 0; i < t->record.num_fields; i++) {
+			t->record.fields[i].type = c_create_in_func_type(rcc, t->record.fields[i].type);
+		}
+	} else if (t->kind == C_TYPE_FUNC) {
+		t->func.ret_type = c_create_in_func_type(rcc, t->func.ret_type);
+		t->func.params = ir_arena_alloc(&rcc->c_func_arena, sizeof(c_param) * t->func.num_params);
+		memcpy(t->func.params, type->func.params, sizeof(c_param) * t->func.num_params);
+		for (i = 0; i < t->func.num_params; i++) {
+			t->func.params[i].type = c_create_in_func_type(rcc, t->func.params[i].type);
+		}
+	} else if (t->kind == C_TYPE_ENUM) {
+		t->enumeration.values = NULL;
+	}
+	return t;
+}
+
 static c_name c_create_static_var(rcc_ctx *rcc, c_name name, c_dcl *d)
 {
 	yy_dyn_str  dyn_str;
@@ -1358,7 +1383,14 @@ c_sym *c_declare(rcc_ctx *rcc, c_name name, c_dcl *d)
 		return NULL;
 	}
 
-	sym = ir_arena_alloc(&rcc->c_arena, sizeof(c_sym));
+	if (d->cleanup_func
+	 && scope
+	 && !(d->flags & (C_DCL_TYPEDEF|C_DCL_ENUM_CONST|C_DCL_STATIC|C_DCL_EXTERN|C_DCL_REG_VAR))
+	 && d->type->kind != C_TYPE_FUNC) {
+		sym = ir_arena_alloc(&rcc->c_func_arena, sizeof(c_sym));
+	} else {
+		sym = ir_arena_alloc(&rcc->c_arena, sizeof(c_sym));
+	}
 	memset(sym, 0, sizeof(c_sym));
 	if (d->flags & C_DCL_TYPEDEF) {
 		IR_ASSERT((d->flags & (C_DCL_STORAGE_CLASS-C_DCL_TYPEDEF)) == 0);
@@ -1594,7 +1626,8 @@ c_sym *c_declare(rcc_ctx *rcc, c_name name, c_dcl *d)
 				yy_sym2str(rcc, d->cleanup_func));
 		} else {
 			sym->cleanup_func = d->cleanup_func;
-			scope->flags |= C_SCOPE_HAS_CLEANUP;
+			sym->cleanup_next = scope->cleanup_sym;
+			scope->cleanup_sym = sym;
 		}
 	}
 
@@ -3096,6 +3129,7 @@ static c_label *c_new_label(rcc_ctx *rcc, c_name name, c_scope *scope, c_label *
 	label->vla_block = IR_UNUSED;
 	label->value_sym = IR_UNUSED;
 	label->value_block = IR_UNUSED;
+	label->cleanup_sym = NULL;
 	label->scope = scope;
 	rcc->yy_hash.data[name].label = label;
 	return label;
@@ -7364,14 +7398,14 @@ static bool c_may_tailcall(rcc_ctx *rcc, ir_ref ref, bool musttail)
 		if (scope->vla_block) {
 			if (musttail) yy_error("cannot tail-call: blocked by VLA");
 			return 0;
-		} else if (scope->flags & C_SCOPE_HAS_CLEANUP) {
+		} else if (scope->cleanup_sym) {
 			if (musttail) yy_error("cannot tail-call: blocked by variable with __attribute__((cleanup))");
 			return 0;
 		}
 		scope = scope->prev;
 	}
 
-	if (scope->flags & C_SCOPE_HAS_CLEANUP) {
+	if (scope->cleanup_sym) {
 		if (musttail) yy_error("cannot tail-call: blocked by variable with __attribute__((cleanup))");
 		return 0;
 	}
@@ -7410,7 +7444,9 @@ void c_do_return(rcc_ctx *rcc, c_value *val)
 {
 	IR_ASSERT(rcc->active_func);
 	c_leave_scope(rcc, rcc->active_func_scope);
-	if (rcc->active_func_scope->flags & C_SCOPE_HAS_CLEANUP) c_do_cleanup_vars(rcc, rcc->active_func_scope);
+	if (rcc->active_func_scope->cleanup_sym) {
+		c_do_cleanup_vars(rcc, rcc->active_func_scope->cleanup_sym, NULL);
+	}
 	if (val && c_value_is_set(val) && val->type->kind != C_TYPE_VOID) {
 		if (!rcc->active_ctx->ret_type) {
 			yy_error("\"return\" with a value, in function returning void");
@@ -7466,7 +7502,9 @@ void c_do_tailcall(rcc_ctx *rcc, c_value *val)
 		return;
 	}
 	c_leave_scope(rcc, rcc->active_func_scope);
-	if (rcc->active_func_scope->flags & C_SCOPE_HAS_CLEANUP) c_do_cleanup_vars(rcc, rcc->active_func_scope);
+	if (rcc->active_func_scope->cleanup_sym) {
+		c_do_cleanup_vars(rcc, rcc->active_func_scope->cleanup_sym, NULL);
+	}
 
 	IR_ASSERT(val
 		&& c_value_is_ref(val)
@@ -7481,6 +7519,85 @@ void c_do_tailcall(rcc_ctx *rcc, c_value *val)
 	ir_BEGIN(IR_UNUSED);
 }
 
+static void c_do_cleanup_vars_goto(rcc_ctx *rcc, c_sym *from, c_sym *to)
+{
+	c_sym *sym;
+	uint32_t goto_depth = 0, label_depth = 0;
+
+	for (sym = from; sym != NULL; sym = sym->cleanup_next) goto_depth++;
+	for (sym = to; sym != NULL; sym = sym->cleanup_next) label_depth++;
+	sym = from;
+	while (goto_depth > label_depth) {
+		 sym = sym->cleanup_next;
+		 goto_depth--;
+	}
+	while (goto_depth < label_depth) {
+		to = to->cleanup_next;
+		label_depth--;
+	}
+	while (sym != to) {
+		sym = sym->cleanup_next;
+		to = to->cleanup_next;
+	}
+	if (from != to) {
+		c_do_cleanup_vars(rcc, from, to);
+	}
+}
+
+static ir_ref c_cleanup_sym_to_ref(rcc_ctx *rcc, c_sym *sym)
+{
+	if (sizeof(ir_ref) == sizeof(c_sym)) {
+		return (ir_ref)(uintptr_t)sym;
+	} else {
+		ir_arena *arena = rcc->c_func_arena;
+
+		while (arena) {
+			if ((char*)sym > (char*)arena && (char*)sym < (char*)arena->ptr) {
+				size_t offset = (char*)sym - (char*)arena;
+				arena = arena->prev;
+				while (arena) {
+					offset += (char*)arena->end - (char*)arena;
+					arena = arena->prev;
+				}
+				IR_ASSERT(offset < 0x7fffffff);
+				return offset;
+			}
+			arena = arena->prev;
+		}
+		IR_ASSERT(0);
+		return IR_UNUSED;
+	}
+}
+
+static c_sym *c_ref_to_cleanup_sym(rcc_ctx *rcc, ir_ref ref)
+{
+	if (sizeof(ir_ref) == sizeof(c_sym)) {
+		return (c_sym*)(uintptr_t)ref;
+	} else {
+		ir_arena *arena = rcc->c_func_arena;
+		size_t offset = (char*)arena->ptr - (char*)arena;
+
+		arena = arena->prev;
+		while (arena) {
+			offset += (char*)arena->end - (char*)arena;
+			arena = arena->prev;
+		}
+		IR_ASSERT(offset < 0x7fffffff && (ir_ref)offset > ref);
+
+		arena = rcc->c_func_arena;
+		offset -= (char*)arena->ptr - (char*)arena;
+		while (1) {
+			if ((ir_ref)offset < ref) {
+				return (c_sym*)((char*)arena + (size_t)ref - offset);
+			}
+			arena = arena->prev;
+			offset -= (char*)arena->end - (char*)arena;
+		}
+		IR_ASSERT(0);
+		return NULL;
+	}
+}
+
 void c_do_goto(rcc_ctx *rcc, c_name name)
 {
 	c_label *label;
@@ -7491,7 +7608,11 @@ void c_do_goto(rcc_ctx *rcc, c_name name)
 		label = c_new_label(rcc, name, rcc->active_func_scope, NULL, rcc->active_scope == rcc->active_func_scope);
 	}
 
-	// TODO: clenup variables ???
+	if (rcc->active_scope->cleanup_sym) {
+		if (label->dst && label->cleanup_sym != rcc->active_scope->cleanup_sym) {
+			c_do_cleanup_vars_goto(rcc, rcc->active_scope->cleanup_sym, label->cleanup_sym);
+		}
+	}
 
 	if (rcc->active_scope->last_vla_block) {
 		ir_ref goto_vla_block = rcc->active_scope->last_vla_block;
@@ -7527,6 +7648,17 @@ void c_do_goto(rcc_ctx *rcc, c_name name)
 	}
 
 	ir_END_list(label->src_list);
+	if (rcc->active_scope->cleanup_sym && !label->dst) {
+		/* Remember last cleanup variable of the current scope */
+		c_sym *sym = rcc->active_scope->cleanup_sym;
+		while (sym) {
+			if (!(sym->value.type->flags & (C_TYPE_GLOBAL|C_TYPE_IN_FUNC))) {
+				sym->value.type = c_create_in_func_type(rcc, sym->value.type);
+			}
+			sym = sym->cleanup_next;
+		}
+		rcc->active_ctx->ir_base[label->src_list].op3 = c_cleanup_sym_to_ref(rcc, rcc->active_scope->cleanup_sym);
+	}
 	ir_BEGIN(IR_UNUSED);
 }
 
@@ -7554,7 +7686,19 @@ c_label *c_do_set_label(rcc_ctx *rcc, c_name name)
 			ir_insn *insn = &rcc->active_ctx->ir_base[ref];
 
 			IR_ASSERT(insn->op == IR_END);
-			// TODO: clenup variables ???
+			if (insn->op3) {
+				/* Cleanup Variables */
+				ir_ref orig_control = rcc->active_ctx->control;
+
+				rcc->active_ctx->control =
+					rcc->active_ctx->ir_base[insn->op1].op == IR_BLOCK_END ?
+						rcc->active_ctx->ir_base[insn->op1].op1 : insn->op1;
+				c_do_cleanup_vars_goto(rcc, c_ref_to_cleanup_sym(rcc, insn->op3), rcc->active_scope->cleanup_sym);
+				insn = &rcc->active_ctx->ir_base[ref];
+				insn->op1 = rcc->active_ctx->control;
+				insn->op3 = IR_UNUSED;
+				rcc->active_ctx->control = orig_control;
+			}
 			/* fix BLOCK_END instructions inseted by forward GOTO */
 			ir_insn *prev = &rcc->active_ctx->ir_base[insn->op1];
 			if (prev->op == IR_BLOCK_END) {
@@ -7610,6 +7754,8 @@ c_label *c_do_set_label(rcc_ctx *rcc, c_name name)
 		IR_ASSERT(rcc->active_ctx->ir_base[label->value_block].op == IR_BEGIN);
 		rcc->active_ctx->ir_base[label->value_block].op1 = label->dst;
 	}
+
+	label->cleanup_sym = rcc->active_scope->cleanup_sym;
 
 	return label;
 }

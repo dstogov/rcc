@@ -733,6 +733,7 @@ typedef enum {
 	C_TYPE_INCOMPLETE = (1<<0), /* incomplete (not defined) enum, struct, union */
 	C_TYPE_INPROGRESS = (1<<1), /* incomplete (not completely defined) struct, union */
 	C_TYPE_GLOBAL     = (1<<2),
+	C_TYPE_IN_FUNC    = (1<<3),
 } c_type_flag;
 
 typedef yy_sym c_name;
@@ -845,13 +846,16 @@ struct _c_sym {
 	uint8_t                has_code: 2;        /* Code generation state (see C_CODE_...) */
 	bool                   tmp_data: 1;        /* temporary growable data area */
 	bool                   has_asm_name: 1;
-	c_name                 alias;
+	union {
+		c_name             alias;
+		c_name             cleanup_func;
+	};
 	c_scope               *scope;
 	c_value                value;              /* type is part of the value */
 	union {
-		c_reloc               *reloc;          /* list of cross-references to other symbols */
-		ir_ctx                *ctx;            /* function IR (used for delayed code-gen or function inlining) */
-		c_name                 cleanup_func;
+		c_reloc           *reloc;              /* list of cross-references to other symbols */
+		ir_ctx            *ctx;                /* function IR (used for delayed code-gen or function inlining) */
+		c_sym             *cleanup_next;
 	};
 };
 
@@ -890,14 +894,12 @@ struct _c_param {
 	const c_type          *type;
 };
 
-#define C_SCOPE_HAS_CLEANUP    (1<<0)
-
 struct _c_scope {
 	pp_list   list;
 	void     *checkpoint;
 	ir_ref    vla_block;
 	ir_ref    last_vla_block;
-	uint32_t  flags;
+	c_sym    *cleanup_sym;
 	c_scope  *prev;
 };
 
@@ -924,6 +926,7 @@ struct _c_label {
 	ir_ref    vla_block;
 	ir_ref    value_sym;      /* used for labels as value and computed goto */
 	ir_ref    value_block;    /* used for labels as value and computed goto */
+	c_sym    *cleanup_sym;
 	c_scope  *scope;
 };
 
