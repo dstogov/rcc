@@ -1331,6 +1331,7 @@ struct _rcc_ctx {
 
 	/* C -> IR Translator */
 	ir_arena             *c_arena;                 /* Arena to keeps C types, symbols, tags, etc */
+	ir_arena             *c_func_arena;            /* Arena to keeps C labels */
 	c_scope              *active_scope;            /* The current inner-most C declaration scope */
 	c_loop               *active_loop;             /* The current inner-most C loop or switch statement */
 	c_scope              *active_func_scope;       /* The scope of the current function */

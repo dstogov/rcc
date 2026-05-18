@@ -500,9 +500,6 @@ void c_pop_scope(rcc_ctx *rcc, c_scope *scope)
 					break;
 				case C_POP_LABEL:
 					c_do_finish_label(rcc, id, rcc->yy_hash.data[id].label);
-					if (!rcc->yy_hash.data[id].label->is_local) {
-						ir_mem_free(rcc->yy_hash.data[id].label);
-					}
 					rcc->yy_hash.data[id].label = ptr;
 					break;
 				default:
@@ -3090,7 +3087,7 @@ static c_label *c_new_label(rcc_ctx *rcc, c_name name, c_scope *scope, c_label *
 		label = ir_arena_alloc(&rcc->c_arena, sizeof(c_label));
 		label->is_local = 1;
 	} else {
-		label = ir_mem_malloc(sizeof(c_label)); // TODO: cache allocatons ???
+		label = ir_arena_alloc(&rcc->c_func_arena, sizeof(c_label));
 		label->is_local = 0;
 	}
 	label->is_unused = 0;
@@ -6868,7 +6865,7 @@ static void c_case_labels_add_i(rcc_ctx *rcc, c_loop *loop, ir_val min, ir_val m
 					p->max.i64 = max.i64;
 					return;
 				} else {
-					q = ir_mem_malloc(sizeof(c_case_labels));
+					q = ir_arena_alloc(&rcc->c_func_arena, sizeof(c_case_labels));
 					p->right = q;
 					break;
 				}
@@ -6880,7 +6877,7 @@ static void c_case_labels_add_i(rcc_ctx *rcc, c_loop *loop, ir_val min, ir_val m
 					p->min.i64 = min.i64;
 					return;
 				} else {
-					q = ir_mem_malloc(sizeof(c_case_labels));
+					q = ir_arena_alloc(&rcc->c_func_arena, sizeof(c_case_labels));
 					p->left = q;
 					break;
 				}
@@ -6896,7 +6893,7 @@ static void c_case_labels_add_i(rcc_ctx *rcc, c_loop *loop, ir_val min, ir_val m
 		q->color = 1;
 		c_case_labels_balance(loop, q);
 	} else {
-		loop->case_labels = p = ir_mem_malloc(sizeof(c_case_labels));
+		loop->case_labels = p = ir_arena_alloc(&rcc->c_func_arena, sizeof(c_case_labels));
 		p->min = min;
 		p->max = max;
 		p->parent = NULL;
@@ -6921,7 +6918,7 @@ static void c_case_labels_add_u(rcc_ctx *rcc, c_loop *loop, ir_val min, ir_val m
 					p->max.u64 = max.u64;
 					return;
 				} else {
-					q = ir_mem_malloc(sizeof(c_case_labels));
+					q = ir_arena_alloc(&rcc->c_func_arena, sizeof(c_case_labels));
 					p->right = q;
 					break;
 				}
@@ -6933,7 +6930,7 @@ static void c_case_labels_add_u(rcc_ctx *rcc, c_loop *loop, ir_val min, ir_val m
 					p->min.u64 = min.u64;
 					return;
 				} else {
-					q = ir_mem_malloc(sizeof(c_case_labels));
+					q = ir_arena_alloc(&rcc->c_func_arena, sizeof(c_case_labels));
 					p->left = q;
 					break;
 				}
@@ -6949,7 +6946,7 @@ static void c_case_labels_add_u(rcc_ctx *rcc, c_loop *loop, ir_val min, ir_val m
 		q->color = 1;
 		c_case_labels_balance(loop, q);
 	} else {
-		loop->case_labels = p = ir_mem_malloc(sizeof(c_case_labels));
+		loop->case_labels = p = ir_arena_alloc(&rcc->c_func_arena, sizeof(c_case_labels));
 		p->min = min;
 		p->max = max;
 		p->parent = NULL;
@@ -6957,13 +6954,6 @@ static void c_case_labels_add_u(rcc_ctx *rcc, c_loop *loop, ir_val min, ir_val m
 		p->right = NULL;
 		p->color = 0;
 	}
-}
-
-static void c_case_labels_free(c_case_labels *p)
-{
-	if (p->left) c_case_labels_free(p->left);
-	if (p->right) c_case_labels_free(p->right);
-	ir_mem_free(p);
 }
 
 void c_do_case(rcc_ctx *rcc, c_value *v)
@@ -7070,9 +7060,6 @@ void c_do_case_default(rcc_ctx *rcc)
 
 void c_do_switch_end(rcc_ctx *rcc, c_loop *loop)
 {
-	if (loop->case_labels) {
-		c_case_labels_free(loop->case_labels);
-	}
 	if (!loop->next) {
 		if (rcc->active_ctx->control) {
 			ir_END_list(loop->break_list);

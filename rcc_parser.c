@@ -378,12 +378,14 @@ static yy_sym parse_declaration(yy_sym sym, rcc_ctx *rcc, uint32_t flags) {
 					yy_error_sym("'{' expected, got", sym);
 				}
 				sym = get_sym();
+				void *checkpoint = ir_arena_checkpoint(rcc->c_func_arena);
 				sym = parse_compound_statement(sym, rcc);
 				c_do_func_end(rcc, name, &d, &scope);
 				if (sym != YY__RBRACE) {
 					yy_error_sym("'}' expected, got", sym);
 				}
 				sym = get_sym();
+				ir_arena_release(&rcc->c_func_arena, checkpoint);
 				rcc->active_ctx = old_ctx;
 			} else {
 				yy_error_sym("unexpected", sym);

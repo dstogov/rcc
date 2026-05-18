@@ -937,6 +937,7 @@ void rcc_init(rcc_ctx *rcc)
 	pp_dtor(rcc);
 
 	rcc->c_arena = ir_arena_create(4096);
+	rcc->c_func_arena = ir_arena_create(4096);
 	rcc->c_linker_arena = ir_arena_create(4096);
 
 	c_type *type;
@@ -989,6 +990,7 @@ void rcc_free(rcc_ctx *rcc)
 	if (rcc->constructors) ir_mem_free(rcc->constructors);
 	if (rcc->destructors) ir_mem_free(rcc->destructors);
 	if (rcc->c_linker_arena) ir_arena_free(rcc->c_linker_arena);
+	if (rcc->c_func_arena) ir_arena_free(rcc->c_func_arena);
 	if (rcc->c_arena) ir_arena_free(rcc->c_arena);
 	if (rcc->yy_arena) ir_arena_free(rcc->yy_arena);
 }

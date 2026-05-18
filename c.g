@@ -251,9 +251,10 @@ declaration(rcc_ctx *rcc, uint32_t flags):                 {c_dcl d0 = {0};}
 					old_style_param_decl(rcc, d.type)+     {c_validate_func_params(rcc, name, &d);}
 				)?                                         {rcc->active_ctx = &ctx;}
 				                                           {c_do_func_start(rcc, name, &d, &scope);}
-				"{"
+				"{"                                        {void *checkpoint = ir_arena_checkpoint(rcc->c_func_arena);}
 				compound_statement(rcc)                    {c_do_func_end(rcc, name, &d, &scope);}
-                "}"                                        {rcc->active_ctx = old_ctx;}
+                "}"                                        {ir_arena_release(&rcc->c_func_arena, checkpoint);}
+                                                           {rcc->active_ctx = old_ctx;}
 			)
 		|                                                  {c_empty_declaration(rcc, &d0);}
 			";"
