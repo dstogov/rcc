@@ -2921,6 +2921,7 @@ static uint32_t yy_read_escape_sequence(rcc_ctx *rcc, char first_ch, const char 
 		case 'a':  ch = '\a'; break;
 		case 'b':  ch = '\b'; break;
 		case 'e':  ch = 27;   break; /* '\e'; */
+		case 'E':  ch = 27;   break; /* '\E'; */
 		case 'f':  ch = '\f'; break;
 		case 'n':  ch = '\n'; break;
 		case 'r':  ch = '\r'; break;
