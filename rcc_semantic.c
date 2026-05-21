@@ -2941,7 +2941,7 @@ error:
 
 error:
 #endif
-	yy_error_fmt("invalid register \"%s\"", s);
+	yy_error_fmt("invalid register \"%s\"", str);
 	return IR_REG_NONE;
 }
 
