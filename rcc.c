@@ -1791,6 +1791,11 @@ static void rcc_help(const char *cmd)
 #if defined(IR_TARGET_X86) || defined(IR_TARGET_X64)
 		"  -mavx                      - use AVX instruction set\n"
 		"  -m[no-]bmi1                - enable/disable BMI1 instruction set\n"
+		"  -m[no-]sse3                - enable/disable SSE3 instruction set\n"
+		"  -m[no-]ssse3               - enable/disable SSSE3 instruction set\n"
+		"  -m[no-]sse4                - enable/disable SSE4 instruction set\n"
+		"  -m[no-]sse4.1              - enable/disable SSE4.1 instruction set\n"
+		"  -m[no-]sse4.2              - enable/disable SSE4.2 instruction set\n"
 #endif
 		"  -muse-fp                   - use base frame pointer register\n"
 #if defined(IR_TARGET_X86)
@@ -1992,8 +1997,40 @@ static int rcc_parse_option(rcc_ctx *rcc, const char *opt, const char *arg, bool
 		rcc->ir_mflags |= IR_X86_AVX;
 	} else if (strcmp(opt, "-mbmi1") == 0) {
 		rcc->ir_mflags |= IR_X86_BMI1;
+		rcc->ir_mflags_disabled &= ~IR_X86_BMI1;
 	} else if (strcmp(opt, "-mno-bmi1") == 0) {
+		rcc->ir_mflags &= ~IR_X86_BMI1;
 		rcc->ir_mflags_disabled |= IR_X86_BMI1;
+	} else if (strcmp(opt, "-msse3") == 0) {
+		rcc->ir_mflags |= IR_X86_SSE3;
+		rcc->ir_mflags_disabled &= ~IR_X86_SSE3;
+	} else if (strcmp(opt, "-mno-sse3") == 0) {
+		rcc->ir_mflags &= ~IR_X86_SSE3;
+		rcc->ir_mflags_disabled |= IR_X86_SSE3;
+	} else if (strcmp(opt, "-mssse3") == 0) {
+		rcc->ir_mflags |= IR_X86_SSSE3;
+		rcc->ir_mflags_disabled &= ~IR_X86_SSSE3;
+	} else if (strcmp(opt, "-mno-ssse3") == 0) {
+		rcc->ir_mflags &= ~IR_X86_SSSE3;
+		rcc->ir_mflags_disabled |= IR_X86_SSSE3;
+	} else if (strcmp(opt, "-msse4") == 0) {
+		rcc->ir_mflags |= IR_X86_SSE41 | IR_X86_SSE42;
+		rcc->ir_mflags_disabled &= ~(IR_X86_SSE41 | IR_X86_SSE42);
+	} else if (strcmp(opt, "-mno-sse4") == 0) {
+		rcc->ir_mflags &= ~(IR_X86_SSE41 | IR_X86_SSE42);
+		rcc->ir_mflags_disabled |= IR_X86_SSE41 | IR_X86_SSE42;
+	} else if (strcmp(opt, "-msse4.1") == 0) {
+		rcc->ir_mflags |= IR_X86_SSE41;
+		rcc->ir_mflags_disabled &= ~IR_X86_SSE41;
+	} else if (strcmp(opt, "-mno-sse4.1") == 0) {
+		rcc->ir_mflags &= ~IR_X86_SSE41;
+		rcc->ir_mflags_disabled |= IR_X86_SSE41;
+	} else if (strcmp(opt, "-msse4.2") == 0) {
+		rcc->ir_mflags |= IR_X86_SSE42;
+		rcc->ir_mflags_disabled &= ~IR_X86_SSE42;
+	} else if (strcmp(opt, "-mno-sse4.2") == 0) {
+		rcc->ir_mflags &= ~IR_X86_SSE42;
+		rcc->ir_mflags_disabled |= IR_X86_SSE42;
 #endif
 	} else if (strcmp(opt, "-muse-fp") == 0) {
 		rcc->ir_flags |= IR_USE_FRAME_POINTER;
@@ -2318,13 +2355,9 @@ int main(int argc, const char **argv)
 					fprintf(stderr, "ERROR: -mavx is not compatible with CPU (AVX is not supported)\n");
 					return 1;
 				}
-				if ((cpuinfo & IR_X86_BMI1) && !(rcc->ir_mflags_disabled & IR_X86_BMI1)) {
-					rcc->ir_mflags |= IR_X86_BMI1;
-				}
+				rcc->ir_mflags |= (cpuinfo & (IR_X86_SSE3|IR_X86_SSSE3|IR_X86_SSE41|IR_X86_SSE42|IR_X86_BMI1)) & ~rcc->ir_mflags_disabled;
 			} else {
-				if (!(rcc->ir_mflags_disabled & IR_X86_BMI1)) {
-					rcc->ir_mflags |= IR_X86_BMI1;
-				}
+				rcc->ir_mflags &= ~rcc->ir_mflags_disabled;
 			}
 #endif
 		}
