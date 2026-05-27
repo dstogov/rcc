@@ -4002,6 +4002,7 @@ incompatible:
 			 && (val_type->pointer.type->kind != C_TYPE_ARRAY
 			  || !c_compatible_types(type->pointer.type, val_type->pointer.type->array.type, 1, type->pointer.type->kind == C_TYPE_FUNC))) {
 				if (type->pointer.type->size == val_type->pointer.type->size
+				 && C_IS_TYPE_SIGNED(type->pointer.type) != C_IS_TYPE_SIGNED(val_type->pointer.type)
 				 && type->pointer.type->kind != C_TYPE_BOOL && C_IS_TYPE_INT(type->pointer.type)
 				 && val_type->pointer.type->kind != C_TYPE_BOOL && C_IS_TYPE_INT(val_type->pointer.type)) {
 					if (arg < 0) {

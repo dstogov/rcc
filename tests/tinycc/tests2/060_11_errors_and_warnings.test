@@ -71,7 +71,7 @@ int no_main ()
 ./tests/tinycc/tests2/060_11_errors_and_warnings.c:39:14: warning: assignment from incompatible pointer type
 ./tests/tinycc/tests2/060_11_errors_and_warnings.c:40:14: warning: assignment from incompatible pointer type
 ./tests/tinycc/tests2/060_11_errors_and_warnings.c:42:12: warning: assignment from incompatible pointer type
-./tests/tinycc/tests2/060_11_errors_and_warnings.c:43:13: warning: pointer targets in assignment differ in signedness
+./tests/tinycc/tests2/060_11_errors_and_warnings.c:43:13: warning: assignment from incompatible pointer type
 ./tests/tinycc/tests2/060_11_errors_and_warnings.c:46:12: warning: assignment from incompatible pointer type
 ./tests/tinycc/tests2/060_11_errors_and_warnings.c:47:14: warning: assignment discards "const" qualifier from pointer target type
 ./tests/tinycc/tests2/060_11_errors_and_warnings.c:51:12: warning: assignment from incompatible pointer type
