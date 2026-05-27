@@ -2128,6 +2128,14 @@ static size_t c_gcc_field_alignment(rcc_ctx *rcc, c_type *type, c_field *field, 
 	size_t align = c_attr2align(field->type->attr);
 	size_t a = field->offset;
 
+#ifdef IR_TARGET_X86
+# ifdef _WIN32
+	if (field->type->size == 8 && C_IS_TYPE_INT(field->type)) {
+		align = 4;
+	}
+# endif
+#endif
+
 	if (!align) align = 1;
 	if (!C_IS_BIT_FIELD(field->bit_field)
 	 || C_BIT_FIELD_SIZE(field->bit_field) != 0) {
@@ -2149,6 +2157,14 @@ static size_t c_ms_field_alignment(rcc_ctx *rcc, c_type *type, c_field *field)
 {
 	size_t align = c_attr2align(field->type->attr);
 	size_t a = field->offset;
+
+#ifdef IR_TARGET_X86
+# ifndef _WIN32
+	if (field->type->size == 8 && C_IS_TYPE_INT(field->type)) {
+		align = 8;
+	}
+# endif
+#endif
 
 	if (!align) align = 1;
 	if ((type->attr & C_ATTR_PACKED) || (field->type->attr & C_ATTR_PACKED)) {
@@ -2247,9 +2263,6 @@ void c_finish_struct_type(rcc_ctx *rcc, c_type *type, c_dcl *d)
 						uint32_t bits = C_BIT_FIELD_SIZE(field->bit_field);
 						uint32_t first_bit = 0;
 
-						if (field->type->size == 8 && bits <= 32) {
-							field->type = (C_IS_TYPE_SIGNED(field->type)) ? &c_type_i32 : &c_type_u32;
-						}
 						if (bits == 0 || field->offset) {
 							last_offset = IR_ALIGNED_SIZE(size, field_align);
 							last_bit = bits;
@@ -2260,8 +2273,8 @@ void c_finish_struct_type(rcc_ctx *rcc, c_type *type, c_dcl *d)
 							}
 						} else {
 							if (!packed
-							 && (last_offset * 8 + last_bit) / (field_align * 8)
-							  != (last_offset * 8 + last_bit + bits - 1) / (field_align * 8)) {
+							 && ((last_offset * 8 + last_bit) % (field_align * 8) + bits + (field_align * 8) - 1)
+									/ (field_align * 8) > field->type->size / field_align) {
 								last_offset = IR_ALIGNED_SIZE(size, field_align);
 								last_bit = bits;
 							} else {
@@ -2273,6 +2286,9 @@ void c_finish_struct_type(rcc_ctx *rcc, c_type *type, c_dcl *d)
 								field->bit_field = C_BIT_FIELD(first_bit, bits);
 								last_bit = first_bit + bits;
 							}
+						}
+						if (field->type->size == 8 && bits <= 32) {
+							field->type = (C_IS_TYPE_SIGNED(field->type)) ? &c_type_i32 : &c_type_u32;
 						}
 						field->offset = last_offset;
 						size = last_offset + ((last_bit) + 7) / 8;
