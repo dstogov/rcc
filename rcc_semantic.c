@@ -3826,8 +3826,11 @@ static ir_ref c_do_store_bit_field(rcc_ctx *rcc, ir_ref addr, uint32_t first_bit
 		}
 	}
 
-	v.u64 = (1ULL<<bits)-1;
-	ref = ir_AND(type, ref, ir_const(rcc->active_ctx, v, type));
+	if (first_bit + bits != ir_type_size[type] * 8) {
+		v.u64 = (1ULL<<bits)-1;
+		ref = ir_AND(type, ref, ir_const(rcc->active_ctx, v, type));
+	}
+
 	if (val->u.type == type) ret = ref;
 
 	if (first_bit) {
