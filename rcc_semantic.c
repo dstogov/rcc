@@ -34,9 +34,17 @@ const c_type c_type_i16                 = {.kind = C_TYPE_I16,    .flags = C_TYP
 const c_type c_type_u32                 = {.kind = C_TYPE_U32,    .flags = C_TYPE_GLOBAL, .size = 4,  .attr = 3};
 const c_type c_type_i32                 = {.kind = C_TYPE_I32,    .flags = C_TYPE_GLOBAL, .size = 4,  .attr = 3};
 const c_type c_type_ul                  = {.kind = C_TYPE_UL,     .flags = C_TYPE_GLOBAL, .size = C_LONG_SIZE,  .attr = C_LONG_ALIGN};
-const c_type c_type_ull                 = {.kind = C_TYPE_ULL,    .flags = C_TYPE_GLOBAL, .size = 8,  .attr = 4};
 const c_type c_type_il                  = {.kind = C_TYPE_IL,     .flags = C_TYPE_GLOBAL, .size = C_LONG_SIZE,  .attr = C_LONG_ALIGN};
+#if defined(IR_64) || (defined(IR_TARGET_X86) && defined(_WIN32))
+const c_type c_type_ull                 = {.kind = C_TYPE_ULL,    .flags = C_TYPE_GLOBAL, .size = 8,  .attr = 4};
 const c_type c_type_ill                 = {.kind = C_TYPE_ILL,    .flags = C_TYPE_GLOBAL, .size = 8,  .attr = 4};
+#elif defined(IR_TARGET_X86)
+/* System V ABI for i386 specifies 4-byte alignment for 64-bit integers */
+const c_type c_type_ull                 = {.kind = C_TYPE_ULL,    .flags = C_TYPE_GLOBAL, .size = 8,  .attr = 3};
+const c_type c_type_ill                 = {.kind = C_TYPE_ILL,    .flags = C_TYPE_GLOBAL, .size = 8,  .attr = 3};
+#else
+# error "unknown targer"
+#endif
 const c_type c_type_float               = {.kind = C_TYPE_FLOAT,  .flags = C_TYPE_GLOBAL, .size = 4,  .attr = 3};
 const c_type c_type_double              = {.kind = C_TYPE_DOUBLE, .flags = C_TYPE_GLOBAL, .size = 8,  .attr = 4};
 // TODO: long double support ???
