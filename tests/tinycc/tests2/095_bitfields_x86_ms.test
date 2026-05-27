@@ -3,7 +3,7 @@ tinycc 095: bitfileds_ms
 --ARGS--
 --run
 --TARGET--
-!x86
+x86
 --CODE--
 #define MS_BITFIELDS 1
 
@@ -234,7 +234,7 @@ void dump(void *p, int s)
 # define MS_BITFIELDS 0
 #endif
 
-#define SELF "095_bitfields_ms.c"
+#define SELF "095_bitfields_x86_ms.c"
 
 int top = 1;
 
@@ -289,7 +289,7 @@ align/size  : 4 20
 bits in use : 3FFFFFFFFFFF0000
 bits as set : 0026000100050000
 values      : 01 00 ffffffff 04 05
-align/size  : 8 8
+align/size  : 4 8
 
 
 
@@ -377,7 +377,7 @@ align/size  : 4 20
 bits in use : 3FFFFFFFFFFF0000
 bits as set : 0026000100050000
 values      : 01 00 ffffffff 04 05
-align/size  : 8 8
+align/size  : 4 8
 
 
 
