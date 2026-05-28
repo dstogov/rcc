@@ -1000,13 +1000,13 @@ extern const c_type c_type_const_ptr;
 #else
 # define C_LONG_SIZE    4
 # define C_LONG_ALIGN   3
-# define c_type_size_t  c_type_ul
-# define c_type_ssize_t c_type_il
+# define c_type_size_t  c_type_u32
+# define c_type_ssize_t c_type_i32
 # define c_type_i64     c_type_ill
 # define c_type_u64     c_type_ull
 # define C_TYPE_I64     C_TYPE_ILL
 # define C_TYPE_U64     C_TYPE_ULL
-# define C_TYPE_SIZE_T  C_TYPE_UL
+# define C_TYPE_SIZE_T  C_TYPE_U32
 # define IR_LONG        IR_I32
 # define IR_ULONG       IR_U32
 #endif
