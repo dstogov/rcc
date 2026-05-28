@@ -884,6 +884,37 @@ _YY_NAMES(_YY_SYM)
 #undef _YY_SYM
 };
 
+static void rcc_add_link(rcc_ctx *rcc, c_name name, const char *str)
+{
+	c_linker_sym *link;
+	void *addr = NULL;
+
+	addr = ir_resolve_sym_name(str);
+	if (rcc->c_flags & C_DUMP_ASM) {
+		ir_disasm_add_symbol(str, (uint64_t)(uintptr_t)addr, IR_UNKNOWN_SIZE);
+	}
+
+	if (rcc->code_buffer.start && ir_needs_thunk(&rcc->code_buffer, addr)) {
+		size_t size;
+
+		ir_mem_unprotect(rcc->code_buffer.start, (char*)rcc->code_buffer.end - (char*)rcc->code_buffer.start);
+		addr = ir_emit_thunk(&rcc->code_buffer, addr, &size);
+		ir_mem_protect(rcc->code_buffer.start, (char*)rcc->code_buffer.end - (char*)rcc->code_buffer.start);
+		if (rcc->c_flags & C_DUMP_ASM) {
+			ir_disasm_add_symbol(str, (uint64_t)(uintptr_t)addr, IR_UNKNOWN_SIZE);
+		}
+	}
+
+	link = ir_arena_alloc(&rcc->yy_arena, sizeof(c_linker_sym));
+	link->addr = addr;
+	link->reloc = NULL;
+	link->is_thunk = 0;
+	link->is_asm_name = 1;
+
+	rcc->yy_hash.data[name].link = link;
+}
+
+
 void rcc_init(rcc_ctx *rcc)
 {
 	yy_sym i;
@@ -940,44 +971,8 @@ void rcc_init(rcc_ctx *rcc)
 	rcc->c_func_arena = ir_arena_create(4096);
 	rcc->c_linker_arena = ir_arena_create(4096);
 
-	c_type *type;
-	c_dcl dcl;
-	memset(&dcl, 0, sizeof(dcl));
-	dcl.flags = C_DCL_EXTERN | C_TYPE_SPEC_TYPE;
-
-	type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
-	if (!type) yy_error("out of memory");
-	memset(type, 0, sizeof(c_type));
-	type->kind = C_TYPE_FUNC;
-	type->func.ret_type = &c_type_ptr;
-	type->func.num_params = 3;
-	type->func.params = ir_arena_alloc(&rcc->c_arena, sizeof(c_param) * 3);
-	type->func.params[0].name = 0;
-	type->func.params[0].type = &c_type_ptr;
-	type->func.params[1].name = 0;
-	type->func.params[1].type = &c_type_const_ptr;
-	type->func.params[2].name = 0;
-	type->func.params[2].type = &c_type_size_t;
-	dcl.type = type;
-
-	c_declare(rcc, YY_MEMCPY, &dcl);
-
-	type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
-	if (!type) yy_error("out of memory");
-	memset(type, 0, sizeof(c_type));
-	type->kind = C_TYPE_FUNC;
-	type->func.ret_type = &c_type_ptr;
-	type->func.num_params = 3;
-	type->func.params = ir_arena_alloc(&rcc->c_arena, sizeof(c_param) * 3);
-	type->func.params[0].name = 0;
-	type->func.params[0].type = &c_type_ptr;
-	type->func.params[1].name = 0;
-	type->func.params[1].type = &c_type_i32;
-	type->func.params[2].name = 0;
-	type->func.params[2].type = &c_type_size_t;
-	dcl.type = type;
-
-	c_declare(rcc, YY_MEMSET, &dcl);
+	rcc_add_link(rcc, YY_MEMCPY, "memcpy");
+	rcc_add_link(rcc, YY_MEMSET, "memset");
 }
 
 void rcc_free(rcc_ctx *rcc)
@@ -1609,7 +1604,7 @@ static void rcc_remember_state(rcc_ctx *rcc)
 	for (i = YY_LAST_KEYWORD + 1, p = rcc->yy_hash.data + i; i < rcc->yy_hash.count; p++, i++) {
 		if (p->macro) p->macro->flags |= PP_MACRO_PREDEFINED;
 		IR_ASSERT(!p->macro_stack);
-		IR_ASSERT(!p->sym || i == YY_MEMCPY || i == YY_MEMSET);
+		IR_ASSERT(!p->sym);
 		IR_ASSERT(!p->tag);
 		IR_ASSERT(!p->label);
 	}
@@ -1672,9 +1667,8 @@ static void rcc_reset_state(rcc_ctx *rcc)
 		p->macro_stack = NULL;
 		p->tag = NULL;
 		p->label = NULL;
-		if (i != YY_MEMCPY && i != YY_MEMSET) {
+		if (p->sym) {
 			if ((rcc->c_flags & C_RUN)
-			 && p->sym
 			 && !p->sym->has_asm_name
 			 && (p->sym->linkage == C_LINK_EXTERNAL
 			  || (p->sym->kind == C_SYM_VAR && p->sym->reloc))) {
