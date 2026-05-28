@@ -2413,6 +2413,12 @@ int main(int argc, const char **argv)
 			}
 
 			func = c_linker_func_addr(rcc, YY_MAIN);
+			if (!func) {
+				rcc_free(rcc);
+				ir_free(&ctx);
+				fprintf(stderr, "undefined reference to function \"%s\"\n", "main");
+				goto exit;
+			}
 
 			/* resolve constructors */
 			const void **rcc_constructors = NULL;
