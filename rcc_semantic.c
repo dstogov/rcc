@@ -4667,7 +4667,7 @@ void c_do_builtin(rcc_ctx *rcc, c_value *val, c_name name, int32_t num_args, c_v
 		ref = ir_CALL_3(IR_ADDR,
 			ir_const_func(rcc->active_ctx,
 				ir_strl(rcc->active_ctx, "memset", sizeof("memset")-1),
-				ir_proto_3(rcc->active_ctx, 0, IR_ADDR, IR_ADDR, IR_ADDR, IR_SIZE_T)),
+				ir_proto_3(rcc->active_ctx, 0, IR_ADDR, IR_ADDR, IR_I32, IR_SIZE_T)),
 			c_value_ref(rcc, &args[0]), c_value_ref(rcc, &args[1]), c_value_ref(rcc, &args[2]));
 		c_value_set_rval(val, &c_type_ptr, IR_ADDR, ref);
 	} else if (name == YY___BUILTIN_ABS) {
