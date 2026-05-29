@@ -4740,106 +4740,91 @@ void c_do_builtin(rcc_ctx *rcc, c_value *val, c_name name, int32_t num_args, c_v
 		if (args[0].type->kind != C_TYPE_I32) {
 			c_do_check_cvt(rcc, &c_type_i32, &args[0], 1);
 		}
-		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTPOP(args[0].u.type, c_value_ref(rcc, &args[0])));
+		c_value_set_rval(val, &c_type_i32, IR_I32, ir_CTPOP(IR_I32, c_value_ref(rcc, &args[0])));
 	} else if (name == YY___BUILTIN_POPCOUNTL) {
 		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 		if (args[0].type->kind != C_TYPE_IL) {
 			c_do_check_cvt(rcc, &c_type_il, &args[0], 1);
 		}
-		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTPOP(args[0].u.type, c_value_ref(rcc, &args[0])));
+		c_value_set_rval(val, &c_type_i32, IR_I32, ir_CTPOP(IR_I32, c_value_ref(rcc, &args[0])));
 	} else if (name == YY___BUILTIN_POPCOUNTLL) {
 		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 		if (args[0].type->kind != C_TYPE_ILL) {
 			c_do_check_cvt(rcc, &c_type_ill, &args[0], 1);
 		}
-		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTPOP(args[0].u.type, c_value_ref(rcc, &args[0])));
+		c_value_set_rval(val, &c_type_i32, IR_I32, ir_CTPOP(IR_I32, c_value_ref(rcc, &args[0])));
 	} else if (name == YY___BUILTIN_CLZ) {
 		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 		if (args[0].type->kind != C_TYPE_I32) {
 			c_do_check_cvt(rcc, &c_type_i32, &args[0], 1);
 		}
-		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTLZ(args[0].u.type, c_value_ref(rcc, &args[0])));
+		c_value_set_rval(val, &c_type_i32, IR_I32, ir_CTLZ(IR_I32, c_value_ref(rcc, &args[0])));
 	} else if (name == YY___BUILTIN_CLZL) {
 		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 		if (args[0].type->kind != C_TYPE_IL) {
 			c_do_check_cvt(rcc, &c_type_il, &args[0], 1);
 		}
-		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTLZ(args[0].u.type, c_value_ref(rcc, &args[0])));
+		c_value_set_rval(val, &c_type_i32, IR_I32, ir_CTLZ(IR_I32, c_value_ref(rcc, &args[0])));
 	} else if (name == YY___BUILTIN_CLZLL) {
 		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 		if (args[0].type->kind != C_TYPE_ILL) {
 			c_do_check_cvt(rcc, &c_type_ill, &args[0], 1);
 		}
-		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTLZ(args[0].u.type, c_value_ref(rcc, &args[0])));
+		c_value_set_rval(val, &c_type_i32, IR_I32, ir_CTLZ(IR_I32, c_value_ref(rcc, &args[0])));
 	} else if (name == YY___BUILTIN_CTZ) {
 		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 		if (args[0].type->kind != C_TYPE_I32) {
 			c_do_check_cvt(rcc, &c_type_i32, &args[0], 1);
 		}
-		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTTZ(args[0].u.type, c_value_ref(rcc, &args[0])));
+		c_value_set_rval(val, &c_type_i32, IR_I32, ir_CTTZ(IR_I32, c_value_ref(rcc, &args[0])));
 	} else if (name == YY___BUILTIN_CTZL) {
 		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 		if (args[0].type->kind != C_TYPE_IL) {
 			c_do_check_cvt(rcc, &c_type_il, &args[0], 1);
 		}
-		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTTZ(args[0].u.type, c_value_ref(rcc, &args[0])));
+		c_value_set_rval(val, &c_type_i32, IR_I32, ir_CTTZ(IR_I32, c_value_ref(rcc, &args[0])));
 	} else if (name == YY___BUILTIN_CTZLL) {
 		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 		if (args[0].type->kind != C_TYPE_ILL) {
 			c_do_check_cvt(rcc, &c_type_ill, &args[0], 1);
 		}
-		c_value_set_rval(val, args[0].type, args[0].u.type, ir_CTTZ(args[0].u.type, c_value_ref(rcc, &args[0])));
+		c_value_set_rval(val, &c_type_i32, IR_I32, ir_CTTZ(IR_I32, c_value_ref(rcc, &args[0])));
 	} else if (name == YY___BUILTIN_FFS) {
-		ir_val val0, val1;
 		ir_ref ref;
-		ir_type type;
 
 		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 		if (args[0].type->kind != C_TYPE_I32) {
 			c_do_check_cvt(rcc, &c_type_i32, &args[0], 1);
 		}
 		ref = c_value_ref(rcc, &args[0]);
-		val0.u64 = 0;
-		val1.u64 = 1;
-		type = args[0].u.type;
-		c_value_set_rval(val, args[0].type, type,
-			ref = ir_COND(type, ref,
-				ir_ADD(type, ir_CTTZ(type, ref), ir_const(rcc->active_ctx, val1, type)),
-				ir_const(rcc->active_ctx, val0, type)));
+		c_value_set_rval(val, &c_type_i32, IR_I32,
+			ref = ir_COND(IR_I32, ref,
+				ir_ADD(IR_I32, ir_CTTZ(IR_I32, ref), ir_const_i32(rcc->active_ctx, 1)),
+				ir_const_i32(rcc->active_ctx, 0)));
 	} else if (name == YY___BUILTIN_FFSL) {
-		ir_val val0, val1;
 		ir_ref ref;
-		ir_type type;
 
 		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 		if (args[0].type->kind != C_TYPE_IL) {
 			c_do_check_cvt(rcc, &c_type_il, &args[0], 1);
 		}
 		ref = c_value_ref(rcc, &args[0]);
-		val0.u64 = 0;
-		val1.u64 = 1;
-		type = args[0].u.type;
-		c_value_set_rval(val, args[0].type, type,
-			ref = ir_COND(type, ref,
-				ir_ADD(type, ir_CTTZ(type, ref), ir_const(rcc->active_ctx, val1, type)),
-				ir_const(rcc->active_ctx, val0, type)));
+		c_value_set_rval(val, &c_type_i32, IR_I32,
+			ref = ir_COND(IR_I32, ref,
+				ir_ADD(IR_I32, ir_CTTZ(IR_I32, ref), ir_const_i32(rcc->active_ctx, 1)),
+				ir_const_i32(rcc->active_ctx, 0)));
 	} else if (name == YY___BUILTIN_FFSLL) {
-		ir_val val0, val1;
 		ir_ref ref;
-		ir_type type;
 
 		if (num_args != 1) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
 		if (args[0].type->kind != C_TYPE_ILL) {
 			c_do_check_cvt(rcc, &c_type_ill, &args[0], 1);
 		}
 		ref = c_value_ref(rcc, &args[0]);
-		val0.u64 = 0;
-		val1.u64 = 1;
-		type = args[0].u.type;
-		c_value_set_rval(val, args[0].type, type,
-			ref = ir_COND(type, ref,
-				ir_ADD(type, ir_CTTZ(type, ref), ir_const(rcc->active_ctx, val1, type)),
-				ir_const(rcc->active_ctx, val0, type)));
+		c_value_set_rval(val, &c_type_i32, IR_I32,
+			ref = ir_COND(IR_I32, ref,
+				ir_ADD(IR_I32, ir_CTTZ(IR_I32, ref), ir_const_i32(rcc->active_ctx, 1)),
+				ir_const_i32(rcc->active_ctx, 0)));
 	} else if (name >= YY___BUILTIN_ADD_OVERFLOW && name <= YY___BUILTIN_UMULLL_OVERFLOW) {
 		ir_ref ref, overflow;
 		const c_type *t;
