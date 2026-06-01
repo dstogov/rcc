@@ -4317,8 +4317,8 @@ void c_do_neg(rcc_ctx *rcc, c_value *v)
 		v->u.ref = ir_NEG(v->u.type, c_value_ref(rcc, v));
 	} else {
 		switch (v->u.type) {
-			case IR_I32:
-			case IR_U32:    v->u.val.i64 = -v->u.val.i32; break;
+			case IR_I32:    v->u.val.i64 = -v->u.val.i32; break;
+			case IR_U32:    v->u.val.u64 = -v->u.val.u32; break;
 			case IR_I64:
 			case IR_U64:    v->u.val.i64 = -v->u.val.i64; break;
 			case IR_FLOAT:  v->u.val.f = -v->u.val.f; break;
