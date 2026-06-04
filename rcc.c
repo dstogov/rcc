@@ -542,7 +542,7 @@ add_thunk:
 			if (sym->linkage == C_LINK_INTERNAL) {
 				rcc->c_flags |= C_DO_LINK_INTERNAL;
 			} else {
-				IR_ASSERT(sym->linkage == C_LINK_EXTERNAL);
+				IR_ASSERT(sym->linkage == C_LINK_EXTERNAL || sym->linkage == C_LINK_BUILTIN);
 				rcc->c_flags |= C_DO_LINK_EXTERNAL;
 			}
 			if (rcc->c_flags & C_DUMP_ASM) {
