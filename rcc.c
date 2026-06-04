@@ -483,10 +483,10 @@ static void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, uint
 	len = (uint32_t)strlen(name);
 	id = yy_hash_lookup(rcc, name, len);
 	sym = rcc->yy_hash.data[id].sym;
-	if (sym && (sym->linkage != C_LINK_INTERNAL && sym->linkage != C_LINK_EXTERNAL)) {
+	if (sym && (sym->linkage != C_LINK_INTERNAL && sym->linkage != C_LINK_EXTERNAL && sym->linkage != C_LINK_BUILTIN)) {
 		sym = c_global_sym(rcc, sym);
 	}
-	if (sym && (sym->linkage == C_LINK_INTERNAL || sym->linkage == C_LINK_EXTERNAL)) {
+	if (sym && (sym->linkage == C_LINK_INTERNAL || sym->linkage == C_LINK_EXTERNAL || sym->linkage == C_LINK_BUILTIN)) {
 		if (c_value_is_const(&sym->value)) {
 			IR_ASSERT(sym->value.u.type == IR_ADDR && sym->value.u.val.ptr);
 			return sym->value.u.val.ptr;
@@ -504,7 +504,7 @@ static void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, uint
 			goto add_thunk;
 		}
 
-		if (sym->linkage == C_LINK_EXTERNAL) {
+		if (sym->linkage == C_LINK_EXTERNAL || sym->linkage == C_LINK_BUILTIN) {
 			void *addr;
 
 			addr = ir_resolve_sym_name(name);
