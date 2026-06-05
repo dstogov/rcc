@@ -2337,8 +2337,8 @@ int main(int argc, const char **argv)
 			rcc->code_buffer.end = (char*)rcc->code_buffer.start + size;
 
 #if defined(IR_TARGET_X86) || defined(IR_TARGET_X64)
+			uint32_t cpuinfo = ir_cpuinfo();
 			if (rcc->c_flags & C_RUN) {
-				uint32_t cpuinfo = ir_cpuinfo();
 
 				if (!(cpuinfo & IR_X86_SSE2)) {
 					fprintf(stderr, "ERROR: incompatible CPU (SSE2 is not supported)\n");
@@ -2349,10 +2349,8 @@ int main(int argc, const char **argv)
 					fprintf(stderr, "ERROR: -mavx is not compatible with CPU (AVX is not supported)\n");
 					return 1;
 				}
-				rcc->ir_mflags |= (cpuinfo & (IR_X86_SSE3|IR_X86_SSSE3|IR_X86_SSE41|IR_X86_SSE42|IR_X86_BMI1)) & ~rcc->ir_mflags_disabled;
-			} else {
-				rcc->ir_mflags &= ~rcc->ir_mflags_disabled;
 			}
+			rcc->ir_mflags |= (cpuinfo & (IR_X86_SSE3|IR_X86_SSSE3|IR_X86_SSE41|IR_X86_SSE42|IR_X86_BMI1)) & ~rcc->ir_mflags_disabled;
 #endif
 		}
 
