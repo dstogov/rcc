@@ -13,6 +13,10 @@
 # include <unistd.h>
 #else
 # include <windows.h>
+# include <io.h>
+# define open _open
+# define read _read
+# define close _close
 #endif
 
 #ifndef O_BINARY

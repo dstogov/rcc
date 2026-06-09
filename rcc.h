@@ -1574,7 +1574,7 @@ IR_ALWAYS_INLINE void c_value_set_const_str(c_value *res, const c_type *type, ir
 	res->u.optx = IR_OPT(C_VAL_CONST | C_VAL_STR, t);
 	res->u.val.ptr = (void*)str;
 	IR_ASSERT(size <= 0x7fffffff);
-	res->u.ref = size; /* string size (including terminating zero) */
+	res->u.ref = (ir_ref)size; /* string size (including terminating zero) */
 }
 
 IR_ALWAYS_INLINE bool c_value_is_const(c_value *v)

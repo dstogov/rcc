@@ -12,6 +12,10 @@
 # include <sys/time.h>
 #else
 # include <windows.h>
+# include <io.h>
+# define open _open
+# define read _read
+# define close _close
 #endif
 
 #ifndef O_BINARY
@@ -1251,7 +1255,7 @@ static size_t rcc_emit_ir_data(rcc_ctx *rcc, FILE *f, const c_type *type, const 
 	return 0;
 }
 
-static void rcc_emit_ir_mbstring(rcc_ctx *rcc, FILE *f, const c_type *type, const void *addr, int len)
+static void rcc_emit_ir_mbstring(rcc_ctx *rcc, FILE *f, const c_type *type, const void *addr, size_t len)
 {
 	ir_type t = c_type2ir(rcc, type);
 	size_t size = ir_type_size[t];
@@ -1485,7 +1489,7 @@ static void rcc_link_internal(rcc_ctx *rcc)
 	c_sym *sym;
 
 	ir_mem_unprotect(rcc->code_buffer.start, (char*)rcc->code_buffer.end - (char*)rcc->code_buffer.start);
-	for (i = YY_LAST_KEYWORD + 1, p = rcc->yy_hash.data + i; i < rcc->yy_hash.count; p++, i++) {
+	for (i = YY_LAST_KEYWORD + 1, p = rcc->yy_hash.data + i; i < (yy_sym)rcc->yy_hash.count; p++, i++) {
 		if (p->sym) {
 			if (p->sym->is_thunk) {
 				if (p->sym->linkage == C_LINK_INTERNAL) {
@@ -1560,7 +1564,7 @@ static void rcc_link(rcc_ctx *rcc)
 	void *addr;
 
 	ir_mem_unprotect(rcc->code_buffer.start, (char*)rcc->code_buffer.end - (char*)rcc->code_buffer.start);
-	for (i = YY_LAST_KEYWORD + 1, p = rcc->yy_hash.data + i; i < rcc->yy_hash.count; p++, i++) {
+	for (i = YY_LAST_KEYWORD + 1, p = rcc->yy_hash.data + i; i < (yy_sym)rcc->yy_hash.count; p++, i++) {
 		link = p->link;
 		if (link) {
 			if (!link->addr || link->is_thunk) {
@@ -1603,7 +1607,7 @@ static void rcc_remember_state(rcc_ctx *rcc)
 	yy_sym i;
 	yy_hash_bucket *p;
 
-	for (i = YY_LAST_KEYWORD + 1, p = rcc->yy_hash.data + i; i < rcc->yy_hash.count; p++, i++) {
+	for (i = YY_LAST_KEYWORD + 1, p = rcc->yy_hash.data + i; i < (yy_sym)rcc->yy_hash.count; p++, i++) {
 		if (p->macro) p->macro->flags |= PP_MACRO_PREDEFINED;
 		IR_ASSERT(!p->macro_stack);
 		IR_ASSERT(!p->sym);
@@ -1662,7 +1666,7 @@ static void rcc_reset_state(rcc_ctx *rcc)
 	if (rcc->c_flags & C_RUN) {
 		ir_mem_unprotect(rcc->code_buffer.start, (char*)rcc->code_buffer.end - (char*)rcc->code_buffer.start);
 	}
-	for (i = YY_LAST_KEYWORD + 1, p = rcc->yy_hash.data + i; i < rcc->reset_state.yy_num_syms; p++, i++) {
+	for (i = YY_LAST_KEYWORD + 1, p = rcc->yy_hash.data + i; i < (yy_sym)rcc->reset_state.yy_num_syms; p++, i++) {
 		if (p->macro && !(p->macro->flags & PP_MACRO_PREDEFINED)) {
 			p->macro = NULL;
 		}
@@ -1679,7 +1683,7 @@ static void rcc_reset_state(rcc_ctx *rcc)
 			p->sym = NULL;
 		}
 	}
-	for (; i < rcc->yy_hash.count; p++, i++) {
+	for (; i < (yy_sym)rcc->yy_hash.count; p++, i++) {
 		if ((rcc->c_flags & C_RUN)
 		 && p->sym
 		 && !p->sym->has_asm_name
