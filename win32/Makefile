@@ -19,10 +19,11 @@ CAPSTONE_DIR=..\ir\win32\capstone
 CFLAGS=/nologo /utf-8 /W3 /EHsc /Zi /I$(IR_SRC_DIR)
 LDFLAGS=/nologo
 !if "$(BUILD)" == "release"
-CFLAGS=$(CFLAGS) /MT /Ox
+CFLAGS=$(CFLAGS) /MT /Ox /D_CRT_SECURE_NO_DEPRECATE /D_CRT_STDIO_INLINE=__declspec(dllexport)__inline
 LDFLAGS=$(LDFLAGS) /LTCG
 !else
-CFLAGS=$(CFLAGS) /MTd /Od /DEBUG /D_DEBUG /DIR_DEBUG=1
+CFLAGS=$(CFLAGS) /MTd /Od /DEBUG /D_DEBUG /DIR_DEBUG=1 /D_CRT_SECURE_NO_DEPRECATE /D_CRT_STDIO_INLINE=__declspec(dllexport)__inline
+
 LDFLAGS=$(LDFLAGS) /DEBUG
 !endif
 
