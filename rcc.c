@@ -2205,6 +2205,12 @@ int main(int argc, const char **argv)
 			printf("%s\n", IR_TARGET);
 			ret = 0;
 			goto exit;
+#ifdef _WIN32
+		} else if (strcmp(argv[i], "--no-abort-fault") == 0) {
+			_set_abort_behavior(0, _WRITE_ABORT_MSG|_CALL_REPORTFAULT);
+			DWORD dwMode = SetErrorMode(SEM_NOGPFAULTERRORBOX);
+			SetErrorMode(dwMode | SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+#endif
 		} else if (argv[i][0] == '-' && (argv[i][1] == 'D' || argv[i][1] == 'U')) {
 			if (argv[i][2] == 0) {
 				if (i + 1 == argc || argv[i+1][0] == '-') {
