@@ -1441,8 +1441,8 @@ IR_ALWAYS_INLINE yy_sym *pp_load_ptr(yy_sym *tokens, void **ptr)
 #if __SIZEOF_POINTER__ == 4
 	*ptr = (void*)(uintptr_t)*tokens++;
 #else
-	uintptr_t val = (uintptr_t)*tokens++ << 32;
-	val |= (uintptr_t)*tokens++;
+	uintptr_t val = (uintptr_t)(uint32_t)*tokens++ << 32;
+	val |= (uintptr_t)(uint32_t)*tokens++;
 	*ptr = (void*)val;
 #endif
 	return tokens;
