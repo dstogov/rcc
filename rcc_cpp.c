@@ -2240,6 +2240,7 @@ static void pp_parse_pragma(rcc_ctx *rcc)
 		if (!(rcc->yy_flags & PP_NO_OUTPUT)) pp_print_pragma(rcc, sym);
 		return;
 	} else if (sym == YY_PACK) {
+		rcc->yy_flags &= ~YY_NO_MACRO;
 		sym = yy_next(rcc);
 		if (sym != YY__LPAREN) goto error;
 		sym = yy_next(rcc);
