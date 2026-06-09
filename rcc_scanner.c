@@ -1052,12 +1052,34 @@ static void yy_error_line(rcc_ctx *rcc)
 static void yy_error_pos(rcc_ctx *rcc)
 {
 	fflush(stdout);
+#ifdef _WIN32
+	/* Convert back-slashes to slashes to make identical tests ouput */
+	// TODO: find a better solution ???
+
+	const char *s = yy_sym2str(rcc, rcc->yy_file_name);
+
+	while (*s) {
+		if (*s == '\\') {
+			fputc('/', stderr);
+		} else {
+			fputc(*s, stderr);
+		}
+		s++;
+	}
+	if (rcc->yy_text >= rcc->yy_linepos && rcc->yy_text <= rcc->yy_pos) {
+		fprintf(stderr, ":%d:%d: ",
+			rcc->yy_line, (int)(rcc->yy_text - rcc->yy_linepos + 1));
+	} else {
+		fprintf(stderr, ":%d: ", rcc->yy_line);
+	}
+#else
 	if (rcc->yy_text >= rcc->yy_linepos && rcc->yy_text <= rcc->yy_pos) {
 		fprintf(stderr, "%s:%d:%d: ", yy_sym2str(rcc, rcc->yy_file_name),
 			rcc->yy_line, (int)(rcc->yy_text - rcc->yy_linepos + 1));
 	} else {
 		fprintf(stderr, "%s:%d: ", yy_sym2str(rcc, rcc->yy_file_name), rcc->yy_line);
 	}
+#endif
 }
 
 void yy_error_(rcc_ctx *rcc, const char *msg)
