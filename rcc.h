@@ -836,8 +836,8 @@ struct _c_linker_sym {
 };
 
 struct _c_sym {
-	c_sym_kind             kind: 2;
-	c_sym_linkage          linkage: 2;         /* only for C_SYM_VAR and C_SYM_FUNC */
+	c_sym_kind             kind: 3;            /* enum bit-filed requires an extra bit for MSVC ??? */
+	c_sym_linkage          linkage: 3;         /* only for C_SYM_VAR and C_SYM_FUNC */
 	bool                   is_external: 1;     /* only for C_SYM_VAR and C_SYM_FUNC */
 	bool                   is_thread_local: 1; /* only for C_SYM_VAR */
 	bool                   is_implemented: 1;  /* only for C_SYM_VAR and C_SYM_FUNC */
