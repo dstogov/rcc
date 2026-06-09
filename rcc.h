@@ -6,8 +6,12 @@
 #ifndef RCC_H
 #define RCC_H
 
-#ifndef __has_attribute
-# define __has_attribute(x) 0
+#ifdef _WIN32
+# if defined(_M_X64) || defined(_M_ARM64)
+#  define __SIZEOF_POINTER__ 8
+# elif defined(_M_IX86)
+#  define __SIZEOF_POINTER__ 4
+# endif
 #endif
 
 #if __has_attribute(noreturn)
