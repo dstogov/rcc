@@ -395,7 +395,7 @@ number_suffix:
 					&& (pos[-1] == 'e' || pos[-1] == 'E' || pos[-1] == 'p' || pos[-1] == 'P'))) {
 					do {
 						ch = *++pos;
-pp_number:
+pp_number:;
 					} while ((ch >= 'a' && ch <= 'z')
 						|| (ch >= 'A' && ch <= 'Z')
 						|| (ch >= '0' && ch <= '9')

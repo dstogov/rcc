@@ -11,6 +11,8 @@
 #include <sys/stat.h>
 #ifndef _WIN32
 # include <unistd.h>
+#else
+# include <windows.h>
 #endif
 
 #ifndef O_BINARY
@@ -43,7 +45,7 @@ typedef pp_macro pp_arg;
 static void pp_debug_print_context(rcc_ctx *rcc);
 static void pp_debug_print_args(rcc_ctx *rcc, pp_macro *macro, pp_arg *args);
 static void pp_debug_print_list(rcc_ctx *rcc, const char *hdr, yy_sym *tokens);
-# define pp_debug_fprintf(file, format...) fprintf(file, format)
+# define pp_debug_fprintf(file, format, ...) fprintf(file, format)
 #else
 # define pp_debug 0
 # define pp_inc_recursion_level(rcc)
@@ -51,7 +53,7 @@ static void pp_debug_print_list(rcc_ctx *rcc, const char *hdr, yy_sym *tokens);
 # define pp_debug_print_context(rcc)
 # define pp_debug_print_args(rcc, macro, args)
 # define pp_debug_print_list(rcc, hdr, tokens)
-# define pp_debug_fprintf(file, format...)
+# define pp_debug_fprintf(file, format, ...)
 #endif
 
 #define PP_ASSERT(condition, message) \
@@ -62,7 +64,8 @@ static void pp_debug_print_list(rcc_ctx *rcc, const char *hdr, yy_sym *tokens);
 #  define IS_DIRSEP(c) (c == '/' || c == '\\')
 #  define IS_ABSPATH(p) (IS_DIRSEP(p[0]) || (p[0] != 0 && p[1] == ':' && IS_DIRSEP(p[2])))
 # else
-#  define IS_ABSPATH(p) (p[0] == '/')
+#  define IS_DIRSEP(c) (c == '/')
+#  define IS_ABSPATH(p) IS_DIRSEP(p[0])
 # endif
 #endif
 
@@ -76,6 +79,10 @@ static void pp_debug_print_list(rcc_ctx *rcc, const char *hdr, yy_sym *tokens);
 # endif
 #endif
 
+#ifdef _WIN32
+# define realpath(file, buf) _fullpath(buf, file, MAXPATHLEN)
+#endif
+
 bool pp_add_include_dir(rcc_ctx *rcc, const char *path)
 {
 	if (rcc->pp_include_paths_count >= PP_MAX_INCLUDE_PATHS) return 0;
@@ -85,8 +92,10 @@ bool pp_add_include_dir(rcc_ctx *rcc, const char *path)
 
 void pp_add_sys_include_dirs(rcc_ctx *rcc)
 {
+#ifndef _WIN32
 	pp_add_include_dir(rcc, "/usr/local/include");
 	pp_add_include_dir(rcc, "/usr/include");
+#endif
 #ifdef __linux__
 # if defined(IR_TARGET_X64)
 	pp_add_include_dir(rcc, "/usr/include/x86_64-linux-gnu");
@@ -1346,7 +1355,7 @@ void pp_pop_include(rcc_ctx *rcc)
 		}
 		ir_hashtab_add(rcc->pp_include_hash, rcc->yy_file_name, rcc->pp_include_ifndef_macro);
 
-		char buf[PATH_MAX];
+		char buf[MAXPATHLEN];
 		char *path_str = realpath(yy_sym2str(rcc, rcc->yy_file_name), buf);
 		if (path_str) {
 			yy_sym path_sym = yy_hash_lookup(rcc, path_str, strlen(path_str));
@@ -1433,7 +1442,7 @@ static yy_sym pp_find_included(rcc_ctx *rcc, const char *name, size_t len)
 
 static bool pp_find_included_realpath(rcc_ctx *rcc, const char *name)
 {
-	char buf[PATH_MAX];
+	char buf[MAXPATHLEN];
 	char *path = realpath(name, buf);
 	yy_sym macro_name, resolved_name;
 
@@ -1482,7 +1491,7 @@ static yy_sym pp_find_include(rcc_ctx *rcc, yy_dyn_str *name, int start_search_d
 			const char *file_name = yy_sym2strl(rcc, rcc->yy_file_name, &len);
 
 			for (j = len; j > 0; j--) {
-				if (file_name[j-1] == '/') {
+				if (IS_DIRSEP(file_name[j-1])) {
 					break;
 				}
 			}
@@ -2184,7 +2193,7 @@ static void pp_parse_pragma(rcc_ctx *rcc)
 		}
 		ir_hashtab_add(rcc->pp_include_hash, rcc->yy_file_name, YY_PRAGMA_ONCE);
 
-		char buf[PATH_MAX];
+		char buf[MAXPATHLEN];
 		char *path_str = realpath(yy_sym2str(rcc, rcc->yy_file_name), buf);
 		if (path_str) {
 			yy_sym path_sym = yy_hash_lookup(rcc, path_str, strlen(path_str));
