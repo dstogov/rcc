@@ -40,6 +40,49 @@ jobs:
         run: make BUILD=debug all
       - name: test
         run: make BUILD=debug test-ci
+  Linux_i386:
+    name: 'Linux i386'
+    runs-on: ubuntu-22.04
+    container:
+      image: ubuntu:22.04
+    env:
+      CFLAGS: '-fsanitize=address,undefined'
+    steps:
+      - uses: actions/checkout@v3
+      - name: apt
+        run: |
+          dpkg --add-architecture i386
+          apt update -y
+          DEBIAN_FRONTEND=noninteractive apt install -y \
+            gcc \
+            gcc-multilib \
+            libc6:i386 \
+            make \
+            wget
+      - name: Build capstone
+        run: |
+          # capstone isn't distributed for 32-bit so we need to build it manually
+          wget https://github.com/capstone-engine/capstone/archive/4.0.2.tar.gz -O capstone.tar.gz
+          tar zxvf capstone.tar.gz
+          cd capstone-4.0.2
+          ./make.sh nix32
+          ./make.sh install
+          cd ..
+          rm -rf capstone-4.0.2 capstone.tar.gz
+      - name: git checkout ir
+        uses: actions/checkout@v5
+        with:
+          repository: dstogov/ir
+          path: ir
+      - name: make ir
+        run: |
+          cd ir
+          make TARGET=x86 BUILD=debug all
+          make TARGET=x86 BUILD=debug install
+      - name: make
+        run: make TARGET=x86 BUILD=debug all
+      - name: test
+        run: make TARGET=x86 BUILD=debug test-ci
   Linux_aarch64:
     name: 'Linux aarch64'
     runs-on: ubuntu-22.04-arm
