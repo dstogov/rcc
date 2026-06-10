@@ -390,11 +390,6 @@ type_qualifier(rcc_ctx *rcc, c_dcl *d):
 function_specifier(rcc_ctx *rcc, c_dcl *d):
 		("inline"|"__inline"|"__inline__")                 {d->attr |= C_ATTR_INLINE;}
 	|	"_Noreturn"                                        {d->attr |= C_ATTR_NORETURN;}
-	|	"__cdecl"                                          {if ((d->attr & C_ATTR_CALL_CONV) && (d->attr & C_ATTR_CALL_CONV) != C_ATTR_CC_CDECL) yy_error("multiple calling conventions");}
-//	|	"__stdcall"
-	|	"__fastcall"                                       {if ((d->attr & C_ATTR_CALL_CONV) && (d->attr & C_ATTR_CALL_CONV) != C_ATTR_CC_FASTCALL) yy_error("multiple calling conventions");}
-//	|	"__thiscall"
-//	|	"__vectorcall"
 ;
 
 alignment_specifier(rcc_ctx *rcc, c_dcl *d):               {c_value v;}
@@ -419,6 +414,11 @@ attributes(rcc_ctx *rcc, c_dcl *d):
 		|	"restrict"
 		)                                                  {sym = c_declspec(rcc, d, name, sym);}
 		")"
+	|	"__cdecl"                                          {if ((d->attr & C_ATTR_CALL_CONV) && (d->attr & C_ATTR_CALL_CONV) != C_ATTR_CC_CDECL) yy_error("multiple calling conventions");}
+//	|	"__stdcall"
+	|	"__fastcall"                                       {if ((d->attr & C_ATTR_CALL_CONV) && (d->attr & C_ATTR_CALL_CONV) != C_ATTR_CC_FASTCALL) yy_error("multiple calling conventions");}
+//	|	"__thiscall"
+//	|	"__vectorcall"
 	)++
 ;
 
@@ -587,8 +587,6 @@ declarator(rcc_ctx *rcc, c_dcl *d, c_name *name, bool allow_old_func):
 	(	"*"                                                {c_make_pointer_type(rcc, d);}
 		type_qualifier_list(rcc, d)?
 	)*
-	/* MSVC accepts specifiers after return type */
-	function_specifier(rcc, d)?
 	(	ID(rcc, name)
 		arrays_and_params(rcc, d, allow_old_func, 0)?
 	|	"("                                                {d2.flags = C_TYPE_SPEC_CHAR;}
