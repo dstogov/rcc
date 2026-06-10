@@ -585,6 +585,8 @@ declarator(rcc_ctx *rcc, c_dcl *d, c_name *name, bool allow_old_func):
 	(	"*"                                                {c_make_pointer_type(rcc, d);}
 		type_qualifier_list(rcc, d)?
 	)*
+	/* MSVC accepts specifiers after return type */
+	function_specifier(rcc, d)?
 	(	ID(rcc, name)
 		arrays_and_params(rcc, d, allow_old_func, 0)?
 	|	"("                                                {d2.flags = C_TYPE_SPEC_CHAR;}

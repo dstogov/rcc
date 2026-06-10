@@ -323,7 +323,7 @@ static yy_sym parse_declaration(yy_sym sym, rcc_ctx *rcc, uint32_t flags) {
 			}
 			if (d0.flags == C_DCL_STATEMENT && d0.attr == C_ATTR_MUSTTAIL) yy_error("\"__musttail__\" attribute only applies to return statements");
 		}
-		if (sym == YY__STAR || C_IS_ID(sym) || sym == YY__LPAREN) {
+		if (sym == YY__STAR || sym == YY_INLINE || sym == YY___INLINE || sym == YY___INLINE__ || sym == YY__NORETURN || sym == YY___CDECL || sym == YY___FASTCALL || C_IS_ID(sym) || sym == YY__LPAREN) {
 			c_dcl d = d0;
 			sym = parse_declarator(sym, rcc, &d, &name, 1);
 			if ((sym == YY_ASM || sym == YY___ASM || sym == YY___ASM__ || sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__ || sym == YY___DECLSPEC || sym == YY__EQUAL || sym == YY__COMMA || sym == YY__SEMICOLON) && synpred_1(sym)) {
@@ -1048,7 +1048,7 @@ static yy_sym parse_struct_declarator(yy_sym sym, rcc_ctx *rcc, c_type *t, c_dcl
 	c_value v;
 	c_name name;
 	c_value_clear(&v);
-	if (sym == YY__STAR || C_IS_ID(sym) || sym == YY__LPAREN) {
+	if (sym == YY__STAR || sym == YY_INLINE || sym == YY___INLINE || sym == YY___INLINE__ || sym == YY__NORETURN || sym == YY___CDECL || sym == YY___FASTCALL || C_IS_ID(sym) || sym == YY__LPAREN) {
 		sym = parse_declarator(sym, rcc, field, &name, 0);
 		if (sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__ || sym == YY___DECLSPEC) {
 			sym = parse_attributes(sym, rcc, field);
@@ -1179,6 +1179,9 @@ static yy_sym parse_declarator(yy_sym sym, rcc_ctx *rcc, c_dcl *d, c_name *name,
 		if (sym == YY_CONST || sym == YY___CONST || sym == YY___CONST__ || sym == YY_RESTRICT || sym == YY___RESTRICT || sym == YY___RESTRICT__ || sym == YY_VOLATILE || sym == YY___VOLATILE || sym == YY___VOLATILE__ || sym == YY__ATOMIC || sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__ || sym == YY___DECLSPEC) {
 			sym = parse_type_qualifier_list(sym, rcc, d);
 		}
+	}
+	if (sym == YY_INLINE || sym == YY___INLINE || sym == YY___INLINE__ || sym == YY__NORETURN || sym == YY___CDECL || sym == YY___FASTCALL) {
+		sym = parse_function_specifier(sym, rcc, d);
 	}
 	if (C_IS_ID(sym)) {
 		sym = parse_ID(sym, rcc, name);
