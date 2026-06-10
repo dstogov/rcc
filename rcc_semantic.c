@@ -5051,6 +5051,13 @@ static ir_ref c_do_convert_builtin(rcc_ctx *rcc, c_value *func, int32_t num_args
 			if (num_args == 1) {
 				return ir_ABS_F(arg_refs[0]);
 			}
+#ifdef _WIN32
+		} else if (sym_name == YY___VA_START) {
+			if (num_args == 1 || num_args == 2) {
+				ir_VA_START(arg_refs[0]);
+				return IR_NULL;
+			}
+#endif
 		}
 	}
 

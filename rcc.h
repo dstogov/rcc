@@ -396,6 +396,7 @@
 	_("__DF__",                        YY___DF__)                      \
 	/* builtin functions */                                            \
 	_("alloca",                        YY_ALLOCA)                      \
+	_("__va_start",                    YY___VA_START)                  \
 	_("abs",                           YY_ABS)                         \
 	_("labs",                          YY_LABS)                        \
 	_("llabs",                         YY_LLABS)                       \
