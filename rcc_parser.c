@@ -732,7 +732,14 @@ static yy_sym parse_attributes(yy_sym sym, rcc_ctx *rcc, c_dcl *d) {
 				yy_error_sym("'(' expected, got", sym);
 			}
 			sym = get_sym();
-			sym = parse_ID(sym, rcc, &name);
+			name = sym;
+			if (C_IS_ID(sym)) {
+				sym = parse_ID(sym, rcc, &name);
+			} else if (sym == YY_RESTRICT) {
+				sym = get_sym();
+			} else {
+				yy_error_sym("unexpected", sym);
+			}
 			sym = c_declspec(rcc, d, name, sym);
 			if (sym != YY__RPAREN) {
 				yy_error_sym("')' expected, got", sym);

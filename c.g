@@ -414,8 +414,10 @@ attributes(rcc_ctx *rcc, c_dcl *d):
 			attrib(rcc, d) ( "," attrib(rcc, d) )*
 		")" ")"
 	|	                                                   {c_name name;}
-		"__declspec" "("
-		ID(rcc, &name)                                     {sym = c_declspec(rcc, d, name, sym);}
+		"__declspec" "("                                   {name = sym;}
+		(	ID(rcc, &name)
+		|	"restrict"
+		)                                                  {sym = c_declspec(rcc, d, name, sym);}
 		")"
 	)++
 ;
