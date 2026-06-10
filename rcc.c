@@ -22,6 +22,12 @@
 # define O_BINARY 0
 #endif
 
+#ifdef _WIN32
+# define IS_PATHSEP(c) (c == ';')
+#else
+# define IS_PATHSEP(c) (c == ':')
+#endif
+
 #include <ir.h>
 #include <ir_private.h>
 #include <ir_builder.h>
@@ -1852,6 +1858,7 @@ static void rcc_help(const char *cmd)
 		"  --emit-llvm                - convert final IR to LLVM code (implementation is incomplete)\n"
 		"  --dump-size                - print size of generated code\n"
 		"  --dump-time                - print compilation and execution time\n"
+		"  --dump-search-dirs         - print search paths\n"
 		"  --target                   - print JIT target\n"
 		"  --version\n"
 		"  --help\n",
@@ -2162,6 +2169,16 @@ void rcc_parse_options(rcc_ctx *rcc, const char *str, size_t len)
 	}
 }
 
+void rcc_print_search_dirs(rcc_ctx *rcc)
+{
+	int i;
+
+	printf("include:\n");
+	for (i = 0; i < rcc->pp_include_paths_count; i++) {
+		printf("  %s\n", rcc->pp_include_paths[i]);
+	}
+}
+
 int main(int argc, const char **argv)
 {
 	rcc_ctx rcc_holder, *rcc = &rcc_holder;
@@ -2173,6 +2190,8 @@ int main(int argc, const char **argv)
 	ir_ctx ctx;
 	double start_time = 0.0;
 	int ret = 1;
+	bool dump_dirs = 0;
+	char *includes = NULL;
 
 	ir_consistency_check();
 
@@ -2203,6 +2222,8 @@ int main(int argc, const char **argv)
 			printf("IR %s\n", IR_VERSION);
 			ret = 0;
 			goto exit;
+		} else if (strcmp(argv[i], "--dump-search-dirs") == 0) {
+			dump_dirs = 1;
 		} else if (strcmp(argv[i], "--target") == 0) {
 			printf("%s\n", IR_TARGET);
 			ret = 0;
@@ -2268,7 +2289,43 @@ int main(int argc, const char **argv)
 		}
 	}
 
+#ifdef _WIN32
+	includes = getenv("INCLUDE");
+#else
+	includes = getenv("C_INCLUDE_PATH");
+#endif
+
+	if (includes) {
+		size_t len = strlen(includes);
+		char *s = ir_mem_malloc(len + 1);
+		char *p;
+
+		memcpy(s, includes, len + 1);
+		includes = s;
+		p = s;
+		while (1) {
+			while (*p && !IS_PATHSEP(*p)) {
+				p++;
+			}
+			if (*p) {
+				*p = 0;
+				pp_add_include_dir(rcc, s);
+				p++;
+				s = p;
+			} else {
+				pp_add_include_dir(rcc, s);
+				break;
+			}
+		}
+	}
+
 	pp_add_sys_include_dirs(rcc);
+
+	if (dump_dirs) {
+		rcc_print_search_dirs(rcc);
+		ret = 0;
+		goto exit;
+	}
 
 	if (rcc->c_flags & C_SYNTAX_ONLY) {
 		if (rcc->c_flags & (C_DUMP_SIZE|C_DUMP_ASM|C_RUN)) {
@@ -2526,6 +2583,7 @@ int main(int argc, const char **argv)
 	ir_free(&ctx);
 
 exit:
+	if (includes) ir_mem_free(includes);
 	ir_list_free(&def);
 	ir_list_free(&src);
 	return ret;
