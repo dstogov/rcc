@@ -103,6 +103,8 @@ static bool is_nested_declarator(rcc_ctx *rcc, yy_sym id)
 			while (*tokens == YY_WS) tokens++;
 			if (*tokens == YY___ATTRIBUTE
 			 || *tokens == YY___ATTRIBUTE__
+			 || *tokens == YY___CDECL
+			 || *tokens == YY___FASTCALL
 			 || *tokens == YY__STAR
 			 || *tokens == YY__LPAREN
 			 || *tokens == YY__LBRACK
@@ -126,6 +128,8 @@ static bool is_nested_declarator(rcc_ctx *rcc, yy_sym id)
 	rcc->yy_flags &= ~YY_NO_DIRECTIVE;
 	bool ret = (sym == YY___ATTRIBUTE
 			|| sym == YY___ATTRIBUTE__
+			|| sym == YY___CDECL
+			|| sym == YY___FASTCALL
 			|| sym == YY__STAR
 			|| sym == YY__LPAREN
 			|| sym == YY__LBRACK
@@ -742,9 +746,11 @@ static yy_sym parse_attributes(yy_sym sym, rcc_ctx *rcc, c_dcl *d) {
 		} else if (sym == YY___CDECL) {
 			sym = get_sym();
 			if ((d->attr & C_ATTR_CALL_CONV) && (d->attr & C_ATTR_CALL_CONV) != C_ATTR_CC_CDECL) yy_error("multiple calling conventions");
+			d->attr |= C_ATTR_CC_CDECL;
 		} else if (sym == YY___FASTCALL) {
 			sym = get_sym();
 			if ((d->attr & C_ATTR_CALL_CONV) && (d->attr & C_ATTR_CALL_CONV) != C_ATTR_CC_FASTCALL) yy_error("multiple calling conventions");
+			d->attr |= C_ATTR_CC_FASTCALL;
 		} else {
 			yy_error_sym("unexpected", sym);
 		}
