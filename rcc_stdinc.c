@@ -91,6 +91,19 @@ static const char c_boot[] =
 "#define __UINT64_TYPE__          unsigned long int\n"
 "#define __INTMAX_TYPE__          long int\n"
 "#define __UINTMAX_TYPE__         unsigned long int\n"
+
+#ifdef _WIN32
+"#define _WIN32                   1\n"
+"#define _WIN64                   1\n"
+"#define _M_X64                   100\n"
+"#define _M_AMD64                 100\n"
+"#define _INTEGRAL_MAX_BITS       64\n"
+"#define __int8                   __INT8_TYPE__\n"
+"#define __int16                  __INT16_TYPE__\n"
+"#define __int32                  __INT32_TYPE__\n"
+"#define __int64                  __INT64_TYPE__ \n"
+#endif
+
 #elif defined(IR_TARGET_X86)
 "#define __ILP32__                1\n"
 "#define __i386__                 1\n"
@@ -151,6 +164,17 @@ static const char c_boot[] =
 "#define __UINT64_TYPE__          unsigned long long int\n"
 "#define __INTMAX_TYPE__          long long int\n"
 "#define __UINTMAX_TYPE__         unsigned long long int\n"
+
+#ifdef _WIN32
+"#define _WIN32                   1\n"
+"#define _M_IX86                  600\n"
+"#define _INTEGRAL_MAX_BITS       64\n"
+"#define __int8                   __INT8_TYPE__\n"
+"#define __int16                  __INT16_TYPE__\n"
+"#define __int32                  __INT32_TYPE__\n"
+"#define __int64                  __INT64_TYPE__ \n"
+#endif
+
 #elif defined(IR_TARGET_AARCH64)
 "#define __LP64__                 1\n"
 "#define __aarch64__              1\n"
@@ -230,7 +254,7 @@ static const char c_boot[] =
 "\n";
 
 static const char c_builtin[] =
-#if defined(__i386__) || defined(__WIN32) || defined(__APPLE__)
+#if defined(__i386__) || defined(_WIN32) || defined(__APPLE__)
 "typedef char *__builtin_va_list;\n"
 #elif defined(__x86_64__)
 "typedef struct {\n"
@@ -295,7 +319,7 @@ static const char c_stdarg_h[] =
 "#define va_start __builtin_va_start\n"
 "#define va_arg __builtin_va_arg\n"
 "#define va_end(ap) (void)(ap)\n"
-#if defined(__i386__) || defined(__WIN32) || defined(__APPLE__)
+#if defined(__i386__) || defined(_WIN32) || defined(__APPLE__)
 "#define va_copy(dest, src) ((dest) = (src))\n"
 #else
 "#define va_copy(dest, src) ((dest)[0] = (src)[0])\n"

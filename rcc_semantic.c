@@ -4557,7 +4557,7 @@ c_value *c_do_grow_actual_parameters(c_value *args, int32_t num_args)
 
 static ir_ref c_va_list_addr(rcc_ctx *rcc, c_value *val)
 {
-#if defined(__i386__) || defined(__WIN32) || defined(__APPLE__)
+#if defined(__i386__) || defined(_WIN32) || defined(__APPLE__)
 	if (!c_value_is_lval(val)) yy_error("lvalue required");
 	return c_value_is_var(val) ? ir_VADDR(val->u.ref) : val->u.ref;
 #else
