@@ -961,6 +961,8 @@ void rcc_init(rcc_ctx *rcc)
 	pp_macro_define(rcc, YY___BASE_FILE__,       PP_MACRO_BUILTIN, 0, NULL);
 	pp_macro_define(rcc, YY___HAS_ATTRIBUTE,     PP_MACRO_BUILTIN, 1, NULL);
 	pp_macro_define(rcc, YY___HAS_BUILTIN,       PP_MACRO_BUILTIN, 1, NULL);
+	pp_macro_define(rcc, YY__PRAGMA,             PP_MACRO_BUILTIN, 1, NULL);
+	pp_macro_define(rcc, YY___PRAGMA,            PP_MACRO_BUILTIN, 1, NULL);
 
 	pp_start(rcc);
 	c_stdinc_init(rcc);

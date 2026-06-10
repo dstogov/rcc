@@ -228,6 +228,7 @@ static void pp_debug_tokens(rcc_ctx *rcc, FILE *f, yy_sym *tokens, const pp_macr
 static void pp_debug_include(rcc_ctx *rcc, yy_sym inc_sym, const char *name, size_t len, bool is_user);
 static void pp_debug_macro(rcc_ctx *rcc, yy_sym sym, yy_sym name, pp_macro *macro);
 static void pp_print_pragma(rcc_ctx *rcc, yy_sym sym);
+static void pp_parse_pragma(rcc_ctx *rcc, bool operator);
 
 pp_subst_stream *pp_push_stream(rcc_ctx *rcc)
 {
@@ -1179,6 +1180,66 @@ bool pp_macro_expand(rcc_ctx *rcc, pp_macro *macro, yy_sym name)
 			pp_list_init(rcc, &replacement);
 			pp_list_push(&replacement, YY_DECIMAL_NUMBER);
 			pp_list_push_val(rcc, &replacement);
+		} else if (name == YY__PRAGMA || name == YY___PRAGMA) {
+			char *buf;
+			const char *str;
+			size_t len, i, j;
+
+			rcc->yy_flags &= ~YY_ACCEPT_NOSUBST;
+			rcc->yy_flags |= YY_SKIP_WS;
+			sym = yy_next(rcc);
+			if (sym != YY__LPAREN) yy_error("'(' expected");
+			sym = yy_next(rcc);
+			if (sym != YY_STRING) yy_error("<STRING> expected");
+			str = rcc->yy_text;
+			len = rcc->yy_len;
+			sym = yy_next(rcc);
+			if (sym != YY__RPAREN) yy_error("')' expected");
+
+			/* Create a stream with unescaped string and pass it to pp_parse_pragma() */
+			buf = alloca(len);
+			len = len - 1;
+			for (i = 0, j = 1; j < len; j++) {
+				if (str[j] == '\\' && j + 1 < len && (str[j + 1] == '\\' || str[j + 1] == '\"')) {
+					j++;
+				}
+				buf[i++] = str[j];
+			}
+			len = i;
+			buf[i++] = '\n';
+			buf[i] = 0;
+
+			const char      *old_pos     = rcc->yy_pos;
+			const char      *old_text    = rcc->yy_text;
+			const char      *old_linepos = rcc->yy_linepos;
+			size_t           old_len     = rcc->yy_len;
+			uint32_t         old_line    = rcc->yy_line;
+			const char      *old_buf     = rcc->yy_buf;
+			const char      *old_end     = rcc->yy_end;
+			pp_subst_stream *old_stream  = rcc->pp_stream;
+
+			rcc->yy_pos = rcc->yy_text = rcc->yy_linepos = rcc->yy_buf = buf;
+			rcc->yy_len = 0;
+			rcc->yy_end = buf + len;
+
+			rcc->yy_flags &= ~YY_SKIP_EOL;
+			rcc->yy_flags |= YY_SKIP_WS | YY_NO_MACRO | YY_ACCEPT_PUNCTUATOR | YY_NO_DIRECTIVE;
+
+			rcc->pp_stream = NULL;
+
+			pp_parse_pragma(rcc, 1);
+
+			rcc->yy_pos     = old_pos;
+			rcc->yy_text    = old_text;
+			rcc->yy_linepos = old_linepos;
+			rcc->yy_len     = old_len;
+			rcc->yy_line    = old_line;
+			rcc->yy_buf     = old_buf;
+			rcc->yy_end     = old_end;
+			rcc->pp_stream  = old_stream;
+
+			rcc->yy_flags = save_flags;
+			return 1;
 		} else {
 			yy_error_fmt("bad builtin macro \"%.*s\"", rcc->yy_len, rcc->yy_text);
 		}
@@ -1255,7 +1316,7 @@ static void pp_skip_until_eol(rcc_ctx *rcc)
 
 	do {
 		sym = yy_next(rcc);
-	} while (sym != YY_EOL);
+	} while (sym != YY_EOL && sym != YY_EOF);
 }
 
 static void pp_skip_asm_comments(rcc_ctx *rcc)
@@ -2186,7 +2247,7 @@ static void pp_parse_line(rcc_ctx *rcc, yy_sym sym)
 	}
 }
 
-static void pp_parse_pragma(rcc_ctx *rcc)
+static void pp_parse_pragma(rcc_ctx *rcc, bool operator)
 {
 	yy_sym name, sym = yy_next(rcc);
 
@@ -2244,7 +2305,9 @@ static void pp_parse_pragma(rcc_ctx *rcc)
 		if (!(rcc->yy_flags & PP_NO_OUTPUT)) pp_print_pragma(rcc, sym);
 		return;
 	} else if (sym == YY_PACK) {
-		rcc->yy_flags &= ~YY_NO_MACRO;
+		if (!operator) {
+			rcc->yy_flags &= ~YY_NO_MACRO;
+		}
 		sym = yy_next(rcc);
 		if (sym != YY__LPAREN) goto error;
 		sym = yy_next(rcc);
@@ -2638,7 +2701,7 @@ void pp_parse_directive(rcc_ctx *rcc)
 				pp_parse_line(rcc, yy_next(rcc));
 				break;
 			case YY_PRAGMA:
-				pp_parse_pragma(rcc);
+				pp_parse_pragma(rcc, 0);
 				break;
 			case YY_DECIMAL_NUMBER:
 			case YY_OCTAL_NUMBER:
@@ -2869,7 +2932,7 @@ static void pp_print_pragma(rcc_ctx *rcc, yy_sym sym)
 
 	fwrite("#pragma", sizeof("#pragma")-1, 1, f);
 
-	while (sym != YY_EOL) {
+	while (sym != YY_EOL && sym != YY_EOF) {
 		if (pp_needs_space(prev, sym)) fputc(' ', f);
 		fwrite(rcc->yy_text, rcc->yy_len, 1, f);
 		prev = sym;

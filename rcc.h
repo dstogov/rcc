@@ -266,6 +266,8 @@
 	_("__INCLUDE_LEVEL__",             YY___INCLUDE_LEVEL__)           \
 	_("__BASE_FILE__",                 YY___BASE_FILE__)               \
 	_("__VA_ARGS__",                   YY___VA_ARGS__)                 \
+	_("_Pragma",                       YY__PRAGMA)                     \
+	_("__pragma",                      YY___PRAGMA)                    \
 	_("E",                             YY_E)                           \
 	_("comment",                       YY__COMMENT)                    \
 	_("once",                          YY_ONCE)                        \
