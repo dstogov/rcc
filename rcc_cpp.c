@@ -1180,7 +1180,8 @@ bool pp_macro_expand(rcc_ctx *rcc, pp_macro *macro, yy_sym name)
 			pp_list_init(rcc, &replacement);
 			pp_list_push(&replacement, YY_DECIMAL_NUMBER);
 			pp_list_push_val(rcc, &replacement);
-		} else if (name == YY__PRAGMA || name == YY___PRAGMA) {
+		} else if (name == YY__PRAGMA) {
+			/* C99 _Pragma() operator */
 			char *buf;
 			const char *str;
 			size_t len, i, j;
@@ -1237,6 +1238,48 @@ bool pp_macro_expand(rcc_ctx *rcc, pp_macro *macro, yy_sym name)
 			rcc->yy_buf     = old_buf;
 			rcc->yy_end     = old_end;
 			rcc->pp_stream  = old_stream;
+
+			rcc->yy_flags = save_flags;
+			return 1;
+		} else if (name == YY___PRAGMA) {
+			/* MSVC __pragma() operator */
+			pp_subst_stream *stream;
+			int level = 0;
+
+			rcc->yy_flags &= ~YY_ACCEPT_NOSUBST;
+			rcc->yy_flags |= YY_SKIP_WS | YY_SKIP_EOL;
+			sym = yy_next(rcc);
+			if (sym != YY__LPAREN) yy_error("'(' expected");
+			pp_list_init(rcc, &replacement);
+			while (1) {
+				sym = yy_next(rcc);
+				if (sym == YY__RPAREN) {
+					if (level == 0) break;
+					level--;
+				} else if (sym == YY__LPAREN) {
+					level++;
+				}
+				pp_list_push(&replacement, sym);
+				if (PP_HAS_VAL(sym)) {
+					pp_list_push_val(rcc, &replacement);
+				}
+			}
+			pp_list_push(&replacement, YY_EOL);
+			pp_list_push(&replacement, YY_EOF);
+
+			stream = pp_push_stream(rcc);
+			stream->macro = NULL;
+			stream->size = replacement.size;
+			stream->start = NULL;
+			stream->tokens = replacement.syms;
+			stream->skip_eof = 0;
+
+			rcc->yy_flags &= ~YY_SKIP_EOL;
+			rcc->yy_flags |= YY_SKIP_WS | YY_NO_MACRO | YY_ACCEPT_PUNCTUATOR | YY_NO_DIRECTIVE;
+
+			pp_parse_pragma(rcc, 1);
+
+			rcc->pp_stream = (stream == rcc->pp_subst_stack) ? NULL : (stream - 1);
 
 			rcc->yy_flags = save_flags;
 			return 1;
@@ -2321,8 +2364,8 @@ pack_set:
 				n = n * 10 + (*s - '0');
 				s++;
 			}
-            if (n < 1 || n > 16 || (n & (n - 1)) != 0) yy_error_fmt("invalid \"pragma pack(%d)\" value", n);
-            rcc->pp_pack = n;
+			if (n < 1 || n > 16 || (n & (n - 1)) != 0) yy_error_fmt("invalid \"pragma pack(%d)\" value", n);
+			rcc->pp_pack = n;
 			sym = yy_next(rcc);
 		} else if (sym == YY_PUSH) {
 			if (rcc->pp_pack_stack_pos < PACK_STACK_SIZE) {
@@ -2934,7 +2977,13 @@ static void pp_print_pragma(rcc_ctx *rcc, yy_sym sym)
 
 	while (sym != YY_EOL && sym != YY_EOF) {
 		if (pp_needs_space(prev, sym)) fputc(' ', f);
-		fwrite(rcc->yy_text, rcc->yy_len, 1, f);
+		if (PP_HAS_VAL(sym)) {
+			fwrite(rcc->yy_text, rcc->yy_len, 1, f);
+		} else {
+			size_t len;
+			const char *str = yy_sym2strl(rcc, sym, &len);
+			fwrite(str, len, 1, f);
+		}
 		prev = sym;
 		sym = yy_next(rcc);
 	}
