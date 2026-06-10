@@ -2412,6 +2412,12 @@ pack_set:
 		} else {
 			/* ignore without any warning */
 		}
+#ifdef _WIN32
+	} else if (sym == YY_REGION || sym == YY_ENDREGION || sym == YY_WARNING) {
+		/* silenttly ignore */
+		pp_skip_until_eol(rcc);
+		return;
+#endif
 	} else if (sym == YY_EOL) {
 		yy_warning("ignoring \"#pragma\"");
 		return;

@@ -270,6 +270,8 @@
 	_("__VA_ARGS__",                   YY___VA_ARGS__)                 \
 	_("_Pragma",                       YY__PRAGMA)                     \
 	_("__pragma",                      YY___PRAGMA)                    \
+	_("region",                        YY_REGION)                      \
+	_("endregion",                     YY_ENDREGION)                   \
 	_("E",                             YY_E)                           \
 	_("comment",                       YY__COMMENT)                    \
 	_("once",                          YY_ONCE)                        \

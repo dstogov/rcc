@@ -3002,7 +3002,31 @@ void c_asm_alias(rcc_ctx *rcc, c_dcl *d, c_value *val)
 
 yy_sym c_declspec(rcc_ctx *rcc, c_dcl *d, c_name attr, yy_sym sym)
 {
-	yy_warning_ex_fmt(E_UNSUPPORTED, "unsupported \"__declspec(%s)\"", yy_sym2str(rcc, attr));
+	if (attr == YY_DEPRECATED) {
+		d->attr |= C_ATTR_DEPRECATED;
+		/* ignore error message */
+	} else if (attr == YY_NOINLINE) {
+		d->attr |= C_ATTR_NOINLINE;
+		return sym;
+	} else if (attr == YY_NORETURN) {
+		if (!(d->flags & C_DCL_TYPEDEF) || !d->type) d->attr |= C_ATTR_NORETURN;
+		return sym;
+	} else if (attr == YY_NOTHROW) {
+		d->attr |= C_ATTR_NOTHROW;
+		return sym;
+	} else if (attr == YY_RESTRICT) {
+		// TODO: temporary commentd to avoid "invalid use of restrict" error ???
+		//d->attr |= C_ATTR_RESTRICT;
+		return sym;
+	} else if (attr == YY_DLLEXPORT) {
+		/* silently ignore */
+		return sym;
+	} else if (attr == YY_DLLIMPORT) {
+		/* silently ignore */
+		return sym;
+	} else {
+		yy_warning_ex_fmt(E_UNSUPPORTED, "unsupported \"__declspec(%s)\"", yy_sym2str(rcc, attr));
+	}
 
 	if (sym == YY__LPAREN) {
 		int level = 0;
