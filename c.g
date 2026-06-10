@@ -390,9 +390,9 @@ type_qualifier(rcc_ctx *rcc, c_dcl *d):
 function_specifier(rcc_ctx *rcc, c_dcl *d):
 		("inline"|"__inline"|"__inline__")                 {d->attr |= C_ATTR_INLINE;}
 	|	"_Noreturn"                                        {d->attr |= C_ATTR_NORETURN;}
-//	|	"__cdecl"
+	|	"__cdecl"                                          {if ((d->attr & C_ATTR_CALL_CONV) && (d->attr & C_ATTR_CALL_CONV) != C_ATTR_CC_CDECL) yy_error("multiple calling conventions");}
 //	|	"__stdcall"
-//	|	"__fastcall"
+	|	"__fastcall"                                       {if ((d->attr & C_ATTR_CALL_CONV) && (d->attr & C_ATTR_CALL_CONV) != C_ATTR_CC_FASTCALL) yy_error("multiple calling conventions");}
 //	|	"__thiscall"
 //	|	"__vectorcall"
 ;

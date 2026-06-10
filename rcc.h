@@ -289,6 +289,7 @@
 	_("always_inline",                 YY_ALWAYS_INLINE)        /*f  */\
 	_("__always_inline__",             YY___ALWAYS_INLINE__)    /*f  */\
 	_("cdecl",                         YY_CDECL)                /*f  */\
+	_("__cdecl",                       YY___CDECL)              /*f  */\
 	_("__cdecl__",                     YY___CDECL__)            /*f  */\
 	_("cleanup",                       YY_CLEANUP)              /* v */\
 	_("__cleanup__",                   YY___CLEANUP__)          /* v */\
@@ -309,6 +310,7 @@
 	_("fallthrough",                   YY_FALLTHROUGH)          /*  s*/\
 	_("__fallthrough__",               YY___FALLTHROUGH__)      /*  s*/\
 	_("fastcall",                      YY_FASTCALL)             /*f  */\
+	_("__fastcall",                    YY___FASTCALL)           /*f  */\
 	_("__fastcall__",                  YY___FASTCALL__)         /*f  */\
 	_("format",                        YY_FORMAT)               /*f  */\
 	_("__format__",                    YY___FORMAT__)           /*f  */\
