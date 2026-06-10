@@ -151,12 +151,14 @@
 	_("__asm__",                       YY___ASM__)                     \
 	_("__attribute",                   YY___ATTRIBUTE)                 \
 	_("__attribute__",                 YY___ATTRIBUTE__)               \
+	_("__cdecl",                       YY___CDECL)                     \
 	_("__const",                       YY___CONST)                     \
 	_("__const__",                     YY___CONST__)                   \
 	_("__complex",                     YY___COMPLEX)                   \
 	_("__complex__",                   YY___COMPLEX__)                 \
 	_("__declspec",                    YY___DECLSPEC)                  \
 	_("__extension__",                 YY___EXTENSION__)               \
+	_("__fastcall",                    YY___FASTCALL)                  \
 	_("__inline",                      YY___INLINE)                    \
 	_("__inline__",                    YY___INLINE__)                  \
 	_("__label__",                     YY___LABEL__)                   \
@@ -289,7 +291,6 @@
 	_("always_inline",                 YY_ALWAYS_INLINE)        /*f  */\
 	_("__always_inline__",             YY___ALWAYS_INLINE__)    /*f  */\
 	_("cdecl",                         YY_CDECL)                /*f  */\
-	_("__cdecl",                       YY___CDECL)              /*f  */\
 	_("__cdecl__",                     YY___CDECL__)            /*f  */\
 	_("cleanup",                       YY_CLEANUP)              /* v */\
 	_("__cleanup__",                   YY___CLEANUP__)          /* v */\
@@ -310,7 +311,6 @@
 	_("fallthrough",                   YY_FALLTHROUGH)          /*  s*/\
 	_("__fallthrough__",               YY___FALLTHROUGH__)      /*  s*/\
 	_("fastcall",                      YY_FASTCALL)             /*f  */\
-	_("__fastcall",                    YY___FASTCALL)           /*f  */\
 	_("__fastcall__",                  YY___FASTCALL__)         /*f  */\
 	_("format",                        YY_FORMAT)               /*f  */\
 	_("__format__",                    YY___FORMAT__)           /*f  */\
