@@ -159,6 +159,7 @@
 	_("__declspec",                    YY___DECLSPEC)                  \
 	_("__extension__",                 YY___EXTENSION__)               \
 	_("__fastcall",                    YY___FASTCALL)                  \
+	_("__forceinline",                 YY___FORCEINLINE)               \
 	_("__inline",                      YY___INLINE)                    \
 	_("__inline__",                    YY___INLINE__)                  \
 	_("__label__",                     YY___LABEL__)                   \

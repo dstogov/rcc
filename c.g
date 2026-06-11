@@ -394,6 +394,7 @@ type_qualifier(rcc_ctx *rcc, c_dcl *d):
 function_specifier(rcc_ctx *rcc, c_dcl *d):
 		("inline"|"__inline"|"__inline__")                 {d->attr |= C_ATTR_INLINE;}
 	|	"_Noreturn"                                        {d->attr |= C_ATTR_NORETURN;}
+	|	"__forceinline"                                    {d->attr |= C_ATTR_ALWAYS_INLINE;}
 ;
 
 alignment_specifier(rcc_ctx *rcc, c_dcl *d):               {c_value v;}
