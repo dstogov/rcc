@@ -3,7 +3,12 @@ tinycc 108: constructor
 --ARGS--
 --run
 --CODE--
+#ifdef _WIN32
+extern int _write (int fd, void *buf, int len);
+#define write _write
+#else
 extern int write (int fd, void *buf, int len);
+#endif
 
 static void __attribute__ ((constructor))
 testc (void)
