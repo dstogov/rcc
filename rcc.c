@@ -896,12 +896,20 @@ _YY_NAMES(_YY_SYM)
 #undef _YY_SYM
 };
 
-static void rcc_add_link(rcc_ctx *rcc, c_name name, const char *str)
+#ifdef _WIN32
+static char *_strndup(const char *s, size_t n)
+{
+	char *ret = malloc(n + 1);
+	memset(ret, s, n);
+	ret[n] = 0;
+	return ret;
+}
+#endif
+
+static void rcc_add_link_addr(rcc_ctx *rcc, c_name name, const char *str, void *addr)
 {
 	c_linker_sym *link;
-	void *addr = NULL;
 
-	addr = ir_resolve_sym_name(str);
 	if (rcc->c_flags & C_DUMP_ASM) {
 		ir_disasm_add_symbol(str, (uint64_t)(uintptr_t)addr, IR_UNKNOWN_SIZE);
 	}
@@ -924,6 +932,11 @@ static void rcc_add_link(rcc_ctx *rcc, c_name name, const char *str)
 	link->is_asm_name = 1;
 
 	rcc->yy_hash.data[name].link = link;
+}
+
+static void rcc_add_link(rcc_ctx *rcc, c_name name, const char *str)
+{
+	rcc_add_link_addr(rcc, name, str, ir_resolve_sym_name(str));
 }
 
 
@@ -987,6 +1000,9 @@ void rcc_init(rcc_ctx *rcc)
 
 	rcc_add_link(rcc, YY_MEMCPY, "memcpy");
 	rcc_add_link(rcc, YY_MEMSET, "memset");
+#ifdef _WIN32
+	rcc_add_link_addr(rcc, YY_STRNDUP, "strndup", _strndup);
+#endif
 }
 
 void rcc_free(rcc_ctx *rcc)

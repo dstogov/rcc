@@ -291,7 +291,11 @@ static const char c_builtin[] =
 "char *__builtin_strchr(const char *, int) __asm__(\"strchr\");\n"
 "int __builtin_strcmp(const char *, const char *) __asm__(\"strcmp\");\n"
 "char *__builtin_strcpy(char *, const char *) __asm__(\"strcpy\");\n"
+#ifdef _WIN32
+"char *__builtin_strdup(const char *) __asm__(\"_strdup\");\n"
+#else
 "char *__builtin_strdup(const char *) __asm__(\"strdup\");\n"
+#endif
 "__SIZE_TYPE__ __builtin_strlen(const char *) __asm__(\"strlen\");\n"
 "char *__builtin_strncat(char *, const char *, __SIZE_TYPE__) __asm__(\"strncat\");\n"
 "int __builtin_strncmp(const char *, const char *, __SIZE_TYPE__) __asm__(\"strncmp\");\n"

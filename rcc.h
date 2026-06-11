@@ -283,6 +283,7 @@
 	_("pop",                           YY_POP)                         \
 	_("memcpy",                        YY_MEMCPY)                      \
 	_("memset",                        YY_MEMSET)                      \
+	_("strndup",                       YY_STRNDUP)                     \
 	_("abort",                         YY_ABORT)                       \
 	_("main",                          YY_MAIN)                        \
 	/* GCC attributes */                                               \
