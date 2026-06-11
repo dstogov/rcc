@@ -1022,6 +1022,22 @@ extern const c_type c_type_const_ptr;
 # define IR_ULONG       IR_U32
 #endif
 
+#ifdef _WIN32
+# define C_WCHAR_SIZE   2
+# define C_WCHAR_ALIGN  2
+# define C_WCHAR_SIGNED 1
+# define c_type_wchar_t c_type_u16
+# define C_TYPE_WCHAR_T C_TYPE_U16
+# define IR_WCHAR       IR_U16
+#else
+# define C_WCHAR_SIZE   4
+# define C_WCHAR_ALIGN  3
+# define C_WCHAR_SIGNED 0
+# define c_type_wchar_t c_type_i32
+# define C_TYPE_WCHAR_T C_TYPE_I32
+# define IR_WCHAR       IR_I32
+#endif
+
 #define C_POP_MASK   0x3
 #define C_POP_SYM    0x0
 #define C_POP_TAG    0x1

@@ -1790,8 +1790,12 @@ restart:
 		val.i64 = (int)ch;
 		c_value_set_const(res, &c_type_i32, IR_I32, val);
 	} else if (prefix == 'L') {
-		val.i64 = (int)ch;
-		c_value_set_const(res, &c_type_i32, IR_I32, val);
+		if (C_WCHAR_SIGNED) {
+			val.i64 = (int)ch;
+		} else {
+			val.u64 = ch;
+		}
+		c_value_set_const(res, &c_type_wchar_t, IR_WCHAR, val);
 	} else if (prefix == 'u') {
 		val.u64 = ch & 0xffff;
 		c_value_set_const(res, &c_type_u16, IR_U16, val);
@@ -1834,7 +1838,7 @@ static void yy_append_utf8(rcc_ctx *rcc, yy_dyn_str *dyn_str, uint32_t n)
 
 static void yy_append_unicode_str(rcc_ctx *rcc, yy_dyn_str *dyn_str, char prefix, const char *str, size_t len)
 {
-	if (prefix == 'u') {
+	if (prefix == 'u' || (C_WCHAR_SIZE == 2 && prefix == 'L')) {
 		uint16_t *dst = (uint16_t*)yy_dyn_str_grow(rcc, dyn_str, len * 2);
 		unsigned char *p = (unsigned char*)str;
 
@@ -1861,7 +1865,7 @@ static void yy_append_unicode_str(rcc_ctx *rcc, yy_dyn_str *dyn_str, char prefix
 
 static void yy_append_unicode_char(rcc_ctx *rcc, yy_dyn_str *dyn_str, char prefix, uint32_t uc)
 {
-	if (prefix == 'u') {
+	if (prefix == 'u' || (C_WCHAR_SIZE == 2 && prefix == 'L')) {
 		if (uc < 0x10000) {
 			uint16_t *dst = (uint16_t*)yy_dyn_str_grow(rcc, dyn_str, 2);
 			*dst = uc;
@@ -1976,7 +1980,11 @@ static void yy_read_string(rcc_ctx *rcc, c_value *res, const char *str, size_t l
 		yy_dyn_str_append(rcc, &dyn_str, "\0", 1);
 		type = (rcc->e_warnings & E_WRITE_STRINGS) ? &c_type_const_string : &c_type_string;
 	} else if (prefix == 'L') {
-		yy_dyn_str_append(rcc, &dyn_str, "\0\0\0\0", 4);
+		if (C_WCHAR_SIZE == 2) {
+			yy_dyn_str_append(rcc, &dyn_str, "\0\0", 2);
+		} else {
+			yy_dyn_str_append(rcc, &dyn_str, "\0\0\0\0", 4);
+		}
 		type = (rcc->e_warnings & E_WRITE_STRINGS) ? &c_type_const_lstring : &c_type_lstring;
 	} else if (prefix == 'u') {
 		yy_dyn_str_append(rcc, &dyn_str, "\0\0", 2);

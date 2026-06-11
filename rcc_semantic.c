@@ -67,7 +67,7 @@ const c_type c_type_lstring = {
 	.flags = C_TYPE_GLOBAL,
 	.size = sizeof(void*),
 	.attr = 3 | C_ATTR_FLEXIBLE,
-	.array.type = &c_type_i32,
+	.array.type = &c_type_wchar_t,
 	.array.length = 0
 };
 
@@ -115,7 +115,7 @@ const c_type c_type_const_ptr = {
 const c_type c_type_const_char          = {.kind = C_TYPE_CHAR,   .flags = C_TYPE_GLOBAL, .size = 1,  .attr = 1 | C_ATTR_CONST};
 const c_type c_type_const_u16           = {.kind = C_TYPE_U16,    .flags = C_TYPE_GLOBAL, .size = 2,  .attr = 2 | C_ATTR_CONST};
 const c_type c_type_const_u32           = {.kind = C_TYPE_U32,    .flags = C_TYPE_GLOBAL, .size = 4,  .attr = 3 | C_ATTR_CONST};
-const c_type c_type_const_i32           = {.kind = C_TYPE_I32,    .flags = C_TYPE_GLOBAL, .size = 4,  .attr = 3 | C_ATTR_CONST};
+const c_type c_type_const_wchar_t       = {.kind = C_TYPE_WCHAR_T,.flags = C_TYPE_GLOBAL, .size = C_WCHAR_SIZE,  .attr = C_WCHAR_ALIGN | C_ATTR_CONST};
 
 const c_type c_type_const_string = {
 	.kind = C_TYPE_ARRAY,
@@ -131,7 +131,7 @@ const c_type c_type_const_lstring = {
 	.flags = C_TYPE_GLOBAL,
 	.size = sizeof(void*),
 	.attr = 3 | C_ATTR_FLEXIBLE,
-	.array.type = &c_type_const_i32,
+	.array.type = &c_type_const_wchar_t,
 	.array.length = 0
 };
 

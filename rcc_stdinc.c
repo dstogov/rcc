@@ -237,7 +237,11 @@ static const char c_boot[] =
 "#define __UINTMAX_TYPE__         unsigned long int\n"
 #endif
 
+#ifdef _WIN32
+"#define __WCHAR_TYPE__           unsigned short\n"
+#else
 "#define __WCHAR_TYPE__           int\n"
+#endif
 "#define __CHAR16_TYPE__          short unsigned int\n"
 "#define __CHAR32_TYPE__          unsigned int\n"
 
@@ -334,7 +338,7 @@ static const char c_stddef_h[] =
 "typedef __PTRDIFF_TYPE__ ptrdiff_t;\n"
 "typedef __SIZE_TYPE__ size_t;\n"
 "typedef long double max_align_t;\n"
-"typedef int wchar_t;\n"
+"typedef __WCHAR_TYPE__ wchar_t;\n"
 "\n"
 "#define NULL ((void *) 0)\n"
 "\n"
