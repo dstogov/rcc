@@ -596,7 +596,7 @@ void pp_list_grow(pp_list *l, uint32_t size);
 #define C_TYPE_SPEC_NAME         (1<<16)
 #define C_TYPE_SPEC_TYPE         (1<<17)
 
-#ifdef IR_64
+#if defined(IR_64) && !defined(_WIN32)
 # define C_TYPE_SPEC_INT64       C_TYPE_SPEC_LONG
 #else
 # define C_TYPE_SPEC_INT64       (C_TYPE_SPEC_LONG_LONG|C_TYPE_SPEC_LONG)
@@ -998,7 +998,7 @@ extern const c_type c_type_const_string_u32;
 extern const c_type c_type_ptr;
 extern const c_type c_type_const_ptr;
 
-#if __SIZEOF_SIZE_T__ == 8
+#if __SIZEOF_SIZE_T__ == 8 && !defined(_WIN32)
 # define C_LONG_SIZE    8
 # define C_LONG_ALIGN   4
 # define c_type_size_t  c_type_ul
@@ -1010,6 +1010,18 @@ extern const c_type c_type_const_ptr;
 # define C_TYPE_SIZE_T  C_TYPE_UL
 # define IR_LONG        IR_I64
 # define IR_ULONG       IR_U64
+#elif __SIZEOF_SIZE_T__ == 8 && defined(_WIN32)
+# define C_LONG_SIZE    4
+# define C_LONG_ALIGN   3
+# define c_type_size_t  c_type_ull
+# define c_type_ssize_t c_type_ill
+# define c_type_i64     c_type_ill
+# define c_type_u64     c_type_ull
+# define C_TYPE_I64     C_TYPE_ILL
+# define C_TYPE_U64     C_TYPE_ULL
+# define C_TYPE_SIZE_T  C_TYPE_U64
+# define IR_LONG        IR_I32
+# define IR_ULONG       IR_U32
 #else
 # define C_LONG_SIZE    4
 # define C_LONG_ALIGN   3

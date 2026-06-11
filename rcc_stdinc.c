@@ -32,11 +32,19 @@ static const char c_boot[] =
 //"#define __GNUC_PATCHLEVEL__      0\n"
 "#define __USER_LABEL_PREFIX__\n"
 #if defined(IR_TARGET_X64)
+# if defined(_WIN32)
+"#define __LLP64__                1\n"
+# else
 "#define __LP64__                 1\n"
+# endif
 "#define __x86_64__               1\n"
 "#define __SIZEOF_SHORT__         2\n"
 "#define __SIZEOF_INT__           4\n"
+# if defined(_WIN32)
+"#define __SIZEOF_LONG__          4\n"
+# else
 "#define __SIZEOF_LONG__          8\n"
+#endif
 "#define __SIZEOF_LONG_LONG__     8\n"
 "#define __SIZEOF_POINTER__       8\n"
 "#define __SIZEOF_PTRDIFF_T__     8\n"
@@ -52,9 +60,17 @@ static const char c_boot[] =
 "#define __SCHAR_MAX__            0x7f\n"
 "#define __SHRT_MAX__             0x7fff\n"
 "#define __INT_MAX__              0x7fffffff\n"
+# if defined(_WIN32)
+"#define __LONG_MAX__             0x7fffffffL\n"
+# else
 "#define __LONG_MAX__             0x7fffffffffffffffL\n"
+# endif
 "#define __LONG_LONG_MAX__        0x7fffffffffffffffLL\n"
+# if defined(_WIN32)
+"#define __PTRDIFF_MAX__          0x7fffffffffffffffLL\n"
+# else
 "#define __PTRDIFF_MAX__          0x7fffffffffffffffL\n"
+# endif
 
 "#define __FLT_MANT_DIG__         24\n"
 "#define __FLT_DIG__              6\n"
@@ -77,20 +93,34 @@ static const char c_boot[] =
 "#define __DBL_MIN__              2.22507385850720138309023271733240406e-308\n"
 "#define __DBL_EPSILON__          2.22044604925031308084726333618164062e-16\n"
 
+# if defined(_WIN32)
+"#define __SIZE_TYPE__            unsigned long long\n"
+"#define __PTRDIFF_TYPE__         long long\n"
+"#define __UINTPTR_TYPE__         unsigned long long\n"
+"#define __INTPTR_TYPE__          long long\n"
+# else
 "#define __SIZE_TYPE__            unsigned long\n"
 "#define __PTRDIFF_TYPE__         long\n"
 "#define __UINTPTR_TYPE__         unsigned long\n"
 "#define __INTPTR_TYPE__          long\n"
+# endif
 "#define __INT8_TYPE__            signed char\n"
 "#define __UINT8_TYPE__           unsigned char\n"
 "#define __INT16_TYPE__           short int\n"
 "#define __UINT16_TYPE__          unsigned short int\n"
 "#define __INT32_TYPE__           int\n"
 "#define __UINT32_TYPE__          unsigned int\n"
+# if defined(_WIN32)
+"#define __INT64_TYPE__           long long int\n"
+"#define __UINT64_TYPE__          unsigned long long int\n"
+"#define __INTMAX_TYPE__          long long int\n"
+"#define __UINTMAX_TYPE__         unsigned long long int\n"
+# else
 "#define __INT64_TYPE__           long int\n"
 "#define __UINT64_TYPE__          unsigned long int\n"
 "#define __INTMAX_TYPE__          long int\n"
 "#define __UINTMAX_TYPE__         unsigned long int\n"
+# endif
 
 #ifdef _WIN32
 "#define _WIN32                   1\n"
