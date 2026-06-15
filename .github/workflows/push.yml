@@ -135,13 +135,13 @@ jobs:
           $tag = (nmake -nologo -f win32\Makefile capstone_tag).Trim()
           echo ("CAPSTONE_TAG=" + $tag) | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           $dir = (nmake -nologo -f win32\Makefile capstone_dir).Trim()
-          echo ("CAPSTONE_DIR=" + "ir\" + $dir) | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo ("CAPSTONE_DIR=" + $dir) | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           echo ("VCVER=" + $env:VCToolsVersion) | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Cache capstone
         id: cache-capstone
         uses: actions/cache@v3
         with:
-          path: ${{ env.CAPSTONE_DIR }}
+          path: ir\${{ env.CAPSTONE_DIR }}
           key: capstone-${{ matrix.arch }}-${{ env.CAPSTONE_TAG }}-${{ env.VCVER }}-0
       - if: ${{ steps.cache-capstone.outputs.cache-hit != 'true' }}
         name: Prepare capstone
@@ -156,8 +156,8 @@ jobs:
           nmake -nologo -f win32/Makefile BUILD=debug
       - name: Build
         shell: cmd
-        run: nmake -nologo -f win32/Makefile IR_SRC_DIR=ir BUILD=debug
+        run: nmake -nologo -f win32/Makefile IR_SRC_DIR=ir CAPSTONE_DIR=ir\win32\capstone BUILD=debug
       - name: Test
         shell: cmd
         run: |
-          nmake -nologo -f win32/Makefile IR_SRC_DIR=ir BUILD=debug test-ci
+          nmake -nologo -f win32/Makefile IR_SRC_DIR=ir CAPSTONE_DIR=ir\win32\capstone BUILD=debug test-ci
