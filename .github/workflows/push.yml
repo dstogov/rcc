@@ -148,6 +148,7 @@ jobs:
           repository: dstogov/ir
           path: ir
       - name: make ir
+        shell: cmd
         run: |
           cd ir
           nmake -nologo -f win32/Makefile BUILD=debug
