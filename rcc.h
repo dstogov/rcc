@@ -287,6 +287,7 @@
 	_("memset",                        YY_MEMSET)                      \
 	_("strndup",                       YY_STRNDUP)                     \
 	_("abort",                         YY_ABORT)                       \
+	_("_setjmp",                       YY__SETJMP)                     \
 	_("main",                          YY_MAIN)                        \
 	/* GCC attributes */                                               \
 	_("alias",                         YY_ALIAS)                /*f  */\

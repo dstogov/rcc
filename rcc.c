@@ -519,6 +519,14 @@ static void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, uint
 		if (sym->linkage == C_LINK_EXTERNAL || sym->linkage == C_LINK_BUILTIN) {
 			void *addr;
 
+			if (rcc->yy_hash.data[id].link && rcc->yy_hash.data[id].link->is_asm_name) {
+				void *addr = (void*)rcc->yy_hash.data[id].link->addr;
+				if (addr) {
+					sym->value.u.opt = IR_OPT(C_VAL_CONST, IR_ADDR);
+					sym->value.u.val.ptr = addr;
+					return addr;
+				}
+			}
 			addr = ir_resolve_sym_name(name);
 			if (addr) {
 				sym->is_external = 1;
@@ -1002,6 +1010,9 @@ void rcc_init(rcc_ctx *rcc)
 	rcc_add_link(rcc, YY_MEMSET, "memset");
 #ifdef _WIN32
 	rcc_add_link_addr(rcc, YY_STRNDUP, "strndup", _strndup);
+#endif
+#if defined(_WIN32) && !defined(_WIN64)
+	rcc_add_link_addr(rcc, YY__SETJMP, "_setjmp", _setjmp);
 #endif
 }
 
