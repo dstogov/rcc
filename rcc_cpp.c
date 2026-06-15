@@ -227,8 +227,8 @@ void pp_list_grow(pp_list *l, uint32_t size)
 static void pp_debug_tokens(rcc_ctx *rcc, FILE *f, yy_sym *tokens, const pp_macro *macro);
 static void pp_debug_include(rcc_ctx *rcc, yy_sym inc_sym, const char *name, size_t len, bool is_user);
 static void pp_debug_macro(rcc_ctx *rcc, yy_sym sym, yy_sym name, pp_macro *macro);
-static void pp_print_pragma(rcc_ctx *rcc, yy_sym sym);
-static void pp_parse_pragma(rcc_ctx *rcc, bool operator);
+static void pp_print_pragma(rcc_ctx *rcc, yy_sym operator, yy_sym sym);
+static void pp_parse_pragma(rcc_ctx *rcc, yy_sym operator);
 
 pp_subst_stream *pp_push_stream(rcc_ctx *rcc)
 {
@@ -1228,7 +1228,7 @@ bool pp_macro_expand(rcc_ctx *rcc, pp_macro *macro, yy_sym name)
 
 			rcc->pp_stream = NULL;
 
-			pp_parse_pragma(rcc, 1);
+			pp_parse_pragma(rcc, YY__PRAGMA);
 
 			rcc->yy_pos     = old_pos;
 			rcc->yy_text    = old_text;
@@ -1277,7 +1277,7 @@ bool pp_macro_expand(rcc_ctx *rcc, pp_macro *macro, yy_sym name)
 			rcc->yy_flags &= ~YY_SKIP_EOL;
 			rcc->yy_flags |= YY_SKIP_WS | YY_NO_MACRO | YY_ACCEPT_PUNCTUATOR | YY_NO_DIRECTIVE;
 
-			pp_parse_pragma(rcc, 1);
+			pp_parse_pragma(rcc, YY___PRAGMA);
 
 			rcc->pp_stream = (stream == rcc->pp_subst_stack) ? NULL : (stream - 1);
 
@@ -2290,7 +2290,7 @@ static void pp_parse_line(rcc_ctx *rcc, yy_sym sym)
 	}
 }
 
-static void pp_parse_pragma(rcc_ctx *rcc, bool operator)
+static void pp_parse_pragma(rcc_ctx *rcc, yy_sym operator)
 {
 	yy_sym name, sym = yy_next(rcc);
 
@@ -2345,7 +2345,7 @@ static void pp_parse_pragma(rcc_ctx *rcc, bool operator)
 			yy_warning_fmt("pragma pop_macro could not pop \"%s\"", yy_sym2str(rcc, name));
 		}
 	} else if (rcc->yy_flags & PP_PREPROCESS) {
-		if (!(rcc->yy_flags & PP_NO_OUTPUT)) pp_print_pragma(rcc, sym);
+		if (!(rcc->yy_flags & PP_NO_OUTPUT)) pp_print_pragma(rcc, operator, sym);
 		return;
 	} else if (sym == YY_PACK) {
 		if (!operator) {
@@ -2964,7 +2964,7 @@ static void pp_debug_macro(rcc_ctx *rcc, yy_sym sym, yy_sym name, pp_macro *macr
 	}
 }
 
-static void pp_print_pragma(rcc_ctx *rcc, yy_sym sym)
+static void pp_print_pragma(rcc_ctx *rcc, yy_sym operator, yy_sym sym)
 {
 	FILE *f = rcc->pp_out_file ? rcc->pp_out_file : stdout;
 	yy_sym prev = YY_PRAGMA;
@@ -2979,7 +2979,11 @@ static void pp_print_pragma(rcc_ctx *rcc, yy_sym sym)
 		}
 	}
 
-	fwrite("#pragma", sizeof("#pragma")-1, 1, f);
+	if (operator) {
+		fprintf(f, "%s(", yy_sym2str(rcc, operator));
+	} else {
+		fwrite("#pragma", sizeof("#pragma")-1, 1, f);
+	}
 
 	while (sym != YY_EOL && sym != YY_EOF) {
 		if (pp_needs_space(prev, sym)) fputc(' ', f);
@@ -2992,6 +2996,9 @@ static void pp_print_pragma(rcc_ctx *rcc, yy_sym sym)
 		}
 		prev = sym;
 		sym = yy_next(rcc);
+	}
+	if (operator) {
+		fputc(')', f);
 	}
 	fputc('\n', f);
 }
