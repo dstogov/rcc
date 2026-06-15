@@ -3,7 +3,9 @@ tinycc 116: bound setjmp2
 --ARGS--
 --run
 --OS--
-!Windows
+Windows
+--XFAIL--
+Unimplemented features in "winnt.h"
 --CODE--
 #include <stdio.h>
 #include <string.h>
