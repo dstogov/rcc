@@ -2118,7 +2118,7 @@ static void c_do_check_nested_redeclarations(rcc_ctx *rcc, const c_type *type, c
 }
 
 #ifdef _WIN32
-# define IS_GCC_STRUCT(attr) (((attr) & C_ATTR_GCC_STRUCT) == 1)
+# define IS_GCC_STRUCT(attr) (((attr) & C_ATTR_GCC_STRUCT) != 0)
 #else
 # define IS_GCC_STRUCT(attr) (((attr) & C_ATTR_MS_STRUCT) == 0)
 #endif

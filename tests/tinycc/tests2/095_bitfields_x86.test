@@ -158,13 +158,13 @@ top = 0;
 #if MS_BF
 # ifdef __TINYC__
 #  pragma comment(option, "-mms-bitfields")
-# elif defined __GNUC__
+# elif defined __GNUC__ || defined(__RCC__)
 #  define M __attribute__((ms_struct))
 # endif
 #else
 # ifdef __TINYC__
 #  pragma comment(option, "-mno-ms-bitfields")
-# elif defined __GNUC__
+# elif defined __GNUC__ || defined(__RCC__)
 #  define M __attribute__((gcc_struct))
 # endif
 #endif
