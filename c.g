@@ -415,9 +415,12 @@ attributes(rcc_ctx *rcc, c_dcl *d):
 		")" ")"
 	|	                                                   {c_name name;}
 		"__declspec" "("                                   {name = sym;}
-		(	ID(rcc, &name)
-		|	"restrict"
-		)                                                  {sym = c_declspec(rcc, d, name, sym);}
+		(                                                  {c_value v;}
+														   {c_value_clear(&v);}
+			"align" "(" constant_expression(rcc, &v) ")"   {c_declspec_align(rcc, d, &v);}
+		|	"restrict"                                     {sym = c_declspec(rcc, d, name, sym);}
+		|	ID(rcc, &name)                                 {sym = c_declspec(rcc, d, name, sym);}
+		)
 		")"
 	|	"__cdecl"                                          {if ((d->attr & C_ATTR_CALL_CONV) && (d->attr & C_ATTR_CALL_CONV) != C_ATTR_CC_CDECL) yy_error("multiple calling conventions");}
 	                                                       {d->attr |= C_ATTR_CC_CDECL;}

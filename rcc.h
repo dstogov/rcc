@@ -290,6 +290,7 @@
 	/* GCC attributes */                                               \
 	_("alias",                         YY_ALIAS)                /*f  */\
 	_("__alias__",                     YY___ALIAS__)            /*f  */\
+	_("align",                         YY_ALIGN)                /* vt*/\
 	_("aligned",                       YY_ALIGNED)              /* vt*/\
 	_("__aligned__",                   YY___ALIGNED__)          /* vt*/\
 	_("always_inline",                 YY_ALWAYS_INLINE)        /*f  */\
@@ -1092,6 +1093,7 @@ void c_gcc_attribute_cleanup(rcc_ctx *rcc, c_dcl *d, c_name attr, c_name func);
 yy_sym c_gcc_attribute(rcc_ctx *rcc, c_dcl *dcl, c_name attr, yy_sym sym);
 void c_gcc_attribute_alias(rcc_ctx *rcc, c_dcl *d, c_name attr, c_value *v);
 void c_asm_alias(rcc_ctx *rcc, c_dcl *d, c_value *v);
+void c_declspec_align(rcc_ctx *rcc, c_dcl *dcl, c_value *v);
 yy_sym c_declspec(rcc_ctx *rcc, c_dcl *dcl, c_name attr, yy_sym sym);
 
 void c_sizeof_type(rcc_ctx *rcc, c_value *res, const c_type *type);

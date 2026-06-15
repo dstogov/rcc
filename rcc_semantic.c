@@ -3000,6 +3000,20 @@ void c_asm_alias(rcc_ctx *rcc, c_dcl *d, c_value *val)
 	}
 }
 
+void c_declspec_align(rcc_ctx *rcc, c_dcl *d, c_value *val)
+{
+	if (!c_value_is_set(val) || !c_value_is_const(val) || !C_IS_TYPE_INT(val->type)) {
+		yy_warning("declspec \"align\" value must be an integer constant");
+	} else {
+		if (!c_valid_alignment(val)) {
+			yy_warning("declspec \"align\" value must be a power of two");
+		} else {
+			if ((d->attr & C_ATTR_ALIGN_MASK) != 0) yy_warning("multiple alignments");
+			d->attr |= c_align2attr(val->u.val.u64);
+		}
+	}
+}
+
 yy_sym c_declspec(rcc_ctx *rcc, c_dcl *d, c_name attr, yy_sym sym)
 {
 	if (attr == YY_DEPRECATED) {

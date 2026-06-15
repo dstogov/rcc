@@ -734,14 +734,29 @@ static yy_sym parse_attributes(yy_sym sym, rcc_ctx *rcc, c_dcl *d) {
 			}
 			sym = get_sym();
 			name = sym;
-			if (C_IS_ID(sym)) {
-				sym = parse_ID(sym, rcc, &name);
+			if (sym == YY_ALIGN) {
+				c_value v;
+				c_value_clear(&v);
+				sym = get_sym();
+				if (sym != YY__LPAREN) {
+					yy_error_sym("'(' expected, got", sym);
+				}
+				sym = get_sym();
+				sym = parse_constant_expression(sym, rcc, &v);
+				if (sym != YY__RPAREN) {
+					yy_error_sym("')' expected, got", sym);
+				}
+				sym = get_sym();
+				c_declspec_align(rcc, d, &v);
 			} else if (sym == YY_RESTRICT) {
 				sym = get_sym();
+				sym = c_declspec(rcc, d, name, sym);
+			} else if (C_IS_ID(sym)) {
+				sym = parse_ID(sym, rcc, &name);
+				sym = c_declspec(rcc, d, name, sym);
 			} else {
 				yy_error_sym("unexpected", sym);
 			}
-			sym = c_declspec(rcc, d, name, sym);
 			if (sym != YY__RPAREN) {
 				yy_error_sym("')' expected, got", sym);
 			}
