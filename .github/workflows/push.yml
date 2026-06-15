@@ -156,8 +156,8 @@ jobs:
           nmake -nologo -f win32/Makefile BUILD=debug
       - name: Build
         shell: cmd
-        run: nmake -nologo -f win32/Makefile BUILD=debug
+        run: nmake -nologo -f win32/Makefile IR_SRC_DIR=ir BUILD=debug
       - name: Test
         shell: cmd
         run: |
-          nmake -nologo -f win32/Makefile BUILD=debug test-ci
+          nmake -nologo -f win32/Makefile IR_SRC_DIR=ir BUILD=debug test-ci
