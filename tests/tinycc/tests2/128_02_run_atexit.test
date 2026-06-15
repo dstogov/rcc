@@ -2,6 +2,8 @@
 tinycc 128.02: run atexit
 --ARGS--
 --run
+--OS--
+!Windows
 --CODE--
 #include <stdio.h>
 

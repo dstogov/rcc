@@ -101,6 +101,7 @@ test: $(BUILD_DIR)/rcc $(BUILD_DIR)/tester
 	--test-extension ".test" \
 	--code-extension ".c" \
 	--target $(TEST_TARGET) \
+	--os $(OS) \
 	$(TESTS)
 
 test-ci: $(BUILD_DIR)/rcc $(BUILD_DIR)/tester
@@ -110,6 +111,7 @@ test-ci: $(BUILD_DIR)/rcc $(BUILD_DIR)/tester
 	--code-extension ".c" \
 	--show-diff \
 	--target $(TEST_TARGET) \
+	--os $(OS) \
 	$(TESTS)
 
 

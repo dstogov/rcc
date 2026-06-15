@@ -44,6 +44,7 @@ typedef struct _test {
 	int   id;
 	char *name;
 	char *target;
+	char *os;
 	char *args;
 	char *code;
 	char *expect;
@@ -55,6 +56,7 @@ static int colorize = 1;
 
 static const char *test_cmd = NULL;
 static const char *target = NULL;
+static const char *os = NULL;
 static const char *default_args = NULL;
 static const char *additional_args = NULL;
 static const char *diff_cmd = NULL;
@@ -143,6 +145,8 @@ static test *parse_file(const char *filename, int id)
 			section = &t->xfail;
 		} else if (i - start == strlen("--TARGET--")  && memcmp(buf + start, "--TARGET--", strlen("--TARGET--")) == 0) {
 			section = &t->target;
+		} else if (i - start == strlen("--OS--")  && memcmp(buf + start, "--OS--", strlen("--OS--")) == 0) {
+			section = &t->os;
 		} else if (i - start == strlen("--EXT--")  && memcmp(buf + start, "--EXT--", strlen("--EXT--")) == 0) {
 			section = &t->ext;
 		} else {
@@ -185,6 +189,13 @@ static int skip_test(test *t)
 			return strcmp(t->target + 1, target) == 0;
 		} else {
 			return strcmp(t->target, target) != 0;
+		}
+	}
+	if (os && t->os) {
+		if (t->os[0] == '!') {
+			return strcmp(t->os + 1, os) == 0;
+		} else {
+			return strcmp(t->os, os) != 0;
 		}
 	}
 	return 0;
@@ -523,6 +534,7 @@ static void print_help(const char *exe_name)
 	    "  Run the \"--CODE--\" section of specified test files using <cmd>\n"
 	    "Options:\n"
 	    "  --target <target>        - skip tests that specifies different --TARGET--\n"
+	    "  --os <os>                - skip tests that specifies different --OS--\n"
 	    "  --default-args <args>    - default <cmd> arguments (if --ARGS-- is missed)\n"
 	    "  --additional-args <args> - additional <cmd> arguments (always added at the end)\n"
 	    "  --diff-cmd <cmd>         - diff command\n"
@@ -577,6 +589,7 @@ int main(int argc, char **argv)
 			return 0;
 		} else if (check_arg("--test-cmd",        &test_cmd,        argc, argv, &i, &bad_opt)) {
 		} else if (check_arg("--target",          &target,          argc, argv, &i, &bad_opt)) {
+		} else if (check_arg("--os",              &os,              argc, argv, &i, &bad_opt)) {
 		} else if (check_arg("--default-args",    &default_args,    argc, argv, &i, &bad_opt)) {
 		} else if (check_arg("--additional-args", &additional_args, argc, argv, &i, &bad_opt)) {
 		} else if (check_arg("--diff-cmd",        &diff_cmd,        argc, argv, &i, &bad_opt)) {

@@ -79,13 +79,13 @@ $(BUILD_DIR)\tester.exe: $(SRC_DIR)/tools/tester.c
 	"$(CC)" $(CFLAGS) $(SRC_DIR)\tools\tester.c /Fe:$@
 
 test: $(BUILD_DIR)\rcc.exe $(BUILD_DIR)\tester.exe
-	$(BUILD_DIR)\tester.exe --test-cmd $(BUILD_DIR)\rcc.exe --target $(TEST_TARGET) \
+	$(BUILD_DIR)\tester.exe --test-cmd $(BUILD_DIR)\rcc.exe --target $(TEST_TARGET) --os Windows\
 		--additional-args "--no-abort-fault" \
 		--diff-cmd "diff --strip-trailing-cr -u" \
 		--test-extension ".test" --code-extension ".c" $(TESTS)
 
 test-ci: $(BUILD_DIR)\rcc.exe $(BUILD_DIR)\tester.exe
-	$(BUILD_DIR)\tester.exe --test-cmd $(BUILD_DIR)\rcc.exe --target $(TEST_TARGET) \
+	$(BUILD_DIR)\tester.exe --test-cmd $(BUILD_DIR)\rcc.exe --target $(TEST_TARGET) --os Windows \
 		--additional-args "--no-abort-fault" \
 		--diff-cmd "diff --strip-trailing-cr -u" \
 		--test-extension ".test" --code-extension ".c" --show-diff $(TESTS)
