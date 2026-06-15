@@ -81,6 +81,7 @@ $(BUILD_DIR)\tester.exe: $(SRC_DIR)/tools/tester.c
 test: $(BUILD_DIR)\rcc.exe $(BUILD_DIR)\tester.exe
 	$(BUILD_DIR)\tester.exe --test-cmd $(BUILD_DIR)\rcc.exe --target $(TEST_TARGET) \
 		--additional-args "--no-abort-fault" \
+		--diff-cmd "diff --strip-trailing-cr -u" \
 		--test-extension ".test" --code-extension ".c" $(TESTS)
 
 test-ci: $(BUILD_DIR)\rcc.exe $(BUILD_DIR)\tester.exe
