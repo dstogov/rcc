@@ -1,7 +1,7 @@
 --TEST--
 tinycc 046: grep
 --ARGS--
---run "[^* ]*[:a:d: ]+\:\*-/: $$" ./tests/tinycc/tests2/046_grep.c
+--run "[^* ]*[:a:d: ]+\:\*-/: $$" ./tests/tinycc/tests2/046_grep-win.c
 --OS--
 Windows
 --CODE--
@@ -576,6 +576,6 @@ int main(int argc, char **argv)
 
 /* vim: set expandtab ts=4 sw=3 sts=3 tw=80 :*/
 --EXPECT--
-File ./tests/tinycc/tests2/046_grep.c:
+File ./tests/tinycc/tests2/046_grep-win.c:
 /* vim: set expandtab ts=4 sw=3 sts=3 tw=80 :*/
 
