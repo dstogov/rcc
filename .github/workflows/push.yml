@@ -123,9 +123,15 @@ jobs:
       - uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: ${{ matrix.arch }}
+      - name: git checkout ir
+        uses: actions/checkout@v5
+        with:
+          repository: dstogov/ir
+          path: ir
       - name: Prepare env
         shell: powershell
         run: |
+          cd ir
           $tag = (nmake -nologo -f win32\Makefile capstone_tag).Trim()
           echo ("CAPSTONE_TAG=" + $tag) | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           $dir = (nmake -nologo -f win32\Makefile capstone_dir).Trim()
@@ -142,11 +148,6 @@ jobs:
         shell: cmd
         run: |
           nmake -nologo -f win32\Makefile capstone
-      - name: git checkout ir
-        uses: actions/checkout@v5
-        with:
-          repository: dstogov/ir
-          path: ir
       - name: make ir
         shell: cmd
         run: |
