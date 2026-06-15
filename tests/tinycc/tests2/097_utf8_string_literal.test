@@ -1,7 +1,7 @@
 --TEST--
 tinycc 097: utf8 string literal
 --ARGS--
---run
+-w --run
 --CODE--
 // this file contains BMP chars encoded in UTF-8
 #include <stdio.h>

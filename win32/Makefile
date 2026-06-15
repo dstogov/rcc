@@ -8,12 +8,12 @@ BUILD_DIR=win32\build_$(VSCMD_ARG_TGT_ARCH)_$(BUILD)
 !endif
 SRC_DIR=.
 IR_SRC_DIR=..\ir
-IR_BUILD_DIR=..\ir\win32\build_$(VSCMD_ARG_TGT_ARCH)_$(BUILD)
+IR_BUILD_DIR=$(IR_SRC_DIR)\win32\build_$(VSCMD_ARG_TGT_ARCH)_$(BUILD)
 TESTS=$(SRC_DIR)\tests
 
 CAPSTONE_TAG=5.0-rc2
 !if "$(CAPSTONE_DIR)" == ""
-CAPSTONE_DIR=..\ir\win32\capstone
+CAPSTONE_DIR=$(IR_SRC_DIR)\win32\capstone
 !endif
 
 CFLAGS=/nologo /utf-8 /W3 /EHsc /Zi /I$(IR_SRC_DIR)
