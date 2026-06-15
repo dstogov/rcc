@@ -87,11 +87,7 @@ x86
 /* ----------------------------------------------------------------------- */
 #elif TEST == 7
 {
-#ifdef _WIN32
     typedef long long int ll;
-#else
-    typedef long int ll;
-#endif
     struct M P __s {
         ll d : 16;
         ll b : 16;

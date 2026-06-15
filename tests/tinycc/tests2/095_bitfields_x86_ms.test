@@ -89,11 +89,7 @@ x86
 /* ----------------------------------------------------------------------- */
 #elif TEST == 7
 {
-#ifdef _WIN32
     typedef long long int ll;
-#else
-    typedef long int ll;
-#endif
     struct M P __s {
         ll d : 16;
         ll b : 16;
@@ -289,7 +285,7 @@ align/size  : 4 20
 bits in use : 3FFFFFFFFFFF0000
 bits as set : 0026000100050000
 values      : 01 00 ffffffff 04 05
-align/size  : 4 8
+align/size  : 8 8
 
 
 
@@ -377,7 +373,7 @@ align/size  : 4 20
 bits in use : 3FFFFFFFFFFF0000
 bits as set : 0026000100050000
 values      : 01 00 ffffffff 04 05
-align/size  : 4 8
+align/size  : 8 8
 
 
 
