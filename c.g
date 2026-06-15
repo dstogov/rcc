@@ -429,6 +429,11 @@ attributes(rcc_ctx *rcc, c_dcl *d):
 	                                                       {d->attr |= C_ATTR_CC_FASTCALL;}
 //	|	"__thiscall"
 //	|	"__vectorcall"
+	|	                                                   {c_value v;}
+	                                                       {ir_val val;}
+														   {val.u64 = 1;}
+		"__unaligned"                                      {c_value_set_const(&v, &c_type_i32, IR_I32, val);}
+	                                                       {c_declspec_align(rcc, d, &v);}
 	)++
 ;
 

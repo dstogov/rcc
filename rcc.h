@@ -167,6 +167,7 @@
 	_("__restrict__",                  YY___RESTRICT__)                \
 	_("__signed",                      YY___SIGNED)                    \
 	_("__signed__",                    YY___SIGNED__)                  \
+	_("__unaligned",                   YY___UNALIGNED)                 \
 	_("__volatile",                    YY___VOLATILE)                  \
 	_("__volatile__",                  YY___VOLATILE__)                \
 	_("__builtin_va_start",            YY___BUILTIN_VA_START)          \
