@@ -147,6 +147,7 @@ jobs:
         name: Prepare capstone
         shell: cmd
         run: |
+          cd ir
           nmake -nologo -f win32\Makefile capstone
       - name: make ir
         shell: cmd
