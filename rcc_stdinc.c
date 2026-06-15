@@ -128,7 +128,7 @@ static const char c_boot[] =
 "#define _M_X64                   100\n"
 "#define _M_AMD64                 100\n"
 "#define _INTEGRAL_MAX_BITS       64\n"
-"#define __int8                   __INT8_TYPE__\n"
+"#define __int8                   char\n"
 "#define __int16                  __INT16_TYPE__\n"
 "#define __int32                  __INT32_TYPE__\n"
 "#define __int64                  __INT64_TYPE__ \n"
