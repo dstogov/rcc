@@ -597,10 +597,14 @@ add_thunk:
 	return NULL;
 }
 
-void *c_linker_allocate_data(rcc_ctx *rcc, const char *name, size_t size)
+void *c_linker_allocate_data(rcc_ctx *rcc, const char *name, size_t size, size_t align)
 {
-	void *data = ir_arena_alloc(&rcc->c_linker_arena, size);
+	void *data = ir_arena_alloc_aligned(&rcc->c_linker_arena, size, align);
 	if (UNEXPECTED(!data)) yy_error("not enough memory to allocate data");
+	if (align < 8) {
+		align = 8;
+	}
+	if (IR_ALIGNED_SIZE((uintptr_t)data, align) != (uintptr_t)data) yy_error("bad data alignment");
 	if ((rcc->c_flags & C_DUMP_ASM) && name) {
 		ir_disasm_add_symbol(name, (uintptr_t)data, size);
 	}
@@ -1117,14 +1121,14 @@ static void rcc_fix_flexible_data(rcc_ctx *rcc)
 			/* Convert "flexible" array to regular */
 			IR_ASSERT(p->sym->value.type->kind == C_TYPE_ARRAY);
 			type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
-            *type = *p->sym->value.type;
+			*type = *p->sym->value.type;
 			type->size = type->array.type->size;
 			type->array.length = 1;
 			type->attr &= ~C_ATTR_FLEXIBLE;
 			p->sym->value.type = type;
 
 			p->sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
-			p->sym->value.u.val.ptr = c_linker_allocate_data(rcc, p->str, type->size);
+			p->sym->value.u.val.ptr = c_linker_allocate_data(rcc, p->str, type->size, c_attr2align(type->attr));
 			p->sym->is_implemented = 1;
 
 			//yy_warning_fmt("array \"%s\" assumed to have one element", p->str); // error position ???

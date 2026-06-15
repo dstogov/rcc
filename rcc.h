@@ -1281,7 +1281,7 @@ void yy_warning_(rcc_ctx *rcc, uint32_t kind, const char *msg);
 void yy_warning_fmt_(rcc_ctx *rcc, uint32_t kind, const char *fmt, ...);
 
 /* Linker */
-void *c_linker_allocate_data(rcc_ctx *rcc, const char *name, size_t size);
+void *c_linker_allocate_data(rcc_ctx *rcc, const char *name, size_t size, size_t align);
 bool  c_linker_fix_reloc(rcc_ctx *rcc, c_sym *obj, size_t obj_offset, c_value *val);
 void  c_linker_del_reloc(rcc_ctx *rcc, c_sym *obj, size_t obj_offset);
 
@@ -1678,4 +1678,15 @@ IR_ALWAYS_INLINE size_t c_value_str_size(c_value *v)
 	return v->u.ref; /* string size (including terminating zero) */
 }
 
+IR_ALWAYS_INLINE uint32_t c_align2attr(size_t align)
+{
+	if (align == 0) return 0;
+	return ir_ntzl(align) + 1;
+}
+
+IR_ALWAYS_INLINE size_t c_attr2align(uint32_t attr)
+{
+	if ((attr & C_ATTR_ALIGN_MASK) == 0) return 0;
+	return 1ULL << ((attr & C_ATTR_ALIGN_MASK) - 1);
+}
 #endif /* RCC_H */

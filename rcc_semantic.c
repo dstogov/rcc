@@ -164,18 +164,6 @@ static bool c_valid_alignment(c_value *val)
 	 && (val->u.val.u64 & (val->u.val.u64 - 1)) == 0);
 }
 
-static uint32_t c_align2attr(size_t align)
-{
-	if (align == 0) return 0;
-	return ir_ntzl(align) + 1;
-}
-
-static size_t c_attr2align(uint32_t attr)
-{
-	if ((attr & C_ATTR_ALIGN_MASK) == 0) return 0;
-	return 1ULL << ((attr & C_ATTR_ALIGN_MASK) - 1);
-}
-
 ir_type c_type2ir(rcc_ctx *rcc, const c_type *t)
 {
 	c_type_kind kind = t->kind;
@@ -938,7 +926,7 @@ static void c_do_end_flexible(rcc_ctx *rcc, c_sym *obj, size_t size)
 		size_t len;
 		const char *str = ir_get_strl(rcc->active_ctx, rcc->active_ctx->ir_base[obj->value.u.ref].val.name, &len);
 
-		addr = c_linker_allocate_data(rcc, str, size);
+		addr = c_linker_allocate_data(rcc, str, size, c_attr2align(obj->value.type->attr));
 		memcpy(addr, obj->value.u.val.ptr, size);
 		ir_mem_free(obj->value.u.val.ptr);
 		obj->value.u.val.ptr = addr;
@@ -954,7 +942,8 @@ static void c_do_end_flexible(rcc_ctx *rcc, c_sym *obj, size_t size)
 			type->attr &= ~C_ATTR_FLEXIBLE;
 		}
 	} else {
-		addr = c_linker_allocate_data(rcc, obj->value.u.ref ? yy_sym2str(rcc, obj->value.u.ref) : NULL, size);
+		addr = c_linker_allocate_data(rcc, obj->value.u.ref ? yy_sym2str(rcc, obj->value.u.ref) : NULL, size,
+			c_attr2align(obj->value.type->attr));
 		memcpy(addr, obj->value.u.val.ptr, size);
 		ir_mem_free(obj->value.u.val.ptr);
 		obj->value.u.val.ptr = addr;
@@ -1078,7 +1067,8 @@ static void c_validate_redeclaration(rcc_ctx *rcc, c_name name, c_dcl *d, c_sym 
 				sym->value.u.val.ptr = ir_mem_calloc(1, sym->value.type->size);
 				sym->value.u.ref = name; /* keep name in addition to address */
 			} else {
-				sym->value.u.val.ptr = c_linker_allocate_data(rcc, yy_sym2str(rcc, name), sym->value.type->size);
+				sym->value.u.val.ptr = c_linker_allocate_data(rcc, yy_sym2str(rcc, name),
+					sym->value.type->size, c_attr2align(sym->value.type->attr));
 			}
 		}
 	}
@@ -1244,7 +1234,7 @@ static ir_ref c_create_str_sym(rcc_ctx *rcc, c_value *res)
 	buf[--i] = 's';
 
 	name = yy_hash_lookup(rcc, buf + i, sizeof(buf) - 1 - i);
-	addr = c_linker_allocate_data(rcc, buf + i, size);
+	addr = c_linker_allocate_data(rcc, buf + i, size, 8);
 	memcpy(addr, str, size);
 
 	/* Create a global symbol in yy_arena */
@@ -1504,7 +1494,8 @@ c_sym *c_declare(rcc_ctx *rcc, c_name name, c_dcl *d)
 						sym->tmp_data = 1;
 						addr = ir_mem_calloc(1, d->type->size);
 					} else {
-						addr = c_linker_allocate_data(rcc, yy_sym2str(rcc, name), d->type->size);
+						addr = c_linker_allocate_data(rcc, yy_sym2str(rcc, name),
+							d->type->size, c_attr2align(d->type->attr));
 					}
 					sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
 					sym->value.u.val.ptr = addr;
@@ -1519,7 +1510,8 @@ c_sym *c_declare(rcc_ctx *rcc, c_name name, c_dcl *d)
 						sym->tmp_data = 1;
 						addr = ir_mem_calloc(1, d->type->size);
 					} else {
-						addr = c_linker_allocate_data(rcc, str, d->type->size);
+						addr = c_linker_allocate_data(rcc, str,
+							d->type->size, c_attr2align(d->type->attr));
 					}
 					rcc->yy_hash.data[sym_name].sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
 					rcc->yy_hash.data[sym_name].sym->value.u.val.ptr = addr;
@@ -8598,7 +8590,7 @@ void c_do_init_expr_start(rcc_ctx *rcc, c_sym *obj, const c_type *type)
 			obj->tmp_data = 1;
 			addr = ir_mem_calloc(1, type->size);
 		} else {
-			addr = c_linker_allocate_data(rcc, NULL, type->size);
+			addr = c_linker_allocate_data(rcc, NULL, type->size, c_attr2align(type->attr));
 		}
 
 		rcc->yy_hash.data[sym_name].sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
