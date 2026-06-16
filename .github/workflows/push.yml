@@ -113,6 +113,33 @@ jobs:
         run: make BUILD=debug all
       - name: test
         run: make BUILD=debug test-ci
+  MACOS_aarch64:
+    runs-on: macos-26
+    env:
+      CFLAGS: '-fsanitize=address,undefined'
+      CPATH: /opt/homebrew/include
+      LIBRARY_PATH: /opt/homebrew/lib
+    steps:
+      - uses: actions/checkout@v3
+      - name: brew
+        run: brew install capstone
+      - name: git checkout ir
+        uses: actions/checkout@v5
+        with:
+          repository: dstogov/ir
+          path: ir
+      - name: make ir
+        run: |
+          cd ir
+          make CC=cc BUILD=debug all
+          make CC=cc BUILD=debug install
+      - name: make
+        run: make CC=cc BUILD=debug all
+      - name: test
+        shell: bash
+        run: |
+          export C_INCLUDE_PATH=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include
+          make CC=cc  BUILD=debug test-ci
   Windows:
     strategy:
       fail-fast: false
