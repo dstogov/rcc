@@ -132,7 +132,7 @@ jobs:
         run: |
           cd ir
           make CC=cc BUILD=debug all
-          make CC=cc BUILD=debug install
+          sudo make CC=cc BUILD=debug install
       - name: make
         run: make CC=cc BUILD=debug all
       - name: test
