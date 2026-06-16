@@ -381,6 +381,8 @@
 	_("__vector_size__",               YY___VECTOR_SIZE__)      /*fv */\
 	_("visibility",                    YY_VISIBILITY)           /*f  */\
 	_("__visibility__",                YY___VISIBILITY__)       /*f  */\
+	_("warn_unused_result",            YY_WARN_UNUSED_RESULT)   /*f  */\
+	_("__warn_unused_result__",        YY___WARN_UNUSED_RESULT__) /*f  */\
 	_("weak",                          YY_WEAK)                 /*fv */\
 	_("__weak__",                      YY___WEAK__)             /*fv */\
 	_("weakref",                       YY_WEAKREF)              /*f  */\

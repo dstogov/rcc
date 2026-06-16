@@ -2660,6 +2660,8 @@ yy_sym c_gcc_attribute(rcc_ctx *rcc, c_dcl *d, c_name attr, yy_sym sym)
 	 || attr == YY___MALLOC__
 	 || attr == YY_NONNULL
 	 || attr == YY___NONNULL__
+	 || attr == YY_WARN_UNUSED_RESULT
+	 || attr == YY___WARN_UNUSED_RESULT__
 	) {
 		/* silently ignore some known attributes */
 	} else {
