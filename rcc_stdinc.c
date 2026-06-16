@@ -33,10 +33,15 @@ static const char c_boot[] =
 "#define __USER_LABEL_PREFIX__\n"
 #if defined(IR_TARGET_X64)
 # if defined(_WIN32)
+"#define _LLP64                   1\n"
 "#define __LLP64__                1\n"
 # else
+"#define _LP64                    1\n"
 "#define __LP64__                 1\n"
 # endif
+"#define __amd64                  1\n"
+"#define __amd64__                1\n"
+"#define __x86_64                 1\n"
 "#define __x86_64__               1\n"
 "#define __SIZEOF_SHORT__         2\n"
 "#define __SIZEOF_INT__           4\n"
@@ -135,7 +140,10 @@ static const char c_boot[] =
 #endif
 
 #elif defined(IR_TARGET_X86)
+"#define _ILP32                   1\n"
 "#define __ILP32__                1\n"
+"#define i386                     1\n"
+"#define __i386                   1\n"
 "#define __i386__                 1\n"
 "#define __SIZEOF_SHORT__         2\n"
 "#define __SIZEOF_INT__           4\n"
@@ -274,6 +282,15 @@ static const char c_boot[] =
 #endif
 "#define __CHAR16_TYPE__          short unsigned int\n"
 "#define __CHAR32_TYPE__          unsigned int\n"
+
+#if defined(__linux__)
+"#define linux                    1\n"
+"#define __linux                  1\n"
+"#define __linux__                1\n"
+"#define unix                     1\n"
+"#define __unix                   1\n"
+"#define __unix__                 1\n"
+#endif
 
 "#define __thread                 _Thread_local\n"
 "#define static_assert            _Static_assert\n"
