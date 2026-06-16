@@ -134,21 +134,18 @@ jobs:
       - name: make
         run: make BUILD=debug all
       - name: Install Command Line Tools for Xcode
-        runs:
-          using: composite
-          steps:
-            - shell: bash
-              run: |
-                set
-                softwareupdate -l
-                label=$((softwareupdate -l 2>/dev/null | grep 'Label:' | grep -o 'Command Line Tools for Xcode.*' | head -1) || echo '')
-                if [ -n "$label" ]; then
-                  softwareupdate -i "$label"
-                  xcode_path=$(ls -1 '/Applications' | grep 'Xcode_.*\.app' | sort -r | head -1)
-                  sudo xcode-select -s "/Applications/$xcode_path"
-                else
-                  echo "Not found."
-                fi
+        shell: bash
+        run: |
+          set
+          softwareupdate -l
+          label=$((softwareupdate -l 2>/dev/null | grep 'Label:' | grep -o 'Command Line Tools for Xcode.*' | head -1) || echo '')
+          if [ -n "$label" ]; then
+            softwareupdate -i "$label"
+            xcode_path=$(ls -1 '/Applications' | grep 'Xcode_.*\.app' | sort -r | head -1)
+            sudo xcode-select -s "/Applications/$xcode_path"
+          else
+            echo "Not found."
+          fi
       - name: test
         run: make BUILD=debug test-ci
   Windows:
