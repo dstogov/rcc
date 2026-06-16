@@ -113,6 +113,28 @@ jobs:
         run: make BUILD=debug all
       - name: test
         run: make BUILD=debug test-ci
+  MACOS_x86_64:
+    runs-on: macos-26-intel
+    env:
+      CFLAGS: '-fsanitize=address,undefined'
+    steps:
+      - uses: actions/checkout@v3
+      - name: brew
+        run: brew install capstone
+      - name: git checkout ir
+        uses: actions/checkout@v5
+        with:
+          repository: dstogov/ir
+          path: ir
+      - name: make ir
+        run: |
+          cd ir
+          make BUILD=debug all
+          make BUILD=debug install
+      - name: make
+        run: make BUILD=debug all
+      - name: test
+        run: make BUILD=debug test-ci
   Windows:
     strategy:
       fail-fast: false
