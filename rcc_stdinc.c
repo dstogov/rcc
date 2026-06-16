@@ -214,8 +214,10 @@ static const char c_boot[] =
 #endif
 
 #elif defined(IR_TARGET_AARCH64)
+"#define _LP64                    1\n"
 "#define __LP64__                 1\n"
 "#define __aarch64__              1\n"
+"#define __arm64__                1\n"
 "#define __SIZEOF_SHORT__         2\n"
 "#define __SIZEOF_INT__           4\n"
 "#define __SIZEOF_LONG__          8\n"
