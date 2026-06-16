@@ -131,14 +131,13 @@ jobs:
       - name: make ir
         run: |
           cd ir
-          make CC=cc BUILD=debug all
-          sudo make CC=cc BUILD=debug install
+          make CC=cc PREFIX=/opt/homebrew BUILD=debug all
+          make CC=cc PREFIX=/opt/homebrew BUILD=debug install
       - name: make
-        run: make CC=cc BUILD=debug all
+        run: make CC=cc PREFIX=/opt/homebrew BUILD=debug all
       - name: test
         shell: bash
         run: |
-          export C_INCLUDE_PATH=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include
           make CC=cc  BUILD=debug test-ci
   Windows:
     strategy:
