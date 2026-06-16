@@ -134,7 +134,7 @@ jobs:
           make CC=cc PREFIX=/opt/homebrew BUILD=debug all
           make CC=cc PREFIX=/opt/homebrew BUILD=debug install
       - name: make
-        run: make CC=cc PREFIX=/opt/homebrew BUILD=debug all
+        run: make CC=cc CFLAGS=-pthread PREFIX=/opt/homebrew BUILD=debug all
       - name: test
         shell: bash
         run: |
