@@ -2355,10 +2355,14 @@ static void pp_parse_pragma(rcc_ctx *rcc, yy_sym operator)
 		if (sym != YY__LPAREN) goto error;
 		sym = yy_next(rcc);
 		if (sym == YY_OCTAL_NUMBER || sym == YY_DECIMAL_NUMBER || sym == YY_PP_NUMBER) {
+			const char *s;
+			const char *e;
+			uint32_t n;
+
 pack_set:
-			const char *s = rcc->yy_text;
-			const char *e = s + rcc->yy_len;
-			uint32_t n = 0;
+			s = rcc->yy_text;
+			e = s + rcc->yy_len;
+			n = 0;
 
 			while (s != e && *s >= '0' && *s <= '9') {
 				n = n * 10 + (*s - '0');

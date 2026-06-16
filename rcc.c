@@ -441,6 +441,8 @@ void rcc_ir_compile(rcc_ctx *rcc, c_name name, c_dcl *d, c_sym *sym)
 		rcc_ir_codegen(rcc, name, ctx, sym);
 		ir_free(ctx);
 	} else {
+		ir_ctx *copy;
+
 		if ((((rcc->c_flags & C_SINGLE_FILE) ? name == YY_MAIN : sym->linkage == C_LINK_EXTERNAL)
 		  || (d->attr2 & (C_ATTR2_CONSTRUCTOR|C_ATTR2_DESTRUCTOR)))
 		 && !sym->has_code) {
@@ -449,7 +451,7 @@ void rcc_ir_compile(rcc_ctx *rcc, c_name name, c_dcl *d, c_sym *sym)
 			ir_list_push(&rcc->codegen_queue, name);
 		}
 delay_codegen:
-		ir_ctx *copy = ir_mem_malloc(sizeof(ir_ctx));
+		copy = ir_mem_malloc(sizeof(ir_ctx));
 		memcpy(copy, ctx, sizeof(ir_ctx));
 		sym->ctx = copy;
 	}

@@ -5690,7 +5690,7 @@ static const c_type *c_common_type(rcc_ctx *rcc, yy_sym sym, c_value *op1, c_val
 				return op2_type;
 			}
 		} else if (sym == YY__LESS || sym == YY__LESS_EQUAL || sym == YY__GREATER || sym == YY__GREATER_EQUAL
-			|| sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL || YY__COLON) {
+			|| sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL || sym == YY__COLON) {
 			if (C_IS_TYPE_INT(op1_type)) {
 				if (c_value_is_const(op1) && op1->u.val.u64 == 0) {
 					op1->type = &c_type_ptr;
@@ -5712,7 +5712,7 @@ static const c_type *c_common_type(rcc_ctx *rcc, yy_sym sym, c_value *op1, c_val
 			if (sym == YY__COLON) return c_create_pointer_type(rcc, op1_type);
 			return op1_type;
 		} else if (sym == YY__LESS || sym == YY__LESS_EQUAL || sym == YY__GREATER || sym == YY__GREATER_EQUAL
-			|| sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL || YY__COLON) {
+			|| sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL || sym == YY__COLON) {
 			if (C_IS_TYPE_INT(op2_type)) {
 				if (c_value_is_const(op2) && op2->u.val.u64 == 0) {
 					op2->type = &c_type_ptr;
@@ -5727,7 +5727,7 @@ static const c_type *c_common_type(rcc_ctx *rcc, yy_sym sym, c_value *op1, c_val
 		return NULL;
 	} else if (t2 == C_TYPE_FUNC) {
 		if (sym == YY__LESS || sym == YY__LESS_EQUAL || sym == YY__GREATER || sym == YY__GREATER_EQUAL
-			|| sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL || YY__COLON) {
+			|| sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL || sym == YY__COLON) {
 			if (C_IS_TYPE_INT(op1_type)) {
 				if (c_value_is_const(op1) && op1->u.val.u64 == 0) {
 					op1->type = &c_type_ptr;
@@ -5996,7 +5996,7 @@ static void c_do_sub(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op
 			IR_ASSERT(op1->type->pointer.type->size == op2->type->pointer.type->size);
 			if (c_value_is_const(op1) && !c_value_is_const_str(op1)
 			 && c_value_is_const(op2) && !c_value_is_const_str(op2)
-			 && !(element_type->attr && C_ATTR_VLA)) {
+			 && !(element_type->attr & C_ATTR_VLA)) {
 				val.i64 = (op1->u.val.addr - op2->u.val.addr) / element_size;
 				c_value_set_const(op1, &c_type_ssize_t, IR_SSIZE_T, val);
 			 } else {
