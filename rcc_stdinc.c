@@ -27,9 +27,9 @@ static const char c_boot[] =
 "#define __STDC_NO_THREADS__      1\n"
 //"#define __STDC_NO_VLA__          1\n"
 /* allow GCC extensions: __attribute__ */
-//"#define __GNUC__                 3\n"
-//"#define __GNUC_MINOR__           2\n"
-//"#define __GNUC_PATCHLEVEL__      0\n"
+"#define __GNUC__                 4\n"
+"#define __GNUC_MINOR__           2\n"
+"#define __GNUC_PATCHLEVEL__      0\n"
 "#define __USER_LABEL_PREFIX__\n"
 #if defined(IR_TARGET_X64)
 # if defined(_WIN32)
