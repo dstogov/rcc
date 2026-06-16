@@ -116,7 +116,7 @@ jobs:
   MACOS_aarch64:
     runs-on: macos-26
     env:
-      CFLAGS: '-fsanitize=address,undefined'
+      CFLAGS: '-pthread -fsanitize=address,undefined'
       CPATH: /opt/homebrew/include
       LIBRARY_PATH: /opt/homebrew/lib
     steps:
@@ -134,7 +134,7 @@ jobs:
           make CC=cc PREFIX=/opt/homebrew BUILD=debug all
           make CC=cc PREFIX=/opt/homebrew BUILD=debug install
       - name: make
-        run: make CC=cc CFLAGS=-pthread PREFIX=/opt/homebrew BUILD=debug all
+        run: make CC=cc PREFIX=/opt/homebrew BUILD=debug all
       - name: test
         shell: bash
         run: |
