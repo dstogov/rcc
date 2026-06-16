@@ -353,8 +353,8 @@
 	_("__preserve_none__",             YY___PRESERVE_NONE__)    /*f  */\
 	_("pure",                          YY_PURE)                 /*f  */\
 	_("__pure__",                      YY___PURE__)             /*f  */\
-	_("regparam",                      YY_REGPARAM)             /*f  */\
-	_("__regparam__",                  YY___REGPARAM__)         /*f  */\
+	_("regparm",                       YY_REGPARM)              /*f  */\
+	_("__regparm__",                   YY___REGPARM__)          /*f  */\
 	_("saveall",                       YY_SAVEALL)              /*f  */\
 	_("__saveall__",                   YY___SAVEALL__)          /*f  */\
 	_("section",                       YY_SECTION)              /*fv */\
@@ -663,22 +663,23 @@ void pp_list_grow(pp_list *l, uint32_t size);
 #define C_ATTR_DEPRECATED        (0)        /* TODO: find a free bit ??? */
 #define C_ATTR_UNUSED            (1<<25)
 #define C_ATTR_OLD_FUNC          (1<<26)
-#define C_ATTR_CALL_CONV         ((1<<27) | (1<<28))
-
-/* calling convention */
-#define C_ATTR_CC_DEFAULT        0
-#define C_ATTR_CC_CDECL          (1<<28)
-#define C_ATTR_CC_FASTCALL       (1<<27)
-#define C_ATTR_CC_PRESERVE_NONE  ((1<<27) | (1<<28))
-
 
 /* symbol attributes */
-#define C_ATTR_WEAK              (1<<29)
+#define C_ATTR_WEAK              (1<<27)
 
-/* statement attributes */
-#define C_ATTR_FALLTHROUGH       (1<<30)
-#define C_ATTR_MUSTTAIL          (1U<<31)
-//#define C_ATTR_ASSUME            (1<<32)
+/* calling convention */
+#define C_ATTR_CALL_CONV         ((1<<28) | (1<<29) | (1<<30))
+
+#define C_ATTR_CC_DEFAULT        0
+#define C_ATTR_CC_CDECL          (1U<<28)
+#define C_ATTR_CC_FASTCALL       (2U<<28)
+#define C_ATTR_CC_PRESERVE_NONE  (3U<<28)
+
+#if defined(IR_TARGET_X86)
+# define C_ATTR_CC_REGPARM_1     (4U<<28)
+# define C_ATTR_CC_REGPARM_2     (5U<<28)
+# define C_ATTR_CC_REGPARM_3     (6U<<28)
+#endif
 
 #define C_TYPE_ATTRS \
 	(C_ATTR_CONST|C_ATTR_RESTRICT|C_ATTR_VOLATILE|C_ATTR_ATOMIC)
@@ -702,6 +703,10 @@ void pp_list_grow(pp_list *l, uint32_t size);
 
 #define C_ATTR2_CONSTRUCTOR      (1<<0)
 #define C_ATTR2_DESTRUCTOR       (1<<1)
+
+/* statement attributes */
+#define C_ATTR2_FALLTHROUGH      (1<<30)
+#define C_ATTR2_MUSTTAIL         (1U<<31)
 
 typedef enum {
 	C_TYPE_VOID,
@@ -1094,6 +1099,7 @@ void c_empty_declaration(rcc_ctx *rcc, c_dcl *d);
 void c_gcc_attribute_aligned(rcc_ctx *rcc, c_dcl *d, c_name attr, c_value *v);
 void c_gcc_attribute_packed(rcc_ctx *rcc, c_dcl *d, c_name attr);
 void c_gcc_attribute_cleanup(rcc_ctx *rcc, c_dcl *d, c_name attr, c_name func);
+void c_gcc_attribute_regparm(rcc_ctx *rcc, c_dcl *d, c_name attr, c_value *v);
 yy_sym c_gcc_attribute(rcc_ctx *rcc, c_dcl *dcl, c_name attr, yy_sym sym);
 void c_gcc_attribute_alias(rcc_ctx *rcc, c_dcl *d, c_name attr, c_value *v);
 void c_asm_alias(rcc_ctx *rcc, c_dcl *d, c_value *v);

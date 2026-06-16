@@ -273,6 +273,12 @@ static uint32_t c_type_call_conv(rcc_ctx *rcc, const c_type *t)
 			case C_ATTR_CC_PRESERVE_NONE:
 				flags = IR_CC_PRESERVE_NONE;
 				break;
+#if defined(IR_TARGET_X86)
+			case C_ATTR_CC_REGPARM_1:
+			case C_ATTR_CC_REGPARM_2:
+			case C_ATTR_CC_REGPARM_3:
+				// TODO: IR doesn't support "regparm" calling conventions yet ???
+#endif
 			default:
 				yy_error("unsupported calling convention");
 		}
@@ -2648,6 +2654,35 @@ void c_gcc_attribute_cleanup(rcc_ctx *rcc, c_dcl *d, c_name attr, c_name func)
 	}
 
 	d->cleanup_func = func;
+}
+
+void c_gcc_attribute_regparm(rcc_ctx *rcc, c_dcl *d, c_name attr, c_value *val)
+{
+	if (!c_value_is_set(val) || !c_value_is_const(val) || !C_IS_TYPE_INT(val->type)) {
+		yy_warning("attribute \"regparm\" value must be an integer constant");
+	}
+#if defined(IR_TARGET_X86)
+	if (val->u.val.u32 == 1) {
+		if ((d->attr & C_ATTR_CALL_CONV) && (d->attr & C_ATTR_CALL_CONV) != C_ATTR_CC_REGPARM_1) {
+			yy_error("multiple calling conventions");
+		}
+		d->attr |= C_ATTR_CC_REGPARM_1;
+		return;
+	} else if (val->u.val.u32 == 2) {
+		if ((d->attr & C_ATTR_CALL_CONV) && (d->attr & C_ATTR_CALL_CONV) != C_ATTR_CC_REGPARM_2) {
+			yy_error("multiple calling conventions");
+		}
+		d->attr |= C_ATTR_CC_REGPARM_2;
+		return;
+	} else if (val->u.val.u32 == 3) {
+		if ((d->attr & C_ATTR_CALL_CONV) && (d->attr & C_ATTR_CALL_CONV) != C_ATTR_CC_REGPARM_3) {
+			yy_error("multiple calling conventions");
+		}
+		d->attr |= C_ATTR_CC_REGPARM_3;
+		return;
+	}
+#endif
+	yy_warning_ex_fmt(E_UNSUPPORTED, "unsupported attribure \"%s(%d)\"", yy_sym2str(rcc, attr), val->u.val.u32);
 }
 
 yy_sym c_gcc_attribute(rcc_ctx *rcc, c_dcl *d, c_name attr, yy_sym sym)

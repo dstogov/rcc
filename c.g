@@ -214,14 +214,14 @@ declaration(rcc_ctx *rcc, uint32_t flags):                 {c_dcl d0 = {0};}
 	|	/* use "?" to support C89 defaults to int */       {d0.flags = flags;}
 		(   ?{!C_IS_ID(sym) || is_typedef_name(rcc, sym)}
 			declaration_specifiers(rcc, &d0)
-			(	?{d0.flags == C_DCL_STATEMENT && d0.attr == C_ATTR_MUSTTAIL && !d0.type && !d0.alias}
+			(	?{d0.flags == C_DCL_STATEMENT && d0.attr2 == C_ATTR2_MUSTTAIL && !d0.type && !d0.alias}
                                                            {c_value val;}
                                                            {c_value_clear(&val);}
                                                            {/* Use IR_TAILCALL in val.u.proto to prevent inlining */}
                                                            {val.u.proto = IR_TAILCALL;}
 				"return" expression(rcc, &val)? ";"        {c_do_tailcall(rcc, &val);}
 				                                           {return sym;}
-			)?                                             {if (d0.flags == C_DCL_STATEMENT && d0.attr == C_ATTR_MUSTTAIL) yy_error("\"__musttail__\" attribute only applies to return statements");}
+			)?                                             {if (d0.flags == C_DCL_STATEMENT && d0.attr2 == C_ATTR2_MUSTTAIL) yy_error("\"__musttail__\" attribute only applies to return statements");}
 		)?
 		(	                                               {c_dcl d = d0;}
 		    declarator(rcc, &d, &name, 1)
@@ -455,7 +455,7 @@ attrib(rcc_ctx *rcc, c_dcl *d):                            {c_name name = sym;}
                                                            {c_value_clear(&v);}
 		( "(" constant_expression(rcc, &v) ")" )?
 	|	("destructor"|"__destructor__")                    {d->attr2 |= C_ATTR2_DESTRUCTOR;}
-	|	("fallthrough"|"__fallthrough__")                  {d->attr |= C_ATTR_FALLTHROUGH;}
+	|	("fallthrough"|"__fallthrough__")                  {d->attr2 |= C_ATTR2_FALLTHROUGH;}
 	|	("fastcall"|"__fastcall__")                        {if ((d->attr & C_ATTR_CALL_CONV) && (d->attr & C_ATTR_CALL_CONV) != C_ATTR_CC_FASTCALL) yy_error("multiple calling conventions");}
 	                                                       {d->attr |= C_ATTR_CC_FASTCALL;}
 	|	("gcc_struct"|"__gcc_struct__")                    {d->attr |= C_ATTR_GCC_STRUCT;}
@@ -475,7 +475,7 @@ attrib(rcc_ctx *rcc, c_dcl *d):                            {c_name name = sym;}
 		")"
 	|	("ms_struct"|"__ms_struct__")                      {d->attr |= C_ATTR_MS_STRUCT;}
 	|	("musttail"|"__musttail__")                        {if (!(d->flags & C_DCL_STATEMENT)) yy_error_fmt("\"%s\" attribute only applies to return statements", yy_sym2str(rcc, name));}
-	                                                       {d->attr |= C_ATTR_MUSTTAIL;}
+	                                                       {d->attr2 |= C_ATTR2_MUSTTAIL;}
 	|	("noinline"|"__noinline__")                        {d->attr |= C_ATTR_NOINLINE;}
 	|	("noreturn"|"__noreturn__")                        {if (!(d->flags & C_DCL_TYPEDEF) || !d->type) d->attr |= C_ATTR_NORETURN;}
 	|	("nothrow"|"__nothrow__")                          {d->attr |= C_ATTR_NOTHROW;}
@@ -483,6 +483,8 @@ attrib(rcc_ctx *rcc, c_dcl *d):                            {c_name name = sym;}
 	|	("preserve_none"|"__preserve_none__")              {if ((d->attr & C_ATTR_CALL_CONV) && (d->attr & C_ATTR_CALL_CONV) != C_ATTR_CC_PRESERVE_NONE) yy_error("multiple calling conventions");}
 	                                                       {d->attr |= C_ATTR_CC_PRESERVE_NONE;}
 	|	("pure"|"__pure__")                                {d->attr |= C_ATTR_PURE;}
+	|	("regparm"|"__regparm__")
+	    "(" constant_expression(rcc, &v) ")"               {c_gcc_attribute_regparm(rcc, d, name, &v);}
 	|	("unused"|"__unused__")                            {d->attr |= C_ATTR_UNUSED;}
 	|	("vector_size"|"__vector_size__")                  {c_value_clear(&v);}
 		( "(" constant_expression(rcc, &v) ")" )?          {yy_error_fmt("unsupported attribute \"%s\"", yy_sym2str(rcc, name));}

@@ -309,7 +309,7 @@ static yy_sym parse_declaration(yy_sym sym, rcc_ctx *rcc, uint32_t flags) {
 		d0.flags = flags;
 		if ((sym == YY_TYPEDEF || sym == YY_EXTERN || sym == YY_STATIC || sym == YY_AUTO || sym == YY_REGISTER || sym == YY__THREAD_LOCAL || sym == YY_VOID || sym == YY_CHAR || sym == YY_SHORT || sym == YY_INT || sym == YY_LONG || sym == YY_FLOAT || sym == YY_DOUBLE || sym == YY_SIGNED || sym == YY___SIGNED || sym == YY___SIGNED__ || sym == YY_UNSIGNED || sym == YY__BOOL || sym == YY__COMPLEX || sym == YY___COMPLEX || sym == YY___COMPLEX__ || sym == YY__ATOMIC || sym == YY_TYPEOF || sym == YY___TYPEOF || sym == YY___TYPEOF__ || sym == YY_STRUCT || sym == YY_UNION || sym == YY_ENUM || C_IS_ID(sym) || sym == YY_CONST || sym == YY___CONST || sym == YY___CONST__ || sym == YY_RESTRICT || sym == YY___RESTRICT || sym == YY___RESTRICT__ || sym == YY_VOLATILE || sym == YY___VOLATILE || sym == YY___VOLATILE__ || sym == YY_INLINE || sym == YY___INLINE || sym == YY___INLINE__ || sym == YY__NORETURN || sym == YY___FORCEINLINE || sym == YY__ALIGNAS || sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__ || sym == YY___DECLSPEC || sym == YY___CDECL || sym == YY___FASTCALL || sym == YY___UNALIGNED) && (!C_IS_ID(sym) || is_typedef_name(rcc, sym))) {
 			sym = parse_declaration_specifiers(sym, rcc, &d0);
-			if ((sym == YY_RETURN) && (d0.flags == C_DCL_STATEMENT && d0.attr == C_ATTR_MUSTTAIL && !d0.type && !d0.alias)) {
+			if ((sym == YY_RETURN) && (d0.flags == C_DCL_STATEMENT && d0.attr2 == C_ATTR2_MUSTTAIL && !d0.type && !d0.alias)) {
 				c_value val;
 				c_value_clear(&val);
 				/* Use IR_TAILCALL in val.u.proto to prevent inlining */
@@ -325,7 +325,7 @@ static yy_sym parse_declaration(yy_sym sym, rcc_ctx *rcc, uint32_t flags) {
 				c_do_tailcall(rcc, &val);
 				return sym;
 			}
-			if (d0.flags == C_DCL_STATEMENT && d0.attr == C_ATTR_MUSTTAIL) yy_error("\"__musttail__\" attribute only applies to return statements");
+			if (d0.flags == C_DCL_STATEMENT && d0.attr2 == C_ATTR2_MUSTTAIL) yy_error("\"__musttail__\" attribute only applies to return statements");
 		}
 		if (sym == YY__STAR || C_IS_ID(sym) || sym == YY__LPAREN) {
 			c_dcl d = d0;
@@ -786,7 +786,7 @@ static yy_sym parse_attributes(yy_sym sym, rcc_ctx *rcc, c_dcl *d) {
 static yy_sym parse_attrib(yy_sym sym, rcc_ctx *rcc, c_dcl *d) {
 	c_name name = sym;
 	c_value v;
-	if (sym == YY_ALIAS || sym == YY___ALIAS__ || sym == YY_ALIGNED || sym == YY___ALIGNED__ || sym == YY_ALWAYS_INLINE || sym == YY___ALWAYS_INLINE__ || sym == YY_CDECL || sym == YY___CDECL__ || sym == YY_CLEANUP || sym == YY___CLEANUP__ || sym == YY_COLD || sym == YY___COLD__ || sym == YY_CONST || sym == YY___CONST__ || sym == YY_CONSTRUCTOR || sym == YY___CONSTRUCTOR__ || sym == YY_DEPRECATED || sym == YY___DEPRECATED__ || sym == YY_DESTRUCTOR || sym == YY___DESTRUCTOR__ || sym == YY_FALLTHROUGH || sym == YY___FALLTHROUGH__ || sym == YY_FASTCALL || sym == YY___FASTCALL__ || sym == YY_GCC_STRUCT || sym == YY___GCC_STRUCT__ || sym == YY_HOT || sym == YY___HOT__ || sym == YY_LEAF || sym == YY___LEAF__ || sym == YY_MODE || sym == YY___MODE__ || sym == YY_MS_STRUCT || sym == YY___MS_STRUCT__ || sym == YY_MUSTTAIL || sym == YY___MUSTTAIL__ || sym == YY_NOINLINE || sym == YY___NOINLINE__ || sym == YY_NORETURN || sym == YY___NORETURN__ || sym == YY_NOTHROW || sym == YY___NOTHROW__ || sym == YY_PACKED || sym == YY___PACKED__ || sym == YY_PRESERVE_NONE || sym == YY___PRESERVE_NONE__ || sym == YY_PURE || sym == YY___PURE__ || sym == YY_UNUSED || sym == YY___UNUSED__ || sym == YY_VECTOR_SIZE || sym == YY___VECTOR_SIZE__ || sym == YY_WEAK || sym == YY___WEAK__ || C_IS_ID(sym)) {
+	if (sym == YY_ALIAS || sym == YY___ALIAS__ || sym == YY_ALIGNED || sym == YY___ALIGNED__ || sym == YY_ALWAYS_INLINE || sym == YY___ALWAYS_INLINE__ || sym == YY_CDECL || sym == YY___CDECL__ || sym == YY_CLEANUP || sym == YY___CLEANUP__ || sym == YY_COLD || sym == YY___COLD__ || sym == YY_CONST || sym == YY___CONST__ || sym == YY_CONSTRUCTOR || sym == YY___CONSTRUCTOR__ || sym == YY_DEPRECATED || sym == YY___DEPRECATED__ || sym == YY_DESTRUCTOR || sym == YY___DESTRUCTOR__ || sym == YY_FALLTHROUGH || sym == YY___FALLTHROUGH__ || sym == YY_FASTCALL || sym == YY___FASTCALL__ || sym == YY_GCC_STRUCT || sym == YY___GCC_STRUCT__ || sym == YY_HOT || sym == YY___HOT__ || sym == YY_LEAF || sym == YY___LEAF__ || sym == YY_MODE || sym == YY___MODE__ || sym == YY_MS_STRUCT || sym == YY___MS_STRUCT__ || sym == YY_MUSTTAIL || sym == YY___MUSTTAIL__ || sym == YY_NOINLINE || sym == YY___NOINLINE__ || sym == YY_NORETURN || sym == YY___NORETURN__ || sym == YY_NOTHROW || sym == YY___NOTHROW__ || sym == YY_PACKED || sym == YY___PACKED__ || sym == YY_PRESERVE_NONE || sym == YY___PRESERVE_NONE__ || sym == YY_PURE || sym == YY___PURE__ || sym == YY_REGPARM || sym == YY___REGPARM__ || sym == YY_UNUSED || sym == YY___UNUSED__ || sym == YY_VECTOR_SIZE || sym == YY___VECTOR_SIZE__ || sym == YY_WEAK || sym == YY___WEAK__ || C_IS_ID(sym)) {
 		if (sym == YY_ALIAS || sym == YY___ALIAS__) {
 			sym = get_sym();
 			if (sym == YY__LPAREN) {
@@ -856,7 +856,7 @@ static yy_sym parse_attrib(yy_sym sym, rcc_ctx *rcc, c_dcl *d) {
 			d->attr2 |= C_ATTR2_DESTRUCTOR;
 		} else if (sym == YY_FALLTHROUGH || sym == YY___FALLTHROUGH__) {
 			sym = get_sym();
-			d->attr |= C_ATTR_FALLTHROUGH;
+			d->attr2 |= C_ATTR2_FALLTHROUGH;
 		} else if (sym == YY_FASTCALL || sym == YY___FASTCALL__) {
 			sym = get_sym();
 			if ((d->attr & C_ATTR_CALL_CONV) && (d->attr & C_ATTR_CALL_CONV) != C_ATTR_CC_FASTCALL) yy_error("multiple calling conventions");
@@ -914,7 +914,7 @@ static yy_sym parse_attrib(yy_sym sym, rcc_ctx *rcc, c_dcl *d) {
 		} else if (sym == YY_MUSTTAIL || sym == YY___MUSTTAIL__) {
 			sym = get_sym();
 			if (!(d->flags & C_DCL_STATEMENT)) yy_error_fmt("\"%s\" attribute only applies to return statements", yy_sym2str(rcc, name));
-			d->attr |= C_ATTR_MUSTTAIL;
+			d->attr2 |= C_ATTR2_MUSTTAIL;
 		} else if (sym == YY_NOINLINE || sym == YY___NOINLINE__) {
 			sym = get_sym();
 			d->attr |= C_ATTR_NOINLINE;
@@ -934,6 +934,18 @@ static yy_sym parse_attrib(yy_sym sym, rcc_ctx *rcc, c_dcl *d) {
 		} else if (sym == YY_PURE || sym == YY___PURE__) {
 			sym = get_sym();
 			d->attr |= C_ATTR_PURE;
+		} else if (sym == YY_REGPARM || sym == YY___REGPARM__) {
+			sym = get_sym();
+			if (sym != YY__LPAREN) {
+				yy_error_sym("'(' expected, got", sym);
+			}
+			sym = get_sym();
+			sym = parse_constant_expression(sym, rcc, &v);
+			if (sym != YY__RPAREN) {
+				yy_error_sym("')' expected, got", sym);
+			}
+			sym = get_sym();
+			c_gcc_attribute_regparm(rcc, d, name, &v);
 		} else if (sym == YY_UNUSED || sym == YY___UNUSED__) {
 			sym = get_sym();
 			d->attr |= C_ATTR_UNUSED;
