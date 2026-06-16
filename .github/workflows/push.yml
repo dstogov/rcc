@@ -116,7 +116,7 @@ jobs:
   MACOS_aarch64:
     runs-on: macos-26
     env:
-      CFLAGS: '-pthread -fsanitize=address,undefined'
+      CFLAGS: '-fsanitize=address,undefined'
       CPATH: /opt/homebrew/include
       LIBRARY_PATH: /opt/homebrew/lib
     steps:
