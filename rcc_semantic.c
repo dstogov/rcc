@@ -3925,6 +3925,9 @@ static ir_ref c_do_store_bit_field(rcc_ctx *rcc, ir_ref addr, uint32_t first_bit
 	v.u64 = ~(((1ULL<<bits)-1)<<first_bit);
 
 	if (IR_IS_CONST_REF(ref) && rcc->active_ctx->ir_base[ref].val.u64 == 0) {
+		if (ir_type_size[type] < 8) {
+			v.u64 &= (1ULL << (ir_type_size[type] * 8)) - 1;
+		}
 		ir_STORE(
 			addr,
 			ir_AND(type,
@@ -3937,6 +3940,9 @@ static ir_ref c_do_store_bit_field(rcc_ctx *rcc, ir_ref addr, uint32_t first_bit
 				ir_LOAD(type, addr),
 				ref));
 	} else {
+		if (ir_type_size[type] < 8) {
+			v.u64 &= (1ULL << (ir_type_size[type] * 8)) - 1;
+		}
 		ir_STORE(
 			addr,
 			ir_OR(type,
