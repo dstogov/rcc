@@ -77,11 +77,6 @@
 #define C_DO_LINK_INTERNAL            (1<<30)
 #define C_DO_LINK_EXTERNAL            (1U<<31)
 
-#define C_OPT_LEVEL              0x3
-#define C_OPT_INLINE             (1<<2)
-#define C_OPT_MEM2SSA            (1<<3)
-#define C_OPT_TAILCALL           (1<<4)
-
 #define IR_UNKNOWN_SIZE          1
 
 IR_ALWAYS_INLINE bool rcc_needs_native_code(rcc_ctx *rcc)
@@ -143,6 +138,11 @@ static void rcc_ir_codegen(rcc_ctx *rcc, c_name name, ir_ctx *ctx, c_sym *sym)
 	sym->has_code = C_CODE_STARTED;
 
 	if (rcc_needs_native_code(rcc)) {
+		size_t len;
+		const char *str = yy_sym2strl(rcc, name, &len);
+
+		ctx->func_name = ir_strl(ctx, str, len);
+
 		ir_match(ctx);
 	}
 

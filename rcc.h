@@ -1331,6 +1331,11 @@ typedef struct _rcc_loader {
 	rcc_ctx           *rcc;
 } rcc_loader;
 
+#define C_OPT_LEVEL              0x3
+#define C_OPT_INLINE             (1<<2)
+#define C_OPT_MEM2SSA            (1<<3)
+#define C_OPT_TAILCALL           (1<<4)
+
 struct _rcc_ctx {
 	/* C Scanner */
 	const char           *yy_pos;            /* pointer to current scanned character          */
@@ -1427,7 +1432,7 @@ struct _rcc_ctx {
 
 	/* Main Compiler Driver */
 	uint32_t              c_flags;                 /* compiler actions (see C_RUN, C_DUMP_* in rcc.c) */
-	uint32_t              c_opt_flags;             /* optimization level and flags (see C_OPT_* in rcc.c) */
+	uint32_t              c_opt_flags;             /* optimization level and flags (see C_OPT_* above) */
 
 	uint32_t              ir_flags;                /* IR context flags (see IR_* defines in ir.h) */
 	uint32_t              ir_mflags;               /* CPU specific flags (see IR_X86_... in ir.h) */

@@ -7561,7 +7561,8 @@ void c_do_return(rcc_ctx *rcc, c_value *val)
 		} else if (rcc->active_func->value.type->func.ret_type != val->type) {
 			c_do_check_cvt(rcc, rcc->active_func->value.type->func.ret_type, val, 0);
 		}
-		if (c_value_is_ref(val)
+		if ((rcc->c_opt_flags & C_OPT_TAILCALL)
+		 && c_value_is_ref(val)
 		 && rcc->active_ctx->ir_base[val->u.ref].op == IR_CALL
 		 && rcc->active_ctx->insns_count ==
 			val->u.ref + (ir_ref)ir_insn_inputs_to_len(rcc->active_ctx->ir_base[val->u.ref].inputs_count)
@@ -7586,7 +7587,8 @@ void c_do_return(rcc_ctx *rcc, c_value *val)
 		}
 	} else {
 		if (rcc->active_ctx->ret_type) yy_error("\"return\" with no value, in function returning non-void");
-		if (rcc->active_ctx->ir_base[rcc->active_ctx->control].op == IR_CALL
+		if ((rcc->c_opt_flags & C_OPT_TAILCALL)
+		 && rcc->active_ctx->ir_base[rcc->active_ctx->control].op == IR_CALL
 		 && rcc->active_ctx->insns_count ==
 			rcc->active_ctx->control + (ir_ref)ir_insn_inputs_to_len(rcc->active_ctx->ir_base[rcc->active_ctx->control].inputs_count)
 		 && c_may_tailcall(rcc, rcc->active_ctx->control, 0)) {
