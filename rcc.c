@@ -80,6 +80,7 @@
 #define C_OPT_LEVEL              0x3
 #define C_OPT_INLINE             (1<<2)
 #define C_OPT_MEM2SSA            (1<<3)
+#define C_OPT_TAILCALL           (1<<4)
 
 #define IR_UNKNOWN_SIZE          1
 
@@ -888,6 +889,9 @@ void rcc_ir_init(rcc_ctx *rcc, uint32_t flags)
 	flags |= IR_FUNCTION;
 	if ((rcc->c_opt_flags & C_OPT_LEVEL) > 0) {
 		flags |= IR_OPT_FOLDING | IR_OPT_CFG | IR_OPT_CODEGEN;
+	}
+	if (rcc->c_opt_flags & C_OPT_TAILCALL) {
+		flags |= IR_OPT_TAILCALL;
 	}
 	flags |= rcc->ir_flags;
 	ir_init(ctx, flags, 256, 1024);
@@ -1827,6 +1831,7 @@ static void rcc_help(const char *cmd)
 		"Optimization Options:\n"
 		"  -O[012]                    - optimization level (default: -O2)\n"
 		"  -f[no-]inline              - enable/disable function inlining (default: enabled at -O1)\n"
+		"  -f[no-]tail-calls          - enable/disable tail call optimization (default: enabled at -O1)\n"
 		"  -fno-mem2ssa               - disable MEM2SSA pass (default: enabled at -O1)\n"
 		"Code Generation Options:\n"
 #if defined(IR_TARGET_X86) || defined(IR_TARGET_X64)
@@ -1953,8 +1958,7 @@ static int rcc_parse_option(rcc_ctx *rcc, const char *opt, const char *arg, bool
 {
 	if (opt[0] == '-' && opt[1] == 'O' && strlen(opt) == 3) {
 		if (opt[2] == '0') {
-			rcc->c_opt_flags = (rcc->c_opt_flags & ~C_OPT_LEVEL) | 0;
-			rcc->c_opt_flags &= ~C_OPT_INLINE;
+			rcc->c_opt_flags = 0;
 		} else if (opt[2] == '1') {
 			rcc->c_opt_flags = (rcc->c_opt_flags & ~C_OPT_LEVEL) | 1;
 		} else if (opt[2] == '2') {
@@ -1988,6 +1992,10 @@ static int rcc_parse_option(rcc_ctx *rcc, const char *opt, const char *arg, bool
 		rcc->c_opt_flags &= ~C_OPT_INLINE;
 	} else if (strcmp(opt, "-finline") == 0) {
 		rcc->c_opt_flags |= C_OPT_INLINE;
+	} else if (strcmp(opt, "-fno-tail-calls") == 0) {
+		rcc->c_opt_flags &= ~C_OPT_TAILCALL;
+	} else if (strcmp(opt, "-ftail-calls") == 0) {
+		rcc->c_opt_flags |= C_OPT_TAILCALL;
 	} else if (strcmp(opt, "-fno-mem2ssa") == 0) {
 		rcc->c_opt_flags &= ~C_OPT_MEM2SSA;
 	} else if (strcmp(opt, "-P") == 0) {
@@ -2234,7 +2242,7 @@ int main(int argc, const char **argv)
 	}
 
 	memset(rcc, 0, sizeof(rcc_ctx));
-	rcc->c_opt_flags = 2 | C_OPT_INLINE | C_OPT_MEM2SSA;
+	rcc->c_opt_flags = 2 | C_OPT_INLINE | C_OPT_MEM2SSA | C_OPT_TAILCALL;
 	rcc->e_errors = E_ERRORS_DEFAULT;
 	rcc->e_warnings = E_WARNINGS_DEFAULT;
 	rcc->ir_save_flags = IR_SAVE_SAFE_NAMES;
