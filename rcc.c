@@ -138,11 +138,7 @@ static void rcc_ir_codegen(rcc_ctx *rcc, c_name name, ir_ctx *ctx, c_sym *sym)
 	sym->has_code = C_CODE_STARTED;
 
 	if (rcc_needs_native_code(rcc)) {
-		size_t len;
-		const char *str = yy_sym2strl(rcc, name, &len);
-
-		ctx->func_name = ir_strl(ctx, str, len);
-
+		ctx->func_name = IR_EXT_STR(name);
 		ir_match(ctx);
 	}
 
@@ -486,17 +482,16 @@ static const void* c_linker_func_addr(rcc_ctx *rcc, c_name name)
 	return sym->value.u.val.ptr;
 }
 
-static void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, uint32_t flags)
+static void* c_linker_resolve_sym_name(ir_loader *loader, ir_ctx *ctx, ir_str _name, uint32_t flags)
 {
 	rcc_ctx *rcc = ((rcc_loader*)loader)->rcc;
-	uint32_t len;
 	c_name id;
 	c_sym *sym;
 
 	if (!rcc_needs_native_code(rcc)) return NULL;
 
-	len = (uint32_t)strlen(name);
-	id = yy_hash_lookup(rcc, name, len);
+	IR_ASSERT(IR_IS_EXT_STR(_name));
+	id = IR_EXT_STR(_name);
 	sym = rcc->yy_hash.data[id].sym;
 	if (sym && (sym->linkage != C_LINK_INTERNAL && sym->linkage != C_LINK_EXTERNAL && sym->linkage != C_LINK_BUILTIN)) {
 		sym = c_global_sym(rcc, sym);
@@ -530,13 +525,13 @@ static void* c_linker_resolve_sym_name(ir_loader *loader, const char *name, uint
 					return addr;
 				}
 			}
-			addr = ir_resolve_sym_name(name);
+			addr = ir_resolve_sym_name(yy_sym2str(rcc, id));
 			if (addr) {
 				sym->is_external = 1;
 				sym->value.u.opt = IR_OPT(C_VAL_CONST, IR_ADDR);
 				sym->value.u.val.ptr = addr;
 				if (rcc->c_flags & C_DUMP_ASM) {
-					ir_disasm_add_symbol(name, (uint64_t)(uintptr_t)addr, IR_UNKNOWN_SIZE);
+					ir_disasm_add_symbol(yy_sym2str(rcc, id), (uint64_t)(uintptr_t)addr, IR_UNKNOWN_SIZE);
 				}
 				return addr;
 			}
@@ -570,7 +565,7 @@ add_thunk:
 			}
 			if (rcc->c_flags & C_DUMP_ASM) {
 				/* thunk and real symbol use the same name */
-				ir_disasm_add_symbol(name, (uint64_t)(uintptr_t)addr, size);
+				ir_disasm_add_symbol(yy_sym2str(rcc, id), (uint64_t)(uintptr_t)addr, size);
 			}
 			if ((RCC_DELAY_CODE_GEN || sym->ctx) && !sym->has_code) {
 				sym->has_code = C_CODE_SCHEDULED;
@@ -584,10 +579,10 @@ add_thunk:
 
 		if (addr) return addr;
 
-		addr = ir_resolve_sym_name(name);
+		addr = ir_resolve_sym_name(yy_sym2str(rcc, id));
 		if (addr) {
 			if (rcc->c_flags & C_DUMP_ASM) {
-				ir_disasm_add_symbol(name, (uint64_t)(uintptr_t)addr, IR_UNKNOWN_SIZE);
+				ir_disasm_add_symbol(yy_sym2str(rcc, id), (uint64_t)(uintptr_t)addr, IR_UNKNOWN_SIZE);
 			}
 			rcc->yy_hash.data[id].link->addr = addr;
 			return addr;
@@ -595,12 +590,12 @@ add_thunk:
 	}
 
 	if (!(flags & IR_RESOLVE_SYM_SILENT)) {
-		yy_error_fmt("undefined symbol \"%s\"", name);
+		yy_error_fmt("undefined symbol \"%s\"", yy_sym2str(rcc, id));
 	}
 	return NULL;
 }
 
-void *c_linker_allocate_data(rcc_ctx *rcc, const char *name, size_t size, size_t align)
+void *c_linker_allocate_data(rcc_ctx *rcc, c_name name, size_t size, size_t align)
 {
 	void *data = ir_arena_alloc_aligned(&rcc->c_linker_arena, size, align);
 	if (UNEXPECTED(!data)) yy_error("not enough memory to allocate data");
@@ -609,7 +604,7 @@ void *c_linker_allocate_data(rcc_ctx *rcc, const char *name, size_t size, size_t
 	}
 	if (IR_ALIGNED_SIZE((uintptr_t)data, align) != (uintptr_t)data) yy_error("bad data alignment");
 	if ((rcc->c_flags & C_DUMP_ASM) && name) {
-		ir_disasm_add_symbol(name, (uintptr_t)data, size);
+		ir_disasm_add_symbol(yy_sym2str(rcc, name), (uintptr_t)data, size);
 	}
 	memset(data, 0, size);
 	return data;
@@ -620,10 +615,10 @@ static void c_linker_add_reloc(rcc_ctx *rcc, c_sym *obj, size_t obj_offset, c_na
 	c_reloc *reloc = ir_arena_alloc(&rcc->yy_arena, sizeof(c_reloc));
 
 	if (c_value_is_ref(&obj->value)) {
-		size_t len;
-		const char *str = ir_get_strl(rcc->active_ctx, rcc->active_ctx->ir_base[obj->value.u.ref].val.name, &len);
-		c_name sym = yy_hash_find(rcc, str, len);
-		obj = rcc->yy_hash.data[sym].sym;
+		ir_str str = rcc->active_ctx->ir_base[obj->value.u.ref].val.name;
+
+		IR_ASSERT(IR_IS_EXT_STR(str));
+		obj = rcc->yy_hash.data[IR_EXT_STR(str)].sym;
 	}
 
 	reloc->obj_offset = obj_offset;
@@ -636,10 +631,10 @@ static void c_linker_add_reloc(rcc_ctx *rcc, c_sym *obj, size_t obj_offset, c_na
 void c_linker_del_reloc(rcc_ctx *rcc, c_sym *obj, size_t obj_offset)
 {
 	if (c_value_is_ref(&obj->value)) {
-		size_t len;
-		const char *str = ir_get_strl(rcc->active_ctx, rcc->active_ctx->ir_base[obj->value.u.ref].val.name, &len);
-		c_name sym = yy_hash_find(rcc, str, len);
-		obj = rcc->yy_hash.data[sym].sym;
+		ir_str str = rcc->active_ctx->ir_base[obj->value.u.ref].val.name;
+
+		IR_ASSERT(IR_IS_EXT_STR(str));
+		obj = rcc->yy_hash.data[IR_EXT_STR(str)].sym;
 	}
 
 	if (obj->reloc) {
@@ -665,10 +660,10 @@ void c_linker_del_reloc(rcc_ctx *rcc, c_sym *obj, size_t obj_offset)
 static void c_linker_copy_relocs(rcc_ctx *rcc, c_sym *obj, size_t obj_offset, c_value *val)
 {
 	if (c_value_is_ref(&obj->value)) {
-		size_t len;
-		const char *str = ir_get_strl(rcc->active_ctx, rcc->active_ctx->ir_base[obj->value.u.ref].val.name, &len);
-		c_name sym = yy_hash_find(rcc, str, len);
-		obj = rcc->yy_hash.data[sym].sym;
+		ir_str str = rcc->active_ctx->ir_base[obj->value.u.ref].val.name;
+
+		IR_ASSERT(IR_IS_EXT_STR(str));
+		obj = rcc->yy_hash.data[IR_EXT_STR(str)].sym;
 	}
 
 	if (obj->reloc) {
@@ -693,11 +688,11 @@ static void c_linker_copy_relocs(rcc_ctx *rcc, c_sym *obj, size_t obj_offset, c_
 
 	IR_ASSERT(c_value_is_ref(val) && IR_IS_CONST_REF(val->u.ref));
 	if (rcc->active_ctx->ir_base[val->u.ref].op == IR_SYM) {
-		size_t len;
-		const char *name = ir_get_strl(rcc->active_ctx, rcc->active_ctx->ir_base[val->u.ref].val.name, &len);
-		c_name n = yy_hash_lookup(rcc, name, len);
-		c_sym *sym = rcc->yy_hash.data[n].sym;
+		ir_str name = rcc->active_ctx->ir_base[val->u.ref].val.name;
+		c_sym *sym;
 
+		IR_ASSERT(IR_IS_EXT_STR(name));
+		sym = rcc->yy_hash.data[IR_EXT_STR(name)].sym;
 		if (sym->reloc) {
 			c_reloc *dst, *src = sym->reloc;
 
@@ -800,11 +795,13 @@ bool c_linker_fix_reloc(rcc_ctx *rcc, c_sym *obj, size_t obj_offset, c_value *va
 	}
 
 	if (addr_insn->op == IR_SYM || addr_insn->op == IR_FUNC) {
-		size_t len;
-		const char *name = ir_get_strl(rcc->active_ctx, addr_insn->val.name, &len);
-		c_name n = yy_hash_lookup(rcc, name, len);
-		c_sym *sym = rcc->yy_hash.data[n].sym;
+		ir_str name = addr_insn->val.name;
+		c_name n;
+		c_sym *sym;
 
+		IR_ASSERT(IR_IS_EXT_STR(name));
+		n = IR_EXT_STR(name);
+		sym = rcc->yy_hash.data[n].sym;
 		IR_ASSERT(sym && (sym->kind == C_SYM_VAR || (sym->kind == C_SYM_FUNC && offset == 0)));
 		if (rcc->c_flags & C_DUMP_IR) {
 			c_linker_add_reloc(rcc, obj, obj_offset, n, offset);
@@ -834,10 +831,11 @@ bool c_linker_fix_reloc(rcc_ctx *rcc, c_sym *obj, size_t obj_offset, c_value *va
 		}
 		return 1;
 	} else if (addr_insn->op == IR_LABEL) {
-		size_t len;
-		const char *name = ir_get_strl(rcc->active_ctx, addr_insn->val.name, &len);
-		c_name n = yy_hash_lookup(rcc, name, len);
+		ir_str name = addr_insn->val.name;
+		c_name n;
 
+		IR_ASSERT(IR_IS_EXT_STR(name));
+		n = IR_EXT_STR(name);
 		if (rcc->c_flags & (C_DUMP_IR|C_RUN)) {
 			c_linker_add_reloc(rcc, obj, obj_offset, n, 0);
 		}
@@ -882,6 +880,22 @@ bool c_linker_fix_reloc(rcc_ctx *rcc, c_sym *obj, size_t obj_offset, c_value *va
 	return 0;
 }
 
+static const char *rcc_get_str(ir_loader *loader, ir_str name)
+{
+	rcc_ctx *rcc = ((rcc_loader*)loader)->rcc;
+
+	IR_ASSERT(IR_IS_EXT_STR(name));
+	return yy_sym2str(rcc, IR_EXT_STR(name));
+}
+
+static const char *rcc_get_strl(ir_loader *loader, ir_str name, size_t *len)
+{
+	rcc_ctx *rcc = ((rcc_loader*)loader)->rcc;
+
+	IR_ASSERT(IR_IS_EXT_STR(name));
+	return yy_sym2strl(rcc, IR_EXT_STR(name), len);
+}
+
 void rcc_ir_init(rcc_ctx *rcc, uint32_t flags)
 {
 	ir_ctx *ctx = rcc->active_ctx;
@@ -898,10 +912,6 @@ void rcc_ir_init(rcc_ctx *rcc, uint32_t flags)
 	ctx->mflags = rcc->ir_mflags;
 	ctx->fixed_regset = ~rcc->ir_debug_regset | rcc->c_fixed_regset;
 	ctx->loader = &rcc->c_linker.l;
-
-	rcc->c_linker.l.resolve_sym_name = c_linker_resolve_sym_name;
-	rcc->c_linker.l.add_label = c_linker_add_label,
-	rcc->c_linker.rcc = rcc;
 }
 
 static const char *_sym_name = {
@@ -1134,7 +1144,7 @@ static void rcc_fix_flexible_data(rcc_ctx *rcc)
 			p->sym->value.type = type;
 
 			p->sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
-			p->sym->value.u.val.ptr = c_linker_allocate_data(rcc, p->str, type->size, c_attr2align(type->attr));
+			p->sym->value.u.val.ptr = c_linker_allocate_data(rcc, i, type->size, c_attr2align(type->attr));
 			p->sym->is_implemented = 1;
 
 			//yy_warning_fmt("array \"%s\" assumed to have one element", p->str); // error position ???
@@ -2401,7 +2411,14 @@ int main(int argc, const char **argv)
 		start_time = rcc_time();
 	}
 
+	rcc->c_linker.l.resolve_sym_name = c_linker_resolve_sym_name;
+	rcc->c_linker.l.add_label = c_linker_add_label,
+	rcc->c_linker.l.get_str = rcc_get_str,
+	rcc->c_linker.l.get_strl = rcc_get_strl,
+	rcc->c_linker.rcc = rcc;
+
 	ir_init(&ctx, IR_OPT_FOLDING, 64, 64);
+	ctx.loader = &rcc->c_linker.l;
 	rcc->global_ctx = rcc->active_ctx = &ctx;
 	ir_START();
 
