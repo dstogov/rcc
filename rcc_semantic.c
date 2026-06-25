@@ -4503,26 +4503,43 @@ void c_do_array_dim(rcc_ctx *rcc, c_value *v, c_value *dim)
 	}
 	if (!C_IS_TYPE_INT(dim->type) && dim->type->kind != C_TYPE_ENUM) yy_error("array subscript is not an integer");
 	c_value_rval(rcc, dim);
-	if (c_value_is_const(dim) && dim->u.val.u64 == 0) {
-		/* pass */
-	} else if (C_IS_TYPE_SIGNED(dim->type)) {
-		if (dim->type->kind != c_type_ssize_t.kind) {
-			c_do_cvt(rcc, &c_type_ssize_t, IR_SSIZE_T, dim);
-		}
-		if (type->size == 1 && !(type->attr & C_ATTR_VLA)) {
-			ref = ir_ADD_A(ref, c_value_ref(rcc, dim));
+	if (!c_value_is_const(dim) || dim->u.val.u64 != 0) {
+		ir_ref dim_ref;
+
+		if (C_IS_TYPE_SIGNED(dim->type)) {
+			if (dim->type->kind != c_type_ssize_t.kind) {
+				c_do_cvt(rcc, &c_type_ssize_t, IR_SSIZE_T, dim);
+			}
+			if (!(type->attr & C_ATTR_VLA)) {
+				if (c_value_is_const(dim)) {
+					dim_ref = ir_const_ssize_t(rcc->active_ctx, dim->u.val.i64 * type->size);
+				} else {
+					dim_ref = c_value_ref(rcc, dim);
+					if (type->size != 1) {
+						dim_ref = ir_MUL(IR_SSIZE_T, dim_ref, ir_const_ssize_t(rcc->active_ctx, type->size));
+					}
+				}
+			} else {
+				dim_ref = ir_MUL(IR_SSIZE_T, c_value_ref(rcc, dim), c_type_ssize(rcc, type));
+			}
 		} else {
-			ref = ir_ADD_A(ref, ir_MUL(IR_SSIZE_T, c_value_ref(rcc, dim), c_type_ssize(rcc, type)));
+			if (dim->type->kind != c_type_size_t.kind) {
+				c_do_cvt(rcc, &c_type_size_t, IR_SIZE_T, dim);
+			}
+			if (!(type->attr & C_ATTR_VLA)) {
+				if (c_value_is_const(dim)) {
+					dim_ref = ir_const_size_t(rcc->active_ctx, dim->u.val.u64 * type->size);
+				} else {
+					dim_ref = c_value_ref(rcc, dim);
+					if (type->size != 1) {
+						dim_ref = ir_MUL(IR_SIZE_T, dim_ref, ir_const_size_t(rcc->active_ctx, type->size));
+					}
+				}
+			} else {
+				dim_ref = ir_MUL(IR_SIZE_T, c_value_ref(rcc, dim), c_type_size(rcc, type));
+			}
 		}
-	} else {
-		if (dim->type->kind != c_type_size_t.kind) {
-			c_do_cvt(rcc, &c_type_size_t, IR_SIZE_T, dim);
-		}
-		if (type->size == 1 && !(type->attr & C_ATTR_VLA)) {
-			ref = ir_ADD_A(ref, c_value_ref(rcc, dim));
-		} else {
-			ref = ir_ADD_A(ref, ir_MUL(IR_SIZE_T, c_value_ref(rcc, dim), c_type_size(rcc, type)));
-		}
+		ref = ir_ADD_A(ref, dim_ref);
 	}
 	is_volatile = (v->type->kind == C_TYPE_ARRAY)
 		&& ((v->type->attr & C_ATTR_VOLATILE) || (v->u.op & C_VAL_VOLATILE));
