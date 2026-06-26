@@ -544,8 +544,7 @@ void yy_dyn_str_append0(rcc_ctx *rcc, yy_dyn_str *dyn_str, const char *str, size
 struct _pp_macro {
 	uint32_t                 flags;
 	int32_t                  num_args;
-	uint32_t                 size;
-	yy_sym                  *tokens;
+	yy_sym                   tokens[];
 };
 
 struct _pp_macro_list {
@@ -574,7 +573,7 @@ void pp_start(rcc_ctx *rcc);
 void pp_dtor(rcc_ctx *rcc);
 pp_subst_stream *pp_push_stream(rcc_ctx *rcc);
 pp_subst_stream *pp_pop_stream(rcc_ctx *rcc);
-void pp_macro_define(rcc_ctx *rcc, yy_sym name, uint32_t flags, uint32_t num_args, yy_sym *tokens);
+void pp_macro_define(rcc_ctx *rcc, yy_sym name, uint32_t flags, uint32_t num_args, yy_sym *tokens, uint32_t len);
 bool pp_macro_expand(rcc_ctx *rcc, pp_macro *macro, yy_sym sym);
 void pp_parse_directive(rcc_ctx *rcc);
 void pp_pop_include(rcc_ctx *rcc);

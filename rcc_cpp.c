@@ -42,12 +42,16 @@
 
 #define YY_PRAGMA_ONCE       1
 
-typedef pp_macro pp_arg;
+typedef struct {
+	int32_t                  arg_pos;
+	uint32_t                 expansion_size;
+	yy_sym                  *expansion;
+} pp_arg;
 
 #if PP_DEBUG
 # define pp_debug 1
 static void pp_debug_print_context(rcc_ctx *rcc);
-static void pp_debug_print_args(rcc_ctx *rcc, pp_macro *macro, pp_arg *args);
+static void pp_debug_print_args(rcc_ctx *rcc, pp_macro *macro, yy_sym *tokens, pp_arg *args);
 static void pp_debug_print_list(rcc_ctx *rcc, const char *hdr, yy_sym *tokens);
 # define pp_debug_fprintf(file, format, ...) fprintf(file, format)
 #else
@@ -55,7 +59,7 @@ static void pp_debug_print_list(rcc_ctx *rcc, const char *hdr, yy_sym *tokens);
 # define pp_inc_recursion_level(rcc)
 # define pp_dec_recursion_level(rcc)
 # define pp_debug_print_context(rcc)
-# define pp_debug_print_args(rcc, macro, args)
+# define pp_debug_print_args(rcc, macro, tokens, args)
 # define pp_debug_print_list(rcc, hdr, tokens)
 # define pp_debug_fprintf(file, format, ...)
 #endif
@@ -301,16 +305,18 @@ static bool pp_needs_space(yy_sym sym1, yy_sym sym2)
 	return 0;
 }
 
-void pp_macro_define(rcc_ctx *rcc, yy_sym name, uint32_t flags, uint32_t num_args, yy_sym *tokens)
+void pp_macro_define(rcc_ctx *rcc, yy_sym name, uint32_t flags, uint32_t num_args, yy_sym *tokens, uint32_t len)
 {
 	pp_macro *macro;
 
 	PP_ASSERT(PP_IS_ID(name), "<ID> expected");
 
-	macro = ir_arena_alloc(&rcc->yy_arena, sizeof(pp_macro));
+	macro = ir_arena_alloc(&rcc->yy_arena, sizeof(pp_macro) + sizeof(yy_sym) * len); /* struct with flexible array */
 	macro->flags = flags;
 	macro->num_args = num_args;
-	macro->tokens = tokens;
+	if (len) {
+		memcpy(macro->tokens, tokens, sizeof(yy_sym) * len);
+	}
 
 	rcc->yy_hash.data[name].macro = macro;
 
@@ -354,7 +360,7 @@ static void pp_debug_print_context(rcc_ctx *rcc)
 	fprintf(stderr, "\n");
 }
 
-static void pp_debug_print_args(rcc_ctx *rcc, pp_macro *macro, pp_arg *args)
+static void pp_debug_print_args(rcc_ctx *rcc, pp_macro *macro, yy_sym *tokens, pp_arg *args)
 {
 	int i;
 	bool first = 1;
@@ -363,7 +369,7 @@ static void pp_debug_print_args(rcc_ctx *rcc, pp_macro *macro, pp_arg *args)
 	for (i = 0; i < macro->num_args; i++) {
 		if (!first) fprintf(stderr, ",");
 		first = 0;
-		pp_debug_tokens(rcc, stderr, args[i].tokens, NULL);
+		pp_debug_tokens(rcc, stderr, tokens + args[i].arg_pos, NULL);
 	}
 	fprintf(stderr, ")\n");
 }
@@ -634,7 +640,7 @@ static void pp_macro_stringize(rcc_ctx *rcc, yy_sym *tokens)
 	rcc->yy_len = dyn_str.len;
 }
 
-static void pp_macro_subst_args(rcc_ctx *rcc, pp_macro *macro, pp_arg *args, pp_list *replacement)
+static void pp_macro_subst_args(rcc_ctx *rcc, pp_macro *macro, yy_sym *syms, pp_arg *args, pp_list *replacement)
 {
 	int i;
 	yy_sym *macro_tokens = macro->tokens + macro->num_args;
@@ -645,18 +651,18 @@ static void pp_macro_subst_args(rcc_ctx *rcc, pp_macro *macro, pp_arg *args, pp_
 			yy_sym sym = *macro_tokens++;
 
 			if (sym & PP_MACRO_ARG) {
-				arg = sym & ~(PP_MACRO_ARG|PP_STRINGIZE);
+				yy_sym *tokens;
 
+				arg = sym & ~(PP_MACRO_ARG|PP_STRINGIZE);
 				IR_ASSERT(arg >= 0);
+				tokens = args[arg].expansion_size ? args[arg].expansion : syms + args[arg].arg_pos;
 				if (sym & PP_STRINGIZE) {
 					PP_ASSERT(arg >= 0, "'#' is not followed by a macro parameter");
-					pp_macro_stringize(rcc, args[arg].tokens);
+					pp_macro_stringize(rcc, tokens);
 					pp_list_push(replacement, YY_STRING);
 					pp_list_push_val(rcc, replacement);
 				} else {
-					yy_sym *tokens = args[arg].tokens;
-
-					if (!(args[arg].flags & PP_MACRO_EXPANDED)) {
+					if (!args[arg].expansion_size) {
 						pp_list expansion;
 						pp_subst_stream *this_stream, *stream;
 
@@ -701,15 +707,14 @@ static void pp_macro_subst_args(rcc_ctx *rcc, pp_macro *macro, pp_arg *args, pp_
 							}
 						}
 						rcc->pp_stream = (stream == rcc->pp_subst_stack) ? NULL : (stream - 1);
-						if (UNEXPECTED((args[arg].flags & PP_MACRO_EXPANDED) != 0)) {
+						if (UNEXPECTED(args[arg].expansion_size)) {
 							pp_list_release(rcc, expansion.syms, expansion.size);
-							tokens = args[arg].tokens;
+							tokens = args[arg].expansion;
 						} else {
 							pp_list_push(&expansion, YY_EOF);
 
-							args[arg].flags |= PP_MACRO_EXPANDED;
-							args[arg].size = expansion.size;
-							args[arg].tokens = tokens = expansion.syms;
+							args[arg].expansion_size = expansion.size;
+							args[arg].expansion = tokens = expansion.syms;
 						}
 					}
 
@@ -748,18 +753,18 @@ static void pp_macro_subst_args(rcc_ctx *rcc, pp_macro *macro, pp_arg *args, pp_
 			if (sym == YY_EOF) {
 				break;
 			} else if (sym & PP_MACRO_ARG) {
-				arg = sym & ~(PP_MACRO_ARG|PP_STRINGIZE);
+				yy_sym *tokens;
 
+				arg = sym & ~(PP_MACRO_ARG|PP_STRINGIZE);
 				IR_ASSERT(arg >= 0);
+				tokens = args[arg].expansion_size ? args[arg].expansion : syms + args[arg].arg_pos;
 				if (sym & PP_STRINGIZE) {
 					PP_ASSERT(arg >= 0, "'#' is not followed by a macro parameter");
-					pp_macro_stringize(rcc, args[arg].tokens);
+					pp_macro_stringize(rcc, tokens);
 					pp_list_push(replacement, YY_STRING);
 					pp_list_push_val(rcc, replacement);
 					prev = 0;
 				} else {
-					yy_sym *tokens = args[arg].tokens;
-
 					if (prev == YY_PP_JOIN) {
 						if ((macro->flags & PP_MACRO_VAR_ARG)
 						 && arg == macro->num_args - 1
@@ -773,7 +778,7 @@ static void pp_macro_subst_args(rcc_ctx *rcc, pp_macro *macro, pp_arg *args, pp_
 								replacement->len -= 1;
 							}
 						}
-					} else if (*macro_tokens != YY_PP_JOIN && !(args[arg].flags & PP_MACRO_EXPANDED)) {
+					} else if (*macro_tokens != YY_PP_JOIN && !args[arg].expansion_size) {
 						pp_list expansion;
 						pp_subst_stream *this_stream, *stream;
 
@@ -818,15 +823,14 @@ static void pp_macro_subst_args(rcc_ctx *rcc, pp_macro *macro, pp_arg *args, pp_
 							}
 						}
 						rcc->pp_stream = (stream == rcc->pp_subst_stack) ? NULL : (stream - 1);
-						if (UNEXPECTED((args[arg].flags & PP_MACRO_EXPANDED))) {
+						if (UNEXPECTED(args[arg].expansion_size)) {
 							pp_list_release(rcc, expansion.syms, expansion.size);
-						    tokens = args[arg].tokens;
+						    tokens = args[arg].expansion;
 						} else {
 							pp_list_push(&expansion, YY_EOF);
 
-							args[arg].flags |= PP_MACRO_EXPANDED;
-							args[arg].size = expansion.size;
-							args[arg].tokens = tokens = expansion.syms;
+							args[arg].expansion_size = expansion.size;
+							args[arg].expansion = tokens = expansion.syms;
 						}
 					}
 
@@ -861,8 +865,8 @@ static void pp_macro_subst_args(rcc_ctx *rcc, pp_macro *macro, pp_arg *args, pp_
 	}
 
 	for (i = 0; i < macro->num_args; i++) {
-		if (args[i].flags & PP_MACRO_EXPANDED) {
-			pp_list_release(rcc, args[i].tokens, args[i].size);
+		if (args[i].expansion_size) {
+			pp_list_release(rcc, args[i].expansion, args[i].expansion_size);
 		}
 	}
 }
@@ -876,7 +880,8 @@ static void pp_macro_read_args(rcc_ctx *rcc, pp_macro *macro, yy_sym name, pp_ar
 	rcc->yy_flags |= YY_ACCEPT_PP_NUMBER | YY_ACCEPT_PUNCTUATOR | YY_NO_MACRO;
 	rcc->yy_flags &= ~YY_SKIP_WS;
 
-	args[0].num_args = 0;
+	args[0].arg_pos = 0;
+	args[0].expansion_size = 0;
 	do {
 		sym = yy_next(rcc);
 	} while (sym == YY_WS || sym == YY_EOL);
@@ -891,7 +896,8 @@ static void pp_macro_read_args(rcc_ctx *rcc, pp_macro *macro, yy_sym name, pp_ar
 			num_args++;
 			if (num_args < macro->num_args) {
 				pp_list_push(list, YY_EOF);
-				args[num_args].num_args = list->len;
+				args[num_args].arg_pos = list->len;
+				args[num_args].expansion_size = 0;
 				do {
 					sym = yy_next(rcc);
 				} while (sym == YY_WS || sym == YY_EOL);
@@ -945,7 +951,7 @@ static void pp_macro_read_args(rcc_ctx *rcc, pp_macro *macro, yy_sym name, pp_ar
 	if (num_args == macro->num_args) {
 		if ((macro->flags & PP_MACRO_VAR_ARG)
 		 && num_args != 1
-		 && (uint32_t)args[num_args - 1].num_args == list->len) {
+		 && (uint32_t)args[num_args - 1].arg_pos == list->len) {
 			/* __VA_ARGS__ is not empty, COMMA ## __VA_ARGS__ should be expaned to COMMA */
 			pp_list_push(list, YY_WS);
 		}
@@ -961,7 +967,8 @@ static void pp_macro_read_args(rcc_ctx *rcc, pp_macro *macro, yy_sym name, pp_ar
 	} else {
 		if ((macro->flags & PP_MACRO_VAR_ARG) && num_args == macro->num_args - 1) {
 			/* empty variadic argument */
-			args[num_args].num_args = list->len;
+			args[num_args].arg_pos = list->len;
+			args[num_args].expansion_size = 0;
 		} else {
 			yy_error_fmt("macro \"%s\" requires %d arguments, but only %d given",
 				yy_sym2str(rcc, name), macro->num_args, num_args);
@@ -969,12 +976,6 @@ static void pp_macro_read_args(rcc_ctx *rcc, pp_macro *macro, yy_sym name, pp_ar
 	}
 
 	pp_list_push(list, YY_EOF);
-
-	for (num_args = 0; num_args <  macro->num_args; num_args++) {
-		args[num_args].tokens = list->syms + args[num_args].num_args;
-		args[num_args].flags = 0;
-		args[num_args].num_args = 0;
-	}
 }
 
 bool pp_macro_expand(rcc_ctx *rcc, pp_macro *macro, yy_sym name)
@@ -989,7 +990,7 @@ bool pp_macro_expand(rcc_ctx *rcc, pp_macro *macro, yy_sym name)
 	replacement.len = 0;
 
 	if (macro->flags & PP_MACRO_FUNCTION) {
-		pp_list tmp;
+		pp_list list;
 		pp_arg *args;
 		uint32_t ws = 0;
 
@@ -1042,21 +1043,21 @@ bool pp_macro_expand(rcc_ctx *rcc, pp_macro *macro, yy_sym name)
 		}
 
 		args = alloca(sizeof(pp_arg) * (macro->num_args + 1)); /* "+ 1" for macro->num_args == 0 case */
-		pp_list_init(rcc, &tmp);
+		pp_list_init(rcc, &list);
 
-		pp_macro_read_args(rcc, macro, name, args, &tmp);
+		pp_macro_read_args(rcc, macro, name, args, &list);
 
-		if (pp_debug) {pp_debug_print_args(rcc, macro, args);}
+		if (pp_debug) {pp_debug_print_args(rcc, macro, list.syms, args);}
 
 		if (macro->flags & PP_MACRO_EMPTY) {
-			pp_list_release(rcc, tmp.syms, tmp.size);
+			pp_list_release(rcc, list.syms, list.size);
 			rcc->yy_flags = save_flags;
 			return 1;
 		}
 
 		pp_list_init(rcc, &replacement);
-		pp_macro_subst_args(rcc, macro, args, &replacement);
-		pp_list_release(rcc, tmp.syms, tmp.size);
+		pp_macro_subst_args(rcc, macro, list.syms, args, &replacement);
+		pp_list_release(rcc, list.syms, list.size);
 	} else if (macro->flags & PP_MACRO_BUILTIN) {
 		if (name == YY___COUNTER__ || name == YY___INCLUDE_LEVEL__ || name == YY___LINE__) {
 			char buf[16], *s;
@@ -2025,6 +2026,7 @@ static void pp_parse_define(rcc_ctx *rcc)
 	save_flags = rcc->yy_flags;
 	rcc->yy_flags |= YY_NO_MACRO | YY_ACCEPT_PP_NUMBER | YY_ACCEPT_PUNCTUATOR;
 	tokens.syms = NULL;
+	tokens.len = 0;
 
 	sym = yy_next(rcc);
 	if (sym == YY__LPAREN && rcc->yy_text == end) {
@@ -2202,13 +2204,11 @@ next:
 		}
 	}
 
-	yy_sym *p = NULL;
+	pp_macro_define(rcc, id, flags, num_args, tokens.syms, tokens.len);
+
 	if (tokens.syms) {
-		p = ir_arena_alloc(&rcc->yy_arena, sizeof(yy_sym) * tokens.len);
-		memcpy(p, tokens.syms, sizeof(yy_sym) * tokens.len);
 		pp_list_release(rcc, tokens.syms, tokens.size);
 	}
-	pp_macro_define(rcc, id, flags, num_args, p);
 }
 
 static void pp_parse_undef(rcc_ctx *rcc)

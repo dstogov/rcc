@@ -996,20 +996,20 @@ void rcc_init(rcc_ctx *rcc)
 		s += len + 1;
 	}
 
-	pp_macro_define(rcc, YY___COUNTER__,         PP_MACRO_BUILTIN, 0, NULL);
-	pp_macro_define(rcc, YY___DATE__,            PP_MACRO_BUILTIN, 0, NULL);
-	pp_macro_define(rcc, YY___FILE__,            PP_MACRO_BUILTIN, 0, NULL);
-	pp_macro_define(rcc, YY___FUNCTION__,        PP_MACRO_BUILTIN, 0, NULL);
-	pp_macro_define(rcc, YY___PRETTY_FUNCTION__, PP_MACRO_BUILTIN, 0, NULL);
-	pp_macro_define(rcc, YY___FUNC__,            PP_MACRO_BUILTIN, 0, NULL);
-	pp_macro_define(rcc, YY___LINE__,            PP_MACRO_BUILTIN, 0, NULL);
-	pp_macro_define(rcc, YY___TIME__,            PP_MACRO_BUILTIN, 0, NULL);
-	pp_macro_define(rcc, YY___INCLUDE_LEVEL__,   PP_MACRO_BUILTIN, 0, NULL);
-	pp_macro_define(rcc, YY___BASE_FILE__,       PP_MACRO_BUILTIN, 0, NULL);
-	pp_macro_define(rcc, YY___HAS_ATTRIBUTE,     PP_MACRO_BUILTIN, 1, NULL);
-	pp_macro_define(rcc, YY___HAS_BUILTIN,       PP_MACRO_BUILTIN, 1, NULL);
-	pp_macro_define(rcc, YY__PRAGMA,             PP_MACRO_BUILTIN, 1, NULL);
-	pp_macro_define(rcc, YY___PRAGMA,            PP_MACRO_BUILTIN, 1, NULL);
+	pp_macro_define(rcc, YY___COUNTER__,         PP_MACRO_BUILTIN, 0, NULL, 0);
+	pp_macro_define(rcc, YY___DATE__,            PP_MACRO_BUILTIN, 0, NULL, 0);
+	pp_macro_define(rcc, YY___FILE__,            PP_MACRO_BUILTIN, 0, NULL, 0);
+	pp_macro_define(rcc, YY___FUNCTION__,        PP_MACRO_BUILTIN, 0, NULL, 0);
+	pp_macro_define(rcc, YY___PRETTY_FUNCTION__, PP_MACRO_BUILTIN, 0, NULL, 0);
+	pp_macro_define(rcc, YY___FUNC__,            PP_MACRO_BUILTIN, 0, NULL, 0);
+	pp_macro_define(rcc, YY___LINE__,            PP_MACRO_BUILTIN, 0, NULL, 0);
+	pp_macro_define(rcc, YY___TIME__,            PP_MACRO_BUILTIN, 0, NULL, 0);
+	pp_macro_define(rcc, YY___INCLUDE_LEVEL__,   PP_MACRO_BUILTIN, 0, NULL, 0);
+	pp_macro_define(rcc, YY___BASE_FILE__,       PP_MACRO_BUILTIN, 0, NULL, 0);
+	pp_macro_define(rcc, YY___HAS_ATTRIBUTE,     PP_MACRO_BUILTIN, 1, NULL, 0);
+	pp_macro_define(rcc, YY___HAS_BUILTIN,       PP_MACRO_BUILTIN, 1, NULL, 0);
+	pp_macro_define(rcc, YY__PRAGMA,             PP_MACRO_BUILTIN, 1, NULL, 0);
+	pp_macro_define(rcc, YY___PRAGMA,            PP_MACRO_BUILTIN, 1, NULL, 0);
 
 	pp_start(rcc);
 	c_stdinc_init(rcc);
