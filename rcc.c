@@ -1303,6 +1303,15 @@ static size_t rcc_emit_ir_data(rcc_ctx *rcc, FILE *f, const c_type *type, const 
 			offset++;
 		}
 		return offset;
+	} else if (type->kind == C_TYPE_VECTOR) {
+		size_t offset = 0, el_offset = 0;
+		int i;
+
+		for (i = 0; i < type->vec.length; el_offset += type->vec.type->size, i++) {
+			IR_ASSERT(offset == el_offset);
+			offset += rcc_emit_ir_data(rcc, f, type->vec.type, (const char*)addr + el_offset, base + el_offset, rel);
+		}
+		return offset;
 	} else {
 		IR_ASSERT(0);
 	}

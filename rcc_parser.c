@@ -960,7 +960,7 @@ static yy_sym parse_attrib(yy_sym sym, rcc_ctx *rcc, c_dcl *d) {
 				}
 				sym = get_sym();
 			}
-			yy_error_fmt("unsupported attribute \"%s\"", yy_sym2str(rcc, name));
+			c_gcc_attribute_vector_size(rcc, d, name, &v);
 		} else if (sym == YY_WEAK || sym == YY___WEAK__) {
 			sym = get_sym();
 			d->attr |= C_ATTR_WEAK;

@@ -730,6 +730,7 @@ typedef enum {
 	C_TYPE_ARRAY,
 	C_TYPE_STRUCT,
 	C_TYPE_UNION,
+	C_TYPE_VECTOR,
 	C_TYPE_FLOAT_COMPLEX,
 	C_TYPE_DOUBLE_COMPLEX,
 	C_TYPE_LONG_DOUBLE_COMPLEX,
@@ -797,6 +798,10 @@ struct _c_type {
 			const c_type  *ret_type;
 			c_param       *params;
 		} func;
+		struct {
+			const c_type  *type;
+			int32_t        length;
+		} vec;
 		c_name             tag;
 	};
 };
@@ -824,6 +829,7 @@ struct _c_dcl {
 	c_name                 cleanup_func; /* may be set for local variables */
 	int8_t                 reg;
 	uint32_t               attr2;
+	uint32_t               vector_size;
 };
 
 typedef enum {
@@ -892,13 +898,18 @@ struct _c_tag {
 #define C_CODE_STARTED     2
 #define C_CODE_DONE        3
 
-#define C_IS_BIT_FIELD(bit_field)     ((bit_field) != 0)
+#define C_IS_SIMPLE_VAL(bit_field)    ((bit_field) == 0)
+#define C_IS_BIT_FIELD(bit_field)     ((bit_field) & (1 << 12))
 #define C_BIT_FIELD(start, lenght)    ((1 << 12) | ((start) << 6) | (lenght))
 #define C_BIT_FIELD_START(bit_field)  (((bit_field) >> 6) & 0x3f)
 #define C_BIT_FIELD_SIZE(bit_field)   ((bit_field) & 0x3f)
 
 #define C_IS_BIT_FIELD_PACKED(bit_field)  ((bit_field) & (1 << 13))
 #define C_SET_BIT_FIELD_PACKED(bit_field) do {(bit_field) |= (1 << 13);} while (0)
+
+#define C_IS_VECTOR_DIM(proto)            ((proto) & (1 << 14))
+#define C_VECTOR_DIM(type)                ((1 << 14) | (type))
+#define C_VECTOR_DIM_TYPE(proto)          (proto & 0xff)
 
 struct _c_field {
 	c_name                 name;
@@ -1099,6 +1110,7 @@ void c_gcc_attribute_aligned(rcc_ctx *rcc, c_dcl *d, c_name attr, c_value *v);
 void c_gcc_attribute_packed(rcc_ctx *rcc, c_dcl *d, c_name attr);
 void c_gcc_attribute_cleanup(rcc_ctx *rcc, c_dcl *d, c_name attr, c_name func);
 void c_gcc_attribute_regparm(rcc_ctx *rcc, c_dcl *d, c_name attr, c_value *v);
+void c_gcc_attribute_vector_size(rcc_ctx *rcc, c_dcl *d, c_name attr, c_value *v);
 yy_sym c_gcc_attribute(rcc_ctx *rcc, c_dcl *dcl, c_name attr, yy_sym sym);
 void c_gcc_attribute_alias(rcc_ctx *rcc, c_dcl *d, c_name attr, c_value *v);
 void c_asm_alias(rcc_ctx *rcc, c_dcl *d, c_value *v);
