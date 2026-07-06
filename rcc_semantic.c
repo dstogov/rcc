@@ -9017,7 +9017,10 @@ void c_do_init_nested(rcc_ctx *rcc, c_sym *obj, c_init *init, bool b)
 		}
 	}
 
-	if (type->kind != C_TYPE_ARRAY && type->kind != C_TYPE_STRUCT && type->kind != C_TYPE_UNION) {
+	if (type->kind != C_TYPE_ARRAY
+	 && type->kind != C_TYPE_STRUCT
+	 && type->kind != C_TYPE_UNION
+	 && type->kind != C_TYPE_VECTOR) {
 		yy_warning("braces around scalar initializer");
 	} else if (!b) {
 		init->level++;
