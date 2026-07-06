@@ -5861,6 +5861,71 @@ void c_do_call(rcc_ctx *rcc, c_value *func, int32_t num_args, c_value *args, c_v
 	if (num_args > C_ALLOCA_PARAMS) ir_mem_free(args);
 }
 
+static bool c_try_convert_const_fp2fp(rcc_ctx *rcc, const c_type *type, c_value *val)
+{
+	ir_val v;
+
+	IR_ASSERT(type->kind == C_TYPE_FLOAT && val->type->kind == C_TYPE_DOUBLE);
+	v.f = (float)val->u.val.d;
+	v.u32_hi = 0;
+	if ((double)v.f != val->u.val.d) return 0;
+
+	c_value_set_const(val, type, IR_FLOAT, v);
+	return 1;
+}
+
+static bool c_try_convert_const_int2fp(rcc_ctx *rcc, const c_type *type, c_value *val)
+{
+	ir_val v;
+
+	switch (type->kind) {
+		case C_TYPE_FLOAT:
+			if (C_IS_TYPE_SIGNED(val->type)) {
+				v.f = (float)val->u.val.i64;
+				v.u32_hi = 0;
+				if ((int64_t)v.f != val->u.val.i64) return 0;
+			} else {
+				v.f = (float)val->u.val.u64;
+				v.u32_hi = 0;
+				if ((uint64_t)v.f != val->u.val.u64) return 0;
+			}
+			c_value_set_const(val, type, IR_FLOAT, v);
+			return 1;
+		case C_TYPE_DOUBLE:
+			if (C_IS_TYPE_SIGNED(val->type)) {
+				v.d = (double)val->u.val.i64;
+				if ((int64_t)v.d != val->u.val.i64) return 0;
+			} else {
+				v.d = (double)val->u.val.u64;
+				if ((uint64_t)v.d != val->u.val.u64) return 0;
+			}
+			c_value_set_const(val, type, IR_DOUBLE, v);
+			return 1;
+		default:
+			IR_ASSERT(0);
+			return 0;
+	}
+}
+
+static bool c_try_convert_const_int2int(rcc_ctx *rcc, const c_type *type, c_value *val)
+{
+	ir_val v;
+
+	v.u64 = val->u.val.u64;
+	if (type->size < 8) {
+		uint32_t shift = (8 - type->size) * 8;
+
+		if (C_IS_TYPE_SIGNED(type)) {
+			v.i64 = (int64_t)(v.u64 << shift) >> shift;
+		} else {
+			v.u64 = (v.u64 << shift) >> shift;
+		}
+	}
+	if (v.u64 != val->u.val.u64) return 0;
+	c_value_set_const(val, type, c_type2ir(rcc, type), v);
+	return 1;
+}
+
 static bool c_do_splat(rcc_ctx *rcc, const c_type *type, c_value *val)
 {
 	ir_type t;
@@ -5870,15 +5935,17 @@ static bool c_do_splat(rcc_ctx *rcc, const c_type *type, c_value *val)
 	if (C_IS_TYPE_KIND_FP(type->vec.type->kind)) {
 		if (C_IS_TYPE_KIND_FP(val->type->kind)) {
 			if (val->type->size > type->vec.type->size) {
-				// TODO: constant folding ???
-				yy_error("cannot convert value to a vector (conversion involves truncation)");
+				if (!c_value_is_const(val) || !c_try_convert_const_fp2fp(rcc, type->vec.type, val)) {
+					yy_error("cannot convert value to a vector (conversion involves truncation)");
+				}
 			} else if (val->type->size < type->vec.type->size) {
 				c_do_fp2fp(rcc, type->vec.type, c_type2ir(rcc, type->vec.type), val);
 			}
 		} else if (C_IS_TYPE_KIND_INT(val->type->kind)) {
 			if (val->type->size >= type->vec.type->size) {
-				// TODO: constant folding ???
-				yy_error("cannot convert value to a vector (conversion involves truncation)");
+				if (!c_value_is_const(val) || !c_try_convert_const_int2fp(rcc, type->vec.type, val)) {
+					yy_error("cannot convert value to a vector (conversion involves truncation)");
+				}
 			} else {
 				c_do_int2fp(rcc, type->vec.type, c_type2ir(rcc, type->vec.type), val);
 			}
@@ -5891,8 +5958,9 @@ static bool c_do_splat(rcc_ctx *rcc, const c_type *type, c_value *val)
 			yy_error("cannot convert value to a vector");
 		} else if (C_IS_TYPE_KIND_INT(val->type->kind)) {
 			if (val->type->size > type->vec.type->size) {
-				// TODO: constant folding ???
-				yy_error("cannot convert value to a vector (conversion involves truncation)");
+				if (!c_value_is_const(val) || !c_try_convert_const_int2int(rcc, type->vec.type, val)) {
+					yy_error("cannot convert value to a vector (conversion involves truncation)");
+				}
 			} else if (val->type->size < type->vec.type->size) {
 				if (C_IS_TYPE_KIND_SIGNED(val->type->kind)) {
 					c_do_sext(rcc, type->vec.type, c_type2ir(rcc, type->vec.type), val);
