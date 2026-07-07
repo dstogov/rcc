@@ -8298,7 +8298,19 @@ void c_do_computed_goto(rcc_ctx *rcc, c_value *v)
 	ir_BEGIN(IR_UNUSED);
 }
 
-static void c_do_init(void *addr, c_value *val)
+static void c_do_init_vector(rcc_ctx *rcc, void *addr, c_value *val)
+{
+	IR_ASSERT(c_value_is_ref(val) && IR_IS_CONST_REF(val->u.ref));
+	if (rcc->active_ctx->ir_base[val->u.ref].op == IR_SYM) {
+		IR_ASSERT(val->u.val.ptr);
+		memcpy(addr, val->u.val.ptr, val->type->size);
+	} else {
+		IR_ASSERT(rcc->active_ctx->ir_base[val->u.ref].op == IR_LONG_CONST);
+		memcpy(addr, ir_long_const_ptr(rcc->active_ctx, val->u.ref), val->type->size);
+	}
+}
+
+static void c_do_init(rcc_ctx *rcc, void *addr, c_value *val)
 {
 	const c_type *type = val->type;
 	c_type_kind kind = type->kind;
@@ -8329,6 +8341,7 @@ repeat:
 		case C_TYPE_STRUCT:
 		case C_TYPE_UNION:    memcpy(addr, val->u.val.ptr, type->size); break;
 		case C_TYPE_ENUM:     kind = type->enumeration.kind; goto repeat;
+		case C_TYPE_VECTOR:   c_do_init_vector(rcc, addr, val); break;
 		default: IR_ASSERT(0);
 	}
 }
@@ -8456,7 +8469,7 @@ void c_do_init_obj(rcc_ctx *rcc, c_sym *obj, c_value *val)
 		if (!c_value_is_const(val) && !c_linker_fix_reloc(rcc, obj, 0, val)) {
 			yy_error("initializer element is not constant");
 		}
-		c_do_init(obj->value.u.val.ptr, val);
+		c_do_init(rcc, obj->value.u.val.ptr, val);
 	} else if (C_IS_TYPE_SCALAR_OR_PTR(obj->value.type) || obj->value.type->kind == C_TYPE_VECTOR) {
 		IR_ASSERT(c_value_is_ref(&obj->value));
 		if (rcc->active_ctx->ir_base[obj->value.u.ref].op == IR_VAR) {
@@ -8865,7 +8878,9 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val)
 			 * We have to remove relocations added previously. */
 			c_linker_del_reloc(rcc, obj, offset);
 		}
-		if (!c_value_is_const(val) && !c_linker_fix_reloc(rcc, obj, offset, val)) {
+		if (!c_value_is_const(val)
+		 && !c_linker_fix_reloc(rcc, obj, offset, val)
+		 && !(IR_IS_CONST_REF(val->u.ref) && val->type->kind == C_TYPE_VECTOR)) {
 			yy_error("initializer element is not constant");
 		}
 		IR_ASSERT(/*obj->value.u.type == IR_ADDR &&*/ obj->value.u.val.ptr);
@@ -8874,7 +8889,7 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val)
 			init->size = new_size;
 		}
 		if (!C_IS_BIT_FIELD(bit_field)) {
-			c_do_init((char*)obj->value.u.val.ptr + offset, val);
+			c_do_init(rcc, (char*)obj->value.u.val.ptr + offset, val);
 		} else {
 			uint32_t first_bit = C_BIT_FIELD_START(bit_field);
 			uint32_t bits = C_BIT_FIELD_SIZE(bit_field);
@@ -8949,7 +8964,6 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val)
 					ir_ref ref;
 
 					offset -= t->vec.type->size * init->stack[init->level].pos;
-					IR_ASSERT(offset == 0);
 					if (init->stack[init->level].pos == 0) {
 						ir_val v;
 						v.u64 = 0;
