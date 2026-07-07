@@ -822,7 +822,6 @@ static void c_finalize_type(rcc_ctx *rcc, c_dcl *d)
 
 		type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
 		type->size = d->vector_size;
-		type->kind = C_TYPE_ARRAY;
 		type->kind = C_TYPE_VECTOR;
 		type->flags = rcc->active_scope ? 0 : C_TYPE_GLOBAL;
 		type->attr = c_align2attr(IR_MIN(d->vector_size, 16)); /* 16 byte allgnment */
@@ -5206,7 +5205,47 @@ void c_do_builtin(rcc_ctx *rcc, c_value *val, c_name name, int32_t num_args, c_v
 	} else if (name == YY___BUILTIN_SHUFFLE) {
 		IR_ASSERT(0 && "__builtin_shuffle() NIY ???");
 	} else if (name == YY___BUILTIN_SHUFFLEVECTOR) {
-		IR_ASSERT(0 && "__builtin_shufflevector() NIY ???");
+		ir_ref ref;
+		ir_type t;
+		uint32_t len1, len2, len, i;
+		int8_t *ptr;
+		c_type *type;
+
+		if (num_args < 3) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
+		if (args[0].type->kind != C_TYPE_VECTOR) yy_error("first argument of __builtin_shufflevector() must a vector");
+		if (args[1].type->kind != C_TYPE_VECTOR) yy_error("second argument of __builtin_shufflevector() must a vector");
+		if (args[0].type->vec.type->kind != args[1].type->vec.type->kind) yy_error("first and second arguments of __builtin_shufflevector() are vectors of different types");
+		len = num_args - 2;
+		if (len > 64 || (len & (len - 1)) != 0) yy_error("unsupported numver of vector elments in __builtin_shufflevector()");
+
+		len1 = args[0].type->vec.length;
+		len2 = args[1].type->vec.length;
+		t = IR_MAKE_VECTOR_TYPE(IR_I8, len);
+		ref = ir_const_vector(rcc->active_ctx, t);
+		ptr = ir_long_const_ptr(rcc->active_ctx, ref);
+		for (i = 0; i < len; i++) {
+			if (!C_IS_TYPE_INT(args[i + 2].type)
+			 || !c_value_is_const(&args[i + 2])
+			 || (args[i + 2].u.val.u64 > len1 + len2
+			  && (!C_IS_TYPE_SIGNED(args[i + 2].type)
+			   || args[i + 2].u.val.i64 == -1))) {
+				yy_error_fmt("%d-th argument of __builtin_shufflevector() is an invalid vector index", i + 3);
+			}
+			*ptr = (int8_t)args[i + 2].u.val.i8;
+			ptr++;
+		}
+
+		t = IR_MAKE_VECTOR_TYPE(c_type2ir(rcc, args[0].type->vec.type), len);
+		type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
+		type->size = IR_VECTOR_SIZE(t);
+		type->kind = C_TYPE_VECTOR;
+		type->flags = rcc->active_scope ? 0 : C_TYPE_GLOBAL;
+		type->attr = c_align2attr(IR_MIN(type->size, 16)); /* 16 byte allgnment */
+		type->vec.type = args[0].type->vec.type;
+		type->vec.length = len;
+
+		c_value_set_rval(val, type, t,
+			ir_SHUFFLE(t, c_value_ref(rcc, &args[0]), c_value_ref(rcc, &args[1]), ref));
 	} else {
 		IR_ASSERT(0);
 	}
@@ -5276,11 +5315,11 @@ void c_do_builtin_convertvector(rcc_ctx *rcc, c_value *val, const c_type *type)
 	ir_op op = IR_NOP;
 
 	if (val->type->kind != C_TYPE_VECTOR) {
-		yy_error("\"__builtin_convertvector\" first argument must be a vector");
+		yy_error("first argument of __builtin_convertvector() must be a vector");
 	} else if (type->kind != C_TYPE_VECTOR) {
-		yy_error("\"__builtin_convertvector\" second argument must be a vector type");
+		yy_error("second argument of __builtin_convertvector() must be a vector type");
 	} else if (val->type->vec.length != type->vec.length) {
-		yy_error("\"__builtin_convertvector\" vector and type have different number of elements");
+		yy_error("vector and type arguments of __builtin_convertvector() have different number of elements");
 	} else if (val->type->vec.type->kind == type->vec.type->kind) {
 		/* convert to the same type */
 		return;
@@ -5418,7 +5457,14 @@ static ir_ref ir_inline_call(rcc_ctx *rcc, ir_ctx *ctx, ir_ctx *func_ctx, uint32
 				optx = IR_OPTX(op, IR_OPT_TYPE(optx), proto);
 			}
 		}
-		xlat[i] = ir_const_ex(ctx, val, IR_OPT_TYPE(optx), optx);
+		if (op == IR_LONG_CONST) {
+			xlat[i] = ir_long_const(ctx, insn->type, insn->long_const_size);
+			memcpy(ir_long_const_ptr(ctx, xlat[i]), insn + 1, insn->long_const_size);
+			i += IR_ALIGNED_SIZE(insn->long_const_size, sizeof(ir_insn)) / sizeof(ir_insn);
+			insn += IR_ALIGNED_SIZE(insn->long_const_size, sizeof(ir_insn)) / sizeof(ir_insn);
+		} else {
+			xlat[i] = ir_const_ex(ctx, val, IR_OPT_TYPE(optx), optx);
+		}
 	}
 	xlat[IR_TRUE] = IR_TRUE;
 	xlat[IR_FALSE] = IR_FALSE;
