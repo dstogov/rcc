@@ -4575,7 +4575,10 @@ void c_do_bool_not(rcc_ctx *rcc, c_value *v)
 	ir_val val;
 
 	c_value_rval(rcc, v);
-	if (v->type->kind == C_TYPE_VOID || v->type->kind == C_TYPE_STRUCT || v->type->kind == C_TYPE_UNION) {
+	if (v->type->kind == C_TYPE_VOID
+	 || v->type->kind == C_TYPE_STRUCT
+	 || v->type->kind == C_TYPE_UNION
+	 || v->type->kind == C_TYPE_VECTOR) {
 		yy_error("invalid type argument of unary \"!\"");
 	}
 	if (c_value_is_ref(v)) {
@@ -7132,7 +7135,10 @@ static void c_ir_IF_FALSE(rcc_ctx *rcc, ir_ref ref)
 
 ir_ref c_do_bool_and_start(rcc_ctx *rcc, c_value *op1)
 {
-	if (op1->type->kind == C_TYPE_VOID || op1->type->kind == C_TYPE_STRUCT || op1->type->kind == C_TYPE_UNION) {
+	if (op1->type->kind == C_TYPE_VOID
+	 || op1->type->kind == C_TYPE_STRUCT
+	 || op1->type->kind == C_TYPE_UNION
+	 || op1->type->kind == C_TYPE_VECTOR) {
 		yy_error("scalar is required");
 	}
 	if (c_value_is_const(op1)) {
@@ -7149,7 +7155,10 @@ void c_do_bool_and_end(rcc_ctx *rcc, c_value *op1, c_value *op2, ir_ref if_ref)
 {
 	ir_val val;
 
-	if (op2->type->kind == C_TYPE_VOID || op2->type->kind == C_TYPE_STRUCT || op2->type->kind == C_TYPE_UNION) {
+	if (op2->type->kind == C_TYPE_VOID
+	 || op2->type->kind == C_TYPE_STRUCT
+	 || op2->type->kind == C_TYPE_UNION
+	 || op2->type->kind == C_TYPE_VECTOR) {
 		yy_error("scalar is required");
 	}
 	if (if_ref) {
@@ -7176,7 +7185,10 @@ void c_do_bool_and_end(rcc_ctx *rcc, c_value *op1, c_value *op2, ir_ref if_ref)
 
 ir_ref c_do_bool_or_start(rcc_ctx *rcc, c_value *op1)
 {
-	if (op1->type->kind == C_TYPE_VOID || op1->type->kind == C_TYPE_STRUCT || op1->type->kind == C_TYPE_UNION) {
+	if (op1->type->kind == C_TYPE_VOID
+	 || op1->type->kind == C_TYPE_STRUCT
+	 || op1->type->kind == C_TYPE_UNION
+	 || op1->type->kind == C_TYPE_VECTOR) {
 		yy_error("scalar is required");
 	}
 	if (c_value_is_const(op1)) {
@@ -7193,7 +7205,10 @@ void c_do_bool_or_end(rcc_ctx *rcc, c_value *op1, c_value *op2, ir_ref if_ref)
 {
 	ir_val val;
 
-	if (op2->type->kind == C_TYPE_VOID || op2->type->kind == C_TYPE_STRUCT || op2->type->kind == C_TYPE_UNION) {
+	if (op2->type->kind == C_TYPE_VOID
+	 || op2->type->kind == C_TYPE_STRUCT
+	 || op2->type->kind == C_TYPE_UNION
+	 || op2->type->kind == C_TYPE_VECTOR) {
 		yy_error("scalar is required");
 	}
 	if (if_ref) {
@@ -7317,7 +7332,10 @@ ir_ref c_do_if(rcc_ctx *rcc, c_value *cond)
 {
 	ir_ref ref;
 
-	if (cond->type->kind == C_TYPE_VOID || cond->type->kind == C_TYPE_STRUCT || cond->type->kind == C_TYPE_UNION) {
+	if (cond->type->kind == C_TYPE_VOID
+	 || cond->type->kind == C_TYPE_STRUCT
+	 || cond->type->kind == C_TYPE_UNION
+	 || cond->type->kind == C_TYPE_VECTOR) {
 		yy_error("scalar is required");
 	} else if (C_IS_TYPE_FP(cond->type)) {
 		ir_val val;
@@ -7730,7 +7748,10 @@ void c_do_loop_check(rcc_ctx *rcc, c_loop *loop, c_value *cond)
 {
 	ir_ref ref;
 
-	if (cond->type->kind == C_TYPE_VOID || cond->type->kind == C_TYPE_STRUCT || cond->type->kind == C_TYPE_UNION) {
+	if (cond->type->kind == C_TYPE_VOID
+	 || cond->type->kind == C_TYPE_STRUCT
+	 || cond->type->kind == C_TYPE_UNION
+	 || cond->type->kind == C_TYPE_VECTOR) {
 		yy_error("scalar is required");
 	} else if (C_IS_TYPE_FP(cond->type)) {
 		ir_val val;
