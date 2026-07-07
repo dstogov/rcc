@@ -73,6 +73,8 @@
 
 #define C_DUMP_LIVE_RANGES            (1<<25)
 
+#define C_DUMP_C                      (1<<26)
+
 #define C_SINGLE_FILE                 (1<<29)
 #define C_DO_LINK_INTERNAL            (1<<30)
 #define C_DO_LINK_EXTERNAL            (1U<<31)
@@ -1502,6 +1504,74 @@ static void rcc_emit_llvm(rcc_ctx *rcc, FILE *f)
 	}
 }
 
+static void rcc_emit_c_proto(rcc_ctx *rcc, const char *name, c_sym *func, FILE *f)
+{
+	const c_type *t = func->value.type;
+	uint32_t flags;
+	ir_type ret_type;
+	uint32_t params_count;
+	uint8_t *param_types;
+
+	IR_ASSERT(t->kind == C_TYPE_FUNC);
+	param_types = alloca(t->func.num_params + 16);
+	c_type2proto_ex(rcc, t, &flags, &ret_type, &params_count, param_types);
+	if (func->linkage == C_LINK_INTERNAL) {
+		flags |= IR_STATIC;
+	} else if (func->linkage == C_LINK_BUILTIN) {
+		flags |= IR_CC_BUILTIN;
+	}
+	ir_emit_c_func_decl(name, flags, ret_type, params_count, param_types, f);
+}
+
+static void rcc_emit_c(rcc_ctx *rcc, FILE *f)
+{
+	uint32_t i;
+	yy_hash_bucket *p;
+
+	for (i = YY_LAST_KEYWORD + 1, p = rcc->yy_hash.data + i; i < rcc->yy_hash.count; p++, i++) {
+		if (p->sym && p->sym->kind == C_SYM_FUNC && !p->sym->ctx) {
+			if ((p->sym->is_external || !p->sym->ctx) && p->sym->alias) continue;
+			rcc_emit_c_proto(rcc, p->str, p->sym, f);
+		}
+	}
+
+	for (i = YY_LAST_KEYWORD + 1, p = rcc->yy_hash.data + i; i < rcc->yy_hash.count; p++, i++) {
+		if (p->sym && p->sym->kind == C_SYM_VAR) {
+			uint32_t flags = 0;
+			const char *str;
+
+			if (p->sym->linkage == C_LINK_INTERNAL) {
+				flags |= IR_STATIC;
+			} else if (p->sym->is_external || !c_value_is_set(&p->sym->value)) {
+				flags |= IR_EXTERN;
+			}
+			if (c_is_type_const(p->sym->value.type)) {
+				flags |= IR_CONST;
+			}
+			if (p->sym->alias) {
+				str = rcc->yy_hash.data[p->sym->alias].str;
+			} else {
+				str = p->str;
+			}
+			//TODO: type ???
+			ir_emit_c_sym_decl(str, flags, f);
+			//TODO: initializer ???
+		}
+	}
+
+	for (i = YY_LAST_KEYWORD + 1, p = rcc->yy_hash.data + i; i < rcc->yy_hash.count; p++, i++) {
+		if (p->sym && p->sym->kind == C_SYM_FUNC && p->sym->ctx) {
+			ir_ctx *ctx = p->sym->ctx;
+
+			if (!ctx->vregs) {
+				ir_assign_virtual_registers(ctx);
+				ir_compute_dessa_moves(ctx);
+			}
+			ir_emit_c(ctx, p->str, f);
+		}
+	}
+}
+
 static int rcc_preprocess(rcc_ctx *rcc, const char *file_name, FILE *f)
 {
 	if (!rcc_read(rcc, file_name)) {
@@ -1528,6 +1598,9 @@ static int rcc_compile(rcc_ctx *rcc, const char *file_name)
 	}
 	if (rcc->c_flags & C_DUMP_LLVM) {
 		rcc_emit_llvm(rcc, rcc->output);
+	}
+	if (rcc->c_flags & C_DUMP_C) {
+		rcc_emit_c(rcc, rcc->output);
 	}
 	if (ir_list_capasity(&rcc->codegen_queue)) {
 		do {
@@ -2325,6 +2398,8 @@ int main(int argc, const char **argv)
 			rcc->c_flags |= C_DUMP_IR;
 		} else if (strcmp(argv[i], "--emit-llvm") == 0) {
 			rcc->c_flags |= C_DUMP_LLVM;
+		} else if (strcmp(argv[i], "--emit-c") == 0) {
+			rcc->c_flags |= C_DUMP_C;
 		} else if (strcmp(argv[i], "-S") == 0) {
 			rcc->c_flags |= C_DUMP_ASM;
 		} else if (strcmp(argv[i], "--dump-size") == 0) {
