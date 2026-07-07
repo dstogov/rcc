@@ -1562,12 +1562,18 @@ static void rcc_emit_c(rcc_ctx *rcc, FILE *f)
 	for (i = YY_LAST_KEYWORD + 1, p = rcc->yy_hash.data + i; i < rcc->yy_hash.count; p++, i++) {
 		if (p->sym && p->sym->kind == C_SYM_FUNC && p->sym->ctx) {
 			ir_ctx *ctx = p->sym->ctx;
+			bool cleanup = 0;
 
 			if (!ctx->vregs) {
 				ir_assign_virtual_registers(ctx);
 				ir_compute_dessa_moves(ctx);
+				cleanup = 1;
 			}
 			ir_emit_c(ctx, p->str, f);
+			if (cleanup) {
+				ir_mem_free(ctx->vregs);
+				ctx->vregs = NULL;
+			}
 		}
 	}
 }
