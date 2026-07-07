@@ -5203,7 +5203,46 @@ void c_do_builtin(rcc_ctx *rcc, c_value *val, c_name name, int32_t num_args, c_v
 		ref = ir_fold2(rcc->active_ctx, IR_OPT(IR_UNORDERED, IR_BOOL), c_value_ref(rcc, &args[0]), c_value_ref(rcc, &args[1]));
 		c_value_set_rval(val, &c_type_bool, IR_BOOL, ref);
 	} else if (name == YY___BUILTIN_SHUFFLE) {
-		IR_ASSERT(0 && "__builtin_shuffle() NIY ???");
+		uint32_t len;
+		ir_ref op1, op2, op3;
+		ir_type t;
+		c_type *type;
+
+		if (num_args != 2 && num_args != 3) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
+		if (args[0].type->kind != C_TYPE_VECTOR) yy_error("first argument of __builtin_shuffle() must be a vector");
+		if (num_args == 2) {
+			if (args[1].type->kind != C_TYPE_VECTOR || !C_IS_TYPE_INT(args[1].type->vec.type)) {
+				yy_error("second argument of __builtin_shuffle() must be an integer vector");
+			}
+			len = args[1].type->vec.length;
+			op1 = op2 = c_value_ref(rcc, &args[0]);
+			op3 = c_value_ref(rcc, &args[1]);
+		} else {
+			if (args[1].type->kind != C_TYPE_VECTOR) yy_error("second argument of __builtin_shuffle() must be a vector");
+			if (args[0].type->vec.type->kind != args[1].type->vec.type->kind) yy_error("first and second arguments of __builtin_shuffle() are vectors of different types");
+			if (args[2].type->kind != C_TYPE_VECTOR || !C_IS_TYPE_INT(args[2].type->vec.type)) {
+				yy_error("third argument of __builtin_shuffle() must be an integer vector");
+			}
+			len = args[2].type->vec.length;
+			op1 = c_value_ref(rcc, &args[0]);
+			op2 = c_value_ref(rcc, &args[1]);
+			op3 = c_value_ref(rcc, &args[2]);
+		}
+
+		t = IR_MAKE_VECTOR_TYPE(c_type2ir(rcc, args[0].type->vec.type), len);
+		if ((uint32_t)args[0].type->vec.length == len) {
+			type = (c_type*)args[0].type;
+		} else {
+			type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
+			type->size = IR_VECTOR_SIZE(t);
+			type->kind = C_TYPE_VECTOR;
+			type->flags = rcc->active_scope ? 0 : C_TYPE_GLOBAL;
+			type->attr = c_align2attr(IR_MIN(type->size, 16)); /* 16 byte allgnment */
+			type->vec.type = args[0].type->vec.type;
+			type->vec.length = len;
+		}
+
+		c_value_set_rval(val, type, t, ir_SHUFFLE(t, op1, op2, op3));
 	} else if (name == YY___BUILTIN_SHUFFLEVECTOR) {
 		ir_ref ref;
 		ir_type t;
@@ -5212,8 +5251,8 @@ void c_do_builtin(rcc_ctx *rcc, c_value *val, c_name name, int32_t num_args, c_v
 		c_type *type;
 
 		if (num_args < 3) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
-		if (args[0].type->kind != C_TYPE_VECTOR) yy_error("first argument of __builtin_shufflevector() must a vector");
-		if (args[1].type->kind != C_TYPE_VECTOR) yy_error("second argument of __builtin_shufflevector() must a vector");
+		if (args[0].type->kind != C_TYPE_VECTOR) yy_error("first argument of __builtin_shufflevector() must be a vector");
+		if (args[1].type->kind != C_TYPE_VECTOR) yy_error("second argument of __builtin_shufflevector() must be a vector");
 		if (args[0].type->vec.type->kind != args[1].type->vec.type->kind) yy_error("first and second arguments of __builtin_shufflevector() are vectors of different types");
 		len = num_args - 2;
 		if (len > 64 || (len & (len - 1)) != 0) yy_error("unsupported numver of vector elments in __builtin_shufflevector()");
@@ -5236,13 +5275,17 @@ void c_do_builtin(rcc_ctx *rcc, c_value *val, c_name name, int32_t num_args, c_v
 		}
 
 		t = IR_MAKE_VECTOR_TYPE(c_type2ir(rcc, args[0].type->vec.type), len);
-		type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
-		type->size = IR_VECTOR_SIZE(t);
-		type->kind = C_TYPE_VECTOR;
-		type->flags = rcc->active_scope ? 0 : C_TYPE_GLOBAL;
-		type->attr = c_align2attr(IR_MIN(type->size, 16)); /* 16 byte allgnment */
-		type->vec.type = args[0].type->vec.type;
-		type->vec.length = len;
+		if ((uint32_t)args[0].type->vec.length == len) {
+			type = (c_type*)args[0].type;
+		} else {
+			type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
+			type->size = IR_VECTOR_SIZE(t);
+			type->kind = C_TYPE_VECTOR;
+			type->flags = rcc->active_scope ? 0 : C_TYPE_GLOBAL;
+			type->attr = c_align2attr(IR_MIN(type->size, 16)); /* 16 byte allgnment */
+			type->vec.type = args[0].type->vec.type;
+			type->vec.length = len;
+		}
 
 		c_value_set_rval(val, type, t,
 			ir_SHUFFLE(t, c_value_ref(rcc, &args[0]), c_value_ref(rcc, &args[1]), ref));
