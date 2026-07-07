@@ -233,6 +233,9 @@
 	_("__builtin_umul_overflow",       YY___BUILTIN_UMUL_OVERFLOW)     \
 	_("__builtin_umull_overflow",      YY___BUILTIN_UMULL_OVERFLOW)    \
 	_("__builtin_umulll_overflow",     YY___BUILTIN_UMULLL_OVERFLOW)   \
+	_("__builtin_convertvector",       YY___BUILTIN_CONVERTVECTOR)     \
+	_("__builtin_shuffle",             YY___BUILTIN_SHUFFLE)           \
+	_("__builtin_shufflevector",       YY___BUILTIN_SHUFFLEVECTOR)     \
 	_("__builtin_expect",              YY___BUILTIN_EXPECT)            \
 	_("__builtin_prefetch",            YY___BUILTIN_PREFETCH)          \
 	_("__builtin_unreachable",         YY___BUILTIN_UNREACHABLE)       \
@@ -1155,6 +1158,7 @@ c_value *c_do_grow_actual_parameters(c_value *args, int32_t num_args);
 void c_do_builtin(rcc_ctx *rcc, c_value *val, c_name name, int32_t num_args, c_value *args);
 void c_do_builtin_constant_p(rcc_ctx *rcc, c_value *val);
 void c_do_builtin_va_arg(rcc_ctx *rcc, c_value *val, const c_type *type);
+void c_do_builtin_convertvector(rcc_ctx *rcc, c_value *val, const c_type *type);
 void c_do_call(rcc_ctx *rcc, c_value *func, int32_t num_args, c_value *args, c_value *res);
 void c_do_binary_op(rcc_ctx *rcc, yy_sym sym, c_value *v, c_value *op2);
 void c_do_assign_op(rcc_ctx *rcc, yy_sym sym, c_value *v, c_value *op2);

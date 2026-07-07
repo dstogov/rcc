@@ -1205,6 +1205,8 @@ unary_expression(rcc_ctx *rcc, c_value *val):
 		|	"__builtin_umul_overflow"
 		|	"__builtin_umull_overflow"
 		|	"__builtin_umulll_overflow"
+		|	"__builtin_shuffle"
+		|	"__builtin_shufflevector"
 		)
 		"(" builtin_parameters(rcc, &v, name) ")"
 	|	                                                   {ir_ref old = c_do_nocode(rcc);}
@@ -1217,6 +1219,12 @@ unary_expression(rcc_ctx *rcc, c_value *val):
 		assignment_expression(rcc, &v)
 		","
 		type_name(rcc, &t)                                 {c_do_builtin_va_arg(rcc, &v, t);}
+		")"
+	|	"__builtin_convertvector"
+		"("
+		assignment_expression(rcc, &v)
+		","
+		type_name(rcc, &t)                                 {c_do_builtin_convertvector(rcc, &v, t);}
 		")"
 	)
 	(                                                      {c_value dim;}

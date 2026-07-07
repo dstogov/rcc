@@ -5203,6 +5203,10 @@ void c_do_builtin(rcc_ctx *rcc, c_value *val, c_name name, int32_t num_args, c_v
 		if (!C_IS_TYPE_FP(args[0].type) || !C_IS_TYPE_FP(args[1].type)) yy_error_fmt("wrong arguments in %s() call", yy_sym2str(rcc, name));
 		ref = ir_fold2(rcc->active_ctx, IR_OPT(IR_UNORDERED, IR_BOOL), c_value_ref(rcc, &args[0]), c_value_ref(rcc, &args[1]));
 		c_value_set_rval(val, &c_type_bool, IR_BOOL, ref);
+	} else if (name == YY___BUILTIN_SHUFFLE) {
+		IR_ASSERT(0 && "__builtin_shuffle() NIY ???");
+	} else if (name == YY___BUILTIN_SHUFFLEVECTOR) {
+		IR_ASSERT(0 && "__builtin_shufflevector() NIY ???");
 	} else {
 		IR_ASSERT(0);
 	}
@@ -5264,6 +5268,55 @@ void c_do_builtin_va_arg(rcc_ctx *rcc, c_value *val, const c_type *type)
 		ref = ir_VA_ARG(c_va_list_addr(rcc, val), t);
 		c_value_set_rval(val, type, t, ref);
 	}
+}
+
+void c_do_builtin_convertvector(rcc_ctx *rcc, c_value *val, const c_type *type)
+{
+	ir_type t;
+	ir_op op = IR_NOP;
+
+	if (val->type->kind != C_TYPE_VECTOR) {
+		yy_error("\"__builtin_convertvector\" first argument must be a vector");
+	} else if (type->kind != C_TYPE_VECTOR) {
+		yy_error("\"__builtin_convertvector\" second argument must be a vector type");
+	} else if (val->type->vec.length != type->vec.length) {
+		yy_error("\"__builtin_convertvector\" vector and type have different number of elements");
+	} else if (val->type->vec.type->kind == type->vec.type->kind) {
+		/* convert to the same type */
+		return;
+	}
+
+	if (C_IS_TYPE_INT(type->vec.type)) {
+		if (C_IS_TYPE_INT(val->type->vec.type)) {
+			if (type->vec.type->size < val->type->vec.type->size) {
+				op = IR_TRUNC;
+			} else if (type->vec.type->size == val->type->vec.type->size) {
+				op = IR_BITCAST;
+			} else if (C_IS_TYPE_SIGNED(val->type->vec.type)) {
+				op = IR_SEXT;
+			} else {
+				op = IR_ZEXT;
+			}
+		} else if (C_IS_TYPE_FP(val->type->vec.type)) {
+			op = IR_FP2INT;
+		} else {
+			IR_ASSERT(0);
+		}
+	} else if (C_IS_TYPE_FP(type->vec.type)) {
+		if (C_IS_TYPE_INT(val->type->vec.type)) {
+			op = IR_INT2FP;
+		} else if (C_IS_TYPE_FP(val->type->vec.type)) {
+			op = IR_FP2FP;
+		} else {
+			IR_ASSERT(0);
+		}
+	} else {
+		IR_ASSERT(0);
+	}
+
+	IR_ASSERT(op != IR_NOP);
+	t = c_type2ir(rcc, type);
+	c_value_set_rval(val, type, t, ir_fold1(rcc->active_ctx, IR_OPT(op, t), c_value_ref(rcc, val)));
 }
 
 static bool c_do_convert_builtin(rcc_ctx *rcc, c_value *func, int32_t num_args, ir_ref *arg_refs)
