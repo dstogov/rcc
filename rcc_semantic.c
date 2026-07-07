@@ -8914,26 +8914,6 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val)
 					ir_const_size_t(rcc->active_ctx, type->size),
 					c_attr2align(type->attr));
 			}
-		} else if (type->kind == C_TYPE_VECTOR && C_IS_TYPE_SCALAR(val->type)) {
-			ir_ref ref;
-			ir_type t;
-			ir_val v;
-
-			if (offset == 0) {
-				t = c_type2ir(rcc, type->vec.type);
-				v.u64 = 0;
-				ref = ir_const(rcc->active_ctx, v, t);
-				t = c_type2ir(rcc, type);
-				ref = ir_SPLAT(t, ref);
-			} else {
-
-			}
-
-			t = c_type2ir(rcc, type);
-			ref = ir_REPLACE(t, ref, ir_const_u8(rcc->active_ctx, offset / sizeof(type->vec.type->size)),
-					c_value_ref(rcc, val));
-
-			IR_ASSERT(0 && "INIT_VEC NIY???");
 		} else if (rcc->active_ctx->ir_base[obj->value.u.ref].op == IR_VAR) {
 			IR_ASSERT(!C_IS_BIT_FIELD(bit_field));
 
@@ -8951,7 +8931,7 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val)
 				} else {
 					ref = ir_VLOAD(vt, obj->value.u.ref);
 				}
-				ref = ir_REPLACE(vt, ref, ir_const_u8(rcc->active_ctx, offset / sizeof(type->vec.type->size)),
+				ref = ir_REPLACE(vt, ref, ir_const_u8(rcc->active_ctx, init->stack[init->level].pos),
 						c_value_ref(rcc, val));
 				ir_VSTORE(obj->value.u.ref, ref);
 			} else {
@@ -8977,7 +8957,7 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val)
 					} else {
 						ref = ir_LOAD(vt, ir_ADD_A(obj->value.u.ref, ir_const_size_t(rcc->active_ctx, offset)));
 					}
-					ref = ir_REPLACE(vt, ref, ir_const_u8(rcc->active_ctx, offset / sizeof(type->vec.type->size)),
+					ref = ir_REPLACE(vt, ref, ir_const_u8(rcc->active_ctx, init->stack[init->level].pos),
 							c_value_ref(rcc, val));
 					ir_STORE(
 						ir_ADD_A(obj->value.u.ref, ir_const_size_t(rcc->active_ctx, offset)),
