@@ -5652,7 +5652,9 @@ void c_do_call(rcc_ctx *rcc, c_value *func, int32_t num_args, c_value *args, c_v
 		ref = ir_inline_call(rcc, rcc->active_ctx, (ir_ctx*)func->u.val.ptr, num_args + j, arg_refs);
 	} else if (!(func->u.op & C_VAL_BUILTIN)) {
 		ref = c_value_ref(rcc, func);
-		if (!IR_IS_CONST_REF(ref) && rcc->active_ctx->ir_base[ref].op != IR_PROTO) {
+		if (rcc->active_ctx->ir_base[ref].op != IR_FUNC
+		 && rcc->active_ctx->ir_base[ref].op != IR_FUNC_ADDR
+		 && rcc->active_ctx->ir_base[ref].op != IR_PROTO) {
 			const c_type *type = func->type;
 			if (type->kind == C_TYPE_POINTER) type = type->pointer.type;
 			ref = ir_emit2(rcc->active_ctx, IR_OPT(IR_PROTO, IR_ADDR), ref, c_type2proto(rcc, type, 0));
@@ -5672,7 +5674,9 @@ void c_do_call(rcc_ctx *rcc, c_value *func, int32_t num_args, c_value *args, c_v
 		ref = c_do_convert_builtin(rcc, func, num_args + j, arg_refs);
 		if (!ref) {
 			ref = c_value_ref(rcc, func);
-			if (!IR_IS_CONST_REF(ref) && rcc->active_ctx->ir_base[ref].op != IR_PROTO) {
+			if (rcc->active_ctx->ir_base[ref].op != IR_FUNC
+			 && rcc->active_ctx->ir_base[ref].op != IR_FUNC_ADDR
+			 && rcc->active_ctx->ir_base[ref].op != IR_PROTO) {
 				const c_type *type = func->type;
 				if (type->kind == C_TYPE_POINTER) type = type->pointer.type;
 				ref = ir_emit2(rcc->active_ctx, IR_OPT(IR_PROTO, IR_ADDR), ref, c_type2proto(rcc, type, 0));
