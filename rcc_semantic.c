@@ -5119,43 +5119,57 @@ void c_do_builtin_va_arg(rcc_ctx *rcc, c_value *val, const c_type *type)
 	}
 }
 
-static ir_ref c_do_convert_builtin(rcc_ctx *rcc, c_value *func, int32_t num_args, ir_ref *arg_refs)
+static bool c_do_convert_builtin(rcc_ctx *rcc, c_value *func, int32_t num_args, ir_ref *arg_refs)
 {
 	if (c_value_is_ref(func)) {
 		const ir_insn *func_insn = &rcc->active_ctx->ir_base[func->u.ref];
 		c_name sym_name;
+		ir_ref ref;
 
 		IR_ASSERT(IR_IS_EXT_STR(func_insn->val.name));
 		sym_name = IR_EXT_STR(func_insn->val.name);
 		if (sym_name == YY_ALLOCA) {
 			if (num_args == 1) {
-				return ir_ALLOCA(arg_refs[0]);
+				ref = ir_ALLOCA(arg_refs[0]);
+				c_value_set_rval(func, &c_type_ptr, IR_ADDR, ref);
+				return 1;
 			}
 		} else if (sym_name == YY_ABS) {
 			if (num_args == 1) {
-				return ir_ABS_I32(arg_refs[0]);
+				ref = ir_ABS_I32(arg_refs[0]);
+				c_value_set_rval(func, &c_type_i32, IR_I32, ref);
+				return 1;
 			}
 		} else if (sym_name == YY_LABS) {
 			if (num_args == 1) {
-				return ir_ABS(IR_LONG, arg_refs[0]);
+				ref = ir_ABS(IR_LONG, arg_refs[0]);
+				c_value_set_rval(func, &c_type_il, IR_LONG, ref);
+				return 1;
 			}
 		} else if (sym_name == YY_LLABS) {
 			if (num_args == 1) {
-				return ir_ABS_I64(arg_refs[0]);
+				ref = ir_ABS_I64(arg_refs[0]);
+				c_value_set_rval(func, &c_type_i64, IR_I64, ref);
+				return 1;
 			}
 		} else if (sym_name == YY_FABS) {
 			if (num_args == 1) {
-				return ir_ABS_D(arg_refs[0]);
+				ref = ir_ABS_D(arg_refs[0]);
+				c_value_set_rval(func, &c_type_double, IR_DOUBLE, ref);
+				return 1;
 			}
 		} else if (sym_name == YY_FABSF) {
 			if (num_args == 1) {
-				return ir_ABS_F(arg_refs[0]);
+				ref = ir_ABS_F(arg_refs[0]);
+				c_value_set_rval(func, &c_type_float, IR_FLOAT, ref);
+				return 1;
 			}
 #ifdef _WIN32
 		} else if (sym_name == YY___VA_START) {
 			if (num_args == 1 || num_args == 2) {
 				ir_VA_START(arg_refs[0]);
-				return IR_NULL;
+				c_value_set_rval(func, &c_type_void, IR_VOID, IR_VOID);
+				return 1;
 			}
 #endif
 		}
@@ -5671,19 +5685,21 @@ void c_do_call(rcc_ctx *rcc, c_value *func, int32_t num_args, c_value *args, c_v
 			return;
 		}
 	} else {
-		ref = c_do_convert_builtin(rcc, func, num_args + j, arg_refs);
-		if (!ref) {
-			ref = c_value_ref(rcc, func);
-			if (rcc->active_ctx->ir_base[ref].op != IR_FUNC
-			 && rcc->active_ctx->ir_base[ref].op != IR_FUNC_ADDR
-			 && rcc->active_ctx->ir_base[ref].op != IR_PROTO) {
-				const c_type *type = func->type;
-				if (type->kind == C_TYPE_POINTER) type = type->pointer.type;
-				ref = ir_emit2(rcc->active_ctx, IR_OPT(IR_PROTO, IR_ADDR), ref, c_type2proto(rcc, type, 0));
-			}
-			ref = ir_CALL_N(_ret_type, ref, num_args + j, arg_refs);
-			rcc->c_last_call_func_type = func->type;
+		if (c_do_convert_builtin(rcc, func, num_args + j, arg_refs)) {
+			if (num_args > C_ALLOCA_PARAMS) ir_mem_free(args);
+			return;
 		}
+
+		ref = c_value_ref(rcc, func);
+		if (rcc->active_ctx->ir_base[ref].op != IR_FUNC
+		 && rcc->active_ctx->ir_base[ref].op != IR_FUNC_ADDR
+		 && rcc->active_ctx->ir_base[ref].op != IR_PROTO) {
+			const c_type *type = func->type;
+			if (type->kind == C_TYPE_POINTER) type = type->pointer.type;
+			ref = ir_emit2(rcc->active_ctx, IR_OPT(IR_PROTO, IR_ADDR), ref, c_type2proto(rcc, type, 0));
+		}
+		ref = ir_CALL_N(_ret_type, ref, num_args + j, arg_refs);
+		rcc->c_last_call_func_type = func->type;
 	}
 	if (ret_type->kind == C_TYPE_STRUCT || ret_type->kind == C_TYPE_UNION) {
 		if (!j) {
