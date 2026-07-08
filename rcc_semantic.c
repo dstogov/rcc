@@ -4510,7 +4510,7 @@ void c_do_unary_plus(rcc_ctx *rcc, c_value *v)
 		if (t->size < 4) {
 			c_do_cvt(rcc, &c_type_i32, IR_I32, v);
 		}
-	} else if (!C_IS_TYPE_FP(t)) {
+	} else if (!C_IS_TYPE_FP(t) && t->kind != C_TYPE_VECTOR) {
 		yy_error("invalid type argument of unary \"+\"");
 	}
 }
@@ -6741,7 +6741,13 @@ static void c_do_shr(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op
 	} else {
 		ir_type t = c_type2ir(rcc, type);
 
-		if (C_IS_TYPE_SIGNED(type)) {
+		if (type->kind == C_TYPE_VECTOR) {
+			if (C_IS_TYPE_SIGNED(type->vec.type)) {
+				c_value_set_rval(op1, type, t, ir_SAR(t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
+			} else {
+				c_value_set_rval(op1, type, t, ir_SHR(t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
+			}
+		} else if (C_IS_TYPE_SIGNED(type)) {
 			c_value_set_rval(op1, type, t, ir_SAR(t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 		} else {
 			c_value_set_rval(op1, type, t, ir_SHR(t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
