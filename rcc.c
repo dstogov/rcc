@@ -1400,7 +1400,9 @@ static void rcc_emit_ir(rcc_ctx *rcc, FILE *f)
 		if (p->sym && p->sym->kind == C_SYM_VAR) {
 			size_t size;
 
-			if (p->sym->linkage == C_LINK_INTERNAL) {
+			if (p->sym->linkage == C_LINK_NONE) {
+				continue;
+			} else if (p->sym->linkage == C_LINK_INTERNAL) {
 				fprintf(f, "static ");
 			} else if (p->sym->is_external || !c_value_is_set(&p->sym->value)) {
 				if (p->sym->alias) continue;
