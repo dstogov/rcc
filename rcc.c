@@ -1942,6 +1942,7 @@ static void rcc_help(const char *cmd)
 		"  -m[no-]sse4                - enable/disable SSE4 instruction set\n"
 		"  -m[no-]sse4.1              - enable/disable SSE4.1 instruction set\n"
 		"  -m[no-]sse4.2              - enable/disable SSE4.2 instruction set\n"
+		"  -m[no-]avx2                - enable/disable AVX2 instruction set\n"
 #endif
 		"  -muse-fp                   - use base frame pointer register\n"
 #if defined(IR_TARGET_X86)
@@ -2181,6 +2182,12 @@ static int rcc_parse_option(rcc_ctx *rcc, const char *opt, const char *arg, bool
 	} else if (strcmp(opt, "-mno-sse4.2") == 0) {
 		rcc->ir_mflags &= ~IR_X86_SSE42;
 		rcc->ir_mflags_disabled |= IR_X86_SSE42;
+	} else if (strcmp(opt, "-mavx2") == 0) {
+		rcc->ir_mflags |= IR_X86_AVX2;
+		rcc->ir_mflags_disabled &= ~IR_X86_AVX2;
+	} else if (strcmp(opt, "-mno-avx2") == 0) {
+		rcc->ir_mflags &= ~IR_X86_AVX2;
+		rcc->ir_mflags_disabled |= IR_X86_AVX2;
 #endif
 	} else if (strcmp(opt, "-muse-fp") == 0) {
 		rcc->ir_flags |= IR_USE_FRAME_POINTER;
@@ -2571,7 +2578,7 @@ int main(int argc, const char **argv)
 					return 1;
 				}
 			}
-			rcc->ir_mflags |= (cpuinfo & (IR_X86_SSE3|IR_X86_SSSE3|IR_X86_SSE41|IR_X86_SSE42|IR_X86_BMI1)) & ~rcc->ir_mflags_disabled;
+			rcc->ir_mflags |= (cpuinfo & (IR_X86_SSE3|IR_X86_SSSE3|IR_X86_SSE41|IR_X86_SSE42|IR_X86_AVX2|IR_X86_BMI1)) & ~rcc->ir_mflags_disabled;
 #endif
 		}
 
