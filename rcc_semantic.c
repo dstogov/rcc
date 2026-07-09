@@ -6232,6 +6232,12 @@ static const c_type *c_common_type(rcc_ctx *rcc, yy_sym sym, c_value *op1, c_val
 		}
 		return NULL;
 	} else if (t1 == C_TYPE_VECTOR) {
+		if (C_IS_TYPE_FP(op1->type->vec.type)) {
+			if (sym == YY__PERCENT || sym == YY__AND || sym == YY__UPARROW || sym == YY__BAR
+			 || sym == YY__LESS_LESS || sym == YY__GREATER_GREATER) {
+				return NULL;
+			}
+		}
 		if (t2 == C_TYPE_VECTOR) {
 			if (op1->type->size == op2->type->size) {
 				if (op1->type->vec.type == op2->type->vec.type) {
@@ -6244,6 +6250,12 @@ static const c_type *c_common_type(rcc_ctx *rcc, yy_sym sym, c_value *op1, c_val
 			}
 		}
 	} else if (t2 == C_TYPE_VECTOR && C_IS_TYPE_KIND_SCALAR(t1)) {
+		if (C_IS_TYPE_FP(op2->type->vec.type)) {
+			if (sym == YY__PERCENT || sym == YY__AND || sym == YY__UPARROW || sym == YY__BAR
+			 || sym == YY__LESS_LESS || sym == YY__GREATER_GREATER) {
+				return NULL;
+			}
+		}
 		if (c_do_splat(rcc, op2->type, op1)) {
 			return op2->type;
 		}
