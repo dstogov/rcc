@@ -8699,6 +8699,22 @@ void c_do_init_start(rcc_ctx *rcc, c_sym *obj, c_init *init)
 	init->stack[0].type = type;
 	init->stack[0].pos = 0;
 	init->stack[0].last = 0;
+
+	if (type->kind == C_TYPE_VECTOR
+	 && !c_value_is_const(&obj->value) && !(c_value_is_ref(&obj->value) && IR_IS_CONST_REF(obj->value.u.ref))) {
+		ir_val v;
+		ir_ref ref;
+
+		v.u64 = 0;
+		ref = ir_SPLAT(c_type2ir(rcc, type), ir_const(rcc->active_ctx, v, c_type2ir(rcc, type->vec.type)));
+
+		if (rcc->active_ctx->ir_base[obj->value.u.ref].op == IR_VAR) {
+			ir_VSTORE(obj->value.u.ref, ref);
+		} else {
+			IR_ASSERT(rcc->active_ctx->ir_base[obj->value.u.ref].op == IR_ALLOCA);
+			ir_STORE(obj->value.u.ref, ref);
+		}
+	}
 }
 
 void c_do_init_dim(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *dim)
@@ -9120,13 +9136,7 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val)
 
 				offset -= t->vec.type->size * init->stack[init->level].pos;
 				IR_ASSERT(offset == 0);
-				if (init->stack[init->level].pos == 0) {
-					ir_val v;
-					v.u64 = 0;
-					ref = ir_SPLAT(vt, ir_const(rcc->active_ctx, v, c_type2ir(rcc, t->vec.type)));
-				} else {
-					ref = ir_VLOAD(vt, obj->value.u.ref);
-				}
+				ref = ir_VLOAD(vt, obj->value.u.ref);
 				ref = ir_REPLACE(vt, ref, ir_const_u8(rcc->active_ctx, init->stack[init->level].pos),
 						c_value_ref(rcc, val));
 				ir_VSTORE(obj->value.u.ref, ref);
@@ -9145,13 +9155,7 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val)
 					ir_ref ref;
 
 					offset -= t->vec.type->size * init->stack[init->level].pos;
-					if (init->stack[init->level].pos == 0) {
-						ir_val v;
-						v.u64 = 0;
-						ref = ir_SPLAT(vt, ir_const(rcc->active_ctx, v, c_type2ir(rcc, t->vec.type)));
-					} else {
-						ref = ir_LOAD(vt, ir_ADD_A(obj->value.u.ref, ir_const_size_t(rcc->active_ctx, offset)));
-					}
+					ref = ir_LOAD(vt, ir_ADD_A(obj->value.u.ref, ir_const_size_t(rcc->active_ctx, offset)));
 					ref = ir_REPLACE(vt, ref, ir_const_u8(rcc->active_ctx, init->stack[init->level].pos),
 							c_value_ref(rcc, val));
 					ir_STORE(
