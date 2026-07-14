@@ -6246,7 +6246,19 @@ static const c_type *c_common_type(rcc_ctx *rcc, yy_sym sym, c_value *op1, c_val
 				}
 			}
 		} else if (C_IS_TYPE_KIND_SCALAR(t2)) {
-			if (c_do_splat(rcc, op1->type, op2)) {
+			if (sym == YY__LESS_LESS || sym == YY__GREATER_GREATER) {
+				/* For shifts: put count into the lower vector element */
+				// TODO: may be this should be done in back-end ???
+				ir_val v;
+				ir_ref ref;
+				ir_type t = c_type2ir(rcc, op1->type);
+
+				v.u64 = 0;
+				ref = ir_SPLAT(t, ir_const(rcc->active_ctx, v, IR_VECTOR_BASE_TYPE(t)));
+				ref = ir_REPLACE(t, ref, ir_const_u8(rcc->active_ctx, 0), c_value_ref(rcc, op2));
+				c_value_set_rval(op2, op1->type, t, ref);
+				return op1->type;
+			} else if (c_do_splat(rcc, op1->type, op2)) {
 				return op1->type;
 			}
 		}
