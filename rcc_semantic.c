@@ -4625,11 +4625,12 @@ void c_do_array_dim(rcc_ctx *rcc, c_value *v, c_value *dim)
 		c_value_rval(rcc, dim);
 		if (c_value_is_lval(v)) {
 			c_value_set_lval(v, type->vec.type, c_type2ir(rcc, type->vec.type), v->u.ref);
+			v->u.proto = C_VECTOR_DIM(vt);
+			v->u.op2 = c_value_ref(rcc, dim);
 		} else {
-			c_value_set_rval(v, type->vec.type, c_type2ir(rcc, type->vec.type), c_value_ref(rcc, v));
+			ir_type	t = c_type2ir(rcc, type->vec.type);
+			c_value_set_rval(v, type->vec.type, t, ir_EXTRACT(t, c_value_ref(rcc, v), c_value_ref(rcc, dim)));
 		}
-		v->u.proto = C_VECTOR_DIM(vt);
-		v->u.op2 = c_value_ref(rcc, dim);;
 		return;
 	} else {
 		type = dim->type;
