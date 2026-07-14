@@ -126,7 +126,7 @@ int main()
 		printf("%d\n", ~(i8)x[I]);
 	}
 
-	return 0;	
+	return 0;
 }
 --EXPECT--
 42
