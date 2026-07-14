@@ -9257,7 +9257,9 @@ void c_do_init_expr_start(rcc_ctx *rcc, c_sym *obj, const c_type *type)
 	if (rcc->active_func && !rcc->c_static_data) {
 		ir_ref size = ir_const_size_t(rcc->active_ctx, type->size);
 		ir_ref addr = c_do_alloca(rcc, type->size, c_attr2align(type->attr), 0);
-		ir_memzero(rcc, addr, size, c_attr2align(type->attr));
+		if (type->kind != C_TYPE_VECTOR) {
+			ir_memzero(rcc, addr, size, c_attr2align(type->attr));
+		}
 		c_value_set_rval(&obj->value, type, IR_ADDR, addr);
 	} else {
 		c_dcl d = {.type = type, .flags = C_DCL_DEFINITION, .attr = 0};
