@@ -597,9 +597,15 @@ add_thunk:
 	return NULL;
 }
 
-void *c_linker_allocate_data(rcc_ctx *rcc, c_name name, size_t size, size_t align)
+void *c_linker_allocate_data(rcc_ctx *rcc, c_name name, size_t size, size_t align, bool is_array)
 {
-	void *data = ir_arena_alloc_aligned(&rcc->c_linker_arena, size, align);
+	void *data;
+
+	if (is_array && size >= 16 && align < 16) {
+		/* global array variable of length at least 16 bytes always has alignment of at least 16 byte */
+		align = 16;
+	}
+	data = ir_arena_alloc_aligned(&rcc->c_linker_arena, size, align);
 	if (UNEXPECTED(!data)) yy_error("not enough memory to allocate data");
 	if (align < 8) {
 		align = 8;
@@ -1146,7 +1152,7 @@ static void rcc_fix_flexible_data(rcc_ctx *rcc)
 			p->sym->value.type = type;
 
 			p->sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
-			p->sym->value.u.val.ptr = c_linker_allocate_data(rcc, i, type->size, c_attr2align(type->attr));
+			p->sym->value.u.val.ptr = c_linker_allocate_data(rcc, i, type->size, c_attr2align(type->attr), 1);
 			p->sym->is_implemented = 1;
 
 			//yy_warning_fmt("array \"%s\" assumed to have one element", p->str); // error position ???

@@ -760,6 +760,7 @@ typedef enum {
 	C_TYPE_INPROGRESS = (1<<1), /* incomplete (not completely defined) struct, union */
 	C_TYPE_GLOBAL     = (1<<2),
 	C_TYPE_IN_FUNC    = (1<<3),
+	C_TYPE_OPAQUE     = (1<<4), /* opaque vector */
 } c_type_flag;
 
 typedef yy_sym c_name;
@@ -1304,7 +1305,7 @@ void yy_warning_(rcc_ctx *rcc, uint32_t kind, const char *msg);
 void yy_warning_fmt_(rcc_ctx *rcc, uint32_t kind, const char *fmt, ...);
 
 /* Linker */
-void *c_linker_allocate_data(rcc_ctx *rcc, c_name name, size_t size, size_t align);
+void *c_linker_allocate_data(rcc_ctx *rcc, c_name name, size_t size, size_t align, bool is_array);
 bool  c_linker_fix_reloc(rcc_ctx *rcc, c_sym *obj, size_t obj_offset, c_value *val);
 void  c_linker_del_reloc(rcc_ctx *rcc, c_sym *obj, size_t obj_offset);
 

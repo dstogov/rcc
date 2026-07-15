@@ -916,6 +916,9 @@ static bool c_compatible_types(const c_type *t1, const c_type *t2, bool unqualif
 		if (!c_compatible_types(t1->array.type, t2->array.type, 0, 0)) return 0;
 	} else if (t1->kind == C_TYPE_POINTER) {
 		if (!c_compatible_types(t1->pointer.type, t2->pointer.type, 0, 0)) return 0;
+	} else if (t1->kind == C_TYPE_VECTOR) {
+		if (t1->vec.length != t2->vec.length) return 0;
+		if (!c_compatible_types(t1->vec.type, t2->vec.type, 0, 0)) return 0;
 	} else if (t1->kind == C_TYPE_STRUCT || t1->kind == C_TYPE_UNION) {
 		if (t1->record.tag != t2->record.tag) return 0;
 		if (t1->record.tag && t2->record.tag) return 1;
@@ -978,7 +981,7 @@ static void c_do_end_flexible(rcc_ctx *rcc, c_sym *obj, size_t size)
 
 		IR_ASSERT(IR_IS_EXT_STR(name));
 		sym = IR_EXT_STR(name);
-		addr = c_linker_allocate_data(rcc, sym, size, c_attr2align(obj->value.type->attr));
+		addr = c_linker_allocate_data(rcc, sym, size, c_attr2align(obj->value.type->attr), 1);
 		memcpy(addr, obj->value.u.val.ptr, size);
 		ir_mem_free(obj->value.u.val.ptr);
 		obj->value.u.val.ptr = addr;
@@ -994,7 +997,7 @@ static void c_do_end_flexible(rcc_ctx *rcc, c_sym *obj, size_t size)
 		}
 	} else {
 		addr = c_linker_allocate_data(rcc, obj->value.u.ref, size,
-			c_attr2align(obj->value.type->attr));
+			c_attr2align(obj->value.type->attr), 1);
 		memcpy(addr, obj->value.u.val.ptr, size);
 		ir_mem_free(obj->value.u.val.ptr);
 		obj->value.u.val.ptr = addr;
@@ -1119,7 +1122,7 @@ static void c_validate_redeclaration(rcc_ctx *rcc, c_name name, c_dcl *d, c_sym 
 				sym->value.u.ref = name; /* keep name in addition to address */
 			} else {
 				sym->value.u.val.ptr = c_linker_allocate_data(rcc, name,
-					sym->value.type->size, c_attr2align(sym->value.type->attr));
+					sym->value.type->size, c_attr2align(sym->value.type->attr), sym->value.type->kind == C_TYPE_ARRAY);
 			}
 		}
 	}
@@ -1284,7 +1287,7 @@ static ir_ref c_create_str_sym(rcc_ctx *rcc, c_value *res)
 	buf[--i] = 's';
 
 	name = yy_hash_lookup(rcc, buf + i, sizeof(buf) - 1 - i);
-	addr = c_linker_allocate_data(rcc, name, size, 8);
+	addr = c_linker_allocate_data(rcc, name, size, 8, 1);
 	memcpy(addr, str, size);
 
 	/* Create a global symbol in yy_arena */
@@ -1548,7 +1551,7 @@ c_sym *c_declare(rcc_ctx *rcc, c_name name, c_dcl *d)
 						addr = ir_mem_calloc(1, d->type->size);
 					} else {
 						addr = c_linker_allocate_data(rcc, name,
-							d->type->size, c_attr2align(d->type->attr));
+							d->type->size, c_attr2align(d->type->attr), d->type->kind == C_TYPE_ARRAY);
 					}
 					sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
 					sym->value.u.val.ptr = addr;
@@ -1562,7 +1565,7 @@ c_sym *c_declare(rcc_ctx *rcc, c_name name, c_dcl *d)
 						addr = ir_mem_calloc(1, d->type->size);
 					} else {
 						addr = c_linker_allocate_data(rcc, sym_name,
-							d->type->size, c_attr2align(d->type->attr));
+							d->type->size, c_attr2align(d->type->attr), d->type->kind == C_TYPE_ARRAY);
 					}
 					rcc->yy_hash.data[sym_name].sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
 					rcc->yy_hash.data[sym_name].sym->value.u.val.ptr = addr;
@@ -4180,6 +4183,47 @@ static ir_ref c_do_store(rcc_ctx *rcc, c_value *addr, c_value *val)
 	}
 }
 
+static const c_type *c_opaque_vector_type(rcc_ctx *rcc, const c_type *src_type)
+{
+	c_type *type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
+
+	type->size = src_type->size;
+	type->kind = C_TYPE_VECTOR;
+	type->flags = (src_type->flags & ~C_TYPE_GLOBAL) | (rcc->active_scope ? 0 : C_TYPE_GLOBAL) | C_TYPE_OPAQUE;
+	type->attr = src_type->attr;
+	type->vec.length = src_type->vec.length;
+
+	if (src_type->vec.type->size == 1) {
+		type->vec.type = &c_type_i8;
+	} else if (src_type->vec.type->size == 2) {
+		type->vec.type = &c_type_i16;
+	} else if (src_type->vec.type->size == 4) {
+		type->vec.type = &c_type_i32;
+	} else if (src_type->vec.type->size == 8) {
+		type->vec.type = &c_type_i64;
+	} else {
+		IR_ASSERT(0);
+	}
+
+	return type;
+}
+
+static void c_opaque_vector_cast(rcc_ctx *rcc, const c_type *type, c_value *val)
+{
+	ir_type t = c_type2ir(rcc, type);
+
+#if 0
+	/* Update type of comparison */
+	rcc->active_ctx->ir_base[val->u.ref].type = t;
+	val->type = type;
+	val->u.type = t;
+#else
+	/* Implicit vector BITCAST */
+	c_value_set_rval(val, type, t, ir_BITCAST(t, val->u.ref));
+#endif
+}
+
+
 /* arg >   0 - means real argument number
  * arg ==  0 - return value
  * arg == -1 - assign
@@ -4299,10 +4343,16 @@ check_qualifiers:
 		return;
 	} else if (type->kind == C_TYPE_VECTOR
 	 && val->type->kind == C_TYPE_VECTOR
-	 && type->vec.type->kind == val->type->vec.type->kind
 	 && type->vec.length == val->type->vec.length) {
-		/* identicl vector types */
-		return;
+		if (type->vec.type->kind == val->type->vec.type->kind) {
+			/* identicl vector types */
+			return;
+		} else if (type->size == val->type->size && (val->type->flags & C_TYPE_OPAQUE)) {
+			c_opaque_vector_cast(rcc, type, val);
+			return;
+		} else {
+			goto incompatible;
+		}
 	} else {
 		goto incompatible;
 	}
@@ -6253,12 +6303,29 @@ static const c_type *c_common_type(rcc_ctx *rcc, yy_sym sym, c_value *op1, c_val
 		}
 		if (t2 == C_TYPE_VECTOR) {
 			if (op1->type->size == op2->type->size) {
+				if (op1->type->vec.type != op2->type->vec.type) {
+					if (op2->type->flags & C_TYPE_OPAQUE) {
+						c_opaque_vector_cast(rcc, op1->type, op2);
+					} else if (op1->type->flags & C_TYPE_OPAQUE) {
+						c_opaque_vector_cast(rcc, op2->type, op1);
+					}
+				}
 				if (op1->type->vec.type == op2->type->vec.type) {
+					if ((sym == YY__LESS || sym == YY__LESS_EQUAL || sym == YY__GREATER || sym == YY__GREATER_EQUAL
+					  || sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL)
+					 && !C_IS_TYPE_SIGNED(op1->type->vec.type)) {
+						return c_opaque_vector_type(rcc, op1->type);
+					}
 					return op1->type;
 				}
 			}
 		} else if (C_IS_TYPE_KIND_SCALAR(t2)) {
 			if (c_do_splat(rcc, op1->type, op2, sym == YY__LESS_LESS || sym == YY__GREATER_GREATER)) {
+				if ((sym == YY__LESS || sym == YY__LESS_EQUAL || sym == YY__GREATER || sym == YY__GREATER_EQUAL
+				  || sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL)
+				 && !C_IS_TYPE_SIGNED(op1->type->vec.type)) {
+					return c_opaque_vector_type(rcc, op1->type);
+				}
 				return op1->type;
 			}
 		}
@@ -6270,6 +6337,11 @@ static const c_type *c_common_type(rcc_ctx *rcc, yy_sym sym, c_value *op1, c_val
 			}
 		}
 		if (c_do_splat(rcc, op2->type, op1, 0)) {
+				if ((sym == YY__LESS || sym == YY__LESS_EQUAL || sym == YY__GREATER || sym == YY__GREATER_EQUAL
+				  || sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL)
+				 && !C_IS_TYPE_SIGNED(op2->type->vec.type)) {
+				return c_opaque_vector_type(rcc, op2->type);
+			}
 			return op2->type;
 		}
 	} else if (t2 == C_TYPE_FUNC) {
@@ -9271,7 +9343,7 @@ void c_do_init_expr_start(rcc_ctx *rcc, c_sym *obj, const c_type *type)
 			obj->tmp_data = 1;
 			addr = ir_mem_calloc(1, type->size);
 		} else {
-			addr = c_linker_allocate_data(rcc, 0, type->size, c_attr2align(type->attr));
+			addr = c_linker_allocate_data(rcc, 0, type->size, c_attr2align(type->attr), type->kind == C_TYPE_ARRAY);
 		}
 
 		rcc->yy_hash.data[sym_name].sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
