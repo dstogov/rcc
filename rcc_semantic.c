@@ -5283,7 +5283,6 @@ void c_do_builtin(rcc_ctx *rcc, c_value *val, c_name name, int32_t num_args, c_v
 			op3 = c_value_ref(rcc, &args[2]);
 		}
 
-		t = IR_MAKE_VECTOR_TYPE(c_type2ir(rcc, args[0].type->vec.type), len);
 		if ((uint32_t)args[0].type->vec.length == len) {
 			type = (c_type*)args[0].type;
 		} else {
@@ -5295,6 +5294,7 @@ void c_do_builtin(rcc_ctx *rcc, c_value *val, c_name name, int32_t num_args, c_v
 			type->vec.type = args[0].type->vec.type;
 			type->vec.length = len;
 		}
+		t = c_type2ir(rcc, type);
 
 		c_value_set_rval(val, type, t, ir_SHUFFLE(t, op1, op2, op3));
 	} else if (name == YY___BUILTIN_SHUFFLEVECTOR) {
@@ -5328,7 +5328,6 @@ void c_do_builtin(rcc_ctx *rcc, c_value *val, c_name name, int32_t num_args, c_v
 			ptr++;
 		}
 
-		t = IR_MAKE_VECTOR_TYPE(c_type2ir(rcc, args[0].type->vec.type), len);
 		if ((uint32_t)args[0].type->vec.length == len) {
 			type = (c_type*)args[0].type;
 		} else {
@@ -5340,6 +5339,7 @@ void c_do_builtin(rcc_ctx *rcc, c_value *val, c_name name, int32_t num_args, c_v
 			type->vec.type = args[0].type->vec.type;
 			type->vec.length = len;
 		}
+		t = c_type2ir(rcc, type);
 
 		c_value_set_rval(val, type, t,
 			ir_SHUFFLE(t, c_value_ref(rcc, &args[0]), c_value_ref(rcc, &args[1]), ref));
