@@ -4572,7 +4572,7 @@ void c_do_struct_field(rcc_ctx *rcc, c_value *v, c_name field_name)
 	field = c_find_struct_field(v->type, field_name, &offset);
 	if (!field) {
 		if (v->type->record.tag) {
-			yy_error_fmt("\"%s %s\" hasu.operand no member named \"%s\"",
+			yy_error_fmt("\"%s %s\" has no member named \"%s\"",
 				(v->type->kind == C_TYPE_STRUCT) ? "struct" : "union",
 				yy_sym2str(rcc, v->type->record.tag),
 				yy_sym2str(rcc, field_name));
