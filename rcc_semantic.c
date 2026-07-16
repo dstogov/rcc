@@ -6122,7 +6122,7 @@ static bool c_try_convert_const_int2int(rcc_ctx *rcc, const c_type *type, c_valu
 	return 1;
 }
 
-static bool c_do_splat(rcc_ctx *rcc, const c_type *type, c_value *val, bool shift)
+static bool c_do_splat(rcc_ctx *rcc, const c_type *type, c_value *val)
 {
 	ir_type t;
 
@@ -6172,19 +6172,7 @@ static bool c_do_splat(rcc_ctx *rcc, const c_type *type, c_value *val, bool shif
 	}
 
 	t = c_type2ir(rcc, type);
-	if (shift) {
-		/* For shifts: put count into the lower vector element */
-		// TODO: may be this should be done in back-end ???
-		ir_val v;
-		ir_ref ref;
-
-		v.u64 = 0;
-		ref = ir_SPLAT(t, ir_const(rcc->active_ctx, v, IR_VECTOR_BASE_TYPE(t)));
-		ref = ir_REPLACE(t, ref, ir_const_u8(rcc->active_ctx, 0), c_value_ref(rcc, val));
-		c_value_set_rval(val, type, t, ref);
-	} else {
-		c_value_set_rval(val, type, t, ir_SPLAT(t, c_value_ref(rcc, val)));
-	}
+	c_value_set_rval(val, type, t, ir_SPLAT(t, c_value_ref(rcc, val)));
 
 	return 1;
 }
@@ -6320,7 +6308,10 @@ static const c_type *c_common_type(rcc_ctx *rcc, yy_sym sym, c_value *op1, c_val
 				}
 			}
 		} else if (C_IS_TYPE_KIND_SCALAR(t2)) {
-			if (c_do_splat(rcc, op1->type, op2, sym == YY__LESS_LESS || sym == YY__GREATER_GREATER)) {
+			if (sym == YY__LESS_LESS || sym == YY__GREATER_GREATER) {
+				if (!C_IS_TYPE_KIND_INT(t2)) return NULL;
+				return op1->type;
+			} else if (c_do_splat(rcc, op1->type, op2)) {
 				if ((sym == YY__LESS || sym == YY__LESS_EQUAL || sym == YY__GREATER || sym == YY__GREATER_EQUAL
 				  || sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL)
 				 && !C_IS_TYPE_SIGNED(op1->type->vec.type)) {
@@ -6336,7 +6327,7 @@ static const c_type *c_common_type(rcc_ctx *rcc, yy_sym sym, c_value *op1, c_val
 				return NULL;
 			}
 		}
-		if (c_do_splat(rcc, op2->type, op1, 0)) {
+		if (c_do_splat(rcc, op2->type, op1)) {
 				if ((sym == YY__LESS || sym == YY__LESS_EQUAL || sym == YY__GREATER || sym == YY__GREATER_EQUAL
 				  || sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL)
 				 && !C_IS_TYPE_SIGNED(op2->type->vec.type)) {
@@ -6793,7 +6784,7 @@ static void c_do_mod(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op
 
 static void c_do_shl(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op2)
 {
-	if (c_value_is_const(op1) && c_value_is_const(op2)) {
+	if (c_value_is_const(op1) && c_value_is_const(op2) && op1->type->kind != C_TYPE_VECTOR) {
 		ir_val val;
 		uint32_t mask = (op2->type->size == 8) ? 63 : 31;
 
@@ -6818,7 +6809,7 @@ static void c_do_shl(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op
 
 static void c_do_shr(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op2)
 {
-	if (c_value_is_const(op1) && c_value_is_const(op2)) {
+	if (c_value_is_const(op1) && c_value_is_const(op2) && op1->type->kind != C_TYPE_VECTOR) {
 		ir_val val;
 		uint32_t mask = (op2->type->size == 8) ? 63 : 31;
 
