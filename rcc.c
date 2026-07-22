@@ -2610,7 +2610,11 @@ int main(int argc, const char **argv)
 				atexit(rcc_atexit_destructors);
 			}
 
+#if defined(_MSC_VER) && defined(IR_TARGET_X86)
+			ret = ir_call_with_aligned_stack(func, jit_argc, jit_argv);
+#else
 			ret = func(jit_argc, jit_argv);
+#endif
 
 			if ((rcc->c_flags & C_DUMP_TIME) && rcc_atexit_start) {
 				double t = rcc_time();
