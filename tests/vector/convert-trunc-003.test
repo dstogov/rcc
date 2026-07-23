@@ -1,0 +1,109 @@
+--TEST--
+CONVERT.TRUNC.003: 256-bit vectors AVX
+--TARGET--
+!aarch64
+--ARGS--
+-mavx --run
+--CODE--
+int printf(const char *, ...);
+
+typedef long long          i64;
+typedef unsigned long long u64;
+typedef int                i32;
+typedef unsigned int       u32;
+typedef short              i16;
+typedef unsigned short     u16;
+typedef char               i8;
+typedef unsigned char      u8;
+
+typedef i64 __attribute__((__vector_size__(32))) v_4i64;
+typedef i32 __attribute__((__vector_size__(16))) v_4i32;
+typedef i16 __attribute__((__vector_size__(8)))  v_4i16;
+typedef i8  __attribute__((__vector_size__(4)))  v_4i8;
+
+typedef i32 __attribute__((__vector_size__(32))) v_8i32;
+typedef i16 __attribute__((__vector_size__(16))) v_8i16;
+typedef i8  __attribute__((__vector_size__(8)))  v_8i8;
+
+typedef i16 __attribute__((__vector_size__(32))) v_16i16;
+typedef i8  __attribute__((__vector_size__(16))) v_16i8;
+
+v_4i32 __attribute__((noinline)) test_i64_i32(v_4i64 v)
+{
+	return __builtin_convertvector(v, v_4i32);
+}
+
+v_4i16 __attribute__((noinline)) test_i64_i16(v_4i64 v)
+{
+	return __builtin_convertvector(v, v_4i16);
+}
+
+v_4i8 __attribute__((noinline)) test_i64_i8(v_4i64 v)
+{
+	return __builtin_convertvector(v, v_4i8);
+}
+
+v_8i16 __attribute__((noinline)) test_i32_i16(v_8i32 v)
+{
+	return __builtin_convertvector(v, v_8i16);
+}
+
+v_8i8 __attribute__((noinline)) test_i32_i8(v_8i32 v)
+{
+	return __builtin_convertvector(v, v_8i8);
+}
+
+v_16i8 __attribute__((noinline)) test_i16_i8(v_16i16 v)
+{
+	return __builtin_convertvector(v, v_16i8);
+}
+
+int main()
+{
+	{
+		v_4i64 x = {1, 2, 3, 4};
+		v_4i32 y = test_i64_i32(x);
+		printf("%d %d %d %d\n", y[0], y[1], y[2], y[3]);
+	}
+
+	{
+		v_4i64 x = {1, 2, 3, 4};
+		v_4i16 y = test_i64_i16(x);
+		printf("%d %d %d %d\n", y[0], y[1], y[2], y[3]);
+	}
+
+	{
+		v_4i64 x = {1, 2, 3, 4};
+		v_4i8 y = test_i64_i8(x);
+		printf("%d %d %d %d\n", y[0], y[1], y[2], y[3]);
+	}
+
+	{
+		v_8i32 x = {1, 2, 3, 4, 5, 6, 7, 8};
+		v_8i16 y = test_i32_i16(x);
+		printf("%d %d %d %d %d %d %d %d\n", y[0], y[1], y[2], y[3], y[4], y[5], y[6], y[7]);
+	}
+
+	{
+		v_8i32 x = {1, 2, 3, 4, 5, 6, 7, 8};
+		v_8i8 y = test_i32_i8(x);
+		printf("%d %d %d %d %d %d %d %d\n", y[0], y[1], y[2], y[3], y[4], y[5], y[6], y[7]);
+	}
+
+	{
+		v_16i16 x = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+		v_16i8 y = test_i16_i8(x);
+		printf("%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d\n",
+			y[0], y[1], y[2], y[3], y[4], y[5], y[6], y[7],
+			y[8], y[9], y[10], y[11], y[12], y[13], y[14], y[15]);
+	}
+
+	return 0;
+}
+--EXPECT--
+1 2 3 4
+1 2 3 4
+1 2 3 4
+1 2 3 4 5 6 7 8
+1 2 3 4 5 6 7 8
+1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16
