@@ -102,7 +102,7 @@ int main()
 	{
 		v_u64 x = {1, 2};
 		x = test_v_u64(x, (v_i64){1, 0});
-		printf("%lld %ld\n", x[0], x[1]);
+		printf("%lld %lld\n", x[0], x[1]);
 	}
 
 	{
