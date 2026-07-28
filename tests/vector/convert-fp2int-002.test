@@ -1,0 +1,238 @@
+--TEST--
+CONVERT.FP2INT.002: 256-bit vectors AVX
+--TARGET--
+!aarch64
+--ARGS--
+-mavx --run
+--CODE--
+int printf(const char *, ...);
+
+typedef long long          i64;
+typedef unsigned long long u64;
+typedef int                i32;
+typedef unsigned int       u32;
+typedef short              i16;
+typedef unsigned short     u16;
+typedef char               i8;
+typedef unsigned char      u8;
+
+typedef double __attribute__((__vector_size__(32))) v_4d;
+
+typedef i64 __attribute__((__vector_size__(32))) v_4i64;
+typedef i32 __attribute__((__vector_size__(16))) v_4i32;
+typedef i16 __attribute__((__vector_size__(8)))  v_4i16;
+typedef i8  __attribute__((__vector_size__(4)))  v_4i8;
+
+typedef u64 __attribute__((__vector_size__(32))) v_4u64;
+typedef u32 __attribute__((__vector_size__(16))) v_4u32;
+typedef u16 __attribute__((__vector_size__(8)))  v_4u16;
+typedef u8  __attribute__((__vector_size__(4)))  v_4u8;
+
+typedef float  __attribute__((__vector_size__(32))) v_8f;
+typedef float  __attribute__((__vector_size__(16))) v_4f;
+
+typedef i32 __attribute__((__vector_size__(32))) v_8i32;
+typedef i16 __attribute__((__vector_size__(16))) v_8i16;
+typedef i8  __attribute__((__vector_size__(8)))  v_8i8;
+
+typedef u32 __attribute__((__vector_size__(32))) v_8u32;
+typedef u16 __attribute__((__vector_size__(16))) v_8u16;
+typedef u8  __attribute__((__vector_size__(8)))  v_8u8;
+
+v_4i64 __attribute__((noinline)) test_d_i64(v_4d v)
+{
+	return __builtin_convertvector(v, v_4i64);
+}
+
+v_4i32 __attribute__((noinline)) test_d_i32(v_4d v)
+{
+	return __builtin_convertvector(v, v_4i32);
+}
+
+v_4i16 __attribute__((noinline)) test_d_i16(v_4d v)
+{
+	return __builtin_convertvector(v, v_4i16);
+}
+
+v_4i8 __attribute__((noinline)) test_d_i8(v_4d v)
+{
+	return __builtin_convertvector(v, v_4i8);
+}
+
+v_4u64 __attribute__((noinline)) test_d_u64(v_4d v)
+{
+	return __builtin_convertvector(v, v_4u64);
+}
+
+v_4u32 __attribute__((noinline)) test_d_u32(v_4d v)
+{
+	return __builtin_convertvector(v, v_4u32);
+}
+
+v_4u16 __attribute__((noinline)) test_d_u16(v_4d v)
+{
+	return __builtin_convertvector(v, v_4u16);
+}
+
+v_4u8 __attribute__((noinline)) test_d_u8(v_4d v)
+{
+	return __builtin_convertvector(v, v_4u8);
+}
+
+v_4i64 __attribute__((noinline)) test_f_i64(v_4f v)
+{
+	return __builtin_convertvector(v, v_4i64);
+}
+
+v_4u64 __attribute__((noinline)) test_f_u64(v_4f v)
+{
+	return __builtin_convertvector(v, v_4u64);
+}
+
+v_8i32 __attribute__((noinline)) test_f_i32(v_8f v)
+{
+	return __builtin_convertvector(v, v_8i32);
+}
+
+v_8i16 __attribute__((noinline)) test_f_i16(v_8f v)
+{
+	return __builtin_convertvector(v, v_8i16);
+}
+
+v_8i8 __attribute__((noinline)) test_f_i8(v_8f v)
+{
+	return __builtin_convertvector(v, v_8i8);
+}
+
+v_8u32 __attribute__((noinline)) test_f_u32(v_8f v)
+{
+	return __builtin_convertvector(v, v_8u32);
+}
+
+v_8u16 __attribute__((noinline)) test_f_u16(v_8f v)
+{
+	return __builtin_convertvector(v, v_8u16);
+}
+
+v_8u8 __attribute__((noinline)) test_f_u8(v_8f v)
+{
+	return __builtin_convertvector(v, v_8u8);
+}
+
+int main()
+{
+	{
+		v_4d x = {1, 2, 3, 4};
+		v_4i64 y = test_d_i64(x);
+		printf("%lld %lld %lld %lld\n", y[0], y[1], y[2], y[3]);
+	}
+
+	{
+		v_4d x = {1, 2, 3, 4};
+		v_4i32 y = test_d_i32(x);
+		printf("%d %d %d %d\n", y[0], y[1], y[2], y[3]);
+	}
+
+	{
+		v_4d x = {1, 2, 3, 4};
+		v_4i16 y = test_d_i16(x);
+		printf("%d %d %d %d\n", y[0], y[1], y[2], y[3]);
+	}
+	
+	{
+		v_4d x = {1, 2, 3, 4};
+		v_4i8 y = test_d_i8(x);
+		printf("%d %d %d %d\n", y[0], y[1], y[2], y[3]);
+	}
+
+	{
+		v_4d x = {1, 2, 3, 4};
+		v_4u64 y = test_d_u64(x);
+		printf("%llu %llu %llu %llu\n", y[0], y[1], y[2], y[3]);
+	}
+
+	{
+		v_4d x = {1, 2, 3, 4};
+		v_4u32 y = test_d_u32(x);
+		printf("%u %u %u %u\n", y[0], y[1], y[2], y[3]);
+	}
+
+	{
+		v_4d x = {1, 2, 3, 4};
+		v_4u16 y = test_d_u16(x);
+		printf("%u %u %u %u\n", y[0], y[1], y[2], y[3]);
+	}
+	{
+		v_4d x = {1, 2, 3, 4};
+		v_4u8 y = test_d_u8(x);
+		printf("%u %u %u %u\n", y[0], y[1], y[2], y[3]);
+	}
+
+	{
+		v_4f x = {1, 2, 3, 4};
+		v_4i64 y = test_f_i64(x);
+		printf("%lld %lld %lld %lld\n", y[0], y[1], y[2], y[3]);
+	}
+
+	{
+		v_4f x = {1, 2, 3, 4};
+		v_4u64 y = test_f_u64(x);
+		printf("%llu %llu %llu %llu\n", y[0], y[1], y[2], y[3]);
+	}
+
+	{
+		v_8f x = {1, 2, 3, 4, 5, 6, 7, 8};
+		v_8i32 y = test_f_i32(x);
+		printf("%d %d %d %d %d %d %d %d\n", y[0], y[1], y[2], y[3], y[4], y[5], y[6], y[7]);
+	}
+
+	{
+		v_8f x = {1, 2, 3, 4, 5, 6, 7, 8};
+		v_8i16 y = test_f_i16(x);
+		printf("%d %d %d %d %d %d %d %d\n", y[0], y[1], y[2], y[3], y[4], y[5], y[6], y[7]);
+	}
+
+	{
+		v_8f x = {1, 2, 3, 4, 5, 6, 7, 8};
+		v_8i8 y = test_f_i8(x);
+		printf("%d %d %d %d %d %d %d %d\n", y[0], y[1], y[2], y[3], y[4], y[5], y[6], y[7]);
+	}
+
+	{
+		v_8f x = {1, 2, 3, 4, 5, 6, 7, 8};
+		v_8u32 y = test_f_u32(x);
+		printf("%u %u %u %u %u %u %u %u\n", y[0], y[1], y[2], y[3], y[4], y[5], y[6], y[7]);
+	}
+
+	{
+		v_8f x = {1, 2, 3, 4, 5, 6, 7, 8};
+		v_8u16 y = test_f_u16(x);
+		printf("%u %u %u %u %u %u %u %u\n", y[0], y[1], y[2], y[3], y[4], y[5], y[6], y[7]);
+	}
+
+	{
+		v_8f x = {1, 2, 3, 4, 5, 6, 7, 8};
+		v_8u8 y = test_f_u8(x);
+		printf("%u %u %u %u %u %u %u %u\n", y[0], y[1], y[2], y[3], y[4], y[5], y[6], y[7]);
+	}
+
+	return 0;
+}
+--EXPECT--
+1 2 3 4
+1 2 3 4
+1 2 3 4
+1 2 3 4
+1 2 3 4
+1 2 3 4
+1 2 3 4
+1 2 3 4
+1 2 3 4
+1 2 3 4
+1 2 3 4 5 6 7 8
+1 2 3 4 5 6 7 8
+1 2 3 4 5 6 7 8
+1 2 3 4 5 6 7 8
+1 2 3 4 5 6 7 8
+1 2 3 4 5 6 7 8
+
