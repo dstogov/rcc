@@ -1,9 +1,9 @@
 --TEST--
-CONVERT.INT2FP.002: 128-bit vectors SSE+SSE4
+CONVERT.INT2FP.002: 128-bit vectors AVX
 --TARGET--
 !aarch64
 --ARGS--
--mno-avx2 --run
+-mavx --run
 --CODE--
 int printf(const char *, ...);
 

@@ -1,5 +1,5 @@
 --TEST--
-CONVERT.FP2FP.001: 256-bit vectors AVX
+CONVERT.FP2FP.002: 128-bit vectors AVX
 --TARGET--
 !aarch64
 --ARGS--
@@ -7,35 +7,35 @@ CONVERT.FP2FP.001: 256-bit vectors AVX
 --CODE--
 int printf(const char *, ...);
 
-typedef double __attribute__((__vector_size__(32))) v_d;
-typedef float  __attribute__((__vector_size__(16))) v_f;
+typedef double __attribute__((__vector_size__(16))) v_2d;
+typedef float  __attribute__((__vector_size__(8)))  v_4f;
 
-v_f __attribute__((noinline)) test_d_f(v_d v)
+v_4f __attribute__((noinline)) test_d_f(v_2d v)
 {
-	return __builtin_convertvector(v, v_f);
+	return __builtin_convertvector(v, v_4f);
 }
 
-v_d __attribute__((noinline)) test_f_d(v_f v)
+v_2d __attribute__((noinline)) test_f_d(v_4f v)
 {
-	return __builtin_convertvector(v, v_d);
+	return __builtin_convertvector(v, v_2d);
 }
 
 int main()
 {
 	{
-		v_d x = {1.1, 2.2, 3.3, 4.4};
-		v_f y = test_d_f(x);
-		printf("%g %g %g %g\n", y[0], y[1], y[2], y[3]);
+		v_2d x = {1.1, 2.2};
+		v_4f y = test_d_f(x);
+		printf("%g %g\n", y[0], y[1]);
 	}
 
 	{
-		v_f x = {1.1f, 2.2f, 3.3f, 4.4f};
-		v_d y = test_f_d(x);
-		printf("%g %g %g %g\n", y[0], y[1], y[2], y[3]);
+		v_4f x = {1.1f, 2.2f};
+		v_2d y = test_f_d(x);
+		printf("%g %g\n", y[0], y[1]);
 	}
 
 	return 0;
 }
 --EXPECT--
-1.1 2.2 3.3 4.4
-1.1 2.2 3.3 4.4
+1.1 2.2
+1.1 2.2

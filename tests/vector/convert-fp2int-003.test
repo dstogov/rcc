@@ -1,9 +1,9 @@
 --TEST--
-CONVERT.FP2INT.002: 128-bit vectors SSE2+SSE4
+CONVERT.FP2INT.003: 128-bit vectors AVX
 --TARGET--
 !aarch64
 --ARGS--
--mno-avx2 --run
+-mavx --run
 --CODE--
 int printf(const char *, ...);
 

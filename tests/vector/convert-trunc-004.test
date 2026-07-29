@@ -1,9 +1,9 @@
 --TEST--
-CONVERT.TRUNC.003: 256-bit vectors AVX
+CONVERT.TRUNC.004: 256-bit vectors AVX
 --TARGET--
 !aarch64
 --ARGS--
--mavx --run
+-mavx -mno-avx2 --run
 --CODE--
 int printf(const char *, ...);
 
