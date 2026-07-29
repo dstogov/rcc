@@ -6926,7 +6926,7 @@ static void c_do_lt(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op2
 		c_value_set_const(op1, &c_type_bool, IR_BOOL, val);
 	} else if (type->kind == C_TYPE_VECTOR) {
 		ir_type t = c_type2ir(rcc, type);
-		if (C_IS_TYPE_SIGNED(type->vec.type) || C_IS_TYPE_FP(type->vec.type)) {
+		if (C_IS_TYPE_SIGNED(op1->type->vec.type) || C_IS_TYPE_FP(op1->type->vec.type)) {
 			c_value_set_rval(op1, type, t, ir_BINARY_OP(IR_LT, t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 		} else {
 			c_value_set_rval(op1, type, t, ir_BINARY_OP(IR_ULT, t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
@@ -6963,7 +6963,7 @@ static void c_do_gt(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op2
 		c_value_set_const(op1, &c_type_bool, IR_BOOL, val);
 	} else if (type->kind == C_TYPE_VECTOR) {
 		ir_type t = c_type2ir(rcc, type);
-		if (C_IS_TYPE_SIGNED(type->vec.type) || C_IS_TYPE_FP(type->vec.type)) {
+		if (C_IS_TYPE_SIGNED(op1->type->vec.type) || C_IS_TYPE_FP(op1->type->vec.type)) {
 			c_value_set_rval(op1, type, t, ir_BINARY_OP(IR_GT, t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 		} else {
 			c_value_set_rval(op1, type, t, ir_BINARY_OP(IR_UGT, t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
@@ -7000,7 +7000,7 @@ static void c_do_le(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op2
 		c_value_set_const(op1, &c_type_bool, IR_BOOL, val);
 	} else if (type->kind == C_TYPE_VECTOR) {
 		ir_type t = c_type2ir(rcc, type);
-		if (C_IS_TYPE_SIGNED(type->vec.type) || C_IS_TYPE_FP(type->vec.type)) {
+		if (C_IS_TYPE_SIGNED(op1->type->vec.type) || C_IS_TYPE_FP(op1->type->vec.type)) {
 			c_value_set_rval(op1, type, t, ir_BINARY_OP(IR_LE, t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 		} else {
 			c_value_set_rval(op1, type, t, ir_BINARY_OP(IR_ULE, t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
@@ -7037,7 +7037,7 @@ static void c_do_ge(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op2
 		c_value_set_const(op1, &c_type_bool, IR_BOOL, val);
 	} else if (type->kind == C_TYPE_VECTOR) {
 		ir_type t = c_type2ir(rcc, type);
-		if (C_IS_TYPE_SIGNED(type->vec.type) || C_IS_TYPE_FP(type->vec.type)) {
+		if (C_IS_TYPE_SIGNED(op1->type->vec.type) || C_IS_TYPE_FP(op1->type->vec.type)) {
 			c_value_set_rval(op1, type, t, ir_BINARY_OP(IR_GE, t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 		} else {
 			c_value_set_rval(op1, type, t, ir_BINARY_OP(IR_UGE, t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
