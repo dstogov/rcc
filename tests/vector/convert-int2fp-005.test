@@ -1,9 +1,9 @@
 --TEST--
-CONVERT.INT2FP.004: 256-bit vectors AVX
+CONVERT.INT2FP.005: 256-bit vectors AVX+AVX2
 --TARGET--
 !aarch64
 --ARGS--
--mavx -mno-avx2 --run
+-mavx --run
 --CODE--
 int printf(const char *, ...);
 

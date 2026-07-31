@@ -1,5 +1,5 @@
 --TEST--
-CONVERT.INT2FP.002: 128-bit vectors AVX
+CONVERT.INT2FP.003: 128-bit vectors AVX
 --TARGET--
 !aarch64
 --ARGS--
