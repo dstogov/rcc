@@ -5327,6 +5327,7 @@ void c_do_builtin(rcc_ctx *rcc, c_value *val, c_name name, int32_t num_args, c_v
 			*ptr = (int8_t)args[i + 2].u.val.i8;
 			ptr++;
 		}
+		ref = ir_long_const_commit(rcc->active_ctx, ref);
 
 		if ((uint32_t)args[0].type->vec.length == len) {
 			type = (c_type*)args[0].type;
