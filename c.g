@@ -664,12 +664,13 @@ array_declarator(rcc_ctx *rcc, c_dcl *d, bool is_param):   {c_value len;}
 		(	/* empty */                                    {attr |= C_ATTR_FLEXIBLE;}
 		|	&"*" "*"                                       {if (!is_param) yy_error("[*] not allowed in other than function prototype scope");}
 		                                                   {attr |= C_ATTR_VLA;}
-		|	"static"?
+		|	(	"static"                                   {if (sym == YY__RBRACK) yy_error("\"static\" may not be used without an array size");}
+			)?
 														   {if (!is_param || (sym = parse_vla_param(sym, rcc, &len)) != YY__RBRACK)}
 			assignment_expression(rcc, &len)
 		)
 	|	"static"                                           {if (!is_param) yy_error("static or type qualifiers in non-parameter array declarator");}
-		type_qualifier_list(rcc, &dim)?
+		type_qualifier_list(rcc, &dim)?                    {if (sym == YY__RBRACK) yy_error("\"static\" may not be used without an array size");}
 														   {if (!is_param || (sym = parse_vla_param(sym, rcc, &len)) != YY__RBRACK)}
 		assignment_expression(rcc, &len)
 	)
