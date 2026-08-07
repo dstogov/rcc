@@ -1,0 +1,159 @@
+--TEST--
+EXTRACT.001: extract variable lane
+--TARGET--
+!aarch64
+--ARGS--
+--run
+--CODE--
+#define N 16
+#define I 1
+
+int printf(const char *, ...);
+
+typedef long long          i64;
+typedef unsigned long long u64;
+typedef int                i32;
+typedef unsigned int       u32;
+typedef short              i16;
+typedef unsigned short     u16;
+typedef char               i8;
+typedef unsigned char      u8;
+
+typedef double __attribute__((__vector_size__(N))) v_d;
+typedef float  __attribute__((__vector_size__(N))) v_f;
+typedef i64    __attribute__((__vector_size__(N))) v_i64;
+typedef u64    __attribute__((__vector_size__(N))) v_u64;
+typedef i32    __attribute__((__vector_size__(N))) v_i32;
+typedef u32    __attribute__((__vector_size__(N))) v_u32;
+typedef i16    __attribute__((__vector_size__(N))) v_i16;
+typedef u16    __attribute__((__vector_size__(N))) v_u16;
+typedef i8     __attribute__((__vector_size__(N))) v_i8;
+typedef u8     __attribute__((__vector_size__(N))) v_u8;
+
+double __attribute__((noinline)) test_v_d(v_d v, int i)
+{
+	return v[i];
+}
+
+float __attribute__((noinline)) test_v_f(v_f v, int i)
+{
+	return v[i];
+}
+
+i64 __attribute__((noinline)) test_v_i64(v_i64 v, int i)
+{
+	return v[i];
+}
+
+u64 __attribute__((noinline)) test_v_u64(v_u64 v, int i)
+{
+	return v[i];
+}
+
+i32 __attribute__((noinline)) test_v_i32(v_i32 v, int i)
+{
+	return v[i];
+}
+
+u32 __attribute__((noinline)) test_v_u32(v_u32 v, int i)
+{
+	return v[i];
+}
+
+i16 __attribute__((noinline)) test_v_i16(v_i16 v, int i)
+{
+	return v[i];
+}
+
+u16 __attribute__((noinline)) test_v_u16(v_u16 v, int i)
+{
+	return v[i];
+}
+
+i8 __attribute__((noinline)) test_v_i8(v_i8 v, int i)
+{
+	return v[i];
+}
+
+u8 __attribute__((noinline)) test_v_u8(v_u8 v, int i)
+{
+	return v[i];
+}
+
+int main()
+{
+	{
+		v_d x = {1, 2};
+		printf("%g %g\n", test_v_d(x, 0), test_v_d(x, 1));
+	}
+
+	{
+		v_f x = {1, 2, 3, 4};
+		printf("%g %g %g %g\n", test_v_f(x, 0), test_v_f(x, 1), test_v_f(x, 2), test_v_f(x, 3));
+	}
+
+	{
+		v_i64 x = {1, 2};
+		printf("%lld %lld\n", test_v_i64(x, 0), test_v_i64(x, 1));
+	}
+
+	{
+		v_u64 x = {1, 2};
+		printf("%lld %lld\n", test_v_u64(x, 0), test_v_u64(x, 1));
+	}
+
+	{
+		v_i32 x = {1, 2, 3, 4};
+		printf("%d %d %d %d\n", test_v_i32(x, 0), test_v_i32(x, 1), test_v_i32(x, 2), test_v_i32(x, 3));
+	}
+
+	{
+		v_u32 x = {1, 2, 3, 4};
+		printf("%d %d %d %d\n", test_v_u32(x, 0), test_v_u32(x, 1), test_v_u32(x, 2), test_v_u32(x, 3));
+	}
+
+	{
+		v_i16 x = {1, 2, 3, 4, 5, 6, 7, 8};
+		printf("%d %d %d %d %d %d %d %d\n",
+			test_v_i16(x, 0), test_v_i16(x, 1), test_v_i16(x, 2), test_v_i16(x, 3),
+			test_v_i16(x, 4), test_v_i16(x, 5), test_v_i16(x, 6), test_v_i16(x, 7));
+	}
+
+	{
+		v_u16 x = {1, 2, 3, 4, 5, 6, 7, 8};
+		printf("%d %d %d %d %d %d %d %d\n",
+			test_v_u16(x, 0), test_v_u16(x, 1), test_v_u16(x, 2), test_v_u16(x, 3),
+			test_v_u16(x, 4), test_v_u16(x, 5), test_v_u16(x, 6), test_v_u16(x, 7));
+	}
+
+	{
+		v_i8 x = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+		printf("%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d\n",
+			test_v_i8(x, 0), test_v_i8(x, 1), test_v_i8(x, 2), test_v_i8(x, 3),
+			test_v_i8(x, 4), test_v_i8(x, 5), test_v_i8(x, 6), test_v_i8(x, 7),
+			test_v_i8(x, 8), test_v_i8(x, 9), test_v_i8(x, 10), test_v_i8(x, 11),
+			test_v_i8(x, 12), test_v_i8(x, 13), test_v_i8(x, 14), test_v_i8(x, 15));
+	}
+
+	{
+		v_u8 x = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+		printf("%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d\n",
+			test_v_u8(x, 0), test_v_u8(x, 1), test_v_u8(x, 2), test_v_u8(x, 3),
+			test_v_u8(x, 4), test_v_u8(x, 5), test_v_u8(x, 6), test_v_u8(x, 7),
+			test_v_u8(x, 8), test_v_u8(x, 9), test_v_u8(x, 10), test_v_u8(x, 11),
+			test_v_u8(x, 12), test_v_u8(x, 13), test_v_u8(x, 14), test_v_u8(x, 15));
+	}
+
+	return 0;
+}
+--EXPECT--
+1 2
+1 2 3 4
+1 2
+1 2
+1 2 3 4
+1 2 3 4
+1 2 3 4 5 6 7 8
+1 2 3 4 5 6 7 8
+1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16
+1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16

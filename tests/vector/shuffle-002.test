@@ -1,0 +1,158 @@
+--TEST--
+SHUFFLE.002: 128-bit vectors SSE2 constant mask
+--TARGET--
+!aarch64
+--ARGS--
+-mno-sse4 -mno-avx2 --run
+--CODE--
+#define N 16
+
+int printf(const char *, ...);
+
+typedef long long          i64;
+typedef unsigned long long u64;
+typedef int                i32;
+typedef unsigned int       u32;
+typedef short              i16;
+typedef unsigned short     u16;
+typedef char               i8;
+typedef unsigned char      u8;
+
+typedef double __attribute__((__vector_size__(N))) v_d;
+typedef float  __attribute__((__vector_size__(N))) v_f;
+typedef i64    __attribute__((__vector_size__(N))) v_i64;
+typedef u64    __attribute__((__vector_size__(N))) v_u64;
+typedef i32    __attribute__((__vector_size__(N))) v_i32;
+typedef u32    __attribute__((__vector_size__(N))) v_u32;
+typedef i16    __attribute__((__vector_size__(N))) v_i16;
+typedef u16    __attribute__((__vector_size__(N))) v_u16;
+typedef i8     __attribute__((__vector_size__(N))) v_i8;
+typedef u8     __attribute__((__vector_size__(N))) v_u8;
+
+v_d __attribute__((noinline)) test_v_d(v_d v)
+{
+	return __builtin_shufflevector(v, v, 1, 0);
+}
+
+v_f __attribute__((noinline)) test_v_f(v_f v)
+{
+	return __builtin_shufflevector(v, v, 1, 2, 3, 0);
+}
+
+v_i64 __attribute__((noinline)) test_v_i64(v_i64 v)
+{
+	return __builtin_shufflevector(v, v, 1, 0);
+}
+
+v_u64 __attribute__((noinline)) test_v_u64(v_u64 v)
+{
+	return __builtin_shufflevector(v, v, 1, 0);
+}
+
+v_i32 __attribute__((noinline)) test_v_i32(v_i32 v)
+{
+	return __builtin_shufflevector(v, v, 1, 2, 3, 0);
+}
+
+v_u32 __attribute__((noinline)) test_v_u32(v_u32 v)
+{
+	return __builtin_shufflevector(v, v, 1, 2, 3, 0);
+}
+
+v_i16 __attribute__((noinline)) test_v_i16(v_i16 v)
+{
+	return __builtin_shufflevector(v, v, 1,2,3,4,5,6,7,0);
+}
+
+v_u16 __attribute__((noinline)) test_v_u16(v_u16 v)
+{
+	return __builtin_shufflevector(v, v, 1,2,3,4,5,6,7,0);
+}
+
+v_i8 __attribute__((noinline)) test_v_i8(v_i8 v)
+{
+	return __builtin_shufflevector(v, v, 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,0);
+}
+
+v_u8 __attribute__((noinline)) test_v_u8(v_u8 v)
+{
+	return __builtin_shufflevector(v, v, 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,0);
+}
+
+int main()
+{
+	{
+		v_d x = {1.1, 2.2};
+		x = test_v_d(x);
+		printf("%g %g\n", x[0], x[1]);
+	}
+
+	{
+		v_f x = {1.1f, 2.2f, 3.3f, 4.4f};
+		x = test_v_f(x);
+		printf("%g %g %g %g\n", x[0], x[1], x[2], x[3]);
+	}
+
+	{
+		v_i64 x = {1, 2};
+		x = test_v_i64(x);
+		printf("%lld %lld\n", x[0], x[1]);
+	}
+
+	{
+		v_u64 x = {1, 2};
+		x = test_v_u64(x);
+		printf("%lld %lld\n", x[0], x[1]);
+	}
+
+	{
+		v_i32 x = {1,2,3,4};
+		x = test_v_i32(x);
+		printf("%d %d %d %d\n", x[0], x[1], x[2], x[3]);
+	}
+
+	{
+		v_u32 x = {1,2,3,4};
+		x = test_v_u32(x);
+		printf("%d %d %d %d\n", x[0], x[1], x[2], x[3]);
+	}
+
+	{
+		v_i16 x = {1,2,3,4,5,6,7,8};
+		x = test_v_i16(x);
+		printf("%d %d %d %d %d %d %d %d\n", x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7]);
+	}
+
+	{
+		v_u16 x = {1,2,3,4,5,6,7,8};
+		x = test_v_u16(x);
+		printf("%d %d %d %d %d %d %d %d\n", x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7]);
+	}
+
+	{
+		v_i8 x = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16};
+		x = test_v_i8(x);
+		printf("%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d\n",
+			x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10], x[11], x[12], x[13], x[14], x[15]);
+	}
+
+	{
+		v_u8 x = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16};
+		x = test_v_u8(x);
+		printf("%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d\n",
+			x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10], x[11], x[12], x[13], x[14], x[15]);
+	}                                                                                         
+
+	return 0;
+}
+--EXPECT--
+2.2 1.1
+2.2 3.3 4.4 1.1
+2 1
+2 1
+2 3 4 1
+2 3 4 1
+2 3 4 5 6 7 8 1
+2 3 4 5 6 7 8 1
+2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 1
+2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 1

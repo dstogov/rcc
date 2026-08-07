@@ -191,14 +191,36 @@ repeat:
 		case C_TYPE_FUNC:    return IR_ADDR;
 		case C_TYPE_STRUCT:  return IR_ADDR;
 		case C_TYPE_UNION:   return IR_ADDR;
+#if IR_SIMD
+		case C_TYPE_VECTOR:
+			switch (t->vec.type->kind) {
+				case C_TYPE_I8:      return IR_MAKE_VECTOR_TYPE(IR_I8,     t->vec.length);
+				case C_TYPE_I16:     return IR_MAKE_VECTOR_TYPE(IR_I16,    t->vec.length);
+				case C_TYPE_I32:     return IR_MAKE_VECTOR_TYPE(IR_I32,    t->vec.length);
+				case C_TYPE_IL:      return IR_MAKE_VECTOR_TYPE(IR_LONG,   t->vec.length);
+				case C_TYPE_ILL:     return IR_MAKE_VECTOR_TYPE(IR_I64,    t->vec.length);
+				case C_TYPE_U8:      return IR_MAKE_VECTOR_TYPE(IR_U8,     t->vec.length);
+				case C_TYPE_U16:     return IR_MAKE_VECTOR_TYPE(IR_U16,    t->vec.length);
+				case C_TYPE_U32:     return IR_MAKE_VECTOR_TYPE(IR_U32,    t->vec.length);
+				case C_TYPE_UL:      return IR_MAKE_VECTOR_TYPE(IR_ULONG,  t->vec.length);
+				case C_TYPE_ULL:     return IR_MAKE_VECTOR_TYPE(IR_U64,    t->vec.length);
+				case C_TYPE_FLOAT:   return IR_MAKE_VECTOR_TYPE(IR_FLOAT,  t->vec.length);
+				case C_TYPE_DOUBLE:  return IR_MAKE_VECTOR_TYPE(IR_DOUBLE, t->vec.length);
+				case C_TYPE_CHAR:    return IR_MAKE_VECTOR_TYPE(IR_I8,     t->vec.length);
+				default:
+					break;
+			}
+			break;
+#endif
 		case C_TYPE_FLOAT_COMPLEX:
 		case C_TYPE_DOUBLE_COMPLEX:
 		case C_TYPE_LONG_DOUBLE_COMPLEX:
 			yy_error("complex numbers are not supported yet"); //???
 		default:
-			IR_ASSERT(0);
-			return IR_VOID;
+			break;
 	}
+	IR_ASSERT(0);
+	return IR_VOID;
 }
 
 #define MAX_ABI_TYPES 2
@@ -785,6 +807,30 @@ static void c_finalize_type(rcc_ctx *rcc, c_dcl *d)
 
 	c_validate_dcl(rcc, d);
 
+	if (d->vector_size) {
+		c_type *type;
+
+		if (d->type->kind < C_TYPE_U8 || d->type->kind > C_TYPE_DOUBLE) {
+			yy_error("invalid vector type for attribute \"vector_size\")");
+#if IR_SIMD
+		} else if (d->vector_size / d->type->size <= 64) {
+			/* General IR limitation */
+#endif
+		} else {
+			yy_error_fmt("unsupported attribute \"vector_size(%u)\"", d->vector_size);
+		}
+
+		type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
+		type->size = d->vector_size;
+		type->kind = C_TYPE_VECTOR;
+		type->flags = rcc->active_scope ? 0 : C_TYPE_GLOBAL;
+		type->attr = c_align2attr(IR_MIN(d->vector_size, 16)); /* 16 byte allgnment */
+		type->vec.type = d->type;
+		type->vec.length = d->vector_size / d->type->size;
+		d->type = type;
+		d->vector_size = 0;
+	}
+
 	if ((d->flags & C_TYPE_SPEC_NAME)
 	 && (d->attr & C_TYPE_ATTRS)
 	 && (d->type->kind == C_TYPE_ARRAY)) {
@@ -870,6 +916,9 @@ static bool c_compatible_types(const c_type *t1, const c_type *t2, bool unqualif
 		if (!c_compatible_types(t1->array.type, t2->array.type, 0, 0)) return 0;
 	} else if (t1->kind == C_TYPE_POINTER) {
 		if (!c_compatible_types(t1->pointer.type, t2->pointer.type, 0, 0)) return 0;
+	} else if (t1->kind == C_TYPE_VECTOR) {
+		if (t1->vec.length != t2->vec.length) return 0;
+		if (!c_compatible_types(t1->vec.type, t2->vec.type, 0, 0)) return 0;
 	} else if (t1->kind == C_TYPE_STRUCT || t1->kind == C_TYPE_UNION) {
 		if (t1->record.tag != t2->record.tag) return 0;
 		if (t1->record.tag && t2->record.tag) return 1;
@@ -915,7 +964,7 @@ static void c_do_grow_flexible(rcc_ctx *rcc, c_sym *obj, size_t old_size, size_t
 	memset((char*)obj->value.u.val.ptr + old_size, 0, size - old_size);
 	if (c_value_is_ref(&obj->value)) {
 		ir_str name = rcc->active_ctx->ir_base[obj->value.u.ref].val.name;
-		
+
 		IR_ASSERT(IR_IS_EXT_STR(name));
 		rcc->yy_hash.data[IR_EXT_STR(name)].sym->value.u.val.ptr = obj->value.u.val.ptr;
 	}
@@ -932,7 +981,7 @@ static void c_do_end_flexible(rcc_ctx *rcc, c_sym *obj, size_t size)
 
 		IR_ASSERT(IR_IS_EXT_STR(name));
 		sym = IR_EXT_STR(name);
-		addr = c_linker_allocate_data(rcc, sym, size, c_attr2align(obj->value.type->attr));
+		addr = c_linker_allocate_data(rcc, sym, size, c_attr2align(obj->value.type->attr), 1);
 		memcpy(addr, obj->value.u.val.ptr, size);
 		ir_mem_free(obj->value.u.val.ptr);
 		obj->value.u.val.ptr = addr;
@@ -948,7 +997,7 @@ static void c_do_end_flexible(rcc_ctx *rcc, c_sym *obj, size_t size)
 		}
 	} else {
 		addr = c_linker_allocate_data(rcc, obj->value.u.ref, size,
-			c_attr2align(obj->value.type->attr));
+			c_attr2align(obj->value.type->attr), 1);
 		memcpy(addr, obj->value.u.val.ptr, size);
 		ir_mem_free(obj->value.u.val.ptr);
 		obj->value.u.val.ptr = addr;
@@ -1073,7 +1122,7 @@ static void c_validate_redeclaration(rcc_ctx *rcc, c_name name, c_dcl *d, c_sym 
 				sym->value.u.ref = name; /* keep name in addition to address */
 			} else {
 				sym->value.u.val.ptr = c_linker_allocate_data(rcc, name,
-					sym->value.type->size, c_attr2align(sym->value.type->attr));
+					sym->value.type->size, c_attr2align(sym->value.type->attr), sym->value.type->kind == C_TYPE_ARRAY);
 			}
 		}
 	}
@@ -1238,7 +1287,7 @@ static ir_ref c_create_str_sym(rcc_ctx *rcc, c_value *res)
 	buf[--i] = 's';
 
 	name = yy_hash_lookup(rcc, buf + i, sizeof(buf) - 1 - i);
-	addr = c_linker_allocate_data(rcc, name, size, 8);
+	addr = c_linker_allocate_data(rcc, name, size, 8, 1);
 	memcpy(addr, str, size);
 
 	/* Create a global symbol in yy_arena */
@@ -1502,7 +1551,7 @@ c_sym *c_declare(rcc_ctx *rcc, c_name name, c_dcl *d)
 						addr = ir_mem_calloc(1, d->type->size);
 					} else {
 						addr = c_linker_allocate_data(rcc, name,
-							d->type->size, c_attr2align(d->type->attr));
+							d->type->size, c_attr2align(d->type->attr), d->type->kind == C_TYPE_ARRAY);
 					}
 					sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
 					sym->value.u.val.ptr = addr;
@@ -1516,7 +1565,7 @@ c_sym *c_declare(rcc_ctx *rcc, c_name name, c_dcl *d)
 						addr = ir_mem_calloc(1, d->type->size);
 					} else {
 						addr = c_linker_allocate_data(rcc, sym_name,
-							d->type->size, c_attr2align(d->type->attr));
+							d->type->size, c_attr2align(d->type->attr), d->type->kind == C_TYPE_ARRAY);
 					}
 					rcc->yy_hash.data[sym_name].sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
 					rcc->yy_hash.data[sym_name].sym->value.u.val.ptr = addr;
@@ -2684,6 +2733,21 @@ void c_gcc_attribute_regparm(rcc_ctx *rcc, c_dcl *d, c_name attr, c_value *val)
 	yy_warning_ex_fmt(E_UNSUPPORTED, "unsupported attribure \"%s(%d)\"", yy_sym2str(rcc, attr), val->u.val.u32);
 }
 
+void c_gcc_attribute_vector_size(rcc_ctx *rcc, c_dcl *d, c_name attr, c_value *val)
+{
+	if (!c_value_is_set(val)
+	 || !c_value_is_const(val)
+	 || !C_IS_TYPE_INT(val->type)
+	 || val->u.val.u64 == 0
+	 || (C_IS_TYPE_SIGNED(val->type) && val->u.val.i64 < 0)) {
+		yy_error_fmt("attribute \"%s\" value must be a positive integer constant", yy_sym2str(rcc, attr));
+	} else if ((val->u.val.u64 & (val->u.val.u64 - 1)) != 0) {
+		yy_error_fmt("attribute \"%s\" value must be a power of two", yy_sym2str(rcc, attr));
+	}
+
+	d->vector_size = val->u.val.u32;
+}
+
 yy_sym c_gcc_attribute(rcc_ctx *rcc, c_dcl *d, c_name attr, yy_sym sym)
 {
 	if (attr == YY_FORMAT
@@ -3528,7 +3592,7 @@ void c_value_rval(rcc_ctx *rcc, c_value *val)
 		} else if (c_value_is_reg(val)) {
 			val->u.ref = ir_RLOAD(val->u.type, val->u.ref);
 		} else if (val->type->kind != C_TYPE_STRUCT && val->type->kind != C_TYPE_UNION) {
-			if (!C_IS_BIT_FIELD(val->u.proto)) {
+			if (C_IS_SIMPLE_VAL(val->u.proto)) {
 				if (IR_IS_CONST_REF(val->u.ref)
 				 && ((rcc->active_ctx->ir_base[val->u.ref].op == IR_SYM
 				   && ((val->type->attr & (C_ATTR_CONST|C_ATTR_VOLATILE)) == C_ATTR_CONST))
@@ -3564,10 +3628,31 @@ void c_value_rval(rcc_ctx *rcc, c_value *val)
 				} else {
 					val->u.ref = ir_LOAD(val->u.type, val->u.ref);
 				}
-			} else if (!C_IS_BIT_FIELD_PACKED(val->u.proto)) {
-				c_do_load_bit_field(rcc, val, C_BIT_FIELD_START(val->u.proto), C_BIT_FIELD_SIZE(val->u.proto));
+			} else if (C_IS_BIT_FIELD(val->u.proto)) {
+				if (!C_IS_BIT_FIELD_PACKED(val->u.proto)) {
+					c_do_load_bit_field(rcc, val, C_BIT_FIELD_START(val->u.proto), C_BIT_FIELD_SIZE(val->u.proto));
+				} else {
+					c_do_load_bit_field_packed(rcc, val, C_BIT_FIELD_START(val->u.proto), C_BIT_FIELD_SIZE(val->u.proto));
+				}
 			} else {
-				c_do_load_bit_field_packed(rcc, val, C_BIT_FIELD_START(val->u.proto), C_BIT_FIELD_SIZE(val->u.proto));
+				ir_ref ref;
+				ir_type t;
+
+				IR_ASSERT(C_IS_VECTOR_DIM(val->u.proto));
+				if (c_value_is_lval(val)) {
+					t = C_VECTOR_DIM_TYPE(val->u.proto);
+					if (rcc->active_ctx->ir_base[val->u.ref].op == IR_VAR) {
+						ref = ir_VLOAD(t, val->u.ref);
+					} else {
+						IR_ASSERT(rcc->active_ctx->ir_base[val->u.ref].type == IR_ADDR);
+						ref = ir_LOAD(t, val->u.ref);
+					}
+				} else {
+					ref = val->u.ref;
+				}
+				t = c_type2ir(rcc, val->type);
+				c_value_set_rval(val, val->type, t, ir_EXTRACT(t, ref, val->u.op2));
+				return;
 			}
 		}
 		val->u.op &= ~(C_VAL_LVAL|C_VAL_VAR|C_VAL_REG|C_VAL_VOLATILE);
@@ -3619,8 +3704,8 @@ static void c_do_trunc(rcc_ctx *rcc, const c_type *t, ir_type type, c_value *v)
 static void c_do_bitcast(rcc_ctx *rcc, const c_type *t, ir_type type, c_value *v)
 {
 	IR_ASSERT(t->size == v->type->size || (t->size == sizeof(void*) && v->type->kind == C_TYPE_ARRAY));
-	IR_ASSERT(ir_type_size[type] == ir_type_size[v->u.type]);
-	if (c_value_is_ref(v) || c_value_is_const_str(v)) {
+	IR_ASSERT(ir_get_type_size(type) == ir_get_type_size(v->u.type));
+	if (c_value_is_ref(v) || c_value_is_const_str(v) || t->kind == C_TYPE_VECTOR) {
 		c_value_set_rval(v, t, type, ir_BITCAST(type, c_value_ref(rcc, v)));
 	} else {
 		switch (type) {
@@ -3854,6 +3939,8 @@ void c_do_addr(rcc_ctx *rcc, c_value *v)
 		}
 	} else if (C_IS_BIT_FIELD(v->u.proto)) {
 		yy_error("cannot take address of bit-field");
+	} else if (C_IS_VECTOR_DIM(v->u.proto)) {
+		yy_error("cannot take address of vector element");
 	}
 
 	type = c_create_pointer_type(rcc, v->type);
@@ -4043,7 +4130,7 @@ static ir_ref c_do_store(rcc_ctx *rcc, c_value *addr, c_value *val)
 {
 	ir_ref ref;
 
-	if (!C_IS_BIT_FIELD(addr->u.proto)) {
+	if (C_IS_SIMPLE_VAL(addr->u.proto)) {
 		ref = c_value_ref(rcc, val);
 		if (c_value_is_var(addr)) {
 			if ((addr->type->attr & C_ATTR_VOLATILE) || (addr->u.op & C_VAL_VOLATILE)) {
@@ -4061,14 +4148,81 @@ static ir_ref c_do_store(rcc_ctx *rcc, c_value *addr, c_value *val)
 			}
 		}
 		return ref;
-	} else if (!C_IS_BIT_FIELD_PACKED(addr->u.proto)) {
-		return c_do_store_bit_field(rcc, addr->u.ref,
-			C_BIT_FIELD_START(addr->u.proto), C_BIT_FIELD_SIZE(addr->u.proto), val);
+	} else if (C_IS_BIT_FIELD(addr->u.proto)) {
+		if (!C_IS_BIT_FIELD_PACKED(addr->u.proto)) {
+			return c_do_store_bit_field(rcc, addr->u.ref,
+				C_BIT_FIELD_START(addr->u.proto), C_BIT_FIELD_SIZE(addr->u.proto), val);
+		} else {
+			return c_do_store_bit_field_packed(rcc, addr->u.ref,
+				C_BIT_FIELD_START(addr->u.proto), C_BIT_FIELD_SIZE(addr->u.proto), val);
+		}
 	} else {
-		return c_do_store_bit_field_packed(rcc, addr->u.ref,
-			C_BIT_FIELD_START(addr->u.proto), C_BIT_FIELD_SIZE(addr->u.proto), val);
+		ir_type vt;
+		ir_ref vref;
+
+		IR_ASSERT(C_IS_VECTOR_DIM(addr->u.proto) && c_value_is_lval(addr));
+		vt = C_VECTOR_DIM_TYPE(addr->u.proto);
+		if (rcc->active_ctx->ir_base[addr->u.ref].op == IR_VAR) {
+			vref = ir_VLOAD(vt, addr->u.ref);
+		} else {
+			IR_ASSERT(rcc->active_ctx->ir_base[addr->u.ref].type == IR_ADDR);
+			vref = ir_LOAD(vt, addr->u.ref);
+		}
+
+		ref = c_value_ref(rcc, val);
+		vref = ir_REPLACE(vt, vref, addr->u.op2, ref);
+
+		if (rcc->active_ctx->ir_base[addr->u.ref].op == IR_VAR) {
+			ir_VSTORE(addr->u.ref, vref);
+		} else {
+			IR_ASSERT(rcc->active_ctx->ir_base[addr->u.ref].type == IR_ADDR);
+			ir_STORE(addr->u.ref, vref);
+		}
+
+		return ref;
 	}
 }
+
+static const c_type *c_opaque_vector_type(rcc_ctx *rcc, const c_type *src_type)
+{
+	c_type *type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
+
+	type->size = src_type->size;
+	type->kind = C_TYPE_VECTOR;
+	type->flags = (src_type->flags & ~C_TYPE_GLOBAL) | (rcc->active_scope ? 0 : C_TYPE_GLOBAL) | C_TYPE_OPAQUE;
+	type->attr = src_type->attr;
+	type->vec.length = src_type->vec.length;
+
+	if (src_type->vec.type->size == 1) {
+		type->vec.type = &c_type_i8;
+	} else if (src_type->vec.type->size == 2) {
+		type->vec.type = &c_type_i16;
+	} else if (src_type->vec.type->size == 4) {
+		type->vec.type = &c_type_i32;
+	} else if (src_type->vec.type->size == 8) {
+		type->vec.type = &c_type_i64;
+	} else {
+		IR_ASSERT(0);
+	}
+
+	return type;
+}
+
+static void c_opaque_vector_cast(rcc_ctx *rcc, const c_type *type, c_value *val)
+{
+	ir_type t = c_type2ir(rcc, type);
+
+#if 0
+	/* Update type of comparison */
+	rcc->active_ctx->ir_base[val->u.ref].type = t;
+	val->type = type;
+	val->u.type = t;
+#else
+	/* Implicit vector BITCAST */
+	c_value_set_rval(val, type, t, ir_BITCAST(t, val->u.ref));
+#endif
+}
+
 
 /* arg >   0 - means real argument number
  * arg ==  0 - return value
@@ -4187,6 +4341,18 @@ check_qualifiers:
 	 && c_compatible_types(type, val_type, 1, 0)) {
 		val->type = type;
 		return;
+	} else if (type->kind == C_TYPE_VECTOR
+	 && val->type->kind == C_TYPE_VECTOR
+	 && type->vec.length == val->type->vec.length) {
+		if (type->vec.type->kind == val->type->vec.type->kind) {
+			/* identicl vector types */
+			return;
+		} else if (type->size == val->type->size && (val->type->flags & C_TYPE_OPAQUE)) {
+			c_opaque_vector_cast(rcc, type, val);
+			return;
+		} else {
+			goto incompatible;
+		}
 	} else {
 		goto incompatible;
 	}
@@ -4208,7 +4374,7 @@ void c_do_cast(rcc_ctx *rcc, const c_type *t, c_value *v)
 				if (f->type == v->type
 				 || c_compatible_types(f->type, v->type, 1, 0)) {
 					ir_ref addr = c_do_alloca(rcc, t->size, c_attr2align(t->attr), 0);
-					if (C_IS_TYPE_SCALAR_OR_PTR(v->type)) {
+					if (C_IS_TYPE_SCALAR_OR_PTR(v->type) || v->type->kind == C_TYPE_VECTOR) {
 						ir_STORE(addr, c_value_ref(rcc, v));
 					} else {
 						IR_ASSERT(v->type->size);
@@ -4219,12 +4385,26 @@ void c_do_cast(rcc_ctx *rcc, const c_type *t, c_value *v)
 					return;
 				}
 			}
+		} else if (t->kind == C_TYPE_VECTOR) {
+			if (t->size == v->type->size
+			 && (v->type->kind == C_TYPE_VECTOR || C_IS_TYPE_KIND_SCALAR(v->type->kind))) {
+				c_do_bitcast(rcc, t, c_type2ir(rcc, t), v);
+				return;
+			}
+			yy_error("cannot convert a value to vector of different size");
 		}
 		yy_error("conversion to non-scalar type requested");
 	} else if (t->flags & C_TYPE_INCOMPLETE) {
 		yy_error("conversion to incomplete type");
 	} else if (v->type->kind == C_TYPE_VOID || v->type->kind == C_TYPE_STRUCT || v->type->kind == C_TYPE_UNION) {
 		yy_error("conversion of non-scalar type requested");
+	} else if (v->type->kind == C_TYPE_VECTOR) {
+		if (t->size == v->type->size
+		 && (t->kind == C_TYPE_VECTOR || C_IS_TYPE_KIND_SCALAR(t->kind))) {
+			c_do_bitcast(rcc, t, c_type2ir(rcc, t), v);
+			return;
+		}
+		yy_error("cannot convert a vector to type of different size");
 	} else if (t->kind == C_TYPE_POINTER) {
 		if (C_IS_TYPE_FP(v->type)) {
 			yy_error("cannot convert floating point value to a pointer");
@@ -4380,7 +4560,7 @@ void c_do_unary_plus(rcc_ctx *rcc, c_value *v)
 		if (t->size < 4) {
 			c_do_cvt(rcc, &c_type_i32, IR_I32, v);
 		}
-	} else if (!C_IS_TYPE_FP(t)) {
+	} else if (!C_IS_TYPE_FP(t) && t->kind != C_TYPE_VECTOR) {
 		yy_error("invalid type argument of unary \"+\"");
 	}
 }
@@ -4394,11 +4574,12 @@ void c_do_neg(rcc_ctx *rcc, c_value *v)
 		if (t->size < 4) {
 			c_do_cvt(rcc, &c_type_i32, IR_I32, v);
 		}
-	} else if (!C_IS_TYPE_FP(t)) {
+	} else if (!C_IS_TYPE_FP(t) && t->kind != C_TYPE_VECTOR) {
 		yy_error("invalid type argument of unary \"-\"");
 	}
 
-	if (c_value_is_ref(v)) {
+	if (c_value_is_ref(v) || t->kind == C_TYPE_VECTOR) {
+		// TODO: constant folding for vectors ???
 		v->u.ref = ir_NEG(v->u.type, c_value_ref(rcc, v));
 	} else {
 		switch (v->u.type) {
@@ -4422,10 +4603,11 @@ void c_do_not(rcc_ctx *rcc, c_value *v)
 		if (t->size < 4) {
 			c_do_cvt(rcc, &c_type_i32, IR_I32, v);
 		}
-	} else {
+	} else if (t->kind != C_TYPE_VECTOR || !C_IS_TYPE_INT(t->vec.type)) {
 		yy_error("invalid type argument of unary \"~\"");
 	}
-	if (c_value_is_ref(v)) {
+	if (c_value_is_ref(v) || t->kind == C_TYPE_VECTOR) {
+		// TODO: constant folding for vectors ???
 		v->u.ref = ir_NOT(v->u.type, c_value_ref(rcc, v));
 	} else {
 		switch (v->u.type) {
@@ -4443,7 +4625,10 @@ void c_do_bool_not(rcc_ctx *rcc, c_value *v)
 	ir_val val;
 
 	c_value_rval(rcc, v);
-	if (v->type->kind == C_TYPE_VOID || v->type->kind == C_TYPE_STRUCT || v->type->kind == C_TYPE_UNION) {
+	if (v->type->kind == C_TYPE_VOID
+	 || v->type->kind == C_TYPE_STRUCT
+	 || v->type->kind == C_TYPE_UNION
+	 || v->type->kind == C_TYPE_VECTOR) {
 		yy_error("invalid type argument of unary \"!\"");
 	}
 	if (c_value_is_ref(v)) {
@@ -4482,6 +4667,21 @@ void c_do_array_dim(rcc_ctx *rcc, c_value *v, c_value *dim)
 		}
 		type = type->pointer.type;
 		ref = c_value_ref(rcc, v);
+	} else if (type->kind == C_TYPE_VECTOR) {
+		ir_type vt = c_type2ir(rcc, type);
+
+		if (!C_IS_TYPE_INT(dim->type) && dim->type->kind != C_TYPE_ENUM) yy_error("array subscript is not an integer");
+		// TODO: constant range check ???
+		c_value_rval(rcc, dim);
+		if (c_value_is_lval(v)) {
+			c_value_set_lval(v, type->vec.type, c_type2ir(rcc, type->vec.type), v->u.ref);
+			v->u.proto = C_VECTOR_DIM(vt);
+			v->u.op2 = c_value_ref(rcc, dim);
+		} else {
+			ir_type	t = c_type2ir(rcc, type->vec.type);
+			c_value_set_rval(v, type->vec.type, t, ir_EXTRACT(t, c_value_ref(rcc, v), c_value_ref(rcc, dim)));
+		}
+		return;
 	} else {
 		type = dim->type;
 		if (type->kind == C_TYPE_ARRAY) {
@@ -5056,6 +5256,94 @@ void c_do_builtin(rcc_ctx *rcc, c_value *val, c_name name, int32_t num_args, c_v
 		if (!C_IS_TYPE_FP(args[0].type) || !C_IS_TYPE_FP(args[1].type)) yy_error_fmt("wrong arguments in %s() call", yy_sym2str(rcc, name));
 		ref = ir_fold2(rcc->active_ctx, IR_OPT(IR_UNORDERED, IR_BOOL), c_value_ref(rcc, &args[0]), c_value_ref(rcc, &args[1]));
 		c_value_set_rval(val, &c_type_bool, IR_BOOL, ref);
+	} else if (name == YY___BUILTIN_SHUFFLE) {
+		uint32_t len;
+		ir_ref op1, op2, op3;
+		ir_type t;
+		c_type *type;
+
+		if (num_args != 2 && num_args != 3) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
+		if (args[0].type->kind != C_TYPE_VECTOR) yy_error("first argument of __builtin_shuffle() must be a vector");
+		if (num_args == 2) {
+			if (args[1].type->kind != C_TYPE_VECTOR || !C_IS_TYPE_INT(args[1].type->vec.type)) {
+				yy_error("second argument of __builtin_shuffle() must be an integer vector");
+			}
+			len = args[1].type->vec.length;
+			op1 = op2 = c_value_ref(rcc, &args[0]);
+			op3 = c_value_ref(rcc, &args[1]);
+		} else {
+			if (args[1].type->kind != C_TYPE_VECTOR) yy_error("second argument of __builtin_shuffle() must be a vector");
+			if (args[0].type->vec.type->kind != args[1].type->vec.type->kind) yy_error("first and second arguments of __builtin_shuffle() are vectors of different types");
+			if (args[2].type->kind != C_TYPE_VECTOR || !C_IS_TYPE_INT(args[2].type->vec.type)) {
+				yy_error("third argument of __builtin_shuffle() must be an integer vector");
+			}
+			len = args[2].type->vec.length;
+			op1 = c_value_ref(rcc, &args[0]);
+			op2 = c_value_ref(rcc, &args[1]);
+			op3 = c_value_ref(rcc, &args[2]);
+		}
+
+		if ((uint32_t)args[0].type->vec.length == len) {
+			type = (c_type*)args[0].type;
+		} else {
+			type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
+			type->size = IR_VECTOR_SIZE(t);
+			type->kind = C_TYPE_VECTOR;
+			type->flags = rcc->active_scope ? 0 : C_TYPE_GLOBAL;
+			type->attr = c_align2attr(IR_MIN(type->size, 16)); /* 16 byte allgnment */
+			type->vec.type = args[0].type->vec.type;
+			type->vec.length = len;
+		}
+		t = c_type2ir(rcc, type);
+
+		c_value_set_rval(val, type, t, ir_SHUFFLE(t, op1, op2, op3));
+	} else if (name == YY___BUILTIN_SHUFFLEVECTOR) {
+		ir_ref ref;
+		ir_type t;
+		uint32_t len1, len2, len, i;
+		int8_t *ptr;
+		c_type *type;
+
+		if (num_args < 3) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
+		if (args[0].type->kind != C_TYPE_VECTOR) yy_error("first argument of __builtin_shufflevector() must be a vector");
+		if (args[1].type->kind != C_TYPE_VECTOR) yy_error("second argument of __builtin_shufflevector() must be a vector");
+		if (args[0].type->vec.type->kind != args[1].type->vec.type->kind) yy_error("first and second arguments of __builtin_shufflevector() are vectors of different types");
+		len = num_args - 2;
+		if (len > 64 || (len & (len - 1)) != 0) yy_error("unsupported numver of vector elments in __builtin_shufflevector()");
+
+		len1 = args[0].type->vec.length;
+		len2 = args[1].type->vec.length;
+		t = IR_MAKE_VECTOR_TYPE(IR_I8, len);
+		ref = ir_const_vector(rcc->active_ctx, t);
+		ptr = ir_long_const_ptr(rcc->active_ctx, ref);
+		for (i = 0; i < len; i++) {
+			if (!C_IS_TYPE_INT(args[i + 2].type)
+			 || !c_value_is_const(&args[i + 2])
+			 || (args[i + 2].u.val.u64 > len1 + len2
+			  && (!C_IS_TYPE_SIGNED(args[i + 2].type)
+			   || args[i + 2].u.val.i64 == -1))) {
+				yy_error_fmt("%d-th argument of __builtin_shufflevector() is an invalid vector index", i + 3);
+			}
+			*ptr = (int8_t)args[i + 2].u.val.i8;
+			ptr++;
+		}
+		ref = ir_long_const_commit(rcc->active_ctx, ref);
+
+		if ((uint32_t)args[0].type->vec.length == len) {
+			type = (c_type*)args[0].type;
+		} else {
+			type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
+			type->size = IR_VECTOR_SIZE(t);
+			type->kind = C_TYPE_VECTOR;
+			type->flags = rcc->active_scope ? 0 : C_TYPE_GLOBAL;
+			type->attr = c_align2attr(IR_MIN(type->size, 16)); /* 16 byte allgnment */
+			type->vec.type = args[0].type->vec.type;
+			type->vec.length = len;
+		}
+		t = c_type2ir(rcc, type);
+
+		c_value_set_rval(val, type, t,
+			ir_SHUFFLE(t, c_value_ref(rcc, &args[0]), c_value_ref(rcc, &args[1]), ref));
 	} else {
 		IR_ASSERT(0);
 	}
@@ -5117,6 +5405,55 @@ void c_do_builtin_va_arg(rcc_ctx *rcc, c_value *val, const c_type *type)
 		ref = ir_VA_ARG(c_va_list_addr(rcc, val), t);
 		c_value_set_rval(val, type, t, ref);
 	}
+}
+
+void c_do_builtin_convertvector(rcc_ctx *rcc, c_value *val, const c_type *type)
+{
+	ir_type t;
+	ir_op op = IR_NOP;
+
+	if (val->type->kind != C_TYPE_VECTOR) {
+		yy_error("first argument of __builtin_convertvector() must be a vector");
+	} else if (type->kind != C_TYPE_VECTOR) {
+		yy_error("second argument of __builtin_convertvector() must be a vector type");
+	} else if (val->type->vec.length != type->vec.length) {
+		yy_error("vector and type arguments of __builtin_convertvector() have different number of elements");
+	} else if (val->type->vec.type->kind == type->vec.type->kind) {
+		/* convert to the same type */
+		return;
+	}
+
+	if (C_IS_TYPE_INT(type->vec.type)) {
+		if (C_IS_TYPE_INT(val->type->vec.type)) {
+			if (type->vec.type->size < val->type->vec.type->size) {
+				op = IR_TRUNC;
+			} else if (type->vec.type->size == val->type->vec.type->size) {
+				op = IR_BITCAST;
+			} else if (C_IS_TYPE_SIGNED(val->type->vec.type)) {
+				op = IR_SEXT;
+			} else {
+				op = IR_ZEXT;
+			}
+		} else if (C_IS_TYPE_FP(val->type->vec.type)) {
+			op = IR_FP2INT;
+		} else {
+			IR_ASSERT(0);
+		}
+	} else if (C_IS_TYPE_FP(type->vec.type)) {
+		if (C_IS_TYPE_INT(val->type->vec.type)) {
+			op = IR_INT2FP;
+		} else if (C_IS_TYPE_FP(val->type->vec.type)) {
+			op = IR_FP2FP;
+		} else {
+			IR_ASSERT(0);
+		}
+	} else {
+		IR_ASSERT(0);
+	}
+
+	IR_ASSERT(op != IR_NOP);
+	t = c_type2ir(rcc, type);
+	c_value_set_rval(val, type, t, ir_fold1(rcc->active_ctx, IR_OPT(op, t), c_value_ref(rcc, val)));
 }
 
 static bool c_do_convert_builtin(rcc_ctx *rcc, c_value *func, int32_t num_args, ir_ref *arg_refs)
@@ -5218,7 +5555,14 @@ static ir_ref ir_inline_call(rcc_ctx *rcc, ir_ctx *ctx, ir_ctx *func_ctx, uint32
 				optx = IR_OPTX(op, IR_OPT_TYPE(optx), proto);
 			}
 		}
-		xlat[i] = ir_const_ex(ctx, val, IR_OPT_TYPE(optx), optx);
+		if (op == IR_LONG_CONST) {
+			xlat[i] = ir_long_const(ctx, insn->type, insn->long_const_size);
+			memcpy(ir_long_const_ptr(ctx, xlat[i]), insn + 1, insn->long_const_size);
+			i += IR_ALIGNED_SIZE(insn->long_const_size, sizeof(ir_insn)) / sizeof(ir_insn);
+			insn += IR_ALIGNED_SIZE(insn->long_const_size, sizeof(ir_insn)) / sizeof(ir_insn);
+		} else {
+			xlat[i] = ir_const_ex(ctx, val, IR_OPT_TYPE(optx), optx);
+		}
 	}
 	xlat[IR_TRUE] = IR_TRUE;
 	xlat[IR_FALSE] = IR_FALSE;
@@ -5714,6 +6058,126 @@ void c_do_call(rcc_ctx *rcc, c_value *func, int32_t num_args, c_value *args, c_v
 	if (num_args > C_ALLOCA_PARAMS) ir_mem_free(args);
 }
 
+static bool c_try_convert_const_fp2fp(rcc_ctx *rcc, const c_type *type, c_value *val)
+{
+	ir_val v;
+
+	IR_ASSERT(type->kind == C_TYPE_FLOAT && val->type->kind == C_TYPE_DOUBLE);
+	v.f = (float)val->u.val.d;
+	v.u32_hi = 0;
+	if ((double)v.f != val->u.val.d) return 0;
+
+	c_value_set_const(val, type, IR_FLOAT, v);
+	return 1;
+}
+
+static bool c_try_convert_const_int2fp(rcc_ctx *rcc, const c_type *type, c_value *val)
+{
+	ir_val v;
+
+	switch (type->kind) {
+		case C_TYPE_FLOAT:
+			if (C_IS_TYPE_SIGNED(val->type)) {
+				v.f = (float)val->u.val.i64;
+				v.u32_hi = 0;
+				if ((int64_t)v.f != val->u.val.i64) return 0;
+			} else {
+				v.f = (float)val->u.val.u64;
+				v.u32_hi = 0;
+				if ((uint64_t)v.f != val->u.val.u64) return 0;
+			}
+			c_value_set_const(val, type, IR_FLOAT, v);
+			return 1;
+		case C_TYPE_DOUBLE:
+			if (C_IS_TYPE_SIGNED(val->type)) {
+				v.d = (double)val->u.val.i64;
+				if ((int64_t)v.d != val->u.val.i64) return 0;
+			} else {
+				v.d = (double)val->u.val.u64;
+				if ((uint64_t)v.d != val->u.val.u64) return 0;
+			}
+			c_value_set_const(val, type, IR_DOUBLE, v);
+			return 1;
+		default:
+			IR_ASSERT(0);
+			return 0;
+	}
+}
+
+static bool c_try_convert_const_int2int(rcc_ctx *rcc, const c_type *type, c_value *val)
+{
+	ir_val v;
+
+	v.u64 = val->u.val.u64;
+	if (type->size < 8) {
+		uint32_t shift = (8 - type->size) * 8;
+
+		if (C_IS_TYPE_SIGNED(type)) {
+			v.i64 = (int64_t)(v.u64 << shift) >> shift;
+		} else {
+			v.u64 = (v.u64 << shift) >> shift;
+		}
+	}
+	if (v.u64 != val->u.val.u64) return 0;
+	c_value_set_const(val, type, c_type2ir(rcc, type), v);
+	return 1;
+}
+
+static bool c_do_splat(rcc_ctx *rcc, const c_type *type, c_value *val)
+{
+	ir_type t;
+
+	IR_ASSERT(type->kind == C_TYPE_VECTOR);
+
+	if (C_IS_TYPE_KIND_FP(type->vec.type->kind)) {
+		if (C_IS_TYPE_KIND_FP(val->type->kind)) {
+			if (val->type->size > type->vec.type->size) {
+				if (!c_value_is_const(val) || !c_try_convert_const_fp2fp(rcc, type->vec.type, val)) {
+					yy_error("cannot convert value to a vector (conversion involves truncation)");
+				}
+			} else if (val->type->size < type->vec.type->size) {
+				c_do_fp2fp(rcc, type->vec.type, c_type2ir(rcc, type->vec.type), val);
+			}
+		} else if (C_IS_TYPE_KIND_INT(val->type->kind)) {
+			if (val->type->size >= type->vec.type->size) {
+				if (!c_value_is_const(val) || !c_try_convert_const_int2fp(rcc, type->vec.type, val)) {
+					yy_error("cannot convert value to a vector (conversion involves truncation)");
+				}
+			} else {
+				c_do_int2fp(rcc, type->vec.type, c_type2ir(rcc, type->vec.type), val);
+			}
+		} else {
+			return 0;
+		}
+	} else {
+		IR_ASSERT(C_IS_TYPE_KIND_INT(type->vec.type->kind));
+		if (C_IS_TYPE_KIND_FP(val->type->kind)) {
+			yy_error("cannot convert value to a vector");
+		} else if (C_IS_TYPE_KIND_INT(val->type->kind)) {
+			if (val->type->size > type->vec.type->size) {
+				if (!c_value_is_const(val) || !c_try_convert_const_int2int(rcc, type->vec.type, val)) {
+					yy_error("cannot convert value to a vector (conversion involves truncation)");
+				}
+			} else if (val->type->size < type->vec.type->size) {
+				if (C_IS_TYPE_KIND_SIGNED(val->type->kind)) {
+					c_do_sext(rcc, type->vec.type, c_type2ir(rcc, type->vec.type), val);
+				} else {
+					c_do_zext(rcc, type->vec.type, c_type2ir(rcc, type->vec.type), val);
+				}
+			} else if (val->type->kind != type->vec.type->kind) {
+				c_do_bitcast(rcc, type->vec.type, c_type2ir(rcc, type->vec.type), val);
+			}
+		} else {
+			return 0;
+		}
+	}
+
+	t = c_type2ir(rcc, type);
+	c_value_set_rval(val, type, t, ir_SPLAT(t, c_value_ref(rcc, val)));
+
+	return 1;
+}
+
 static const c_type *c_common_type(rcc_ctx *rcc, yy_sym sym, c_value *op1, c_value *op2)
 {
 	const c_type *op1_type = op1->type;
@@ -5819,6 +6283,59 @@ static const c_type *c_common_type(rcc_ctx *rcc, yy_sym sym, c_value *op1, c_val
 			}
 		}
 		return NULL;
+	} else if (t1 == C_TYPE_VECTOR) {
+		if (C_IS_TYPE_FP(op1->type->vec.type)) {
+			if (sym == YY__PERCENT || sym == YY__AND || sym == YY__UPARROW || sym == YY__BAR
+			 || sym == YY__LESS_LESS || sym == YY__GREATER_GREATER) {
+				return NULL;
+			}
+		}
+		if (t2 == C_TYPE_VECTOR) {
+			if (op1->type->size == op2->type->size) {
+				if (op1->type->vec.type != op2->type->vec.type) {
+					if (op2->type->flags & C_TYPE_OPAQUE) {
+						c_opaque_vector_cast(rcc, op1->type, op2);
+					} else if (op1->type->flags & C_TYPE_OPAQUE) {
+						c_opaque_vector_cast(rcc, op2->type, op1);
+					}
+				}
+				if (op1->type->vec.type == op2->type->vec.type) {
+					if ((sym == YY__LESS || sym == YY__LESS_EQUAL || sym == YY__GREATER || sym == YY__GREATER_EQUAL
+					  || sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL)
+					 && !C_IS_TYPE_SIGNED(op1->type->vec.type)) {
+						return c_opaque_vector_type(rcc, op1->type);
+					}
+					return op1->type;
+				}
+			}
+		} else if (C_IS_TYPE_KIND_SCALAR(t2)) {
+			if (sym == YY__LESS_LESS || sym == YY__GREATER_GREATER) {
+				if (!C_IS_TYPE_KIND_INT(t2)) return NULL;
+				return op1->type;
+			} else if (c_do_splat(rcc, op1->type, op2)) {
+				if ((sym == YY__LESS || sym == YY__LESS_EQUAL || sym == YY__GREATER || sym == YY__GREATER_EQUAL
+				  || sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL)
+				 && !C_IS_TYPE_SIGNED(op1->type->vec.type)) {
+					return c_opaque_vector_type(rcc, op1->type);
+				}
+				return op1->type;
+			}
+		}
+	} else if (t2 == C_TYPE_VECTOR && C_IS_TYPE_KIND_SCALAR(t1)) {
+		if (C_IS_TYPE_FP(op2->type->vec.type)) {
+			if (sym == YY__PERCENT || sym == YY__AND || sym == YY__UPARROW || sym == YY__BAR
+			 || sym == YY__LESS_LESS || sym == YY__GREATER_GREATER) {
+				return NULL;
+			}
+		}
+		if (c_do_splat(rcc, op2->type, op1)) {
+				if ((sym == YY__LESS || sym == YY__LESS_EQUAL || sym == YY__GREATER || sym == YY__GREATER_EQUAL
+				  || sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL)
+				 && !C_IS_TYPE_SIGNED(op2->type->vec.type)) {
+				return c_opaque_vector_type(rcc, op2->type);
+			}
+			return op2->type;
+		}
 	} else if (t2 == C_TYPE_FUNC) {
 		if (sym == YY__LESS || sym == YY__LESS_EQUAL || sym == YY__GREATER || sym == YY__GREATER_EQUAL
 			|| sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL || sym == YY__COLON) {
@@ -6268,7 +6785,7 @@ static void c_do_mod(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op
 
 static void c_do_shl(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op2)
 {
-	if (c_value_is_const(op1) && c_value_is_const(op2)) {
+	if (c_value_is_const(op1) && c_value_is_const(op2) && op1->type->kind != C_TYPE_VECTOR) {
 		ir_val val;
 		uint32_t mask = (op2->type->size == 8) ? 63 : 31;
 
@@ -6293,7 +6810,7 @@ static void c_do_shl(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op
 
 static void c_do_shr(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op2)
 {
-	if (c_value_is_const(op1) && c_value_is_const(op2)) {
+	if (c_value_is_const(op1) && c_value_is_const(op2) && op1->type->kind != C_TYPE_VECTOR) {
 		ir_val val;
 		uint32_t mask = (op2->type->size == 8) ? 63 : 31;
 
@@ -6313,7 +6830,13 @@ static void c_do_shr(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op
 	} else {
 		ir_type t = c_type2ir(rcc, type);
 
-		if (C_IS_TYPE_SIGNED(type)) {
+		if (type->kind == C_TYPE_VECTOR) {
+			if (C_IS_TYPE_SIGNED(type->vec.type)) {
+				c_value_set_rval(op1, type, t, ir_SAR(t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
+			} else {
+				c_value_set_rval(op1, type, t, ir_SHR(t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
+			}
+		} else if (C_IS_TYPE_SIGNED(type)) {
 			c_value_set_rval(op1, type, t, ir_SAR(t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 		} else {
 			c_value_set_rval(op1, type, t, ir_SHR(t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
@@ -6402,6 +6925,13 @@ static void c_do_lt(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op2
 			default: IR_ASSERT(0); return;
 		}
 		c_value_set_const(op1, &c_type_bool, IR_BOOL, val);
+	} else if (type->kind == C_TYPE_VECTOR) {
+		ir_type t = c_type2ir(rcc, type);
+		if (C_IS_TYPE_SIGNED(op1->type->vec.type) || C_IS_TYPE_FP(op1->type->vec.type)) {
+			c_value_set_rval(op1, type, t, ir_BINARY_OP(IR_LT, t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
+		} else {
+			c_value_set_rval(op1, type, t, ir_BINARY_OP(IR_ULT, t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
+		}
 	} else {
 		if (C_IS_TYPE_SIGNED(type) || C_IS_TYPE_FP(type)) {
 			c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_LT(c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
@@ -6432,6 +6962,13 @@ static void c_do_gt(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op2
 			default: IR_ASSERT(0); return;
 		}
 		c_value_set_const(op1, &c_type_bool, IR_BOOL, val);
+	} else if (type->kind == C_TYPE_VECTOR) {
+		ir_type t = c_type2ir(rcc, type);
+		if (C_IS_TYPE_SIGNED(op1->type->vec.type) || C_IS_TYPE_FP(op1->type->vec.type)) {
+			c_value_set_rval(op1, type, t, ir_BINARY_OP(IR_GT, t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
+		} else {
+			c_value_set_rval(op1, type, t, ir_BINARY_OP(IR_UGT, t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
+		}
 	} else {
 		if (C_IS_TYPE_SIGNED(type) || C_IS_TYPE_FP(type)) {
 			c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_GT(c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
@@ -6462,6 +6999,13 @@ static void c_do_le(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op2
 			default: IR_ASSERT(0); return;
 		}
 		c_value_set_const(op1, &c_type_bool, IR_BOOL, val);
+	} else if (type->kind == C_TYPE_VECTOR) {
+		ir_type t = c_type2ir(rcc, type);
+		if (C_IS_TYPE_SIGNED(op1->type->vec.type) || C_IS_TYPE_FP(op1->type->vec.type)) {
+			c_value_set_rval(op1, type, t, ir_BINARY_OP(IR_LE, t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
+		} else {
+			c_value_set_rval(op1, type, t, ir_BINARY_OP(IR_ULE, t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
+		}
 	} else {
 		if (C_IS_TYPE_SIGNED(type) || C_IS_TYPE_FP(type)) {
 			c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_LE(c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
@@ -6492,6 +7036,13 @@ static void c_do_ge(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op2
 			default: IR_ASSERT(0); return;
 		}
 		c_value_set_const(op1, &c_type_bool, IR_BOOL, val);
+	} else if (type->kind == C_TYPE_VECTOR) {
+		ir_type t = c_type2ir(rcc, type);
+		if (C_IS_TYPE_SIGNED(op1->type->vec.type) || C_IS_TYPE_FP(op1->type->vec.type)) {
+			c_value_set_rval(op1, type, t, ir_BINARY_OP(IR_GE, t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
+		} else {
+			c_value_set_rval(op1, type, t, ir_BINARY_OP(IR_UGE, t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
+		}
 	} else {
 		if (C_IS_TYPE_SIGNED(type) || C_IS_TYPE_FP(type)) {
 			c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_GE(c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
@@ -6522,6 +7073,9 @@ static void c_do_eq(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op2
 			default: IR_ASSERT(0); return;
 		}
 		c_value_set_const(op1, &c_type_bool, IR_BOOL, val);
+	} else if (type->kind == C_TYPE_VECTOR) {
+		ir_type t = c_type2ir(rcc, type);
+		c_value_set_rval(op1, type, t, ir_BINARY_OP(IR_EQ, t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 	} else {
 		c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_EQ(c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 	}
@@ -6548,6 +7102,9 @@ static void c_do_ne(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op2
 			default: IR_ASSERT(0); return;
 		}
 		c_value_set_const(op1, &c_type_bool, IR_BOOL, val);
+	} else if (type->kind == C_TYPE_VECTOR) {
+		ir_type t = c_type2ir(rcc, type);
+		c_value_set_rval(op1, type, t, ir_BINARY_OP(IR_NE, t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 	} else {
 		c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_NE(c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 	}
@@ -6611,7 +7168,7 @@ void c_do_assign_op(rcc_ctx *rcc, yy_sym sym, c_value *op1, c_value *op2)
 	}
 	if (op1->type != op2->type) c_do_check_cvt(rcc, op1->type, op2, -1);
 	if (op1->type->attr & C_ATTR_CONST) yy_error_fmt("%s of read-only location", "assignment");
-	if (C_IS_TYPE_SCALAR_OR_PTR(op1->type)) {
+	if (C_IS_TYPE_SCALAR_OR_PTR(op1->type) || op1->type->kind == C_TYPE_VECTOR) {
 		ir_ref ref = c_do_store(rcc, op1, op2);
 
 		if (!IR_IS_CONST_REF(ref) || IR_IS_SYM_CONST(rcc->active_ctx->ir_base[ref].op)) {
@@ -6673,7 +7230,10 @@ static void c_ir_IF_FALSE(rcc_ctx *rcc, ir_ref ref)
 
 ir_ref c_do_bool_and_start(rcc_ctx *rcc, c_value *op1)
 {
-	if (op1->type->kind == C_TYPE_VOID || op1->type->kind == C_TYPE_STRUCT || op1->type->kind == C_TYPE_UNION) {
+	if (op1->type->kind == C_TYPE_VOID
+	 || op1->type->kind == C_TYPE_STRUCT
+	 || op1->type->kind == C_TYPE_UNION
+	 || op1->type->kind == C_TYPE_VECTOR) {
 		yy_error("scalar is required");
 	}
 	if (c_value_is_const(op1)) {
@@ -6690,7 +7250,10 @@ void c_do_bool_and_end(rcc_ctx *rcc, c_value *op1, c_value *op2, ir_ref if_ref)
 {
 	ir_val val;
 
-	if (op2->type->kind == C_TYPE_VOID || op2->type->kind == C_TYPE_STRUCT || op2->type->kind == C_TYPE_UNION) {
+	if (op2->type->kind == C_TYPE_VOID
+	 || op2->type->kind == C_TYPE_STRUCT
+	 || op2->type->kind == C_TYPE_UNION
+	 || op2->type->kind == C_TYPE_VECTOR) {
 		yy_error("scalar is required");
 	}
 	if (if_ref) {
@@ -6717,7 +7280,10 @@ void c_do_bool_and_end(rcc_ctx *rcc, c_value *op1, c_value *op2, ir_ref if_ref)
 
 ir_ref c_do_bool_or_start(rcc_ctx *rcc, c_value *op1)
 {
-	if (op1->type->kind == C_TYPE_VOID || op1->type->kind == C_TYPE_STRUCT || op1->type->kind == C_TYPE_UNION) {
+	if (op1->type->kind == C_TYPE_VOID
+	 || op1->type->kind == C_TYPE_STRUCT
+	 || op1->type->kind == C_TYPE_UNION
+	 || op1->type->kind == C_TYPE_VECTOR) {
 		yy_error("scalar is required");
 	}
 	if (c_value_is_const(op1)) {
@@ -6734,7 +7300,10 @@ void c_do_bool_or_end(rcc_ctx *rcc, c_value *op1, c_value *op2, ir_ref if_ref)
 {
 	ir_val val;
 
-	if (op2->type->kind == C_TYPE_VOID || op2->type->kind == C_TYPE_STRUCT || op2->type->kind == C_TYPE_UNION) {
+	if (op2->type->kind == C_TYPE_VOID
+	 || op2->type->kind == C_TYPE_STRUCT
+	 || op2->type->kind == C_TYPE_UNION
+	 || op2->type->kind == C_TYPE_VECTOR) {
 		yy_error("scalar is required");
 	}
 	if (if_ref) {
@@ -6858,7 +7427,10 @@ ir_ref c_do_if(rcc_ctx *rcc, c_value *cond)
 {
 	ir_ref ref;
 
-	if (cond->type->kind == C_TYPE_VOID || cond->type->kind == C_TYPE_STRUCT || cond->type->kind == C_TYPE_UNION) {
+	if (cond->type->kind == C_TYPE_VOID
+	 || cond->type->kind == C_TYPE_STRUCT
+	 || cond->type->kind == C_TYPE_UNION
+	 || cond->type->kind == C_TYPE_VECTOR) {
 		yy_error("scalar is required");
 	} else if (C_IS_TYPE_FP(cond->type)) {
 		ir_val val;
@@ -7271,7 +7843,10 @@ void c_do_loop_check(rcc_ctx *rcc, c_loop *loop, c_value *cond)
 {
 	ir_ref ref;
 
-	if (cond->type->kind == C_TYPE_VOID || cond->type->kind == C_TYPE_STRUCT || cond->type->kind == C_TYPE_UNION) {
+	if (cond->type->kind == C_TYPE_VOID
+	 || cond->type->kind == C_TYPE_STRUCT
+	 || cond->type->kind == C_TYPE_UNION
+	 || cond->type->kind == C_TYPE_VECTOR) {
 		yy_error("scalar is required");
 	} else if (C_IS_TYPE_FP(cond->type)) {
 		ir_val val;
@@ -7981,7 +8556,19 @@ void c_do_computed_goto(rcc_ctx *rcc, c_value *v)
 	ir_BEGIN(IR_UNUSED);
 }
 
-static void c_do_init(void *addr, c_value *val)
+static void c_do_init_vector(rcc_ctx *rcc, void *addr, c_value *val)
+{
+	IR_ASSERT(c_value_is_ref(val) && IR_IS_CONST_REF(val->u.ref));
+	if (rcc->active_ctx->ir_base[val->u.ref].op == IR_SYM) {
+		IR_ASSERT(val->u.val.ptr);
+		memcpy(addr, val->u.val.ptr, val->type->size);
+	} else {
+		IR_ASSERT(rcc->active_ctx->ir_base[val->u.ref].op == IR_LONG_CONST);
+		memcpy(addr, ir_long_const_ptr(rcc->active_ctx, val->u.ref), val->type->size);
+	}
+}
+
+static void c_do_init(rcc_ctx *rcc, void *addr, c_value *val)
 {
 	const c_type *type = val->type;
 	c_type_kind kind = type->kind;
@@ -8012,6 +8599,7 @@ repeat:
 		case C_TYPE_STRUCT:
 		case C_TYPE_UNION:    memcpy(addr, val->u.val.ptr, type->size); break;
 		case C_TYPE_ENUM:     kind = type->enumeration.kind; goto repeat;
+		case C_TYPE_VECTOR:   c_do_init_vector(rcc, addr, val); break;
 		default: IR_ASSERT(0);
 	}
 }
@@ -8139,8 +8727,8 @@ void c_do_init_obj(rcc_ctx *rcc, c_sym *obj, c_value *val)
 		if (!c_value_is_const(val) && !c_linker_fix_reloc(rcc, obj, 0, val)) {
 			yy_error("initializer element is not constant");
 		}
-		c_do_init(obj->value.u.val.ptr, val);
-	} else if (C_IS_TYPE_SCALAR_OR_PTR(obj->value.type)) {
+		c_do_init(rcc, obj->value.u.val.ptr, val);
+	} else if (C_IS_TYPE_SCALAR_OR_PTR(obj->value.type) || obj->value.type->kind == C_TYPE_VECTOR) {
 		IR_ASSERT(c_value_is_ref(&obj->value));
 		if (rcc->active_ctx->ir_base[obj->value.u.ref].op == IR_VAR) {
 			ir_VSTORE(obj->value.u.ref, c_value_ref(rcc, val));
@@ -8188,6 +8776,22 @@ void c_do_init_start(rcc_ctx *rcc, c_sym *obj, c_init *init)
 	init->stack[0].type = type;
 	init->stack[0].pos = 0;
 	init->stack[0].last = 0;
+
+	if (type->kind == C_TYPE_VECTOR
+	 && !c_value_is_const(&obj->value) && !(c_value_is_ref(&obj->value) && IR_IS_CONST_REF(obj->value.u.ref))) {
+		ir_val v;
+		ir_ref ref;
+
+		v.u64 = 0;
+		ref = ir_SPLAT(c_type2ir(rcc, type), ir_const(rcc->active_ctx, v, c_type2ir(rcc, type->vec.type)));
+
+		if (rcc->active_ctx->ir_base[obj->value.u.ref].op == IR_VAR) {
+			ir_VSTORE(obj->value.u.ref, ref);
+		} else {
+			IR_ASSERT(rcc->active_ctx->ir_base[obj->value.u.ref].op == IR_ALLOCA);
+			ir_STORE(obj->value.u.ref, ref);
+		}
+	}
 }
 
 void c_do_init_dim(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *dim)
@@ -8288,6 +8892,13 @@ void c_do_init_next(rcc_ctx *rcc, c_sym *obj, c_init *init)
 				yy_warning("excess elements in union initializer");
 				return;
 			}
+		} else if (type->kind == C_TYPE_VECTOR) {
+			pos = init->stack[init->level].pos;
+			if (++pos < type->vec.length) {
+				init->stack[init->level].pos = pos;
+				return;
+			}
+			if (init->level == 0) yy_error("excess elements in vector initializer");
 		} else {
 			if (init->level == 0) yy_error("excess elements in scalar initializer");
 		}
@@ -8402,6 +9013,9 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val)
 			// TODO: select best type ???
 			type = type->record.fields[0].type;
 			if (type->kind != C_TYPE_ARRAY && type->kind != C_TYPE_STRUCT && type->kind != C_TYPE_UNION) break;
+		} else if (type->kind == C_TYPE_VECTOR) {
+			type = type->vec.type;
+			break;
 		} else {
 			break;
 		}
@@ -8444,6 +9058,8 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val)
 			} else {
 				IR_ASSERT(i == init->level);
 			}
+		} else if (t->kind == C_TYPE_VECTOR) {
+			offset += t->vec.type->size * init->stack[i].pos;
 		} else {
 			IR_ASSERT(i == init->level);
 		}
@@ -8536,7 +9152,9 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val)
 			 * We have to remove relocations added previously. */
 			c_linker_del_reloc(rcc, obj, offset);
 		}
-		if (!c_value_is_const(val) && !c_linker_fix_reloc(rcc, obj, offset, val)) {
+		if (!c_value_is_const(val)
+		 && !c_linker_fix_reloc(rcc, obj, offset, val)
+		 && !(IR_IS_CONST_REF(val->u.ref) && val->type->kind == C_TYPE_VECTOR)) {
 			yy_error("initializer element is not constant");
 		}
 		IR_ASSERT(/*obj->value.u.type == IR_ADDR &&*/ obj->value.u.val.ptr);
@@ -8545,7 +9163,7 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val)
 			init->size = new_size;
 		}
 		if (!C_IS_BIT_FIELD(bit_field)) {
-			c_do_init((char*)obj->value.u.val.ptr + offset, val);
+			c_do_init(rcc, (char*)obj->value.u.val.ptr + offset, val);
 		} else {
 			uint32_t first_bit = C_BIT_FIELD_START(bit_field);
 			uint32_t bits = C_BIT_FIELD_SIZE(bit_field);
@@ -8587,16 +9205,44 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val)
 			}
 		} else if (rcc->active_ctx->ir_base[obj->value.u.ref].op == IR_VAR) {
 			IR_ASSERT(!C_IS_BIT_FIELD(bit_field));
-			ir_VSTORE(obj->value.u.ref, c_value_ref(rcc, val));
+
+			if (init->stack[init->level].type->kind == C_TYPE_VECTOR) {
+				const c_type *t = init->stack[init->level].type;
+				ir_type vt = c_type2ir(rcc, t);
+				ir_ref ref;
+
+				offset -= t->vec.type->size * init->stack[init->level].pos;
+				IR_ASSERT(offset == 0);
+				ref = ir_VLOAD(vt, obj->value.u.ref);
+				ref = ir_REPLACE(vt, ref, ir_const_u8(rcc->active_ctx, init->stack[init->level].pos),
+						c_value_ref(rcc, val));
+				ir_VSTORE(obj->value.u.ref, ref);
+			} else {
+				ir_VSTORE(obj->value.u.ref, c_value_ref(rcc, val));
+			}
 		} else if (c_value_is_reg(&obj->value)) {
 			IR_ASSERT(!C_IS_BIT_FIELD(bit_field));
 			ir_RSTORE(obj->value.u.ref, c_value_ref(rcc, val));
 		} else {
 			IR_ASSERT(rcc->active_ctx->ir_base[obj->value.u.ref].op == IR_ALLOCA);
 			if (!C_IS_BIT_FIELD(bit_field)) {
-				ir_STORE(
-					ir_ADD_A(obj->value.u.ref, ir_const_size_t(rcc->active_ctx, offset)),
-					c_value_ref(rcc, val));
+				if (init->stack[init->level].type->kind == C_TYPE_VECTOR) {
+					const c_type *t = init->stack[init->level].type;
+					ir_type vt = c_type2ir(rcc, t);
+					ir_ref ref;
+
+					offset -= t->vec.type->size * init->stack[init->level].pos;
+					ref = ir_LOAD(vt, ir_ADD_A(obj->value.u.ref, ir_const_size_t(rcc->active_ctx, offset)));
+					ref = ir_REPLACE(vt, ref, ir_const_u8(rcc->active_ctx, init->stack[init->level].pos),
+							c_value_ref(rcc, val));
+					ir_STORE(
+						ir_ADD_A(obj->value.u.ref, ir_const_size_t(rcc->active_ctx, offset)),
+						ref);
+				} else {
+					ir_STORE(
+						ir_ADD_A(obj->value.u.ref, ir_const_size_t(rcc->active_ctx, offset)),
+						c_value_ref(rcc, val));
+				}
 			} else if (!C_IS_BIT_FIELD_PACKED(bit_field)) {
 				c_do_store_bit_field(rcc,
 					ir_ADD_A(obj->value.u.ref, ir_const_size_t(rcc->active_ctx, offset)),
@@ -8627,7 +9273,10 @@ void c_do_init_nested(rcc_ctx *rcc, c_sym *obj, c_init *init, bool b)
 		}
 	}
 
-	if (type->kind != C_TYPE_ARRAY && type->kind != C_TYPE_STRUCT && type->kind != C_TYPE_UNION) {
+	if (type->kind != C_TYPE_ARRAY
+	 && type->kind != C_TYPE_STRUCT
+	 && type->kind != C_TYPE_UNION
+	 && type->kind != C_TYPE_VECTOR) {
 		yy_warning("braces around scalar initializer");
 	} else if (!b) {
 		init->level++;
@@ -8672,7 +9321,9 @@ void c_do_init_expr_start(rcc_ctx *rcc, c_sym *obj, const c_type *type)
 	if (rcc->active_func && !rcc->c_static_data) {
 		ir_ref size = ir_const_size_t(rcc->active_ctx, type->size);
 		ir_ref addr = c_do_alloca(rcc, type->size, c_attr2align(type->attr), 0);
-		ir_memzero(rcc, addr, size, c_attr2align(type->attr));
+		if (type->kind != C_TYPE_VECTOR) {
+			ir_memzero(rcc, addr, size, c_attr2align(type->attr));
+		}
 		c_value_set_rval(&obj->value, type, IR_ADDR, addr);
 	} else {
 		c_dcl d = {.type = type, .flags = C_DCL_DEFINITION, .attr = 0};
@@ -8684,7 +9335,7 @@ void c_do_init_expr_start(rcc_ctx *rcc, c_sym *obj, const c_type *type)
 			obj->tmp_data = 1;
 			addr = ir_mem_calloc(1, type->size);
 		} else {
-			addr = c_linker_allocate_data(rcc, 0, type->size, c_attr2align(type->attr));
+			addr = c_linker_allocate_data(rcc, 0, type->size, c_attr2align(type->attr), type->kind == C_TYPE_ARRAY);
 		}
 
 		rcc->yy_hash.data[sym_name].sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);

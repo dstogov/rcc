@@ -1,0 +1,109 @@
+--TEST--
+CONVERT.ZEXT.004: 256-bit vectors AVX
+--TARGET--
+!aarch64
+--ARGS--
+-mavx -mno-avx2 --run
+--CODE--
+int printf(const char *, ...);
+
+typedef long long          i64;
+typedef unsigned long long u64;
+typedef int                i32;
+typedef unsigned int       u32;
+typedef short              i16;
+typedef unsigned short     u16;
+typedef char               i8;
+typedef unsigned char      u8;
+
+typedef u64 __attribute__((__vector_size__(32))) v_4u64;
+typedef u32 __attribute__((__vector_size__(16))) v_4u32;
+typedef u16 __attribute__((__vector_size__(8)))  v_4u16;
+typedef u8  __attribute__((__vector_size__(4)))  v_4u8;
+
+typedef u32 __attribute__((__vector_size__(32))) v_8u32;
+typedef u16 __attribute__((__vector_size__(16))) v_8u16;
+typedef u8  __attribute__((__vector_size__(8)))  v_8u8;
+
+typedef u16 __attribute__((__vector_size__(32))) v_16u16;
+typedef u8  __attribute__((__vector_size__(16))) v_16u8;
+
+v_4u64 __attribute__((noinline)) test_u32_u64(v_4u32 v)
+{
+	return __builtin_convertvector(v, v_4u64);
+}
+
+v_4u64 __attribute__((noinline)) test_u16_u64(v_4u16 v)
+{
+	return __builtin_convertvector(v, v_4u64);
+}
+
+v_4u64 __attribute__((noinline)) test_u8_u64(v_4u8 v)
+{
+	return __builtin_convertvector(v, v_4u64);
+}
+
+v_8u32 __attribute__((noinline)) test_u16_u32(v_8u16 v)
+{
+	return __builtin_convertvector(v, v_8u32);
+}
+
+v_8u32 __attribute__((noinline)) test_u8_u32(v_8u8 v)
+{
+	return __builtin_convertvector(v, v_8u32);
+}
+
+v_16u16 __attribute__((noinline)) test_u8_u16(v_16u8 v)
+{
+	return __builtin_convertvector(v, v_16u16);
+}
+
+int main()
+{
+	{
+		v_16u8 x = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, -8};
+		v_16u16 y = test_u8_u16(x);
+		printf("%u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u\n",
+			y[0], y[1], y[2], y[3], y[4], y[5], y[6], y[7],
+			y[8], y[9], y[10], y[11], y[12], y[13], y[14], y[15]);
+	}
+
+	{
+		v_8u8 x = {1, 2, 3, 4, 5, 6, 7, -4};
+		v_8u32 y = test_u8_u32(x);
+		printf("%u %u %u %u %u %u %u %u\n", y[0], y[1], y[2], y[3], y[4], y[5], y[6], y[7]);
+	}
+
+	{
+		v_8u16 x = {1, 2, 3, 4, 5, 6, 7, -4};
+		v_8u32 y = test_u16_u32(x);
+		printf("%u %u %u %u %u %u %u %u\n", y[0], y[1], y[2], y[3], y[4], y[5], y[6], y[7]);
+	}
+
+	{
+		v_4u8 x = {1, 2, 3, -2};
+		v_4u64 y = test_u8_u64(x);
+		printf("%llu %llu %llu %llu\n", y[0], y[1], y[2], y[3]);
+	}
+
+	{
+		v_4u16 x = {1, 2, 3, -2};
+		v_4u64 y = test_u16_u64(x);
+		printf("%llu %llu %llu %llu\n", y[0], y[1], y[2], y[3]);
+	}
+
+	{
+		v_4u32 x = {1, 2, 3, -2};
+		v_4u64 y = test_u32_u64(x);
+		printf("%llu %llu %llu %llu\n", y[0], y[1], y[2], y[3]);
+	}
+
+	return 0;
+}
+--EXPECT--
+1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 248
+1 2 3 4 5 6 7 252
+1 2 3 4 5 6 7 65532
+1 2 3 254
+1 2 3 65534
+1 2 3 4294967294

@@ -1,0 +1,43 @@
+--TEST--
+SCCP.001: SCCP and vectors
+--ARGS--
+--save-ir-after-scheduling
+--CODE--
+typedef int __attribute__((vector_size(16))) v;
+
+int test(int n) {
+	int i;
+	v x = {1, 2, 3, 4};
+	for (i = 0; i < 10; i++) { 
+		x[2] = 3;		
+	}
+	return x[1] + x[2];
+}
+--EXPECT--
+func @test(int32_t): int32_t
+# (after scheduling)
+{
+	int32_t c_7 = 5;
+	int32_t c_6 = 10;
+	int32_t c_5 = 1;
+	int32_t c_4 = 0;
+	bool c_3 = 1;
+	bool c_2 = 0;
+	uintptr_t c_1 = 0;
+#BB1: end=l_3, succ(1)=[BB2]
+	l_1 = START(l_12);
+	int32_t d_2 = PARAM(l_1, "n", 1);
+	l_3 = END(l_1);
+#BB2: end=l_7, idom=BB1(1), loop=HDR(1), pred(2)=[BB1, BB3], succ(2)=[BB3, BB4]
+	l_4 = LOOP_BEGIN(l_3, l_10);
+	int32_t d_5 = PHI(l_4, c_4, d_9);
+	bool d_6 = LT(d_5, c_6);
+	l_7 = IF(l_4, d_6);
+#BB3: end=l_10, idom=BB2(2), loop=BB2(1), pred(1)=[BB2], succ(1)=[BB2]
+	l_8 = IF_TRUE(l_7);
+	int32_t d_9 = ADD(d_5, c_5);
+	l_10 = LOOP_END(l_8);
+#BB4: end=l_12, idom=BB2(2), pred(1)=[BB2]
+	l_11 = IF_FALSE(l_7);
+	l_12 = RETURN(l_11, c_7);
+}

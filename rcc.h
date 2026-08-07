@@ -233,6 +233,9 @@
 	_("__builtin_umul_overflow",       YY___BUILTIN_UMUL_OVERFLOW)     \
 	_("__builtin_umull_overflow",      YY___BUILTIN_UMULL_OVERFLOW)    \
 	_("__builtin_umulll_overflow",     YY___BUILTIN_UMULLL_OVERFLOW)   \
+	_("__builtin_convertvector",       YY___BUILTIN_CONVERTVECTOR)     \
+	_("__builtin_shuffle",             YY___BUILTIN_SHUFFLE)           \
+	_("__builtin_shufflevector",       YY___BUILTIN_SHUFFLEVECTOR)     \
 	_("__builtin_expect",              YY___BUILTIN_EXPECT)            \
 	_("__builtin_prefetch",            YY___BUILTIN_PREFETCH)          \
 	_("__builtin_unreachable",         YY___BUILTIN_UNREACHABLE)       \
@@ -730,6 +733,7 @@ typedef enum {
 	C_TYPE_ARRAY,
 	C_TYPE_STRUCT,
 	C_TYPE_UNION,
+	C_TYPE_VECTOR,
 	C_TYPE_FLOAT_COMPLEX,
 	C_TYPE_DOUBLE_COMPLEX,
 	C_TYPE_LONG_DOUBLE_COMPLEX,
@@ -756,6 +760,7 @@ typedef enum {
 	C_TYPE_INPROGRESS = (1<<1), /* incomplete (not completely defined) struct, union */
 	C_TYPE_GLOBAL     = (1<<2),
 	C_TYPE_IN_FUNC    = (1<<3),
+	C_TYPE_OPAQUE     = (1<<4), /* opaque vector */
 } c_type_flag;
 
 typedef yy_sym c_name;
@@ -797,6 +802,10 @@ struct _c_type {
 			const c_type  *ret_type;
 			c_param       *params;
 		} func;
+		struct {
+			const c_type  *type;
+			int32_t        length;
+		} vec;
 		c_name             tag;
 	};
 };
@@ -824,6 +833,7 @@ struct _c_dcl {
 	c_name                 cleanup_func; /* may be set for local variables */
 	int8_t                 reg;
 	uint32_t               attr2;
+	uint32_t               vector_size;
 };
 
 typedef enum {
@@ -892,13 +902,18 @@ struct _c_tag {
 #define C_CODE_STARTED     2
 #define C_CODE_DONE        3
 
-#define C_IS_BIT_FIELD(bit_field)     ((bit_field) != 0)
+#define C_IS_SIMPLE_VAL(bit_field)    ((bit_field) == 0)
+#define C_IS_BIT_FIELD(bit_field)     ((bit_field) & (1 << 12))
 #define C_BIT_FIELD(start, lenght)    ((1 << 12) | ((start) << 6) | (lenght))
 #define C_BIT_FIELD_START(bit_field)  (((bit_field) >> 6) & 0x3f)
 #define C_BIT_FIELD_SIZE(bit_field)   ((bit_field) & 0x3f)
 
 #define C_IS_BIT_FIELD_PACKED(bit_field)  ((bit_field) & (1 << 13))
 #define C_SET_BIT_FIELD_PACKED(bit_field) do {(bit_field) |= (1 << 13);} while (0)
+
+#define C_IS_VECTOR_DIM(proto)            ((proto) & (1 << 14))
+#define C_VECTOR_DIM(type)                ((1 << 14) | (type))
+#define C_VECTOR_DIM_TYPE(proto)          (proto & 0xff)
 
 struct _c_field {
 	c_name                 name;
@@ -1099,6 +1114,7 @@ void c_gcc_attribute_aligned(rcc_ctx *rcc, c_dcl *d, c_name attr, c_value *v);
 void c_gcc_attribute_packed(rcc_ctx *rcc, c_dcl *d, c_name attr);
 void c_gcc_attribute_cleanup(rcc_ctx *rcc, c_dcl *d, c_name attr, c_name func);
 void c_gcc_attribute_regparm(rcc_ctx *rcc, c_dcl *d, c_name attr, c_value *v);
+void c_gcc_attribute_vector_size(rcc_ctx *rcc, c_dcl *d, c_name attr, c_value *v);
 yy_sym c_gcc_attribute(rcc_ctx *rcc, c_dcl *dcl, c_name attr, yy_sym sym);
 void c_gcc_attribute_alias(rcc_ctx *rcc, c_dcl *d, c_name attr, c_value *v);
 void c_asm_alias(rcc_ctx *rcc, c_dcl *d, c_value *v);
@@ -1143,6 +1159,7 @@ c_value *c_do_grow_actual_parameters(c_value *args, int32_t num_args);
 void c_do_builtin(rcc_ctx *rcc, c_value *val, c_name name, int32_t num_args, c_value *args);
 void c_do_builtin_constant_p(rcc_ctx *rcc, c_value *val);
 void c_do_builtin_va_arg(rcc_ctx *rcc, c_value *val, const c_type *type);
+void c_do_builtin_convertvector(rcc_ctx *rcc, c_value *val, const c_type *type);
 void c_do_call(rcc_ctx *rcc, c_value *func, int32_t num_args, c_value *args, c_value *res);
 void c_do_binary_op(rcc_ctx *rcc, yy_sym sym, c_value *v, c_value *op2);
 void c_do_assign_op(rcc_ctx *rcc, yy_sym sym, c_value *v, c_value *op2);
@@ -1288,7 +1305,7 @@ void yy_warning_(rcc_ctx *rcc, uint32_t kind, const char *msg);
 void yy_warning_fmt_(rcc_ctx *rcc, uint32_t kind, const char *fmt, ...);
 
 /* Linker */
-void *c_linker_allocate_data(rcc_ctx *rcc, c_name name, size_t size, size_t align);
+void *c_linker_allocate_data(rcc_ctx *rcc, c_name name, size_t size, size_t align, bool is_array);
 bool  c_linker_fix_reloc(rcc_ctx *rcc, c_sym *obj, size_t obj_offset, c_value *val);
 void  c_linker_del_reloc(rcc_ctx *rcc, c_sym *obj, size_t obj_offset);
 

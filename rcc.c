@@ -73,6 +73,8 @@
 
 #define C_DUMP_LIVE_RANGES            (1<<25)
 
+#define C_DUMP_C                      (1<<26)
+
 #define C_SINGLE_FILE                 (1<<29)
 #define C_DO_LINK_INTERNAL            (1<<30)
 #define C_DO_LINK_EXTERNAL            (1U<<31)
@@ -595,9 +597,15 @@ add_thunk:
 	return NULL;
 }
 
-void *c_linker_allocate_data(rcc_ctx *rcc, c_name name, size_t size, size_t align)
+void *c_linker_allocate_data(rcc_ctx *rcc, c_name name, size_t size, size_t align, bool is_array)
 {
-	void *data = ir_arena_alloc_aligned(&rcc->c_linker_arena, size, align);
+	void *data;
+
+	if (is_array && size >= 16 && align < 16) {
+		/* global array variable of length at least 16 bytes always has alignment of at least 16 byte */
+		align = 16;
+	}
+	data = ir_arena_alloc_aligned(&rcc->c_linker_arena, size, align);
 	if (UNEXPECTED(!data)) yy_error("not enough memory to allocate data");
 	if (align < 8) {
 		align = 8;
@@ -1144,7 +1152,7 @@ static void rcc_fix_flexible_data(rcc_ctx *rcc)
 			p->sym->value.type = type;
 
 			p->sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
-			p->sym->value.u.val.ptr = c_linker_allocate_data(rcc, i, type->size, c_attr2align(type->attr));
+			p->sym->value.u.val.ptr = c_linker_allocate_data(rcc, i, type->size, c_attr2align(type->attr), 1);
 			p->sym->is_implemented = 1;
 
 			//yy_warning_fmt("array \"%s\" assumed to have one element", p->str); // error position ???
@@ -1303,6 +1311,15 @@ static size_t rcc_emit_ir_data(rcc_ctx *rcc, FILE *f, const c_type *type, const 
 			offset++;
 		}
 		return offset;
+	} else if (type->kind == C_TYPE_VECTOR) {
+		size_t offset = 0, el_offset = 0;
+		int i;
+
+		for (i = 0; i < type->vec.length; el_offset += type->vec.type->size, i++) {
+			IR_ASSERT(offset == el_offset);
+			offset += rcc_emit_ir_data(rcc, f, type->vec.type, (const char*)addr + el_offset, base + el_offset, rel);
+		}
+		return offset;
 	} else {
 		IR_ASSERT(0);
 	}
@@ -1389,7 +1406,9 @@ static void rcc_emit_ir(rcc_ctx *rcc, FILE *f)
 		if (p->sym && p->sym->kind == C_SYM_VAR) {
 			size_t size;
 
-			if (p->sym->linkage == C_LINK_INTERNAL) {
+			if (p->sym->linkage == C_LINK_NONE) {
+				continue;
+			} else if (p->sym->linkage == C_LINK_INTERNAL) {
 				fprintf(f, "static ");
 			} else if (p->sym->is_external || !c_value_is_set(&p->sym->value)) {
 				if (p->sym->alias) continue;
@@ -1493,6 +1512,80 @@ static void rcc_emit_llvm(rcc_ctx *rcc, FILE *f)
 	}
 }
 
+static void rcc_emit_c_proto(rcc_ctx *rcc, const char *name, c_sym *func, FILE *f)
+{
+	const c_type *t = func->value.type;
+	uint32_t flags;
+	ir_type ret_type;
+	uint32_t params_count;
+	uint8_t *param_types;
+
+	IR_ASSERT(t->kind == C_TYPE_FUNC);
+	param_types = alloca(t->func.num_params + 16);
+	c_type2proto_ex(rcc, t, &flags, &ret_type, &params_count, param_types);
+	if (func->linkage == C_LINK_INTERNAL) {
+		flags |= IR_STATIC;
+	} else if (func->linkage == C_LINK_BUILTIN) {
+		flags |= IR_CC_BUILTIN;
+	}
+	ir_emit_c_func_decl(name, flags, ret_type, params_count, param_types, f);
+}
+
+static void rcc_emit_c(rcc_ctx *rcc, FILE *f)
+{
+	uint32_t i;
+	yy_hash_bucket *p;
+
+	for (i = YY_LAST_KEYWORD + 1, p = rcc->yy_hash.data + i; i < rcc->yy_hash.count; p++, i++) {
+		if (p->sym && p->sym->kind == C_SYM_FUNC && !p->sym->ctx) {
+			if ((p->sym->is_external || !p->sym->ctx) && p->sym->alias) continue;
+			rcc_emit_c_proto(rcc, p->str, p->sym, f);
+		}
+	}
+
+	for (i = YY_LAST_KEYWORD + 1, p = rcc->yy_hash.data + i; i < rcc->yy_hash.count; p++, i++) {
+		if (p->sym && p->sym->kind == C_SYM_VAR) {
+			uint32_t flags = 0;
+			const char *str;
+
+			if (p->sym->linkage == C_LINK_INTERNAL) {
+				flags |= IR_STATIC;
+			} else if (p->sym->is_external || !c_value_is_set(&p->sym->value)) {
+				flags |= IR_EXTERN;
+			}
+			if (c_is_type_const(p->sym->value.type)) {
+				flags |= IR_CONST;
+			}
+			if (p->sym->alias) {
+				str = rcc->yy_hash.data[p->sym->alias].str;
+			} else {
+				str = p->str;
+			}
+			//TODO: type ???
+			ir_emit_c_sym_decl(str, flags, f);
+			//TODO: initializer ???
+		}
+	}
+
+	for (i = YY_LAST_KEYWORD + 1, p = rcc->yy_hash.data + i; i < rcc->yy_hash.count; p++, i++) {
+		if (p->sym && p->sym->kind == C_SYM_FUNC && p->sym->ctx) {
+			ir_ctx *ctx = p->sym->ctx;
+			bool cleanup = 0;
+
+			if (!ctx->vregs) {
+				ir_assign_virtual_registers(ctx);
+				ir_compute_dessa_moves(ctx);
+				cleanup = 1;
+			}
+			ir_emit_c(ctx, p->str, f);
+			if (cleanup) {
+				ir_mem_free(ctx->vregs);
+				ctx->vregs = NULL;
+			}
+		}
+	}
+}
+
 static int rcc_preprocess(rcc_ctx *rcc, const char *file_name, FILE *f)
 {
 	if (!rcc_read(rcc, file_name)) {
@@ -1519,6 +1612,9 @@ static int rcc_compile(rcc_ctx *rcc, const char *file_name)
 	}
 	if (rcc->c_flags & C_DUMP_LLVM) {
 		rcc_emit_llvm(rcc, rcc->output);
+	}
+	if (rcc->c_flags & C_DUMP_C) {
+		rcc_emit_c(rcc, rcc->output);
 	}
 	if (ir_list_capasity(&rcc->codegen_queue)) {
 		do {
@@ -1852,6 +1948,7 @@ static void rcc_help(const char *cmd)
 		"  -m[no-]sse4                - enable/disable SSE4 instruction set\n"
 		"  -m[no-]sse4.1              - enable/disable SSE4.1 instruction set\n"
 		"  -m[no-]sse4.2              - enable/disable SSE4.2 instruction set\n"
+		"  -m[no-]avx2                - enable/disable AVX2 instruction set\n"
 #endif
 		"  -muse-fp                   - use base frame pointer register\n"
 #if defined(IR_TARGET_X86)
@@ -2091,6 +2188,12 @@ static int rcc_parse_option(rcc_ctx *rcc, const char *opt, const char *arg, bool
 	} else if (strcmp(opt, "-mno-sse4.2") == 0) {
 		rcc->ir_mflags &= ~IR_X86_SSE42;
 		rcc->ir_mflags_disabled |= IR_X86_SSE42;
+	} else if (strcmp(opt, "-mavx2") == 0) {
+		rcc->ir_mflags |= IR_X86_AVX2;
+		rcc->ir_mflags_disabled &= ~IR_X86_AVX2;
+	} else if (strcmp(opt, "-mno-avx2") == 0) {
+		rcc->ir_mflags &= ~IR_X86_AVX2;
+		rcc->ir_mflags_disabled |= IR_X86_AVX2;
 #endif
 	} else if (strcmp(opt, "-muse-fp") == 0) {
 		rcc->ir_flags |= IR_USE_FRAME_POINTER;
@@ -2316,6 +2419,8 @@ int main(int argc, const char **argv)
 			rcc->c_flags |= C_DUMP_IR;
 		} else if (strcmp(argv[i], "--emit-llvm") == 0) {
 			rcc->c_flags |= C_DUMP_LLVM;
+		} else if (strcmp(argv[i], "--emit-c") == 0) {
+			rcc->c_flags |= C_DUMP_C;
 		} else if (strcmp(argv[i], "-S") == 0) {
 			rcc->c_flags |= C_DUMP_ASM;
 		} else if (strcmp(argv[i], "--dump-size") == 0) {
@@ -2479,7 +2584,7 @@ int main(int argc, const char **argv)
 					return 1;
 				}
 			}
-			rcc->ir_mflags |= (cpuinfo & (IR_X86_SSE3|IR_X86_SSSE3|IR_X86_SSE41|IR_X86_SSE42|IR_X86_BMI1)) & ~rcc->ir_mflags_disabled;
+			rcc->ir_mflags |= (cpuinfo & (IR_X86_SSE3|IR_X86_SSSE3|IR_X86_SSE41|IR_X86_SSE42|IR_X86_AVX2|IR_X86_BMI1)) & ~rcc->ir_mflags_disabled;
 #endif
 		}
 

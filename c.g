@@ -487,7 +487,7 @@ attrib(rcc_ctx *rcc, c_dcl *d):                            {c_name name = sym;}
 	    "(" constant_expression(rcc, &v) ")"               {c_gcc_attribute_regparm(rcc, d, name, &v);}
 	|	("unused"|"__unused__")                            {d->attr |= C_ATTR_UNUSED;}
 	|	("vector_size"|"__vector_size__")                  {c_value_clear(&v);}
-		( "(" constant_expression(rcc, &v) ")" )?          {yy_error_fmt("unsupported attribute \"%s\"", yy_sym2str(rcc, name));}
+		( "(" constant_expression(rcc, &v) ")" )?          {c_gcc_attribute_vector_size(rcc, d, name, &v);}
 	|	("weak"|"__weak__")                                {d->attr |= C_ATTR_WEAK;}
 	|	ID(rcc, &name)                                     {sym = c_gcc_attribute(rcc, d, name, sym);}
 	)?
@@ -1205,6 +1205,8 @@ unary_expression(rcc_ctx *rcc, c_value *val):
 		|	"__builtin_umul_overflow"
 		|	"__builtin_umull_overflow"
 		|	"__builtin_umulll_overflow"
+		|	"__builtin_shuffle"
+		|	"__builtin_shufflevector"
 		)
 		"(" builtin_parameters(rcc, &v, name) ")"
 	|	                                                   {ir_ref old = c_do_nocode(rcc);}
@@ -1217,6 +1219,12 @@ unary_expression(rcc_ctx *rcc, c_value *val):
 		assignment_expression(rcc, &v)
 		","
 		type_name(rcc, &t)                                 {c_do_builtin_va_arg(rcc, &v, t);}
+		")"
+	|	"__builtin_convertvector"
+		"("
+		assignment_expression(rcc, &v)
+		","
+		type_name(rcc, &t)                                 {c_do_builtin_convertvector(rcc, &v, t);}
 		")"
 	)
 	(                                                      {c_value dim;}
