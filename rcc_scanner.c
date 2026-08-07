@@ -893,13 +893,13 @@ static IR_NEVER_INLINE yy_sym yy_parse_pp_number(rcc_ctx *rcc, const char *str, 
 		if (ch == 'x' || ch == 'X') {
 			do {
 				ch = *++p;
-			} while ((ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z'));
+			} while ((ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'F') || (ch >= 'a' && ch <= 'f'));
 			ret = YY_HEXADECIMAL_NUMBER;
 			if (ch == '.') {
 				ret = YY_HEXADECIMAL_FLOATING_NUMBER;
 				do {
 					ch = *++p;
-				} while ((ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z'));
+				} while ((ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'F') || (ch >= 'a' && ch <= 'f'));
 			}
 			if (ch == 'P' || ch == 'p') {
 				ret = YY_HEXADECIMAL_FLOATING_NUMBER;
