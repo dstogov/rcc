@@ -5456,6 +5456,43 @@ void c_do_builtin_convertvector(rcc_ctx *rcc, c_value *val, const c_type *type)
 	c_value_set_rval(val, type, t, ir_fold1(rcc->active_ctx, IR_OPT(op, t), c_value_ref(rcc, val)));
 }
 
+static ir_ref c_do_cast_ref(rcc_ctx *rcc, ir_type dst_type, ir_ref ref)
+{
+	ir_type src_type = rcc->active_ctx->ir_base[ref].type;
+
+	if (src_type != dst_type) {
+		if (IR_IS_TYPE_INT(dst_type)) {
+			if (IR_IS_TYPE_INT(src_type)) {
+				if (ir_type_size[dst_type] < ir_type_size[src_type]) {
+					ref = ir_TRUNC(dst_type, ref);
+				} else if (ir_type_size[dst_type] == ir_type_size[src_type]) {
+					ref = ir_BITCAST(dst_type, ref);
+				} else if (IR_IS_TYPE_SIGNED(src_type)) {
+					ref = ir_SEXT(dst_type, ref);
+				} else {
+					ref = ir_ZEXT(dst_type, ref);
+				}
+			} else if (IR_IS_TYPE_FP(src_type)) {
+				ref = ir_FP2INT(dst_type, ref);
+			} else {
+				IR_ASSERT(0);
+			}
+		} else if (IR_IS_TYPE_FP(dst_type)) {
+			if (IR_IS_TYPE_INT(src_type)) {
+				ref = ir_INT2FP(dst_type, ref);
+			} else if (IR_IS_TYPE_FP(src_type)) {
+				ref = ir_FP2FP(dst_type, ref);
+			} else {
+				IR_ASSERT(0);
+			}
+		} else {
+			IR_ASSERT(0);
+		}
+	}
+
+	return ref;
+}
+
 static bool c_do_convert_builtin(rcc_ctx *rcc, c_value *func, int32_t num_args, ir_ref *arg_refs)
 {
 	if (c_value_is_ref(func)) {
@@ -5473,31 +5510,36 @@ static bool c_do_convert_builtin(rcc_ctx *rcc, c_value *func, int32_t num_args, 
 			}
 		} else if (sym_name == YY_ABS) {
 			if (num_args == 1) {
-				ref = ir_ABS_I32(arg_refs[0]);
+				ref = c_do_cast_ref(rcc, IR_I32, arg_refs[0]);
+				ref = ir_ABS_I32(ref);
 				c_value_set_rval(func, &c_type_i32, IR_I32, ref);
 				return 1;
 			}
 		} else if (sym_name == YY_LABS) {
 			if (num_args == 1) {
-				ref = ir_ABS(IR_LONG, arg_refs[0]);
+				ref = c_do_cast_ref(rcc, IR_LONG, arg_refs[0]);
+				ref = ir_ABS(IR_LONG, ref);
 				c_value_set_rval(func, &c_type_il, IR_LONG, ref);
 				return 1;
 			}
 		} else if (sym_name == YY_LLABS) {
 			if (num_args == 1) {
-				ref = ir_ABS_I64(arg_refs[0]);
+				ref = c_do_cast_ref(rcc, IR_I64, arg_refs[0]);
+				ref = ir_ABS_I64(ref);
 				c_value_set_rval(func, &c_type_i64, IR_I64, ref);
 				return 1;
 			}
 		} else if (sym_name == YY_FABS) {
 			if (num_args == 1) {
-				ref = ir_ABS_D(arg_refs[0]);
+				ref = c_do_cast_ref(rcc, IR_DOUBLE, arg_refs[0]);
+				ref = ir_ABS_D(ref);
 				c_value_set_rval(func, &c_type_double, IR_DOUBLE, ref);
 				return 1;
 			}
 		} else if (sym_name == YY_FABSF) {
 			if (num_args == 1) {
-				ref = ir_ABS_F(arg_refs[0]);
+				ref = c_do_cast_ref(rcc, IR_FLOAT, arg_refs[0]);
+				ref = ir_ABS_F(ref);
 				c_value_set_rval(func, &c_type_float, IR_FLOAT, ref);
 				return 1;
 			}
