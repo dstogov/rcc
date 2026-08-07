@@ -76,6 +76,23 @@ static const char c_boot[] =
 # else
 "#define __PTRDIFF_MAX__          0x7fffffffffffffffL\n"
 # endif
+"#define __INT8_MAX__             0x7f\n"
+"#define __UINT8_MAX__            0xff\n"
+"#define __INT16_MAX__            0x7fff\n"
+"#define __UINT16_MAX__           0xffff\n"
+"#define __INT32_MAX__            0x7fffffff\n"
+"#define __UINT32_MAX__           0xffffffffU\n"
+# if defined(_WIN32)
+"#define __INT64_MAX__            0x7fffffffffffffffLL\n"
+"#define __UINT64_MAX__           0xffffffffffffffffULL\n"
+"#define __SIZE_MAX__             0xffffffffffffffffULL\n"
+"#define __WCHAR_MAX__            0xffff\n"
+# else
+"#define __INT64_MAX__            0x7fffffffffffffffL\n"
+"#define __UINT64_MAX__           0xffffffffffffffffUL\n"
+"#define __SIZE_MAX__             0xffffffffffffffffUL\n"
+"#define __WCHAR_MAX__            0x7fffffff\n"
+# endif
 
 "#define __FLT_MANT_DIG__         24\n"
 "#define __FLT_DIG__              6\n"
@@ -166,6 +183,20 @@ static const char c_boot[] =
 "#define __LONG_MAX__             0x7fffffffL\n"
 "#define __LONG_LONG_MAX__        0x7fffffffffffffffLL\n"
 "#define __PTRDIFF_MAX__          0x7ffffffff\n"
+"#define __INT8_MAX__             0x7f\n"
+"#define __UINT8_MAX__            0xff\n"
+"#define __INT16_MAX__            0x7fff\n"
+"#define __UINT16_MAX__           0xffff\n"
+"#define __INT32_MAX__            0x7fffffff\n"
+"#define __UINT32_MAX__           0xffffffffU\n"
+"#define __INT64_MAX__            0x7fffffffffffffffLL\n"
+"#define __UINT64_MAX__           0xffffffffffffffffULL\n"
+"#define __SIZE_MAX__             0xffffffffU\n"
+# if defined(_WIN32)
+"#define __WCHAR_MAX__            0xffff\n"
+# else
+"#define __WCHAR_MAX__            0x7fffffff\n"
+# endif
 
 "#define __FLT_MANT_DIG__         24\n"
 "#define __FLT_DIG__              6\n"
@@ -239,6 +270,20 @@ static const char c_boot[] =
 "#define __LONG_MAX__             0x7fffffffffffffffL\n"
 "#define __LONG_LONG_MAX__        0x7fffffffffffffffLL\n"
 "#define __PTRDIFF_MAX__          0x7fffffffffffffffL\n"
+"#define __INT8_MAX__             0x7f\n"
+"#define __UINT8_MAX__            0xff\n"
+"#define __INT16_MAX__            0x7fff\n"
+"#define __UINT16_MAX__           0xffff\n"
+"#define __INT32_MAX__            0x7fffffff\n"
+"#define __UINT32_MAX__           0xffffffffU\n"
+"#define __INT64_MAX__            0x7fffffffffffffffL\n"
+"#define __UINT64_MAX__           0xffffffffffffffffUL\n"
+"#define __SIZE_MAX__             0xffffffffffffffffUL\n"
+# if defined(_WIN32)
+"#define __WCHAR_MAX__            0xffff\n"
+# else
+"#define __WCHAR_MAX__            0x7fffffff\n"
+# endif
 
 "#define __FLT_MANT_DIG__         24\n"
 "#define __FLT_DIG__              6\n"
