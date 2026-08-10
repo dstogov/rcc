@@ -6023,6 +6023,8 @@ void c_do_call(rcc_ctx *rcc, c_value *func, int32_t num_args, c_value *args, c_v
 					} else {
 						c_do_zext(rcc, &c_type_u32, IR_U32, &args[i]);
 					}
+				} else if (args[i].type->kind == C_TYPE_VOID) {
+					yy_error("invalid use of void expression");
 				}
 			}
 			if (args[i].type->kind == C_TYPE_STRUCT || args[i].type->kind == C_TYPE_UNION) {
