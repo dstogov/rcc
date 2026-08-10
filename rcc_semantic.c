@@ -3892,7 +3892,26 @@ static void c_do_cvt(rcc_ctx *rcc, const c_type *t, ir_type type, c_value *v)
 {
 	if (type != v->u.type) {
 		if (IR_IS_TYPE_INT(type)) {
-			if (IR_IS_TYPE_INT(v->u.type)) {
+			if (type == IR_BOOL) {
+				ir_val val;
+
+				if (c_value_is_ref(v)) {
+					val.u64 = 0;
+					c_value_set_rval(v, t, type,
+						ir_NE(c_value_ref(rcc, v), ir_const(rcc->active_ctx, val, v->u.type)));
+				} else if (IR_IS_TYPE_INT(v->u.type)) {
+					val.u64 = v->u.val.u64 != 0;
+					c_value_set_const(v, t, type, val);
+				} else if (v->u.type == IR_FLOAT) {
+					val.u64 = v->u.val.f != 0;
+					c_value_set_const(v, t, type, val);
+				} else if (v->u.type == IR_DOUBLE) {
+					val.u64 = v->u.val.d != 0;
+					c_value_set_const(v, t, type, val);
+				} else {
+					IR_ASSERT(0);
+				}
+			} else if (IR_IS_TYPE_INT(v->u.type)) {
 				if (ir_type_size[type] < ir_type_size[v->u.type]) {
 					c_do_trunc(rcc, t, type, v);
 				} else if (ir_type_size[type] == ir_type_size[v->u.type]) {
