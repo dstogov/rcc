@@ -9023,6 +9023,9 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val)
 		if (type == val->type) {
 			break;
 		} else if (type->kind == C_TYPE_ARRAY) {
+			if (type->array.length == 0 && !(type->attr & C_ATTR_FLEXIBLE)) {
+				yy_error("excess elements in array initializer");
+			}
 			if (c_value_is_const_str(val)
 			 && (type->array.type->kind == val->type->array.type->kind
 			  || (val->type->array.type->size == 1
@@ -9304,6 +9307,9 @@ void c_do_init_nested(rcc_ctx *rcc, c_sym *obj, c_init *init, bool b)
 
 	if (!b) {
 		if (type->kind == C_TYPE_ARRAY) {
+			if (type->array.length == 0 && !(type->attr & C_ATTR_FLEXIBLE)) {
+				yy_error("excess elements in array initializer");
+			}
 			type = type->array.type;
 		} else if (type->kind == C_TYPE_STRUCT) {
 			c_field *field = &type->record.fields[init->stack[init->level].pos];
