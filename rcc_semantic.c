@@ -4676,10 +4676,6 @@ void c_do_array_dim(rcc_ctx *rcc, c_value *v, c_value *dim)
 
 	type = v->type;
 	if (type->kind == C_TYPE_ARRAY) {
-		IR_ASSERT(type->array.type->size
-			/* this may be an empty zero size struct */
-			|| type->array.type->kind == C_TYPE_STRUCT
-			|| type->array.type->kind == C_TYPE_UNION);
 		type = type->array.type;
 		ref = c_value_ref(rcc, v);
 	} else if (type->kind == C_TYPE_POINTER) {
