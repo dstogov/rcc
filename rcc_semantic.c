@@ -7460,7 +7460,9 @@ void c_do_cond_op(rcc_ctx *rcc, c_value *cond, c_value *op1, c_value *op2)
 		if (op2->type != type) c_do_cvt(rcc, type, c_type2ir(rcc, type), op2);
 	}
 	// TODO: We might need PHI decause of dominance ???
-	if (c_value_is_const(cond)) {
+	if (type == &c_type_void) {
+		c_value_set_rval(cond, type, IR_VOID, IR_UNUSED);
+	} else if (c_value_is_const(cond)) {
 		if (c_value_is_true(cond)) {
 			if (c_value_is_const(op1)) {
 				*cond = *op1;
@@ -7476,15 +7478,13 @@ void c_do_cond_op(rcc_ctx *rcc, c_value *cond, c_value *op1, c_value *op2)
 				c_value_set_rval(cond, type, c_type2ir(rcc, type), c_value_ref(rcc, op2));
 			}
 		}
-	} else if (type != &c_type_void) {
+	} else {
 		ir_type t = c_type2ir(rcc, type);
 #if 1
 		c_value_set_rval(cond, type, t, ir_PHI_2(t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 #else
 		c_value_set_rval(cond, type, t, ir_COND(t, c_value_ref(rcc, cond), c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 #endif
-	} else {
-		c_value_set_rval(cond, type, IR_VOID, IR_UNUSED);
 	}
 }
 
