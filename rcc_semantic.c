@@ -4482,6 +4482,7 @@ void c_do_cast(rcc_ctx *rcc, const c_type *t, c_value *v)
 		 && !c_value_is_const(v)) {
 			yy_warning("cast to pointer from integer of different size");
 		}
+		v->u.op &= ~C_VAL_INLINE; /* Disable inlining. See: gcc/testsuite/gcc.dg/pr60647-2.c */
 	} else if (v->type->kind == C_TYPE_POINTER || v->type->kind == C_TYPE_ARRAY) {
 		if (C_IS_TYPE_FP(t)) {
 			yy_error("cannot convert pointer to a floating point");
