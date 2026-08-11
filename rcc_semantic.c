@@ -1511,6 +1511,11 @@ c_sym *c_declare(rcc_ctx *rcc, c_name name, c_dcl *d)
 		 || ((d->flags & C_DCL_STATIC) && rcc->active_scope)) {
 			yy_error_fmt("invalid storage class for function \"%s\"", yy_sym2str(rcc, name));
 		}
+		if (!(d->flags & C_DCL_DEFINITION)
+		 && (d->type->attr & C_ATTR_OLD_FUNC)
+		 && d->type->func.num_params != 0) {
+			yy_error("parameter names (without types) in function declaration");
+		}
 		IR_ASSERT((d->flags & (C_DCL_STORAGE_CLASS-(C_DCL_EXTERN|C_DCL_STATIC))) == 0);
 		sym->kind = C_SYM_FUNC;
 		if (!(d->flags & (C_DCL_STATIC|C_DCL_DEFINITION))
