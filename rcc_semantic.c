@@ -3583,6 +3583,10 @@ void c_value_rval(rcc_ctx *rcc, c_value *val)
 {
 	if (c_value_is_lval(val)) {
 		IR_ASSERT(val->type->kind != C_TYPE_ARRAY && val->type->kind != C_TYPE_FUNC);
+		if ((val->type->flags & C_TYPE_INCOMPLETE) && !c_fix_incomplete_type(rcc, val->type)) {
+			yy_error_fmt("invalid use of object with incomplete type \"%s %s\"",
+				c_type_kind2str(val->type->kind), yy_sym2str(rcc, val->type->tag));
+		}
 		if (c_value_is_var(val)) {
 			if ((val->type->attr & C_ATTR_VOLATILE) || (val->u.op & C_VAL_VOLATILE)) {
 				val->u.ref = ir_VLOAD_v(val->u.type, val->u.ref);
