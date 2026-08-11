@@ -9077,6 +9077,9 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val)
 		} else if (type->kind == C_TYPE_STRUCT) {
 			c_field *f;
 
+			if (type->record.num_fields == 0) {
+				yy_error("excess elements in struct initializer");
+			}
 			if (init->stack[init->level].pos == type->record.num_fields) {
 				if (init->level == 0) yy_error("excess elements in struct initializer");
 				init->level--;
@@ -9095,6 +9098,9 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val)
 			type = f->type;
 		} else if (type->kind == C_TYPE_UNION) {
 			// TODO: select best type ???
+			if (type->record.num_fields == 0) {
+				yy_error("excess elements in union initializer");
+			}
 			type = type->record.fields[0].type;
 			if (type->kind != C_TYPE_ARRAY && type->kind != C_TYPE_STRUCT && type->kind != C_TYPE_UNION) break;
 		} else if (type->kind == C_TYPE_VECTOR) {
@@ -9351,11 +9357,21 @@ void c_do_init_nested(rcc_ctx *rcc, c_sym *obj, c_init *init, bool b)
 			}
 			type = type->array.type;
 		} else if (type->kind == C_TYPE_STRUCT) {
-			c_field *field = &type->record.fields[init->stack[init->level].pos];
+			c_field *field;
+
+			if (type->record.num_fields == 0) {
+				yy_error("excess elements in struct initializer");
+			}
+			field = &type->record.fields[init->stack[init->level].pos];
 			type = field->type;
 		} else if (type->kind == C_TYPE_UNION) {
 			// TODO: select best type ???
-			c_field *field = &type->record.fields[0];
+			c_field *field;
+
+			if (type->record.num_fields == 0) {
+				yy_error("excess elements in union initializer");
+			}
+			field = &type->record.fields[0];
 			type = field->type;
 		}
 	}
