@@ -1005,11 +1005,52 @@ static void c_do_end_flexible(rcc_ctx *rcc, c_sym *obj, size_t size)
 	}
 }
 
+static ir_ref c_do_cast_ref(rcc_ctx *rcc, ir_type dst_type, ir_ref ref)
+{
+	ir_type src_type = rcc->active_ctx->ir_base[ref].type;
+
+	if (src_type != dst_type) {
+		if (IR_IS_TYPE_INT(dst_type)) {
+			if (IR_IS_TYPE_INT(src_type)) {
+				if (ir_type_size[dst_type] < ir_type_size[src_type]) {
+					ref = ir_TRUNC(dst_type, ref);
+				} else if (ir_type_size[dst_type] == ir_type_size[src_type]) {
+					ref = ir_BITCAST(dst_type, ref);
+				} else if (IR_IS_TYPE_SIGNED(src_type)) {
+					ref = ir_SEXT(dst_type, ref);
+				} else {
+					ref = ir_ZEXT(dst_type, ref);
+				}
+			} else if (IR_IS_TYPE_FP(src_type)) {
+				ref = ir_FP2INT(dst_type, ref);
+			} else {
+				IR_ASSERT(0);
+			}
+		} else if (IR_IS_TYPE_FP(dst_type)) {
+			if (IR_IS_TYPE_INT(src_type)) {
+				ref = ir_INT2FP(dst_type, ref);
+			} else if (IR_IS_TYPE_FP(src_type)) {
+				ref = ir_FP2FP(dst_type, ref);
+			} else {
+				IR_ASSERT(0);
+			}
+		} else {
+			IR_ASSERT(0);
+		}
+	}
+
+	return ref;
+}
+
 static ir_ref c_type_size(rcc_ctx *rcc, const c_type *type)
 {
 	if (type->attr & C_ATTR_VLA) {
 		IR_ASSERT(type->kind == C_TYPE_ARRAY);
-		return ir_MUL(IR_SIZE_T, type->array.length, c_type_size(rcc, type->array.type));
+		ir_ref ref = type->array.length;
+		if (rcc->active_ctx->ir_base[ref].type != IR_SIZE_T) {
+			ref = c_do_cast_ref(rcc, IR_SIZE_T, ref);
+		}
+		return ir_MUL(IR_SIZE_T, ref, c_type_size(rcc, type->array.type));
 	} else {
 		return ir_const_size_t(rcc->active_ctx, type->size);
 	}
@@ -1019,8 +1060,12 @@ static ir_ref c_type_ssize(rcc_ctx *rcc, const c_type *type)
 {
 	if (type->attr & C_ATTR_VLA) {
 		IR_ASSERT(type->kind == C_TYPE_ARRAY);
+		ir_ref ref = type->array.length;
+		if (rcc->active_ctx->ir_base[ref].type != IR_SIZE_T) {
+			ref = c_do_cast_ref(rcc, IR_SIZE_T, ref);
+		}
 		return ir_BITCAST(IR_SSIZE_T,
-			ir_MUL(IR_SIZE_T, type->array.length, c_type_size(rcc, type->array.type)));
+			ir_MUL(IR_SIZE_T, ref, c_type_size(rcc, type->array.type)));
 	} else {
 		return ir_const_ssize_t(rcc->active_ctx, type->size);
 	}
@@ -2475,7 +2520,8 @@ void c_declare_func_param(rcc_ctx *rcc, c_param **params, int32_t *num_params, c
 		memset(sym, 0, sizeof(c_sym));
 		sym->kind = C_SYM_PARAM;
 		sym->scope = rcc->active_scope;
-		c_value_set_lval(&sym->value, param->type, c_type2ir(rcc, param->type), *num_params + 1);
+		/* First PARAM has ir_ref == 2 */
+		c_value_set_lval(&sym->value, param->type, c_type2ir(rcc, param->type), *num_params + 2);
 		rcc->yy_hash.data[name].sym = sym;
 	}
 
@@ -5473,43 +5519,6 @@ void c_do_builtin_convertvector(rcc_ctx *rcc, c_value *val, const c_type *type)
 	IR_ASSERT(op != IR_NOP);
 	t = c_type2ir(rcc, type);
 	c_value_set_rval(val, type, t, ir_fold1(rcc->active_ctx, IR_OPT(op, t), c_value_ref(rcc, val)));
-}
-
-static ir_ref c_do_cast_ref(rcc_ctx *rcc, ir_type dst_type, ir_ref ref)
-{
-	ir_type src_type = rcc->active_ctx->ir_base[ref].type;
-
-	if (src_type != dst_type) {
-		if (IR_IS_TYPE_INT(dst_type)) {
-			if (IR_IS_TYPE_INT(src_type)) {
-				if (ir_type_size[dst_type] < ir_type_size[src_type]) {
-					ref = ir_TRUNC(dst_type, ref);
-				} else if (ir_type_size[dst_type] == ir_type_size[src_type]) {
-					ref = ir_BITCAST(dst_type, ref);
-				} else if (IR_IS_TYPE_SIGNED(src_type)) {
-					ref = ir_SEXT(dst_type, ref);
-				} else {
-					ref = ir_ZEXT(dst_type, ref);
-				}
-			} else if (IR_IS_TYPE_FP(src_type)) {
-				ref = ir_FP2INT(dst_type, ref);
-			} else {
-				IR_ASSERT(0);
-			}
-		} else if (IR_IS_TYPE_FP(dst_type)) {
-			if (IR_IS_TYPE_INT(src_type)) {
-				ref = ir_INT2FP(dst_type, ref);
-			} else if (IR_IS_TYPE_FP(src_type)) {
-				ref = ir_FP2FP(dst_type, ref);
-			} else {
-				IR_ASSERT(0);
-			}
-		} else {
-			IR_ASSERT(0);
-		}
-	}
-
-	return ref;
 }
 
 static bool c_do_convert_builtin(rcc_ctx *rcc, c_value *func, int32_t num_args, ir_ref *arg_refs)
