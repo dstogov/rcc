@@ -2177,13 +2177,14 @@ void c_declare_struct_field(rcc_ctx *rcc, c_type *type, c_name name, c_dcl *fiel
 		type->record.fields[i].bit_field = 0;
 	} else {
 		if (!c_value_is_const(bits)) yy_error_fmt("bit-field \"%s\" width not an integer constant", yy_sym2str(rcc, name));
-		if (!IR_IS_TYPE_INT(bits->u.type)) yy_error_fmt("bit-field \"%s\" width not an integer constant", yy_sym2str(rcc, name));
-		if (IR_IS_TYPE_SIGNED(bits->u.type) && bits->u.val.i64 < 0) yy_error_fmt("negative width in bit-field \"%s\"", yy_sym2str(rcc, name));
+		if (!C_IS_TYPE_INT(bits->type)) yy_error_fmt("bit-field \"%s\" width not an integer constant", yy_sym2str(rcc, name));
+		if (C_IS_TYPE_SIGNED(bits->type) && bits->u.val.i64 < 0) yy_error_fmt("negative width in bit-field \"%s\"", yy_sym2str(rcc, name));
 		if (bits->u.val.i64 == 0 && name) yy_error_fmt("zero width for bit-field \"%s\"", yy_sym2str(rcc, name));
 		if (!C_IS_TYPE_INT(field->type) && field->type->kind != C_TYPE_ENUM) {
 			yy_error_fmt("bit-field \"%s\" has invalid type", yy_sym2str(rcc, name));
 		}
 		if (bits->u.val.u64 > field->type->size * 8) yy_error_fmt("width of \"%s\" exceeds its type", yy_sym2str(rcc, name));
+		if (field->type->kind == C_TYPE_BOOL && bits->u.val.u64 > 1) yy_error_fmt("width of \"%s\" exceeds its type", yy_sym2str(rcc, name));
 		if (bits->u.val.u64 < field->type->size * 8) {
 			IR_ASSERT(bits->u.val.u64 < 64);
 			type->record.fields[i].bit_field = C_BIT_FIELD(0, bits->u.val.u64);
@@ -3271,7 +3272,9 @@ void c_sizeof_expr(rcc_ctx *rcc, yy_sym op, c_value *expr, ir_ref old_control)
 		}
 	} else {
 		IR_ASSERT(op == YY___ALIGNOF || op == YY___ALIGNOF__);
-		if (expr->type->kind == C_TYPE_BOOL
+		if (C_IS_BIT_FIELD(expr->u.proto)) {
+			yy_error_fmt("\"%s\" applied to a bit-field", yy_sym2str(rcc, op));
+		} else if (expr->type->kind == C_TYPE_BOOL
 		 && c_value_is_ref(expr)
 		 && rcc->active_ctx->ir_base[expr->u.ref].op != IR_LOAD
 		 && rcc->active_ctx->ir_base[expr->u.ref].op != IR_LOAD_v
