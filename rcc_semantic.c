@@ -10009,6 +10009,8 @@ void c_do_asm_operand_val(rcc_ctx *rcc, c_asm *a, bool out, int n, c_value *val)
 {
 	if (out && !c_value_is_lval(val)) {
 		yy_error("lvalue required as asm output operand");
+	} else if (val->type->kind == C_TYPE_VOID) {
+		yy_error("invalid use of void expresion");
 	}
 	a->ops[n].val = *val;
 }
