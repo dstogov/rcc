@@ -8601,6 +8601,9 @@ void c_do_label_value(rcc_ctx *rcc, c_value *res, c_name label_name)
 	c_label *label;
 
 	IR_ASSERT(label_name);
+	if (!rcc->active_func_scope) {
+		yy_error_fmt("label \"%s\" referenced outside of any function", yy_sym2str(rcc, label_name));
+	}
 	label = rcc->yy_hash.data[label_name].label;
 	if (!label) {
 		label = c_new_label(rcc, label_name, rcc->active_func_scope, NULL, rcc->active_scope == rcc->active_func_scope);
