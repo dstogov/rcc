@@ -880,8 +880,8 @@ static bool c_compatible_types(const c_type *t1, const c_type *t2, bool unqualif
 
 	if (t1 == t2) return 1;
 
-	attr1 = t1->attr & ~((C_ATTR_ALIGN_MASK|C_ATTR_FLEXIBLE|C_ATTR_VLA|C_FUNC_TYPE_ATTRS) - C_ATTR_VARIADIC);
-	attr2 = t2->attr & ~((C_ATTR_ALIGN_MASK|C_ATTR_FLEXIBLE|C_ATTR_VLA|C_FUNC_TYPE_ATTRS) - C_ATTR_VARIADIC);
+	attr1 = t1->attr & ~((C_ATTR_ALIGN_MASK|C_ATTR_FLEXIBLE|C_ATTR_VLA|C_ATTR_VMT|C_FUNC_TYPE_ATTRS) - C_ATTR_VARIADIC);
+	attr2 = t2->attr & ~((C_ATTR_ALIGN_MASK|C_ATTR_FLEXIBLE|C_ATTR_VLA|C_ATTR_VMT|C_FUNC_TYPE_ATTRS) - C_ATTR_VARIADIC);
 	if (unqualified || func) {
 		attr1 &= ~(C_ATTR_CONST|C_ATTR_RESTRICT|C_ATTR_VOLATILE|C_ATTR_ATOMIC);
 		attr2 &= ~(C_ATTR_CONST|C_ATTR_RESTRICT|C_ATTR_VOLATILE|C_ATTR_ATOMIC);
