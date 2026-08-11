@@ -919,6 +919,7 @@ static IR_NEVER_INLINE yy_sym yy_parse_pp_number(rcc_ctx *rcc, const char *str, 
 				ch = *++p;
 			}
 			ret = YY_OCTAL_NUMBER;
+			goto float_number;
 		}
 	} else if (ch == '.') {
 		goto float_number;
@@ -927,8 +928,8 @@ static IR_NEVER_INLINE yy_sym yy_parse_pp_number(rcc_ctx *rcc, const char *str, 
 			ch = *++p;
 		}
 		ret = YY_DECIMAL_NUMBER;
-		if (ch == '.') {
 float_number:
+		if (ch == '.') {
 			ret = YY_FLOATING_NUMBER;
 			do {
 				ch = *++p;
