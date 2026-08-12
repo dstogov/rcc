@@ -4320,7 +4320,8 @@ static void c_do_check_cvt(rcc_ctx *rcc, const c_type *type, c_value *val, int32
 
 	if (C_IS_TYPE_NUM(type) || type->kind == C_TYPE_ENUM) {
 		if (!C_IS_TYPE_NUM(val_type) && val_type->kind != C_TYPE_ENUM) {
-			if (val_type->kind == C_TYPE_POINTER || val_type->kind == C_TYPE_ARRAY || val_type->kind == C_TYPE_FUNC) {
+			if ((val_type->kind == C_TYPE_POINTER || val_type->kind == C_TYPE_ARRAY || val_type->kind == C_TYPE_FUNC)
+			 && !C_IS_TYPE_FP(type)) {
 				if (arg < 0) {
 					yy_warning("assignment makes integer from pointer without a cast");
 					if (arg == -2 && !rcc->active_scope) {
@@ -4410,7 +4411,7 @@ check_qualifiers:
 		  || c_compatible_types(type->pointer.type, val_type, 1, 1))) {
 			attr = (val_type->attr & ~type->pointer.type->attr) & (C_ATTR_CONST|C_ATTR_VOLATILE|C_ATTR_ATOMIC);
 			if (attr) goto check_qualifiers;
-		} else if (C_IS_TYPE_NUM(val_type) || val_type->kind == C_TYPE_ENUM) {
+		} else if (C_IS_TYPE_INT(val_type) || val_type->kind == C_TYPE_ENUM) {
 			if (arg < 0) {
 				yy_warning("assignment makes pointer from integer without a cast");
 			} else if (arg > 0) {
