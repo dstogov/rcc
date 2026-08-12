@@ -961,6 +961,7 @@ static void c_do_grow_flexible(rcc_ctx *rcc, c_sym *obj, size_t old_size, size_t
 	IR_ASSERT(obj->value.u.type == IR_ADDR);
 	IR_ASSERT(size > old_size);
 	obj->value.u.val.ptr = ir_mem_realloc(obj->value.u.val.ptr, size);
+	if (!obj->value.u.val.ptr) yy_error("out of memory");
 	memset((char*)obj->value.u.val.ptr + old_size, 0, size - old_size);
 	if (c_value_is_ref(&obj->value)) {
 		ir_str name = rcc->active_ctx->ir_base[obj->value.u.ref].val.name;
@@ -1164,6 +1165,7 @@ static void c_validate_redeclaration(rcc_ctx *rcc, c_name name, c_dcl *d, c_sym 
 			if (c_is_flexible(sym->value.type)) {
 				sym->tmp_data = 1;
 				sym->value.u.val.ptr = ir_mem_calloc(1, sym->value.type->size);
+				if (!sym->value.u.val.ptr) yy_error("out of memory");
 				sym->value.u.ref = name; /* keep name in addition to address */
 			} else {
 				sym->value.u.val.ptr = c_linker_allocate_data(rcc, name,
@@ -1599,6 +1601,7 @@ c_sym *c_declare(rcc_ctx *rcc, c_name name, c_dcl *d)
 					if (c_is_flexible(d->type)) {
 						sym->tmp_data = 1;
 						addr = ir_mem_calloc(1, d->type->size);
+						if (!addr) yy_error("out of memory");
 					} else {
 						addr = c_linker_allocate_data(rcc, name,
 							d->type->size, c_attr2align(d->type->attr), d->type->kind == C_TYPE_ARRAY);
@@ -1613,6 +1616,7 @@ c_sym *c_declare(rcc_ctx *rcc, c_name name, c_dcl *d)
 					if (c_is_flexible(d->type)) {
 						sym->tmp_data = 1;
 						addr = ir_mem_calloc(1, d->type->size);
+						if (!addr) yy_error("out of memory");
 					} else {
 						addr = c_linker_allocate_data(rcc, sym_name,
 							d->type->size, c_attr2align(d->type->attr), d->type->kind == C_TYPE_ARRAY);
@@ -2096,14 +2100,16 @@ c_type *c_make_struct_type(rcc_ctx *rcc, c_dcl *d, c_name tag)
 	return type;
 }
 
-static void c_grow_struct_fields(c_type *type)
+static void c_grow_struct_fields(rcc_ctx *rcc, c_type *type)
 {
 	if (type->record.num_fields == C_ALLOCA_FIELDS) {
 		c_field *ptr = ir_mem_malloc(type->record.num_fields * 2 * sizeof(c_field));
+		if (!ptr) yy_error("out of memory");
 		memcpy(ptr, type->record.fields, type->record.num_fields * sizeof(c_field));
 		type->record.fields = ptr;
 	} else if (type->record.num_fields % C_ALLOCA_FIELDS == 0) {
 		type->record.fields = ir_mem_realloc(type->record.fields, IR_ALIGNED_SIZE(type->record.num_fields + 1, C_ALLOCA_FIELDS) * sizeof(c_field));
+		if (!type->record.fields) yy_error("out of memory");
 	}
 }
 
@@ -2164,7 +2170,7 @@ void c_declare_struct_field(rcc_ctx *rcc, c_type *type, c_name name, c_dcl *fiel
 	}
 	if (name && c_find_struct_field(type, name, &offset)) yy_error_fmt("duplicate member \"%s\"", yy_sym2str(rcc, name));
 
-	if (type->record.num_fields >= C_ALLOCA_FIELDS) c_grow_struct_fields(type);
+	if (type->record.num_fields >= C_ALLOCA_FIELDS) c_grow_struct_fields(rcc, type);
 
 	i = type->record.num_fields++;
 	type->record.fields[i].name = name;
@@ -2466,14 +2472,16 @@ void c_validate_func_params(rcc_ctx *rcc, c_name name, c_dcl *d)
 	}
 }
 
-static void c_grow_func_params(c_param **params, int32_t *num_params)
+static void c_grow_func_params(rcc_ctx *rcc, c_param **params, int32_t *num_params)
 {
 	if (*num_params == C_ALLOCA_PARAMS) {
 		c_param *ptr = ir_mem_malloc(*num_params * 2 * sizeof(c_param));
+		if (!ptr) yy_error("out of memory");
 		memcpy(ptr, *params, *num_params * sizeof(c_param));
 		*params = ptr;
 	} else if (*num_params % C_ALLOCA_FIELDS == 0) {
 		*params = ir_mem_realloc(*params, IR_ALIGNED_SIZE(*num_params + 1, C_ALLOCA_PARAMS) * sizeof(c_param));
+		if (!*params) yy_error("out of memory");
 	}
 }
 
@@ -2531,7 +2539,7 @@ void c_declare_func_param(rcc_ctx *rcc, c_param **params, int32_t *num_params, c
 		rcc->yy_hash.data[name].sym = sym;
 	}
 
-	if (*num_params >= C_ALLOCA_PARAMS) c_grow_func_params(params, num_params);
+	if (*num_params >= C_ALLOCA_PARAMS) c_grow_func_params(rcc, params, num_params);
 
 	(*params)[*num_params].name = name;
 	(*params)[*num_params].type = param->type;
@@ -2558,7 +2566,7 @@ void c_declare_func_param_name(rcc_ctx *rcc, c_param **params, int32_t *num_para
 	sym->scope = rcc->active_scope;
 	rcc->yy_hash.data[name].sym = sym;
 
-	if (*num_params >= C_ALLOCA_PARAMS) c_grow_func_params(params, num_params);
+	if (*num_params >= C_ALLOCA_PARAMS) c_grow_func_params(rcc, params, num_params);
 
 	(*params)[*num_params].name = name;
 	(*params)[*num_params].type = NULL;
@@ -4919,15 +4927,18 @@ void c_do_struct_field_deref(rcc_ctx *rcc, c_value *v, c_name field_name)
 	}
 }
 
-c_value *c_do_grow_actual_parameters(c_value *args, int32_t num_args)
+c_value *c_do_grow_actual_parameters(rcc_ctx *rcc, c_value *args, int32_t num_args)
 {
 	if (num_args == C_ALLOCA_PARAMS) {
 		c_value *new_args = ir_mem_malloc(C_ALLOCA_PARAMS * 2 * sizeof(c_value));
+		if (!new_args) yy_error("out of memory");
 		memcpy(new_args, args, C_ALLOCA_PARAMS * sizeof(c_value));
 		return new_args;
 	} else {
 		IR_ASSERT(num_args % C_ALLOCA_FIELDS == 0);
-		return ir_mem_realloc(args, (num_args + C_ALLOCA_PARAMS) * sizeof(c_value));
+		c_value *new_args = ir_mem_realloc(args, (num_args + C_ALLOCA_PARAMS) * sizeof(c_value));
+		if (!new_args) yy_error("out of memory");
+		return new_args;
 	}
 }
 
@@ -9439,6 +9450,7 @@ void c_do_init_expr_start(rcc_ctx *rcc, c_sym *obj, const c_type *type)
 		if (c_is_flexible(type)) {
 			obj->tmp_data = 1;
 			addr = ir_mem_calloc(1, type->size);
+			if (!addr) yy_error("out of memory");
 		} else {
 			addr = c_linker_allocate_data(rcc, 0, type->size, c_attr2align(type->attr), type->kind == C_TYPE_ARRAY);
 		}
@@ -9676,6 +9688,7 @@ void c_do_func_start(rcc_ctx *rcc, c_name name, c_dcl *d, c_scope *scope)
 				ir_param_ex(rcc->active_ctx, IR_ADDR, 1, IR_EXT_STR(p->name), i + j + 1);
 				if (!rcc->active_ctx->value_params) {
 					rcc->active_ctx->value_params = ir_mem_calloc(type->func.num_params + j, sizeof(ir_value_param));
+					if (!rcc->active_ctx->value_params) yy_error("out of memory");
 				}
 				rcc->active_ctx->value_params[i + j].size = t->size;
 				rcc->active_ctx->value_params[i + j].align = c_attr2align(t->attr);

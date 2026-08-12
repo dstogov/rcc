@@ -177,6 +177,7 @@ char *yy_dyn_str_grow(rcc_ctx *rcc, yy_dyn_str *dyn_str, size_t len)
 			4096 : IR_ALIGNED_SIZE(dyn_str->len + len + IR_ALIGNED_SIZE(sizeof(ir_arena), 8), 4096);
 		if (dyn_str->str == (char*)rcc->yy_arena + IR_ALIGNED_SIZE(sizeof(ir_arena), 8)) {
 			rcc->yy_arena = ir_mem_realloc(rcc->yy_arena, size);
+			if (!rcc->yy_arena) yy_error("out of memory");
 			dyn_str->str = (char*)rcc->yy_arena + IR_ALIGNED_SIZE(sizeof(ir_arena), 8);
 			rcc->yy_arena->ptr = dyn_str->str + dyn_str->len;
 			rcc->yy_arena->end = (char*)rcc->yy_arena + size;
@@ -224,6 +225,7 @@ void pp_list_grow(pp_list *l, uint32_t size)
 		size += 1;
 	}
 	l->syms = ir_mem_realloc(l->syms, size * sizeof(yy_sym));
+	IR_ASSERT(l->syms != NULL); // TODO: replace with yy_error() ???
 	l->size = size;
 }
 
@@ -1460,6 +1462,7 @@ void pp_pop_include(rcc_ctx *rcc)
 	if (rcc->pp_include_ifndef_state & YY_INCLUDE_END) {
 		if (!rcc->pp_include_hash) {
 			rcc->pp_include_hash = ir_mem_malloc(sizeof(ir_hashtab));
+			if (!rcc->pp_include_hash) yy_error("out of memory");
 			ir_hashtab_init(rcc->pp_include_hash, 32);
 		}
 		ir_hashtab_add(rcc->pp_include_hash, rcc->yy_file_name, rcc->pp_include_ifndef_macro);
@@ -1505,6 +1508,7 @@ static const char *pp_read_file(rcc_ctx *rcc, yy_sym file_name, int fd, size_t *
 	size = stat_buf.st_size;
 
 	buf = ir_mem_malloc(size + 1);
+	if (!buf) yy_error("out of memory");
 	if (!buf) {
 		yy_error_fmt("cannot read file \"%s\"", yy_sym2str(rcc, file_name));
 		return NULL;
@@ -1695,6 +1699,7 @@ static yy_sym pp_find_include(rcc_ctx *rcc, yy_dyn_str *name, int start_search_d
 				}
 				if (buf_ptr) {
 					char *buf = ir_mem_malloc(len + 1);
+					if (!buf) yy_error("out of memory");
 					memcpy(buf, content, len + 1);
 					*buf_ptr = buf;
 					*size_ptr = len;
@@ -2297,6 +2302,7 @@ static void pp_parse_pragma(rcc_ctx *rcc, yy_sym operator)
 	if (sym == YY_ONCE) {
 		if (!rcc->pp_include_hash) {
 			rcc->pp_include_hash = ir_mem_malloc(sizeof(ir_hashtab));
+			if (!rcc->pp_include_hash) yy_error("out of memory");
 			ir_hashtab_init(rcc->pp_include_hash, 32);
 		}
 		ir_hashtab_add(rcc->pp_include_hash, rcc->yy_file_name, YY_PRAGMA_ONCE);

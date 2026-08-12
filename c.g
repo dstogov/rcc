@@ -186,7 +186,7 @@ typedef struct _yy_str {
 /* Scanner actions */
 static void yy_read_string(rcc_ctx *rcc, c_value *res, const char *p, size_t len);
 static void yy_read_strings(rcc_ctx *rcc, c_value *res, yy_str *strings, uint32_t num_strings);
-static yy_str *yy_grow_strings(yy_str *strings, uint32_t num_strings);
+static yy_str *yy_grow_strings(rcc_ctx *rcc, yy_str *strings, uint32_t num_strings);
 static void yy_read_oct(c_value *res, const char *p, size_t len);
 static void yy_read_dec(c_value *res, const char *p, size_t len);
 static void yy_read_hex(c_value *res, const char *p, size_t len);
@@ -998,7 +998,7 @@ strings(rcc_ctx *rcc, c_value *val):                       {const char *str = rc
 	|                                                      {uint32_t num_strings = 1;}
 		                                                   {yy_str *strings = alloca(sizeof(yy_str) * C_ALLOCA_STRINGS);}
 														   {strings[0].str = str; strings[0].len = len;}
-		(                                                  {if (num_strings % C_ALLOCA_STRINGS == 0) strings = yy_grow_strings(strings, num_strings);}
+		(                                                  {if (num_strings % C_ALLOCA_STRINGS == 0) strings = yy_grow_strings(rcc, strings, num_strings);}
 		                                                   {strings[num_strings].str = rcc->yy_text; strings[num_strings].len = rcc->yy_len;}
 														   {num_strings++;}
 			STRING(rcc)
@@ -1011,7 +1011,7 @@ actual_parameters(rcc_ctx *rcc, c_value *func, c_value *res):
 	                                                       {c_value *args = alloca(sizeof(c_value) * C_ALLOCA_PARAMS);}
 	(                                                      {c_value_clear(&args[num_args]);}
 		assignment_expression(rcc, &args[num_args])        {num_args++;}
-		(	","                                            {if (num_args % C_ALLOCA_PARAMS == 0) args = c_do_grow_actual_parameters(args, num_args);}
+		(	","                                            {if (num_args % C_ALLOCA_PARAMS == 0) args = c_do_grow_actual_parameters(rcc, args, num_args);}
 		                                                   {c_value_clear(&args[num_args]);}
 			assignment_expression(rcc, &args[num_args])    {num_args++;}
 		)*
@@ -1022,7 +1022,7 @@ builtin_parameters(rcc_ctx *rcc, c_value *val, c_name name):
                                                            {int32_t num_args = 0;}
 	                                                       {c_value *args = alloca(sizeof(c_value) * C_ALLOCA_PARAMS);}
 	(   assignment_expression(rcc, &args[num_args])        {num_args++;}
-		(	","                                            {if (num_args % C_ALLOCA_PARAMS == 0) args = c_do_grow_actual_parameters(args, num_args);}
+		(	","                                            {if (num_args % C_ALLOCA_PARAMS == 0) args = c_do_grow_actual_parameters(rcc, args, num_args);}
 			assignment_expression(rcc, &args[num_args])    {num_args++;}
 		)*
 	)?                                                     {c_do_builtin(rcc, val, name, num_args, args);}
@@ -2051,18 +2051,25 @@ static void yy_read_strings(rcc_ctx *rcc, c_value *res, yy_str *strings, uint32_
 	if (num_strings > C_ALLOCA_STRINGS) ir_mem_free(strings);
 }
 
-static yy_str *yy_grow_strings(yy_str *strings, uint32_t num_strings)
+static yy_str *yy_grow_strings(rcc_ctx *rcc, yy_str *strings, uint32_t num_strings)
 {
+	yy_str *new_strings;
+
 	if (num_strings == C_ALLOCA_STRINGS) {
-		yy_str *new_strings = ir_mem_malloc(C_ALLOCA_STRINGS * 2 * sizeof(yy_str));
+		new_strings = ir_mem_malloc(C_ALLOCA_STRINGS * 2 * sizeof(yy_str));
+		if (!new_strings) yy_error("out of memory");
 		memcpy(new_strings, strings, C_ALLOCA_STRINGS * sizeof(yy_str));
 		return new_strings;
 	} else {
 		IR_ASSERT(num_strings % C_ALLOCA_STRINGS == 0);
 		if ((num_strings + C_ALLOCA_STRINGS) * sizeof(yy_str) <= 4096) {
-			return ir_mem_realloc(strings, (num_strings + C_ALLOCA_STRINGS) * sizeof(yy_str));
+			new_strings = ir_mem_realloc(strings, (num_strings + C_ALLOCA_STRINGS) * sizeof(yy_str));
+			if (!new_strings) yy_error("out of memory");
+			return new_strings;
 		} else if ((num_strings * sizeof(yy_str)) % 4096 == 0) {
-			return ir_mem_realloc(strings, (num_strings * sizeof(yy_str)) + 4096);
+			new_strings = ir_mem_realloc(strings, (num_strings * sizeof(yy_str)) + 4096);
+			if (!new_strings) yy_error("out of memory");
+			return new_strings;
 		} else {
 			return strings;
 		}

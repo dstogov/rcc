@@ -1155,7 +1155,7 @@ void c_do_bool_not(rcc_ctx *rcc, c_value *v);
 void c_do_array_dim(rcc_ctx *rcc, c_value *v, c_value *dim);
 void c_do_struct_field(rcc_ctx *rcc, c_value *v, c_name field);
 void c_do_struct_field_deref(rcc_ctx *rcc, c_value *v, c_name field);
-c_value *c_do_grow_actual_parameters(c_value *args, int32_t num_args);
+c_value *c_do_grow_actual_parameters(rcc_ctx *rcc, c_value *args, int32_t num_args);
 void c_do_builtin(rcc_ctx *rcc, c_value *val, c_name name, int32_t num_args, c_value *args);
 void c_do_builtin_constant_p(rcc_ctx *rcc, c_value *val);
 void c_do_builtin_va_arg(rcc_ctx *rcc, c_value *val, const c_type *type);

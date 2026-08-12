@@ -30,6 +30,7 @@ void yy_hash_init(rcc_ctx *rcc)
 	yy_hashtab *hash = &rcc->yy_hash;
 
 	char *data = ir_mem_malloc(1024 * sizeof(uint32_t) + 1024 * sizeof(yy_hash_bucket));
+	if (!data) yy_error("out of memory");
 	memset(data, 0, 1024 * sizeof(uint32_t));
 	hash->data = (yy_hash_bucket*)(data + (1024 * sizeof(uint32_t)));
 	hash->count = 0;
@@ -44,8 +45,9 @@ void yy_hash_free(rcc_ctx *rcc)
 	ir_mem_free((char*)hash->data - (hash->size * sizeof(uint32_t)));
 }
 
-static IR_NEVER_INLINE void yy_hash_resize(yy_hashtab *hash)
+static IR_NEVER_INLINE void yy_hash_resize(rcc_ctx *rcc)
 {
+	yy_hashtab *hash = &rcc->yy_hash;
 	uint32_t old_size = (uint32_t)(-(int32_t)hash->mask);
 	yy_hash_bucket *old_data = hash->data;
 	uint32_t new_size = old_size * 2;
@@ -53,6 +55,7 @@ static IR_NEVER_INLINE void yy_hash_resize(yy_hashtab *hash)
 	yy_hash_bucket *p;
 	uint32_t i, mask;
 
+	if (!data) yy_error("out of memory");
 	memset(data, 0, new_size * sizeof(uint32_t));
 	hash->data = data = (yy_hash_bucket*)((char*)data + (new_size * sizeof(uint32_t)));
 	hash->mask = (uint32_t)(-(int32_t)new_size);
@@ -108,7 +111,7 @@ IR_ALWAYS_INLINE yy_sym _yy_hash_lookup_ex(rcc_ctx *rcc, const char *str, size_t
 	}
 
 	if (UNEXPECTED(hash->count == hash->size)) {
-		yy_hash_resize(hash);
+		yy_hash_resize(rcc);
 		data = hash->data;
 	}
 

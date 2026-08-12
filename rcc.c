@@ -451,18 +451,21 @@ void rcc_ir_compile(rcc_ctx *rcc, c_name name, c_dcl *d, c_sym *sym)
 		}
 delay_codegen:
 		copy = ir_mem_malloc(sizeof(ir_ctx));
+		if (!copy) yy_error("out of memory");
 		memcpy(copy, ctx, sizeof(ir_ctx));
 		sym->ctx = copy;
 	}
 
 	if (d->attr2 & C_ATTR2_CONSTRUCTOR) {
 		rcc->constructors = ir_mem_realloc(rcc->constructors, sizeof(c_name) * (rcc->constructors_count + 1));
+		if (!rcc->constructors) yy_error("out of memory");
 		rcc->constructors[rcc->constructors_count] = name;
 		rcc->constructors_count++;
 	}
 
 	if (d->attr2 & C_ATTR2_DESTRUCTOR) {
 		rcc->destructors = ir_mem_realloc(rcc->destructors, sizeof(c_name) * (rcc->destructors_count + 1));
+		if (!rcc->destructors) yy_error("out of memory");
 		rcc->destructors[rcc->destructors_count] = name;
 		rcc->destructors_count++;
 	}
@@ -2456,6 +2459,7 @@ int main(int argc, const char **argv)
 		char *s = ir_mem_malloc(len + 1);
 		char *p;
 
+		if (!s) yy_error("out of memory");
 		memcpy(s, includes, len + 1);
 		includes = s;
 		p = s;
@@ -2652,6 +2656,7 @@ int main(int argc, const char **argv)
 				uint32_t i;
 
 				rcc_constructors = ir_mem_malloc(sizeof(void*) * rcc->constructors_count);
+				if (!rcc_constructors) yy_error("out of memory");
 				for (i = 0; i < rcc->constructors_count; i++) {
 					yy_sym name = rcc->constructors[i];
 					rcc_constructors[i] = c_linker_func_addr(rcc, name);
@@ -2670,6 +2675,7 @@ int main(int argc, const char **argv)
 
 				rcc_destructors_count = rcc->destructors_count;
 				rcc_destructors = ir_mem_malloc(sizeof(void*) * rcc->destructors_count);
+				if (!rcc_destructors) yy_error("out of memory");
 				for (i = 0; i < rcc->destructors_count; i++) {
 					c_name name = rcc->destructors[i];
 					rcc_destructors[i] = c_linker_func_addr(rcc, name);
