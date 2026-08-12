@@ -6782,11 +6782,13 @@ static void c_do_mul(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op
 
 static void c_do_div(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op2)
 {
-	if (c_value_is_const(op1) && c_value_is_const(op2) && (op2->u.val.u64 != 0 || !rcc->active_scope)) {
+	if (c_value_is_const(op1) && c_value_is_const(op2)) {
 		ir_val val;
 
-		if (IR_IS_TYPE_INT(op1->u.type) && c_value_is_const(op2) && op2->u.val.u64 == 0) {
-			if (rcc->c_dead_code) {
+		if (IR_IS_TYPE_INT(op2->u.type) && op2->u.val.u64 == 0) {
+			if (rcc->active_scope) {
+				goto emit_code;
+			} else if (rcc->c_dead_code) {
 				val.u64 = 0;
 				c_value_set_const(op1, type, c_type2ir(rcc, type), val);
 				return;
@@ -6796,7 +6798,9 @@ static void c_do_div(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op
 		switch (op1->u.type) {
 			case IR_I32:
 				if (UNEXPECTED(op2->u.val.i32 == -1 && op1->u.val.u32 == 0x80000000)) {
-					if (rcc->c_dead_code) {
+					if (rcc->active_scope) {
+						goto emit_code;
+					} else if (rcc->c_dead_code) {
 						val.u64 = 0;
 						c_value_set_const(op1, type, c_type2ir(rcc, type), val);
 						return;
@@ -6812,7 +6816,9 @@ static void c_do_div(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op
 				break;
 			case IR_I64:
 				if (UNEXPECTED(op2->u.val.i64 == -1 && op1->u.val.u64 == 0x8000000000000000ULL)) {
-					if (rcc->c_dead_code) {
+					if (rcc->active_scope) {
+						goto emit_code;
+					} else if (rcc->c_dead_code) {
 						val.u64 = 0;
 						c_value_set_const(op1, type, c_type2ir(rcc, type), val);
 						return;
@@ -6839,19 +6845,23 @@ static void c_do_div(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op
 		}
 		c_value_set_const(op1, type, c_type2ir(rcc, type), val);
 	} else {
-		ir_type t = c_type2ir(rcc, type);
+		ir_type t;
 
+emit_code:
+		t = c_type2ir(rcc, type);
 		c_value_set_rval(op1, type, t, ir_DIV(t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 	}
 }
 
 static void c_do_mod(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op2)
 {
-	if (c_value_is_const(op1) && c_value_is_const(op2) && (op2->u.val.u64 != 0 || !rcc->active_scope)) {
+	if (c_value_is_const(op1) && c_value_is_const(op2)) {
 		ir_val val;
 
-		if (c_value_is_const(op2) && op2->u.val.u64 == 0) {
-			if (rcc->c_dead_code) {
+		if (op2->u.val.u64 == 0) {
+			if (rcc->active_scope) {
+				goto emit_code;
+			} else if (rcc->c_dead_code) {
 				val.u64 = 0;
 				c_value_set_const(op1, type, c_type2ir(rcc, type), val);
 				return;
@@ -6859,16 +6869,52 @@ static void c_do_mod(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op
 			yy_error("division by zero");
 		}
 		switch (op1->u.type) {
-			case IR_I32: val.i64 = op1->u.val.i32 % op2->u.val.i32; break;
-			case IR_U32: val.u64 = op1->u.val.u32 % op2->u.val.u32; break;
-			case IR_I64: val.i64 = op1->u.val.i64 % op2->u.val.i64; break;
-			case IR_U64: val.u64 = op1->u.val.u64 % op2->u.val.u64; break;
-			default: IR_ASSERT(0); return;
+			case IR_I32:
+				if (op2->u.val.i32 == -1 && op1->u.val.u32 == 0x80000000) {
+					if (rcc->active_scope) {
+						goto emit_code;
+					} else if (rcc->c_dead_code) {
+						val.u64 = 0;
+						c_value_set_const(op1, type, c_type2ir(rcc, type), val);
+						return;
+					}
+					yy_warning("integer overflow in expression");
+					val.i64 = op1->u.val.i32;
+				} else {
+					val.i64 = op1->u.val.i32 % op2->u.val.i32;
+				}
+				break;
+			case IR_U32:
+				val.u64 = op1->u.val.u32 % op2->u.val.u32;
+				break;
+			case IR_I64:
+				val.i64 = op1->u.val.i64 % op2->u.val.i64;
+				break;
+			case IR_U64:
+				if (op2->u.val.i64 == -1 && op1->u.val.u64 == 0x8000000000000000) {
+					if (rcc->active_scope) {
+						goto emit_code;
+					} else if (rcc->c_dead_code) {
+						val.u64 = 0;
+						c_value_set_const(op1, type, c_type2ir(rcc, type), val);
+						return;
+					}
+					yy_warning("integer overflow in expression");
+					val.i64 = op1->u.val.i64;
+				} else {
+					val.u64 = op1->u.val.u64 % op2->u.val.u64;
+				}
+				break;
+			default:
+				IR_ASSERT(0);
+				return;
 		}
 		c_value_set_const(op1, type, c_type2ir(rcc, type), val);
 	} else {
-		ir_type t = c_type2ir(rcc, type);
+		ir_type t;
 
+emit_code:
+		t = c_type2ir(rcc, type);
 		c_value_set_rval(op1, type, t, ir_MOD(t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
 	}
 }
