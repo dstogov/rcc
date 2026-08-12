@@ -679,7 +679,7 @@ array_declarator(rcc_ctx *rcc, c_dcl *d, bool is_param):   {c_value len;}
 ;
 
 parameters(rcc_ctx *rcc, c_dcl *d, bool allow_old_func):   {uint32_t attr = 0;}
-                                                           {int32_t num_params = 0;}
+                                                           {uint32_t num_params = 0;}
                                                            {c_param *params = alloca(sizeof(c_param) * C_ALLOCA_PARAMS);}
                                                            {c_scope scope;}
 	"("
@@ -701,7 +701,7 @@ parameters(rcc_ctx *rcc, c_dcl *d, bool allow_old_func):   {uint32_t attr = 0;}
 	arrays_and_params(rcc, d, 0, 0)?                       {c_make_func_type(rcc, d, params, num_params, attr);}
 ;
 
-parameter_declaration(rcc_ctx *rcc, c_param **params, int32_t *num_params):
+parameter_declaration(rcc_ctx *rcc, c_param **params, uint32_t *num_params):
                                                            {c_dcl p = {0};}
                                                            {c_name name;}
 	declaration_specifiers(rcc, &p)
@@ -709,7 +709,7 @@ parameter_declaration(rcc_ctx *rcc, c_param **params, int32_t *num_params):
 	attributes(rcc, &p)?                                   {c_declare_func_param(rcc, params, num_params, name, &p);}
 ;
 
-identifier_list(rcc_ctx *rcc, c_param **params, int32_t *num_params):
+identifier_list(rcc_ctx *rcc, c_param **params, uint32_t *num_params):
                                                            {c_name name;}
 	ID(rcc, &name)                                         {c_declare_func_param_name(rcc, params, num_params, name);}
 	(	","
@@ -1007,7 +1007,7 @@ strings(rcc_ctx *rcc, c_value *val):                       {const char *str = rc
 ;
 
 actual_parameters(rcc_ctx *rcc, c_value *func, c_value *res):
-                                                           {int32_t num_args = 0;}
+                                                           {uint32_t num_args = 0;}
 	                                                       {c_value *args = alloca(sizeof(c_value) * C_ALLOCA_PARAMS);}
 	(                                                      {c_value_clear(&args[num_args]);}
 		assignment_expression(rcc, &args[num_args])        {num_args++;}
@@ -1019,7 +1019,7 @@ actual_parameters(rcc_ctx *rcc, c_value *func, c_value *res):
 ;
 
 builtin_parameters(rcc_ctx *rcc, c_value *val, c_name name):
-                                                           {int32_t num_args = 0;}
+                                                           {uint32_t num_args = 0;}
 	                                                       {c_value *args = alloca(sizeof(c_value) * C_ALLOCA_PARAMS);}
 	(   assignment_expression(rcc, &args[num_args])        {num_args++;}
 		(	","                                            {if (num_args % C_ALLOCA_PARAMS == 0) args = c_do_grow_actual_parameters(rcc, args, num_args);}

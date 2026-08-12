@@ -1248,7 +1248,7 @@ static size_t rcc_emit_ir_data(rcc_ctx *rcc, FILE *f, const c_type *type, const 
 		return sizeof(void*);
 	} else if (type->kind == C_TYPE_ARRAY) {
 		size_t offset = 0, el_offset = 0;
-		int i;
+		uint32_t i;
 
 		IR_ASSERT(!(type->attr & C_ATTR_VLA));
 		for (i = 0; i < type->array.length; el_offset += type->array.type->size, i++) {
@@ -1263,7 +1263,7 @@ static size_t rcc_emit_ir_data(rcc_ctx *rcc, FILE *f, const c_type *type, const 
 	} else if (type->kind == C_TYPE_STRUCT) {
 		size_t offset = 0;
 		const c_field *field = type->record.fields;
-		int i;
+		uint32_t i;
 
 		for (i = 0; i < type->record.num_fields; field++, i++) {
 			while (offset < field->offset) {
@@ -1297,7 +1297,7 @@ static size_t rcc_emit_ir_data(rcc_ctx *rcc, FILE *f, const c_type *type, const 
 		const c_field *best_field = NULL;
 		size_t best_size = 0;
 		size_t offset = 0;
-		int i;
+		uint32_t i;
 
 		for (i = 0; i < type->record.num_fields; field++, i++) {
 			if (field->type->size > best_size) {
@@ -1316,7 +1316,7 @@ static size_t rcc_emit_ir_data(rcc_ctx *rcc, FILE *f, const c_type *type, const 
 		return offset;
 	} else if (type->kind == C_TYPE_VECTOR) {
 		size_t offset = 0, el_offset = 0;
-		int i;
+		uint32_t i;
 
 		for (i = 0; i < type->vec.length; el_offset += type->vec.type->size, i++) {
 			IR_ASSERT(offset == el_offset);

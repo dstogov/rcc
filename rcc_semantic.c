@@ -316,7 +316,7 @@ void c_type2proto_ex(rcc_ctx *rcc, const c_type *t,
 	uint8_t flags = 0;
 	ir_type ret_type;
 	uint32_t params_count;
-	int i, j = 0;
+	uint32_t i, j = 0;
 
 	IR_ASSERT(t->kind == C_TYPE_FUNC);
 	if (t->func.ret_type->kind == C_TYPE_STRUCT || t->func.ret_type->kind == C_TYPE_UNION) {
@@ -961,7 +961,7 @@ static void c_do_grow_flexible(rcc_ctx *rcc, c_sym *obj, size_t old_size, size_t
 	IR_ASSERT(obj->value.u.type == IR_ADDR);
 	IR_ASSERT(size > old_size);
 	obj->value.u.val.ptr = ir_mem_realloc(obj->value.u.val.ptr, size);
-	if (!obj->value.u.val.ptr) yy_error("out of memory");
+	if (!obj->value.u.val.ptr) yy_error("not enough memory to allocate data");
 	memset((char*)obj->value.u.val.ptr + old_size, 0, size - old_size);
 	if (c_value_is_ref(&obj->value)) {
 		ir_str name = rcc->active_ctx->ir_base[obj->value.u.ref].val.name;
@@ -1165,7 +1165,7 @@ static void c_validate_redeclaration(rcc_ctx *rcc, c_name name, c_dcl *d, c_sym 
 			if (c_is_flexible(sym->value.type)) {
 				sym->tmp_data = 1;
 				sym->value.u.val.ptr = ir_mem_calloc(1, sym->value.type->size);
-				if (!sym->value.u.val.ptr) yy_error("out of memory");
+				if (!sym->value.u.val.ptr) yy_error("not enough memory to allocate data");
 				sym->value.u.ref = name; /* keep name in addition to address */
 			} else {
 				sym->value.u.val.ptr = c_linker_allocate_data(rcc, name,
@@ -1202,7 +1202,7 @@ c_sym *c_global_sym(rcc_ctx *rcc, c_sym *sym)
 static const c_type *c_create_global_type(rcc_ctx *rcc, const c_type *type)
 {
 	c_type *t;
-	int i;
+	uint32_t i;
 
 	if (type->flags & C_TYPE_GLOBAL) return type;
 	t = ir_arena_alloc(&rcc->yy_arena, sizeof(c_type));
@@ -1234,7 +1234,7 @@ static const c_type *c_create_global_type(rcc_ctx *rcc, const c_type *type)
 static const c_type *c_create_in_func_type(rcc_ctx *rcc, const c_type *type)
 {
 	c_type *t;
-	int i;
+	uint32_t i;
 
 	if (type->flags & (C_TYPE_GLOBAL|C_TYPE_IN_FUNC)) return type;
 	t = ir_arena_alloc(&rcc->c_func_arena, sizeof(c_type));
@@ -1601,7 +1601,7 @@ c_sym *c_declare(rcc_ctx *rcc, c_name name, c_dcl *d)
 					if (c_is_flexible(d->type)) {
 						sym->tmp_data = 1;
 						addr = ir_mem_calloc(1, d->type->size);
-						if (!addr) yy_error("out of memory");
+						if (!addr) yy_error("not enough memory to allocate data");
 					} else {
 						addr = c_linker_allocate_data(rcc, name,
 							d->type->size, c_attr2align(d->type->attr), d->type->kind == C_TYPE_ARRAY);
@@ -1616,7 +1616,7 @@ c_sym *c_declare(rcc_ctx *rcc, c_name name, c_dcl *d)
 					if (c_is_flexible(d->type)) {
 						sym->tmp_data = 1;
 						addr = ir_mem_calloc(1, d->type->size);
-						if (!addr) yy_error("out of memory");
+						if (!addr) yy_error("not enough memory to allocate data");
 					} else {
 						addr = c_linker_allocate_data(rcc, sym_name,
 							d->type->size, c_attr2align(d->type->attr), d->type->kind == C_TYPE_ARRAY);
@@ -1913,8 +1913,7 @@ void c_make_array_type(rcc_ctx *rcc, c_dcl *d, c_dcl *dim, c_value *len, uint64_
 				attr |= C_ATTR_VLA;
 				length = ir_const_size_t(rcc->active_ctx, len->u.val.u64);
 			} else {
-				// TODO: overflow check ???
-				if (len->u.val.u64 * d->type->size > SIZE_MAX) yy_error("array is too large");
+				if (len->u.val.u64 != 0 && d->type->size > SIZE_MAX / len->u.val.u64) yy_error("array is too large");
 				length = len->u.val.u64;
 			}
 		}
@@ -2115,7 +2114,7 @@ static void c_grow_struct_fields(rcc_ctx *rcc, c_type *type)
 
 static c_field *c_find_struct_field(const c_type *type, c_name name, size_t *offset)
 {
-	int32_t i;
+	uint32_t i;
 	c_field *f;
 
 	for (i = 0, f = type->record.fields; i < type->record.num_fields; f++, i++) {
@@ -2202,7 +2201,7 @@ void c_declare_struct_field(rcc_ctx *rcc, c_type *type, c_name name, c_dcl *fiel
 
 static void c_do_check_nested_redeclarations(rcc_ctx *rcc, const c_type *type, const c_type *nested_type)
 {
-	int32_t i;
+	uint32_t i;
 
 	for (i = 0; i < nested_type->record.num_fields; i++) {
 		c_field *field = &nested_type->record.fields[i];
@@ -2292,7 +2291,7 @@ void c_finish_struct_type(rcc_ctx *rcc, c_type *type, c_dcl *d)
 
 	if (type->record.num_fields) {
 		c_field *fields = ir_arena_alloc(&rcc->c_arena, sizeof(c_field) * type->record.num_fields);
-		int32_t i;
+		uint32_t i;
 		size_t size = 0;
 		size_t field_align, struct_align = c_attr2align(type->attr);
 
@@ -2461,7 +2460,7 @@ void c_finish_struct_type(rcc_ctx *rcc, c_type *type, c_dcl *d)
 
 void c_validate_func_params(rcc_ctx *rcc, c_name name, c_dcl *d)
 {
-	int32_t i;
+	uint32_t i;
 	const c_type *type = d->type;
 
 	for (i = 0; i < type->func.num_params; i++) {
@@ -2472,7 +2471,7 @@ void c_validate_func_params(rcc_ctx *rcc, c_name name, c_dcl *d)
 	}
 }
 
-static void c_grow_func_params(rcc_ctx *rcc, c_param **params, int32_t *num_params)
+static void c_grow_func_params(rcc_ctx *rcc, c_param **params, uint32_t *num_params)
 {
 	if (*num_params == C_ALLOCA_PARAMS) {
 		c_param *ptr = ir_mem_malloc(*num_params * 2 * sizeof(c_param));
@@ -2485,7 +2484,7 @@ static void c_grow_func_params(rcc_ctx *rcc, c_param **params, int32_t *num_para
 	}
 }
 
-void c_declare_func_param(rcc_ctx *rcc, c_param **params, int32_t *num_params, c_name name, c_dcl *param)
+void c_declare_func_param(rcc_ctx *rcc, c_param **params, uint32_t *num_params, c_name name, c_dcl *param)
 {
 	c_finalize_type(rcc, param);
 	if (param->flags & (C_DCL_STORAGE_CLASS-C_DCL_REGISTER)) {
@@ -2546,7 +2545,7 @@ void c_declare_func_param(rcc_ctx *rcc, c_param **params, int32_t *num_params, c
 	(*num_params)++;
 }
 
-void c_declare_func_param_name(rcc_ctx *rcc, c_param **params, int32_t *num_params, c_name name)
+void c_declare_func_param_name(rcc_ctx *rcc, c_param **params, uint32_t *num_params, c_name name)
 {
 	c_sym *sym;
 
@@ -2579,7 +2578,7 @@ static void c_validate_func_ret_type(rcc_ctx *rcc, const c_type *t)
 	if (t->kind == C_TYPE_ARRAY) yy_error("function returning an array");
 }
 
-void c_make_func_type(rcc_ctx *rcc, c_dcl *d, c_param *params, int32_t num_params, uint32_t attr)
+void c_make_func_type(rcc_ctx *rcc, c_dcl *d, c_param *params, uint32_t num_params, uint32_t attr)
 {
 	c_type *type;
 
@@ -2619,7 +2618,7 @@ void c_make_func_type(rcc_ctx *rcc, c_dcl *d, c_param *params, int32_t num_param
 
 void c_declare_func_param_type(rcc_ctx *rcc, const c_type *type, c_name name, c_dcl *param)
 {
-	int32_t i;
+	uint32_t i;
 
 	IR_ASSERT(type->kind == C_TYPE_FUNC);
 	IR_ASSERT(name);
@@ -4452,7 +4451,7 @@ void c_do_cast(rcc_ctx *rcc, const c_type *t, c_value *v)
 		c_value_set_rval(v, &c_type_void, IR_VOID, IR_NULL);
 	} else if (!C_IS_TYPE_SCALAR_OR_PTR(t)) {
 		if (t->kind == C_TYPE_UNION) {
-			int32_t i;
+			uint32_t i;
 			c_field *f;
 
 			for (i = 0, f = t->record.fields; i < t->record.num_fields; f++, i++) {
@@ -4927,7 +4926,7 @@ void c_do_struct_field_deref(rcc_ctx *rcc, c_value *v, c_name field_name)
 	}
 }
 
-c_value *c_do_grow_actual_parameters(rcc_ctx *rcc, c_value *args, int32_t num_args)
+c_value *c_do_grow_actual_parameters(rcc_ctx *rcc, c_value *args, uint32_t num_args)
 {
 	if (num_args == C_ALLOCA_PARAMS) {
 		c_value *new_args = ir_mem_malloc(C_ALLOCA_PARAMS * 2 * sizeof(c_value));
@@ -4952,7 +4951,7 @@ static ir_ref c_va_list_addr(rcc_ctx *rcc, c_value *val)
 #endif
 }
 
-void c_do_builtin(rcc_ctx *rcc, c_value *val, c_name name, int32_t num_args, c_value *args)
+void c_do_builtin(rcc_ctx *rcc, c_value *val, c_name name, uint32_t num_args, c_value *args)
 {
 	rcc->c_last_call_func_type = NULL;
 	if (name == YY___BUILTIN_VA_START) {
@@ -5959,7 +5958,7 @@ static ir_ref ir_inline_call(rcc_ctx *rcc, ir_ctx *ctx, ir_ctx *func_ctx, uint32
 	return ret;
 }
 
-void c_do_call(rcc_ctx *rcc, c_value *func, int32_t num_args, c_value *args, c_value *res)
+void c_do_call(rcc_ctx *rcc, c_value *func, uint32_t num_args, c_value *args, c_value *res)
 {
 	const c_type *func_type, *ret_type;
 	ir_type _ret_type;
@@ -6030,7 +6029,7 @@ void c_do_call(rcc_ctx *rcc, c_value *func, int32_t num_args, c_value *args, c_v
 		}
 	}
 	if (num_args > 0) {
-		int i;
+		uint32_t i;
 
 		arg_refs = alloca(sizeof(ir_ref) * (num_args + j));
 		if (j) {
@@ -8895,7 +8894,7 @@ void c_do_init_dim(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *dim)
 	if (type->kind != C_TYPE_ARRAY) yy_error("array index in non-array initializer");
 	if (!c_value_is_const(dim) || !C_IS_TYPE_INT(dim->type)) yy_error("array index in initializer not an integer constant");
 	if (C_IS_TYPE_SIGNED(dim->type) && dim->u.val.i64 < 0) yy_error("array index in initializer exceeds array bounds");
-	if (dim->u.val.i64 >= type->array.length && !(type->attr & C_ATTR_FLEXIBLE)) yy_error("array index in initializer exceeds array bounds");
+	if (dim->u.val.u64 >= type->array.length && !(type->attr & C_ATTR_FLEXIBLE)) yy_error("array index in initializer exceeds array bounds");
 
 	if (init->level >= C_INIT_STACK_SIZE) yy_error("too deep initialization level");
 	init->stack[init->level].pos = dim->u.val.i64;
@@ -8912,18 +8911,18 @@ void c_do_init_range(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *last)
 
 	if (!c_value_is_const(last) || !C_IS_TYPE_INT(last->type)) yy_error("array index in initializer not an integer constant");
 	if (C_IS_TYPE_SIGNED(last->type) && last->u.val.i64 < 0) yy_error("array index in initializer exceeds array bounds");
-	if (last->u.val.i64 >= type->array.length && !(type->attr & C_ATTR_FLEXIBLE)) yy_error("array index in initializer exceeds array bounds");
-	if (last->u.val.i64 < init->stack[init->level - 1].pos) yy_error("empty index range in initializer");
+	if (last->u.val.u64 >= type->array.length && !(type->attr & C_ATTR_FLEXIBLE)) yy_error("array index in initializer exceeds array bounds");
+	if (last->u.val.u64 < init->stack[init->level - 1].pos) yy_error("empty index range in initializer");
 
-	if (init->stack[init->level - 1].pos != last->u.val.i64) {
-		init->stack[init->level - 1].last = last->u.val.i64;
+	if (init->stack[init->level - 1].pos != last->u.val.u64) {
+		init->stack[init->level - 1].last = last->u.val.u64;
 		init->ranges++;
 	}
 }
 
 static bool c_find_struct_field_ex(rcc_ctx *rcc, const c_type *type, c_name name, c_init *init)
 {
-	int32_t i;
+	uint32_t i;
 	c_field *f;
 
 	for (i = 0, f = type->record.fields; i < type->record.num_fields; f++, i++) {
@@ -8963,7 +8962,7 @@ void c_do_init_field(rcc_ctx *rcc, c_sym *obj, c_init *init, c_name field_name)
 void c_do_init_next(rcc_ctx *rcc, c_sym *obj, c_init *init)
 {
 	const c_type *type;
-	int64_t pos;
+	uint64_t pos;
 
 	while (1) {
 		type = init->stack[init->level].type;
@@ -9450,7 +9449,7 @@ void c_do_init_expr_start(rcc_ctx *rcc, c_sym *obj, const c_type *type)
 		if (c_is_flexible(type)) {
 			obj->tmp_data = 1;
 			addr = ir_mem_calloc(1, type->size);
-			if (!addr) yy_error("out of memory");
+			if (!addr) yy_error("not enough memory to allocate data");
 		} else {
 			addr = c_linker_allocate_data(rcc, 0, type->size, c_attr2align(type->attr), type->kind == C_TYPE_ARRAY);
 		}
@@ -9616,7 +9615,7 @@ void c_do_func_start(rcc_ctx *rcc, c_name name, c_dcl *d, c_scope *scope)
 	c_sym *func;
 	const c_type *type = d->type;
 	uint32_t flags;
-	int32_t i, j = 0;
+	uint32_t i, j = 0;
 
 	d->flags |= C_DCL_DEFINITION;
 	func = c_declare(rcc, name, d);

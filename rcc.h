@@ -785,7 +785,7 @@ struct _c_type {
 		} enumeration;
 		struct {
 			const c_type  *type;
-			int32_t        length;
+			uintptr_t      length;
 			yy_sym        *vla_tokens;
 		} array;
 		struct {
@@ -793,18 +793,18 @@ struct _c_type {
 		} pointer;
 		struct {
 			c_name         tag;
-			int32_t        num_fields;
+			uint32_t       num_fields;
 			c_field       *fields;
 		} record;
 		struct {
-			int32_t        num_params;
+			uint32_t       num_params;
 //			ffi_abi        abi;
 			const c_type  *ret_type;
 			c_param       *params;
 		} func;
 		struct {
 			const c_type  *type;
-			int32_t        length;
+			uintptr_t      length;
 		} vec;
 		c_name             tag;
 	};
@@ -975,8 +975,8 @@ typedef struct {
 	uint32_t           ranges;
 	struct {
 		const c_type  *type;
-		int64_t        pos;
-		int64_t        last;
+		uintptr_t      pos;
+		uintptr_t      last;
 	} stack[C_INIT_STACK_SIZE];
 } c_init;
 
@@ -1095,7 +1095,7 @@ c_type *c_make_enum_type(rcc_ctx *rcc, c_dcl *dcl, c_name tag, const c_type *und
 const c_type *c_underlying_enum_type(rcc_ctx *rcc, c_dcl *dcl);
 void c_make_pointer_type(rcc_ctx *rcc, c_dcl *dcl);
 void c_make_array_type(rcc_ctx *rcc, c_dcl *dcl, c_dcl *dim, c_value *len, uint64_t attr, bool is_param);
-void c_make_func_type(rcc_ctx *rcc, c_dcl *dcl, c_param *params, int32_t num_params, uint32_t attr);
+void c_make_func_type(rcc_ctx *rcc, c_dcl *dcl, c_param *params, uint32_t num_params, uint32_t attr);
 void c_make_nested_type(rcc_ctx *rcc, c_dcl *dcl, c_dcl *nested);
 void c_finish_struct_type(rcc_ctx *rcc, c_type *type, c_dcl *d);
 void c_finish_enum_type(rcc_ctx *rcc, c_type *dcl, c_dcl *d, int64_t min, uint64_t max);
@@ -1104,8 +1104,8 @@ void c_validate_func_params(rcc_ctx *rcc, c_name name, c_dcl *dcl);
 c_sym *c_declare(rcc_ctx *rcc, c_name name, c_dcl *dcl);
 void c_declare_struct_field(rcc_ctx *rcc, c_type *type, c_name name, c_dcl *field, c_value *bits);
 void c_declare_enum_val(rcc_ctx *rcc, const c_type *type, c_name name, c_dcl *attr, c_value *val, int64_t *min, uint64_t *max, c_value *last);
-void c_declare_func_param(rcc_ctx *rcc, c_param **params, int32_t *num_params, c_name name, c_dcl *param);
-void c_declare_func_param_name(rcc_ctx *rcc, c_param **params, int32_t *num_params, c_name name);
+void c_declare_func_param(rcc_ctx *rcc, c_param **params, uint32_t *num_params, c_name name, c_dcl *param);
+void c_declare_func_param_name(rcc_ctx *rcc, c_param **params, uint32_t *num_params, c_name name);
 void c_declare_func_param_type(rcc_ctx *rcc, const c_type *type, c_name name, c_dcl *param);
 void c_declare_local_label(rcc_ctx *rcc, c_name name);
 void c_empty_declaration(rcc_ctx *rcc, c_dcl *d);
@@ -1155,12 +1155,12 @@ void c_do_bool_not(rcc_ctx *rcc, c_value *v);
 void c_do_array_dim(rcc_ctx *rcc, c_value *v, c_value *dim);
 void c_do_struct_field(rcc_ctx *rcc, c_value *v, c_name field);
 void c_do_struct_field_deref(rcc_ctx *rcc, c_value *v, c_name field);
-c_value *c_do_grow_actual_parameters(rcc_ctx *rcc, c_value *args, int32_t num_args);
-void c_do_builtin(rcc_ctx *rcc, c_value *val, c_name name, int32_t num_args, c_value *args);
+c_value *c_do_grow_actual_parameters(rcc_ctx *rcc, c_value *args, uint32_t num_args);
+void c_do_builtin(rcc_ctx *rcc, c_value *val, c_name name, uint32_t num_args, c_value *args);
 void c_do_builtin_constant_p(rcc_ctx *rcc, c_value *val);
 void c_do_builtin_va_arg(rcc_ctx *rcc, c_value *val, const c_type *type);
 void c_do_builtin_convertvector(rcc_ctx *rcc, c_value *val, const c_type *type);
-void c_do_call(rcc_ctx *rcc, c_value *func, int32_t num_args, c_value *args, c_value *res);
+void c_do_call(rcc_ctx *rcc, c_value *func, uint32_t num_args, c_value *args, c_value *res);
 void c_do_binary_op(rcc_ctx *rcc, yy_sym sym, c_value *v, c_value *op2);
 void c_do_assign_op(rcc_ctx *rcc, yy_sym sym, c_value *v, c_value *op2);
 ir_ref c_do_bool_and_start(rcc_ctx *rcc, c_value *v);
