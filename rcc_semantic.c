@@ -1459,7 +1459,15 @@ c_sym *c_declare(rcc_ctx *rcc, c_name name, c_dcl *d)
 				c_validate_redeclaration(rcc, name, d, sym);
 				return sym;
 			} else {
-				yy_error_fmt("redeclaration of \"%s\"", yy_sym2str(rcc, name));
+				if (d->flags & C_DCL_TYPEDEF) {
+					if (sym->kind == C_SYM_TYPE
+					 && c_compatible_types(d->type, sym->value.type, 0, 0)) {
+						return sym;
+					}
+					yy_error_fmt("incompatible redeclaration of \"%s\"", yy_sym2str(rcc, name));
+				} else {
+					yy_error_fmt("redeclaration of \"%s\"", yy_sym2str(rcc, name));
+				}
 				return NULL;
 			}
 		}
