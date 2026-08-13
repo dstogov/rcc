@@ -8808,8 +8808,8 @@ void c_do_init_obj(rcc_ctx *rcc, c_sym *obj, c_value *val)
 				} else {
 					c_do_init_patch_flexible_alloca(rcc, obj->value.u.ref, len);
 				}
-			} else if (len > (size_t)obj->value.type->array.length * val->type->array.type->size) {
-				if (len - val->type->array.type->size == (size_t)obj->value.type->array.length * val->type->array.type->size) {
+			} else if (len > obj->value.type->array.length * val->type->array.type->size) {
+				if (len - val->type->array.type->size == obj->value.type->array.length * val->type->array.type->size) {
 					len -= val->type->array.type->size;
 				} else if (val->type->array.type->size == 1) {
 					yy_error("initializer-string for array of \"char\" is too long");
@@ -9232,8 +9232,8 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val)
 			const void *str = c_value_str_addr(val);
 			size_t len = c_value_str_size(val);
 
-			if (len > (size_t)type->array.length && !(type->attr & C_ATTR_FLEXIBLE)) {
-				if (len - type->array.type->size == (size_t)type->array.length) {
+			if (len > type->array.length * type->array.type->size && !(type->attr & C_ATTR_FLEXIBLE)) {
+				if (len - type->array.type->size == type->array.length * type->array.type->size) {
 					len -= type->array.type->size;
 				} else if (val->type->array.type->size == 1) {
 					yy_error("initializer-string for array of \"char\" is too long");
