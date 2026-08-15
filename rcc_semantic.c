@@ -10,6 +10,8 @@
 # include "ir_x86.h"
 #elif defined(IR_TARGET_AARCH64)
 # include "ir_aarch64.h"
+#elif defined(IR_TARGET_RISCV64)
+# include "ir_riscv.h"
 #else
 # error "Unknown IR target"
 #endif
@@ -789,8 +791,7 @@ static void c_merge_type_attr(rcc_ctx *rcc, c_dcl *d)
 	*type = *d->type;
 	if (rcc->active_scope) type->flags &= ~C_TYPE_GLOBAL;
 	type->attr |= (d->attr & C_TYPE_ATTRS);
-	if ((d->attr & C_ATTR_ALIGN_MASK)
-	 && (d->attr & C_ATTR_ALIGN_MASK) != (d->type->attr & C_ATTR_ALIGN_MASK)) {
+	if ((d->attr & C_ATTR_ALIGN_MASK) > (d->type->attr & C_ATTR_ALIGN_MASK)) {
 		type->attr = (type->attr & ~C_ATTR_ALIGN_MASK) | (d->attr & C_ATTR_ALIGN_MASK);
 	}
 	d->type = type;

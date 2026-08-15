@@ -320,6 +320,84 @@ static const char c_boot[] =
 "#define __UINT64_TYPE__          unsigned long int\n"
 "#define __INTMAX_TYPE__          long int\n"
 "#define __UINTMAX_TYPE__         unsigned long int\n"
+
+#elif defined(IR_TARGET_RISCV64)
+"#define _LP64                    1\n"
+"#define __LP64__                 1\n"
+"#define __riscv                  1\n"
+"#define __riscv_xlen             64\n"
+"#define __SIZEOF_SHORT__         2\n"
+"#define __SIZEOF_INT__           4\n"
+"#define __SIZEOF_LONG__          8\n"
+"#define __SIZEOF_LONG_LONG__     8\n"
+"#define __SIZEOF_POINTER__       8\n"
+"#define __SIZEOF_PTRDIFF_T__     8\n"
+"#define __SIZEOF_SIZE_T__        8\n"
+"#define __SIZEOF_FLOAT__         4\n"
+"#define __SIZEOF_DOUBLE__        8\n"
+//"#define __SIZEOF_LONG_DOUBLE__   16\n"
+"#define __CHAR_BIT__             8\n"
+"#define __BYTE_ORDER__           1234\n"
+"#define __ORDER_LITTLE_ENDIAN__  1234\n"
+"#define __ORDER_BIG_ENDIAN__     4321\n"
+
+"#define __SCHAR_MAX__            0x7f\n"
+"#define __SHRT_MAX__             0x7fff\n"
+"#define __INT_MAX__              0x7fffffff\n"
+"#define __LONG_MAX__             0x7fffffffffffffffL\n"
+"#define __LONG_LONG_MAX__        0x7fffffffffffffffLL\n"
+"#define __PTRDIFF_MAX__          0x7fffffffffffffffL\n"
+"#define __INT8_MAX__             0x7f\n"
+"#define __UINT8_MAX__            0xff\n"
+"#define __INT16_MAX__            0x7fff\n"
+"#define __UINT16_MAX__           0xffff\n"
+"#define __INT32_MAX__            0x7fffffff\n"
+"#define __UINT32_MAX__           0xffffffffU\n"
+"#define __INT64_MAX__            0x7fffffffffffffffL\n"
+"#define __UINT64_MAX__           0xffffffffffffffffUL\n"
+"#define __SIZE_MAX__             0xffffffffffffffffUL\n"
+# if defined(_WIN32)
+"#define __WCHAR_MAX__            0xffff\n"
+# else
+"#define __WCHAR_MAX__            0x7fffffff\n"
+# endif
+
+"#define __FLT_MANT_DIG__         24\n"
+"#define __FLT_DIG__              6\n"
+"#define __FLT_DECIMAL_DIG__      9\n"
+"#define __FLT_MIN_EXP__          (-125)\n"
+"#define __FLT_MAX_EXP__          128\n"
+"#define __FLT_MIN_10_EXP__       (-37)\n"
+"#define __FLT_MAX_10_EXP__       38\n"
+"#define __FLT_MAX__              3.40282346638528859811704183484516925e+38F\n"
+"#define __FLT_MIN__              1.17549435082228750796873653722224568e-38F\n"
+"#define __FLT_EPSILON__          1.19209289550781250000000000000000000e-7F\n"
+"#define __DBL_MANT_DIG__         53\n"
+"#define __DBL_DIG__              15\n"
+"#define __DBL_DECIMAL_DIG__      17\n"
+"#define __DBL_MIN_EXP__          (-1021)\n"
+"#define __DBL_MAX_EXP__          1024\n"
+"#define __DBL_MIN_10_EXP__       (-307)\n"
+"#define __DBL_MAX_10_EXP__       308\n"
+"#define __DBL_MAX__              1.79769313486231570814527423731704357e+308\n"
+"#define __DBL_MIN__              2.22507385850720138309023271733240406e-308\n"
+"#define __DBL_EPSILON__          2.22044604925031308084726333618164062e-16\n"
+
+"#define __SIZE_TYPE__            unsigned long\n"
+"#define __PTRDIFF_TYPE__         long\n"
+"#define __UINTPTR_TYPE__         unsigned long\n"
+"#define __INTPTR_TYPE__          long\n"
+"#define __INT8_TYPE__            signed char\n"
+"#define __UINT8_TYPE__           unsigned char\n"
+"#define __INT16_TYPE__           short int\n"
+"#define __UINT16_TYPE__          unsigned short int\n"
+"#define __INT32_TYPE__           int\n"
+"#define __UINT32_TYPE__          unsigned int\n"
+"#define __INT64_TYPE__           long int\n"
+"#define __UINT64_TYPE__          unsigned long int\n"
+"#define __INTMAX_TYPE__          long int\n"
+"#define __UINTMAX_TYPE__         unsigned long int\n"
+
 #endif
 
 #ifdef _WIN32
@@ -352,7 +430,7 @@ static const char c_boot[] =
 "\n";
 
 static const char c_builtin[] =
-#if defined(__i386__) || defined(_WIN32) || defined(__APPLE__)
+#if defined(__i386__) || defined(_WIN32) || defined(__APPLE__) || defined(__riscv)
 "typedef char *__builtin_va_list;\n"
 #elif defined(__x86_64__)
 "typedef struct {\n"
