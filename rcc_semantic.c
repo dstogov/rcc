@@ -1106,14 +1106,37 @@ static void c_validate_redeclaration(rcc_ctx *rcc, c_name name, c_dcl *d, c_sym 
 					yy_error_fmt("incompatible redeclaration of \"%s\"", yy_sym2str(rcc, name));
 				}
 			}
+			if ((sym->value.type->attr & C_ATTR_OLD_FUNC)) {
+				if (!(d->type->attr & C_ATTR_OLD_FUNC)) {
+					if (!sym->is_implemented) {
+						c_type *t = (c_type*)sym->value.type;
+						t->attr &= ~C_ATTR_OLD_FUNC;
+						t->func.num_params = d->type->func.num_params;
+						t->func.params = d->type->func.params;
+						sym->value.type = t;
+					} else if (sym->value.type->func.num_params != d->type->func.num_params) {
+						yy_error_fmt("incompatible redeclaration of \"%s\"", yy_sym2str(rcc, name));
+					}
+				} else if (d->type->func.num_params == 0 && !(d->flags & C_DCL_DEFINITION)) {
+					/* pass */
+				} else if (sym->value.type->func.num_params == 0 && d->type->func.num_params != 0) {
+					c_type *t = (c_type*)sym->value.type;
+					t->func.num_params = d->type->func.num_params;
+					t->func.params = d->type->func.params;
+					sym->value.type = t;
+				} else if (sym->value.type->func.num_params != d->type->func.num_params) {
+					yy_error_fmt("incompatible redeclaration of \"%s\"", yy_sym2str(rcc, name));
+				}
+			} else if (d->type->attr & C_ATTR_OLD_FUNC) {
+				if (d->type->func.num_params == 0 && !(d->flags & C_DCL_DEFINITION)) {
+					/* pass */
+				} else if (sym->value.type->func.num_params != d->type->func.num_params) {
+					yy_error_fmt("incompatible redeclaration of \"%s\"", yy_sym2str(rcc, name));
+				}
+			}
+
 			if (d->flags & C_DCL_DEFINITION) {
 				sym->is_implemented = 1;
-			}
-			if ((sym->value.type->attr & C_ATTR_OLD_FUNC) && !(d->type->attr & C_ATTR_OLD_FUNC)) {
-				c_type *t = (c_type*)sym->value.type;
-				t->attr &= ~C_ATTR_OLD_FUNC;
-				t->func.num_params = d->type->func.num_params;
-				t->func.params = d->type->func.params;
 			}
 		}
 	} else {
@@ -9669,6 +9692,7 @@ void c_do_func_start(rcc_ctx *rcc, c_name name, c_dcl *d, c_scope *scope)
 {
 	c_sym *func;
 	const c_type *type = d->type;
+	const c_type *proto_type = NULL;
 	uint32_t flags;
 	uint32_t i, j = 0;
 
@@ -9684,6 +9708,10 @@ void c_do_func_start(rcc_ctx *rcc, c_name name, c_dcl *d, c_scope *scope)
 	rcc->c_last_call_func_type = NULL;
 
 	c_push_scope(rcc, scope);
+
+	if ((type->attr & C_ATTR_OLD_FUNC) && !(func->value.type->attr & C_ATTR_OLD_FUNC)) {
+		proto_type = func->value.type;
+	}
 
 	flags = 0;
 	if (d->flags & C_DCL_STATIC) {
@@ -9754,6 +9782,7 @@ void c_do_func_start(rcc_ctx *rcc, c_name name, c_dcl *d, c_scope *scope)
 	for (i = 0; i < type->func.num_params; i++) {
 		c_param *p = &type->func.params[i];
 		const c_type *t = p->type;
+		ir_ref param_ref = i + j + 2;
 
 		if (t->attr & C_ATTR_VLA) {
 			c_value val;
@@ -9777,6 +9806,21 @@ void c_do_func_start(rcc_ctx *rcc, c_name name, c_dcl *d, c_scope *scope)
 
 			obj = c_declare(rcc, name, &dcl);
 			IR_ASSERT(obj &&  obj->kind == C_SYM_VAR && c_value_is_ref(&obj->value));
+
+			if (proto_type && i < proto_type->func.num_params) {
+				const c_type *proto_t = proto_type->func.params[i].type;
+
+				if (!c_compatible_types(t, proto_t, 1, 0)) {
+					c_value val;
+					ir_type tt = c_type2ir(rcc, proto_t);
+
+					rcc->active_ctx->ir_base[param_ref].type = tt;
+					c_value_set_rval(&val, proto_t, tt, param_ref);
+					c_do_check_cvt(rcc, t, &val, -1);
+					param_ref = val.u.ref;
+				}
+			}
+
 			if (t->kind == C_TYPE_STRUCT || t->kind == C_TYPE_UNION) {
 				ir_type types[MAX_ABI_TYPES];
 				int n = c_abi_lower_struct_arg(t, types);
@@ -9784,20 +9828,20 @@ void c_do_func_start(rcc_ctx *rcc, c_name name, c_dcl *d, c_scope *scope)
 				if (n == 1) {
 					if (t->size) {
 						if (obj->value.type->attr & C_ATTR_VOLATILE) {
-							ir_STORE_v(obj->value.u.ref, i + j + 2);
+							ir_STORE_v(obj->value.u.ref, param_ref);
 						} else {
-							ir_STORE(obj->value.u.ref, i + j + 2);
+							ir_STORE(obj->value.u.ref, param_ref);
 						}
 					}
 				} else {
 					IR_ASSERT(n == 0);
-					c_value_set_lval(&obj->value, t, IR_ADDR, i + j + 2);
+					c_value_set_lval(&obj->value, t, IR_ADDR, param_ref);
 				}
 			} else {
 				if (obj->value.type->attr & C_ATTR_VOLATILE) {
-					ir_VSTORE_v(obj->value.u.ref, i + j + 2);
+					ir_VSTORE_v(obj->value.u.ref, param_ref);
 				} else {
-					ir_VSTORE(obj->value.u.ref, i + j + 2);
+					ir_VSTORE(obj->value.u.ref, param_ref);
 				}
 			}
 		} else {
