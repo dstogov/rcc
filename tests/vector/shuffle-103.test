@@ -1,0 +1,83 @@
+--TEST--
+SHUFFLE.103: 128-bit DOUBLE vectors SSE2 optimized constant mask (NEON)
+--TARGET--
+aarch64
+--ARGS--
+--run
+--CODE--
+#define N 16
+
+int printf(const char *, ...);
+
+typedef long long          i64;
+typedef unsigned long long u64;
+typedef int                i32;
+typedef unsigned int       u32;
+typedef short              i16;
+typedef unsigned short     u16;
+typedef char               i8;
+typedef unsigned char      u8;
+
+typedef double __attribute__((__vector_size__(N))) v_d;
+typedef float  __attribute__((__vector_size__(N))) v_f;
+typedef i64    __attribute__((__vector_size__(N))) v_i64;
+typedef u64    __attribute__((__vector_size__(N))) v_u64;
+typedef i32    __attribute__((__vector_size__(N))) v_i32;
+typedef u32    __attribute__((__vector_size__(N))) v_u32;
+typedef i16    __attribute__((__vector_size__(N))) v_i16;
+typedef u16    __attribute__((__vector_size__(N))) v_u16;
+typedef i8     __attribute__((__vector_size__(N))) v_i8;
+typedef u8     __attribute__((__vector_size__(N))) v_u8;
+
+typedef v_d v;
+
+#define M2(p1, p2) \
+	v __attribute__((noinline)) test_ ## p1 ## p2(v _v01, v _v02, v v1, v v2) \
+	{ \
+		return __builtin_shufflevector(v1, v2, p1, p2); \
+	}
+
+#define M1(p1) \
+	M2(p1, 0) \
+	M2(p1, 1) \
+	M2(p1, 2) \
+	M2(p1, 3)
+
+#define M() \
+	M1(0) \
+	M1(1) \
+	M1(2) \
+	M1(3)
+
+#define T2(p1, p2) \
+	{ \
+		v x = {0, 1}; \
+		v y = {2, 3}; \
+		x = test_ ## p1 ## p2(x, x, x, y); \
+		if (x[0] != p1 || x[1] != p2) {printf(#p1#p2"\n"); n++;} \
+	}
+
+
+#define T1(p1) \
+	T2(p1, 0) \
+	T2(p1, 1) \
+	T2(p1, 2) \
+	T2(p1, 3)
+
+#define T() \
+	T1(0) \
+	T1(1) \
+	T1(2) \
+	T1(3)
+
+M()
+
+int main()
+{
+	int n = 0;
+	T()
+	printf("%d\n", n);
+	return 0;
+}
+--EXPECT--
+0
