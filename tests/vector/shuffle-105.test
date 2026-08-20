@@ -1,0 +1,138 @@
+--TEST--
+SHUFFLE.105: 128-bit FLOAT vectors SSE2 optimized constant mask (NEON)
+--TARGET--
+aarch64
+--ARGS--
+--run
+--CODE--
+#define N 16
+
+int printf(const char *, ...);
+
+typedef long long          i64;
+typedef unsigned long long u64;
+typedef int                i32;
+typedef unsigned int       u32;
+typedef short              i16;
+typedef unsigned short     u16;
+typedef char               i8;
+typedef unsigned char      u8;
+
+typedef double __attribute__((__vector_size__(N))) v_d;
+typedef float  __attribute__((__vector_size__(N))) v_f;
+typedef i64    __attribute__((__vector_size__(N))) v_i64;
+typedef u64    __attribute__((__vector_size__(N))) v_u64;
+typedef i32    __attribute__((__vector_size__(N))) v_i32;
+typedef u32    __attribute__((__vector_size__(N))) v_u32;
+typedef i16    __attribute__((__vector_size__(N))) v_i16;
+typedef u16    __attribute__((__vector_size__(N))) v_u16;
+typedef i8     __attribute__((__vector_size__(N))) v_i8;
+typedef u8     __attribute__((__vector_size__(N))) v_u8;
+
+typedef v_f v;
+
+#define M4(p1, p2, p3, p4) \
+	v __attribute__((noinline)) test_ ## p1 ## p2 ## p3 ## p4(v _v01, v _v02, v v1, v v2) \
+	{ \
+		return __builtin_shufflevector(v1, v2, p1, p2, p3, p4); \
+	}
+
+#define M3(p1, p2, p3) \
+	M4(p1, p2, p3, 0) \
+	M4(p1, p2, p3, 1) \
+	M4(p1, p2, p3, 2) \
+	M4(p1, p2, p3, 3) \
+	M4(p1, p2, p3, 4) \
+	M4(p1, p2, p3, 5) \
+	M4(p1, p2, p3, 6) \
+	M4(p1, p2, p3, 7)
+
+#define M2(p1, p2) \
+	M3(p1, p2, 0) \
+	M3(p1, p2, 1) \
+	M3(p1, p2, 2) \
+	M3(p1, p2, 3) \
+	M3(p1, p2, 4) \
+	M3(p1, p2, 5) \
+	M3(p1, p2, 6) \
+	M3(p1, p2, 7)
+
+#define M1(p1) \
+	M2(p1, 0) \
+	M2(p1, 1) \
+	M2(p1, 2) \
+	M2(p1, 3) \
+	M2(p1, 4) \
+	M2(p1, 5) \
+	M2(p1, 6) \
+	M2(p1, 7)
+
+#define M() \
+	M1(0) \
+	M1(1) \
+	M1(2) \
+	M1(3) \
+	M1(4) \
+	M1(5) \
+	M1(6) \
+	M1(7)
+
+#define T4(p1, p2, p3, p4) \
+	{ \
+		v x = {0, 1, 2, 3}; \
+		v y = {4, 5, 6, 7}; \
+		x = test_ ## p1 ## p2 ## p3 ## p4(x, x, x, y); \
+		if (x[0] != p1 || x[1] != p2 || x[2] != p3 || x[3] != p4) {printf(#p1#p2#p3#p4"\n"); n++;} \
+	}
+
+#define T3(p1, p2, p3) \
+	T4(p1, p2, p3, 0) \
+	T4(p1, p2, p3, 1) \
+	T4(p1, p2, p3, 2) \
+	T4(p1, p2, p3, 3) \
+	T4(p1, p2, p3, 4) \
+	T4(p1, p2, p3, 5) \
+	T4(p1, p2, p3, 6) \
+	T4(p1, p2, p3, 7)
+
+#define T2(p1, p2) \
+	T3(p1, p2, 0) \
+	T3(p1, p2, 1) \
+	T3(p1, p2, 2) \
+	T3(p1, p2, 3) \
+	T3(p1, p2, 4) \
+	T3(p1, p2, 5) \
+	T3(p1, p2, 6) \
+	T3(p1, p2, 7)
+
+#define T1(p1) \
+	T2(p1, 0) \
+	T2(p1, 1) \
+	T2(p1, 2) \
+	T2(p1, 3) \
+	T2(p1, 4) \
+	T2(p1, 5) \
+	T2(p1, 6) \
+	T2(p1, 7)
+
+#define T() \
+	T1(0) \
+	T1(1) \
+	T1(2) \
+	T1(3) \
+	T1(4) \
+	T1(5) \
+	T1(6) \
+	T1(7)
+
+M()
+
+int main()
+{
+	int n = 0;
+	T()
+	printf("%d\n", n);
+	return 0;
+}
+--EXPECT--
+0
