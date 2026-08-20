@@ -283,6 +283,20 @@ void rcc_ir_compile(rcc_ctx *rcc, c_name name, c_dcl *d, c_sym *sym)
 	ir_ctx *ctx = rcc->active_ctx;
 	c_value *func = &sym->value;
 
+#if IR_DEBUG
+	uint32_t flags;
+	ir_type ret_type;
+	uint32_t params_count;
+	uint8_t *param_types;
+
+	IR_ASSERT(func->type->kind == C_TYPE_FUNC);
+	param_types = alloca(func->type->func.num_params + 16);
+	c_type2proto_ex(rcc, func->type, &flags, &ret_type, &params_count, param_types);
+	if (!ir_check_prototype(rcc->active_ctx, flags, ret_type, params_count, param_types)) {
+		yy_error_fmt("function signature mismatch for \"%s\"", yy_sym2str(rcc, name));
+	}
+#endif
+
 	if (rcc->c_flags & C_DUMP_IR_AFTER_LOAD) {
 		if (rcc->c_flags & C_DUMP_DOT) {
 			ir_dump_dot(ctx, yy_sym2str(rcc, name), "(after load)", stderr);
