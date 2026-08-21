@@ -1620,6 +1620,7 @@ static int rcc_compile(rcc_ctx *rcc, const char *file_name)
 	c_stdinc_builtin(rcc);
 
 	if (!rcc_read(rcc, file_name)) {
+		c_do_compile_end(rcc);
 		return 0;
 	}
 	rcc_parse(rcc);
