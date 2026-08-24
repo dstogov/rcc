@@ -3351,6 +3351,9 @@ void c_alignas_expr(rcc_ctx *rcc, c_dcl *dcl, c_value *expr)
 
 const c_type *c_typeof_expr(rcc_ctx *rcc, c_value *expr, ir_ref old_control)
 {
+	if (C_IS_BIT_FIELD(expr->u.proto)) {
+		yy_error("\"typeof\" applied to a bit-field");
+	}
 	c_do_end_nocode(rcc, old_control);
 	return expr->type;
 }
