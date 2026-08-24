@@ -1,7 +1,7 @@
 --TEST--
 GT.008: 256-bit vectors AVX+AVX2
 --TARGET--
-!aarch64
+x86*
 --ARGS--
 -mavx --run
 --CODE--

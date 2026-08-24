@@ -1,7 +1,7 @@
 --TEST--
 GE.006: 64-bit vectors AVX
 --TARGET--
-!aarch64
+x86*
 --ARGS--
 -mavx -mno-avx2 --run
 --CODE--

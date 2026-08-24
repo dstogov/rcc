@@ -2,8 +2,8 @@
 tinycc 106: versym
 --ARGS--
 --run
---OS--
-!Windows
+--TARGET--
+!*-windows
 --CODE--
 #include <stdio.h>
 #include <pthread.h>

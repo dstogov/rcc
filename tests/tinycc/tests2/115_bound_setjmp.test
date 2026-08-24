@@ -2,8 +2,8 @@
 tinycc 115: bound setjmp
 --ARGS--
 --run
---OS--
-!Windows
+--TARGET--
+!*-windows
 --CODE--
 #include <stdio.h>
 #include <string.h>

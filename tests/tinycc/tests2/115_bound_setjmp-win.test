@@ -2,8 +2,8 @@
 tinycc 115: bound setjmp
 --ARGS--
 --run
---OS--
-Windows
+--TARGET--
+*-windows
 --XFAIL--
 In Win64 longjmp() relies on Structured Exception Handling (SEH), that is not implemented yet.
 --CODE--

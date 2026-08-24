@@ -2397,7 +2397,7 @@ int main(int argc, const char **argv)
 		} else if (strcmp(argv[i], "--dump-search-dirs") == 0) {
 			dump_dirs = 1;
 		} else if (strcmp(argv[i], "--target") == 0) {
-			printf("%s\n", IR_TARGET);
+			printf("%s\n", IR_TARGET_TRIPLET);
 			ret = 0;
 			goto exit;
 #ifdef _WIN32
