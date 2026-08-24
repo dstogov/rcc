@@ -17,7 +17,7 @@ jobs:
     env:
       CFLAGS: '-fsanitize=address,undefined'
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: apt
         run: |
           apt update -y
@@ -27,7 +27,7 @@ jobs:
             libcapstone4 \
             make
       - name: git checkout ir
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           repository: dstogov/ir
           path: ir
@@ -48,7 +48,7 @@ jobs:
     env:
       CFLAGS: '-fsanitize=address,undefined'
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
       - name: apt
         run: |
           dpkg --add-architecture i386
@@ -70,7 +70,7 @@ jobs:
           cd ..
           rm -rf capstone-4.0.2 capstone.tar.gz
       - name: git checkout ir
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           repository: dstogov/ir
           path: ir
@@ -89,7 +89,7 @@ jobs:
     container:
       image: ubuntu:22.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
       - name: apt
         run: |
           apt update -y
@@ -100,7 +100,7 @@ jobs:
             libcapstone4 \
             make
       - name: git checkout ir
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           repository: dstogov/ir
           path: ir
@@ -120,12 +120,12 @@ jobs:
         arch: [x86, amd64]
     runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
       - uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: ${{ matrix.arch }}
       - name: git checkout ir
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           repository: dstogov/ir
           path: ir
@@ -140,7 +140,7 @@ jobs:
           echo ("VCVER=" + $env:VCToolsVersion) | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Cache capstone
         id: cache-capstone
-        uses: actions/cache@v3
+        uses: actions/cache@v6
         with:
           path: ir\${{ env.CAPSTONE_DIR }}
           key: capstone-${{ matrix.arch }}-${{ env.CAPSTONE_TAG }}-${{ env.VCVER }}-0
