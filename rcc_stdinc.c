@@ -337,6 +337,22 @@ static const char c_boot[] =
 "#define unix                     1\n"
 "#define __unix                   1\n"
 "#define __unix__                 1\n"
+#elif defined(__APPLE__)
+"#define __APPLE__                1\n"
+#elif defined(__FreeBSD__)
+"#define __FreeBSD__              1\n"
+"#define unix                     1\n"
+"#define __unix                   1\n"
+"#define __unix__                 1\n"
+#elif defined(__NetBSD__)
+"#define __NetBSD__               1\n"
+"#define unix                     1\n"
+"#define __unix                   1\n"
+"#define __unix__                 1\n"
+#elif defined(__unix__)
+"#define unix                     1\n"
+"#define __unix                   1\n"
+"#define __unix__                 1\n"
 #endif
 
 "#define __thread                 _Thread_local\n"
