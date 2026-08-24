@@ -41,8 +41,13 @@ else ifneq (, $(filter aarch64 arm64, $(TARGET)))
   override CFLAGS += -DIR_TARGET_AARCH64
   override BUILD_CFLAGS += -DIR_TARGET_AARCH64
   TEST_TARGET=aarch64
+else ifneq (, $(filter riscv64, $(TARGET)))
+# CC= riscv64-linux-gnu-gcc
+  override CFLAGS += -DIR_TARGET_RISCV64
+  override BUILD_CFLAGS += -DIR_TARGET_RISCV64
+  TEST_TARGET=riscv64
 else
- $(error Unsupported target. TRGET must be 'x86_64', 'x86' or 'aarch64')
+ $(error Unsupported target. TARGET must be 'x86_64', 'x86', 'aarch64' or 'riscv64')
 endif
 
 ifeq (FreeBSD, $(OS))

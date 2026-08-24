@@ -111,6 +111,8 @@ void pp_add_sys_include_dirs(rcc_ctx *rcc)
 	pp_add_include_dir(rcc, "/usr/include/x86-linux-gnu");
 # elif defined(IR_TARGET_AARCH64)
 	pp_add_include_dir(rcc, "/usr/include/aarch64-linux-gnu");
+# elif defined(IR_TARGET_RISCV64)
+	pp_add_include_dir(rcc, "/usr/include/riscv64-linux-gnu");
 # endif
 #endif
 }
