@@ -1,7 +1,7 @@
 --TEST--
 REPLACE.013: replace variable lane
 --TARGET--
-!aarch64
+x86*
 --ARGS--
 --run
 --CODE--

@@ -2,8 +2,8 @@
 tinycc 046: grep
 --ARGS--
 --run "[^* ]*[:a:d: ]+\:\*-/: $$" ./tests/tinycc/tests2/046_grep-win.c
---OS--
-Windows
+--TARGET--
+*-windows
 --CODE--
 /*
  * The  information  in  this  document  is  subject  to  change

@@ -1,7 +1,7 @@
 --TEST--
 CONVERT.INT2FP.003: 128-bit vectors AVX
 --TARGET--
-!aarch64
+x86*
 --ARGS--
 -mavx --run
 --CODE--

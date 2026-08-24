@@ -1,7 +1,7 @@
 --TEST--
 REPLACE.009: 256-bit vectors AVX (low)
 --TARGET--
-!aarch64
+x86*
 --ARGS--
 -mavx -mno-avx2 --run
 --CODE--

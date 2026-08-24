@@ -1,7 +1,7 @@
 --TEST--
 SHUFFLE.002: 128-bit vectors SSE2 constant mask
 --TARGET--
-!aarch64
+x86*
 --ARGS--
 -mno-sse4 -mno-avx2 --run
 --CODE--

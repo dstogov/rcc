@@ -1,7 +1,7 @@
 --TEST--
 EXTRACT.001: extract variable lane
 --TARGET--
-!aarch64
+x86*
 --ARGS--
 --run
 --CODE--
