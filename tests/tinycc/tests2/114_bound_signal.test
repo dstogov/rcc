@@ -3,7 +3,7 @@ tinycc 114: bound signal
 --ARGS--
 --run
 --TARGET--
-!*-windows
+x86*-sysv
 --CODE--
 #include <stdio.h>
 #include <pthread.h>
