@@ -1542,7 +1542,12 @@ c_sym *c_declare(rcc_ctx *rcc, c_name name, c_dcl *d)
 	} else if (d->type->kind == C_TYPE_FUNC) {
 		if ((d->flags & (C_DCL_THREAD_LOCAL|C_DCL_AUTO|C_DCL_REGISTER))
 		 || ((d->flags & C_DCL_STATIC) && rcc->active_scope)) {
-			yy_error_fmt("invalid storage class for function \"%s\"", yy_sym2str(rcc, name));
+			if ((d->flags & (C_DCL_THREAD_LOCAL|C_DCL_AUTO|C_DCL_REGISTER|C_DCL_STATIC)) == C_DCL_AUTO
+			 && rcc->active_scope) {
+				yy_error("nested functions are not implemented yet (storage class \"auto\")"); //???
+			} else {
+				yy_error_fmt("invalid storage class for function \"%s\"", yy_sym2str(rcc, name));
+			}
 		}
 		if (!(d->flags & C_DCL_DEFINITION)
 		 && (d->type->attr & C_ATTR_OLD_FUNC)
