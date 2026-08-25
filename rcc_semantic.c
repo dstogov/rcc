@@ -159,7 +159,7 @@ static void ir_memzero(rcc_ctx *rcc, ir_ref dst, ir_ref size, uint32_t align);
 
 static bool c_valid_alignment(c_value *val)
 {
-	return ((C_IS_TYPE_SIGNED(val->type) && val->u.val.i64 >= 0)
+	return ((C_IS_TYPE_UNSIGNED(val->type) || val->u.val.i64 >= 0)
 	 && val->u.val.u64 != 0
 	 && (val->u.val.u64 & (val->u.val.u64 - 1)) == 0);
 }
