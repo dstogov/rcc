@@ -2066,22 +2066,22 @@ void c_finish_enum_type(rcc_ctx *rcc, c_type *type, c_dcl *d, int64_t min, uint6
 	IR_ASSERT(type && type->kind == C_TYPE_ENUM);
 	type->attr |= d->attr & C_ENUM_ATTRS;
 	if (!type->enumeration.kind) {
-		if ((type->attr & C_ATTR_PACKED) && min >= -0x7FLL-1 && max <= 0x7FULL) {
-			type->enumeration.kind = C_TYPE_I8;
-			type->size = sizeof(int8_t);
-			type->attr |= c_align2attr(_Alignof(int8_t));
-		} else if ((type->attr & C_ATTR_PACKED) && min >= 0 && max <= 0xFFULL) {
+		if ((type->attr & C_ATTR_PACKED) && min >= 0 && max <= 0xFFULL) {
 			type->enumeration.kind = C_TYPE_U8;
 			type->size = sizeof(uint8_t);
 			type->attr |= c_align2attr(_Alignof(uint8_t));
-		} else if ((type->attr & C_ATTR_PACKED) && min >= -0x7FFFLL-1 && max <= 0x7FFFULL) {
-			type->enumeration.kind = C_TYPE_I16;
-			type->size = sizeof(int16_t);
-			type->attr |= c_align2attr(_Alignof(int16_t));
+		} else if ((type->attr & C_ATTR_PACKED) && min >= -0x7FLL-1 && max <= 0x7FULL) {
+			type->enumeration.kind = C_TYPE_I8;
+			type->size = sizeof(int8_t);
+			type->attr |= c_align2attr(_Alignof(int8_t));
 		} else if ((type->attr & C_ATTR_PACKED) && min >= 0 && max <= 0xFFFFULL) {
 			type->enumeration.kind = C_TYPE_U16;
 			type->size = sizeof(uint16_t);
 			type->attr |= c_align2attr(_Alignof(uint16_t));
+		} else if ((type->attr & C_ATTR_PACKED) && min >= -0x7FFFLL-1 && max <= 0x7FFFULL) {
+			type->enumeration.kind = C_TYPE_I16;
+			type->size = sizeof(int16_t);
+			type->attr |= c_align2attr(_Alignof(int16_t));
 		} else if (min >= 0 && max <= 0xFFFFFFFFULL) {
 			type->enumeration.kind = C_TYPE_U32;
 			type->size = sizeof(uint32_t);
@@ -2106,6 +2106,7 @@ void c_finish_enum_type(rcc_ctx *rcc, c_type *type, c_dcl *d, int64_t min, uint6
 		}
 	}
 
+	type->attr &= ~C_ATTR_PACKED;
 	if ((d->attr & C_ATTR_ALIGN_MASK) > (type->attr & C_ATTR_ALIGN_MASK)) {
 		type->attr &= ~C_ATTR_ALIGN_MASK;
 		type->attr |= (d->attr & C_ATTR_ALIGN_MASK);
