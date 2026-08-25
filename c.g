@@ -373,6 +373,8 @@ type_specifier_or_qualifier(rcc_ctx *rcc, c_dcl *d):       {c_name name;}
 	|	                                                   {if (!d->type || d->type->kind != C_TYPE_POINTER) yy_error("invalid use of \"restrict\"");}
 		("restrict"|"__restrict"|"__restrict__")           {d->attr |= C_ATTR_RESTRICT;}
 	|	("volatile"|"__volatile"|"__volatile__")           {d->attr |= C_ATTR_VOLATILE;}
+	|                                                      {yy_error_fmt("unsupported type \"%s\"", yy_sym2str(rcc, sym));}
+		("__int128"|"__int128_t"|"__uint128_t")
 	)
 ;
 

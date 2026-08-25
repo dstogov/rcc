@@ -170,6 +170,9 @@
 	_("__unaligned",                   YY___UNALIGNED)                 \
 	_("__volatile",                    YY___VOLATILE)                  \
 	_("__volatile__",                  YY___VOLATILE__)                \
+	_("__int128",                      YY___INT128)                    \
+	_("__int128_t",                    YY___INT128_T)                  \
+	_("__uint128_t",                   YY___UINT128_T)                 \
 	_("__builtin_va_start",            YY___BUILTIN_VA_START)          \
 	_("__builtin_va_arg",              YY___BUILTIN_VA_ARG)            \
 	_("__builtin_va_end",              YY___BUILTIN_VA_END)            \
