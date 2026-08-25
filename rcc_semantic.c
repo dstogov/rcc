@@ -2899,7 +2899,7 @@ void c_gcc_attribute_alias(rcc_ctx *rcc, c_dcl *d, c_name attr, c_value *val)
 	}
 }
 
-static int8_t c_parse_reg_name(rcc_ctx *rcc, const char *str, bool variable)
+static int8_t c_parse_reg_name(rcc_ctx *rcc, const char *str, const char *end, bool variable)
 {
 	int8_t reg = 0;
 	const char *s = str;
@@ -3018,7 +3018,7 @@ static int8_t c_parse_reg_name(rcc_ctx *rcc, const char *str, bool variable)
 	} else {
 		goto error;
 	}
-	if (*s != 0) goto error;
+	if (s != end && *s != 0) goto error;
 
 	if (variable) {
 		if (reg == 4) yy_error_fmt("cannot use register \"%s\" for variable", str);
@@ -3103,7 +3103,7 @@ error:
 	} else {
 		goto error;
 	}
-	if (*s != 0) goto error;
+	if (s != end && *s != 0) goto error;
 
 	if (variable) {
 		if (reg == 4) yy_error_fmt("cannot use register \"%s\" for variable", str);
@@ -3133,7 +3133,7 @@ error:
 	} else {
 		goto error;
 	}
-	if (*s != 0) goto error;
+	if (s != end && *s != 0) goto error;
 
 	if (variable) {
 		if (reg == IR_REG_INT_TMP
@@ -3147,7 +3147,7 @@ error:
 
 error:
 #endif
-	yy_error_fmt("invalid register \"%s\"", str);
+	if (!end) yy_error_fmt("invalid register \"%s\"", str);
 	return IR_REG_NONE;
 }
 
@@ -3159,7 +3159,7 @@ void c_asm_alias(rcc_ctx *rcc, c_dcl *d, c_value *val)
 
 	if ((d->flags & C_DCL_STORAGE_CLASS) == C_DCL_REGISTER) {
 		d->flags |= C_DCL_REG_VAR;
-		d->reg = c_parse_reg_name(rcc, (const char*)val->u.val.ptr, 1);
+		d->reg = c_parse_reg_name(rcc, (const char*)val->u.val.ptr, NULL, 1);
 	} else if ((d->flags & (C_DCL_EXTERN|C_DCL_STATIC))
 	 || !rcc->active_scope
 	 || (d->type && d->type->kind == C_TYPE_FUNC)) {
@@ -9970,8 +9970,19 @@ yy_sym c_get_current_func_name(rcc_ctx *rcc)
 void c_do_asm_operand_constraint(rcc_ctx *rcc, c_asm *a, bool out, int n, c_name name, c_value *constraint)
 {
 	c_asm_operand *op = &a->ops[n];
-	const char *p, *s;
+	const char *p, *s, *reg_name;
 	int num;
+	int8_t reg;
+
+	if (name && n) {
+		int i;
+
+		for (i = 0; i < n; i++) {
+			if (a->ops[i].id == name && a->ops[i].flags != C_ASM_OP_LABEL) {
+				yy_error_fmt("duplicate \"__asm__\" operand name \"%s\"", yy_sym2str(rcc, name));
+			}
+		}
+	}
 
 	op->flags = out ? C_ASM_OP_OUTPUT : C_ASM_OP_INPUT;
 	op->id = name;
@@ -10010,12 +10021,23 @@ next:
 				break;
 			case '{':
 				p++;
+				reg_name = p;
 				while (*p) {
 					if (!*p) goto error;
 					if (*p == '}') break;
 					p++;
 				}
-				// TODO: int8_t reg = c_parse_reg_name(rcc, val->u.val.ptr, 0);
+				reg = c_parse_reg_name(rcc, reg_name, p, 0);
+				if (reg == IR_REG_NONE) goto error;
+				if (reg >= IR_REG_GP_FIRST && reg <= IR_REG_GP_LAST) {
+					op->flags |= C_ASM_OP_REG_INT;
+					// TODO: remember register
+				} else if (reg >= IR_REG_GP_FIRST && reg <= IR_REG_FP_LAST) {
+					op->flags |= C_ASM_OP_REG_FP;
+					// TODO: remember register
+				} else {
+					IR_ASSERT(0);
+				}
 				break;
 			case 'm':
 			case 'o':
@@ -10171,7 +10193,7 @@ void c_do_asm_clobbers(rcc_ctx *rcc, c_asm *a, c_value *val)
 	} else if (strcmp(str, "redzone") == 0) {
 		a->flags |= C_ASM_CLOBBERS_REDZONE;
 	} else {
-		int8_t reg = c_parse_reg_name(rcc, val->u.val.ptr, 0);
+		int8_t reg = c_parse_reg_name(rcc, val->u.val.ptr, NULL, 0);
 		ir_regset regset= a->clobbers;
 
 		IR_REGSET_INCL(regset, reg);
@@ -10233,8 +10255,12 @@ void c_do_asm(rcc_ctx *rcc, c_value *asm_str, c_asm *a, int n)
 					n_in++;
 				}
 			} else {
-				if ((op->flags & C_ASM_OP_MEM) && c_value_is_lval(&op->val)) {
-					in[i] = op->val.u.ref;
+				if (op->flags & C_ASM_OP_MEM) {
+					if (c_value_is_lval(&op->val)) {
+						in[i] = op->val.u.ref;
+					} else {
+						yy_error_fmt("\"__asm__\" memory input %d is not directly addressable", i);
+					}
 				} else {
 					IR_ASSERT(0);
 				}
@@ -10243,8 +10269,12 @@ void c_do_asm(rcc_ctx *rcc, c_value *asm_str, c_asm *a, int n)
 		} else if (op->flags & C_ASM_OP_INPUT) {
 			if (op->flags & (C_ASM_OP_REG_INT|C_ASM_OP_REG_FP|C_ASM_OP_IMM_INT|C_ASM_OP_IMM_FP)) {
 				in[i] = c_value_ref(rcc, &op->val);
-			} else if ((op->flags & C_ASM_OP_MEM) && c_value_is_lval(&op->val)) {
-				in[i] = op->val.u.ref;
+			} else if (op->flags & C_ASM_OP_MEM) {
+				if (c_value_is_lval(&op->val)) {
+					in[i] = op->val.u.ref;
+				} else {
+					yy_error_fmt("\"__asm__\" memory input %d is not directly addressable", i);
+				}
 			} else {
 				IR_ASSERT(0);
 			}
@@ -10257,7 +10287,7 @@ void c_do_asm(rcc_ctx *rcc, c_value *asm_str, c_asm *a, int n)
 	ref = ir_emit_N(rcc->active_ctx, IR_OPT(IR_ASM, type), 2 + n_in + ((n || a->clobbers) ? 1 : 0));
 	ir_set_op(rcc->active_ctx, ref, 1, rcc->active_ctx->control);
 	ir_set_op(rcc->active_ctx, ref, 2,
-		ir_const_str(rcc->active_ctx, ir_stringl(rcc->active_ctx, asm_str->u.val.ptr, asm_str->u.ref)));
+		ir_const_str(rcc->active_ctx, ir_stringl(rcc->active_ctx, asm_str->u.val.ptr, asm_str->u.ref - 1)));
 	rcc->active_ctx->control = ref;
 
 	if (n || a->clobbers) {
