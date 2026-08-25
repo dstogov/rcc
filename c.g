@@ -298,14 +298,6 @@ declaration_specifiers(rcc_ctx *rcc, c_dcl *d):
 	)+
 ;
 
-specifier_qualifier_list(rcc_ctx *rcc, c_dcl *d):
-	(	?{!C_IS_ID(sym) || is_typedef_name2(rcc, sym, d)}
-		(	type_specifier_or_qualifier(rcc, d)
-		|	attributes(rcc, d)
-		)
-	)+
-;
-
 type_qualifier_list(rcc_ctx *rcc, c_dcl *d):
 	(	type_qualifier(rcc, d)
 	|	attributes(rcc, d)
@@ -530,7 +522,12 @@ struct_contents(rcc_ctx *rcc, c_type *t, c_dcl *d):        {t->record.fields = a
 
 struct_declaration(rcc_ctx *rcc, c_type *t):               {c_dcl field0 = {0};}
 		"__extension__"?
-		specifier_qualifier_list(rcc, &field0)
+		(	?{!C_IS_ID(sym) || is_typedef_name2(rcc, sym, &field0)}
+			(	type_specifier_or_qualifier(rcc, &field0)
+			|	alignment_specifier(rcc, &field0)
+			|	attributes(rcc, &field0)
+			)
+		)+
 		(                                                  {c_dcl field = field0;}
 			struct_declarator(rcc, t, &field)
 			(	","                                        {field = field0;}
@@ -718,7 +715,11 @@ identifier_list(rcc_ctx *rcc, c_param **params, uint32_t *num_params):
 ;
 
 type_name(rcc_ctx *rcc, const c_type **t):                 {c_dcl d = {0};}
-	specifier_qualifier_list(rcc, &d)
+	(	?{!C_IS_ID(sym) || is_typedef_name2(rcc, sym, &d)}
+		(	type_specifier_or_qualifier(rcc, &d)
+		|	attributes(rcc, &d)
+		)
+	)+
 	abstract_declarator(rcc, &d)                           {*t = c_resolve_type(rcc, &d);}
 ;
 
