@@ -751,11 +751,12 @@ nested_initializer(rcc_ctx *rcc, c_sym *obj, c_init *init, bool b):
 ;
 
 nested_initializer_contents(rcc_ctx *rcc, c_sym *obj, c_init *init):
-	"{"
+	"{"                                                    {uint32_t orig_level = init->level;}
 	(	(	?{!C_IS_ID(sym) || is_label(rcc, sym)}
 			gcc_field_initializer(rcc, obj, init)
 		|	nested_initializer(rcc, obj, init, 0)
-		|	designated_initializer(rcc, obj, init)
+		|                                                  {init->level = orig_level;}
+			designated_initializer(rcc, obj, init)
 		)
 		(	","
 			(	&"}"                                       {break; /* manual conflict resolution */}
@@ -764,7 +765,8 @@ nested_initializer_contents(rcc_ctx *rcc, c_sym *obj, c_init *init):
 				gcc_field_initializer(rcc, obj, init)
 			|                                              {c_do_init_next(rcc, obj, init);}
 				nested_initializer(rcc, obj, init, 0)
-			|	designated_initializer(rcc, obj, init)
+			|                                              {init->level = orig_level;}
+				designated_initializer(rcc, obj, init)
 			)
 		)*
 	)?
