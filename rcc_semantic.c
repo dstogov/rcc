@@ -2185,6 +2185,17 @@ void c_declare_struct_field(rcc_ctx *rcc, c_type *type, c_name name, c_dcl *fiel
 
 	IR_ASSERT(type->kind == C_TYPE_STRUCT || type->kind == C_TYPE_UNION);
 
+#ifndef _WIN32
+	// TODO: this behavior should be enabled/disabled by -f[no]-ms-extensions (see: gcc/testsuite/gcc.dg/20020527-1.c) ???
+	if (!name
+	 && field->type
+	 && (field->type->kind == C_TYPE_STRUCT || field->type->kind == C_TYPE_UNION)
+	 && ((field->flags & C_TYPE_SPEC_NAME) || field->type->tag)) {
+		yy_warning("declaration does not declare anything");
+		return;
+	}
+#endif
+
 	c_finalize_type(rcc, field);
 	if (field->type->kind == C_TYPE_VOID) yy_error_fmt("field \"%s\" declared void", yy_sym2str(rcc, name));
 	if (field->type->kind == C_TYPE_FUNC) yy_error_fmt("field \"%s\" declared as a function", yy_sym2str(rcc, name));
