@@ -752,7 +752,8 @@ nested_initializer(rcc_ctx *rcc, c_sym *obj, c_init *init, bool b):
 
 nested_initializer_contents(rcc_ctx *rcc, c_sym *obj, c_init *init):
 	"{"                                                    {uint32_t orig_level = init->level;}
-	(	(	?{!C_IS_ID(sym) || is_label(rcc, sym)}
+	(                                                      {if (obj->value.type->attr & C_ATTR_VLA) yy_error("variable length array may not be initialized except with an empty initializer");}
+		(	?{!C_IS_ID(sym) || is_label(rcc, sym)}
 			gcc_field_initializer(rcc, obj, init)
 		|	nested_initializer(rcc, obj, init, 0)
 		|                                                  {init->level = orig_level;}

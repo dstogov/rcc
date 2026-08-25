@@ -8957,10 +8957,6 @@ void c_do_init_start(rcc_ctx *rcc, c_sym *obj, c_init *init)
 {
 	const c_type *type = obj->value.type;
 
-	if (type->attr & C_ATTR_VLA) {
-		IR_ASSERT(type->kind == C_TYPE_ARRAY);
-		yy_error("variable length array may not be initialized except with an empty initializer");
-	}
 	init->size = type->size;
 	init->level = 0;
 	init->ranges = 0;
