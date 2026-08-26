@@ -514,7 +514,7 @@ struct_contents(rcc_ctx *rcc, c_type *t, c_dcl *d):        {t->record.fields = a
 				"}"
 			|	struct_declaration(rcc, t)
 			)
-		)+
+		)*
 	|	";"
 	|	/* empty */
 	)
