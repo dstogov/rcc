@@ -4715,10 +4715,26 @@ void c_do_neg(rcc_ctx *rcc, c_value *v)
 		v->u.ref = ir_NEG(v->u.type, c_value_ref(rcc, v));
 	} else {
 		switch (v->u.type) {
-			case IR_I32:    v->u.val.i64 = -v->u.val.i32; break;
-			case IR_U32:    v->u.val.u64 = -v->u.val.u32; break;
+			case IR_I32:
+				if (v->u.val.u32 == 0x80000000) {
+					yy_warning("integer overflow in expression");
+				} else {
+					v->u.val.i64 = -v->u.val.i32;
+				}
+				break;
+			case IR_U32:
+				v->u.val.u64 = -v->u.val.u32;
+				break;
 			case IR_I64:
-			case IR_U64:    v->u.val.i64 = -v->u.val.i64; break;
+				if (v->u.val.u64 == 0x8000000000000000) {
+					yy_warning("integer overflow in expression");
+				} else {
+					v->u.val.i64 = -v->u.val.i64;
+				}
+				break;
+			case IR_U64:
+				v->u.val.u64 = -v->u.val.u64;
+				break;
 			case IR_FLOAT:  v->u.val.f = -v->u.val.f; break;
 			case IR_DOUBLE: v->u.val.d = -v->u.val.d; break;
 			default: IR_ASSERT(0); return;
