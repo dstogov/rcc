@@ -1276,7 +1276,7 @@ static yy_sym parse_abstract_declarator(yy_sym sym, rcc_ctx *rcc, c_dcl *d) {
 			sym = parse_arrays_and_params(sym, rcc, d, 0, 0);
 		}
 		c_make_nested_type(rcc, d, &d2);
-	} else if (sym == YY__LPAREN || sym == YY__LBRACK || sym == YY__RPAREN || sym == YY__COLON) {
+	} else if (sym == YY__LPAREN || sym == YY__LBRACK || sym == YY__RPAREN || sym == YY__COMMA || sym == YY__COLON) {
 		if (sym == YY__LPAREN || sym == YY__LBRACK) {
 			sym = parse_arrays_and_params(sym, rcc, d, 0, 0);
 		}
@@ -2249,6 +2249,7 @@ static yy_sym parse_unary_expression(yy_sym sym, rcc_ctx *rcc, c_value *val) {
 		sym = parse_strings(sym, rcc, &v);
 	} else if (sym == YY__GENERIC) {
 		c_generic g;
+		bool is_type;
 		sym = get_sym();
 		c_do_generic_start(rcc, &g);
 		if (sym != YY__LPAREN) {
@@ -2256,8 +2257,16 @@ static yy_sym parse_unary_expression(yy_sym sym, rcc_ctx *rcc, c_value *val) {
 		}
 		sym = get_sym();
 		c_value_clear(&v);
-		sym = parse_assignment_expression(sym, rcc, &v);
-		c_do_generic_type(rcc, &g, v.type);
+		if ((sym == YY_VOID || sym == YY_CHAR || sym == YY_SHORT || sym == YY_INT || sym == YY_LONG || sym == YY_FLOAT || sym == YY_DOUBLE || sym == YY_SIGNED || sym == YY___SIGNED || sym == YY___SIGNED__ || sym == YY_UNSIGNED || sym == YY__BOOL || sym == YY__COMPLEX || sym == YY___COMPLEX || sym == YY___COMPLEX__ || sym == YY__ATOMIC || sym == YY_TYPEOF || sym == YY___TYPEOF || sym == YY___TYPEOF__ || sym == YY_STRUCT || sym == YY_UNION || sym == YY_ENUM || C_IS_ID(sym) || sym == YY_CONST || sym == YY___CONST || sym == YY___CONST__ || sym == YY_RESTRICT || sym == YY___RESTRICT || sym == YY___RESTRICT__ || sym == YY_VOLATILE || sym == YY___VOLATILE || sym == YY___VOLATILE__ || sym == YY___INT128 || sym == YY___INT128_T || sym == YY___UINT128_T || sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__ || sym == YY___DECLSPEC || sym == YY___CDECL || sym == YY___FASTCALL || sym == YY___UNALIGNED) && (!C_IS_ID(sym) || is_typedef_name(rcc, sym))) {
+			sym = parse_type_name(sym, rcc, &v.type);
+			is_type = 1;
+		} else if (sym == YY__LPAREN || C_IS_ID(sym) || sym == YY_DECIMAL_NUMBER || sym == YY_OCTAL_NUMBER || sym == YY_HEXADECIMAL_NUMBER || sym == YY_BINARY_NUMBER || sym == YY_FLOATING_NUMBER || sym == YY_HEXADECIMAL_FLOATING_NUMBER || sym == YY_CHARACTER || sym == YY_STRING || sym == YY__GENERIC || sym == YY___EXTENSION__ || sym == YY__PLUS_PLUS || sym == YY__MINUS_MINUS || sym == YY__AND || sym == YY__STAR || sym == YY__PLUS || sym == YY__MINUS || sym == YY__TILDE || sym == YY__BANG || sym == YY_SIZEOF || sym == YY__ALIGNOF || sym == YY___ALIGNOF__ || sym == YY___ALIGNOF || sym == YY__AND_AND || sym == YY___BUILTIN_VA_START || sym == YY___BUILTIN_VA_END || sym == YY___BUILTIN_VA_COPY || sym == YY___BUILTIN_ALLOCA || sym == YY___BUILTIN_ABORT || sym == YY___BUILTIN_TRAP || sym == YY___BUILTIN_DEBUGTRAP || sym == YY___BUILTIN_FRAME_ADDRESS || sym == YY___BUILTIN_ABS || sym == YY___BUILTIN_LABS || sym == YY___BUILTIN_LLABS || sym == YY___BUILTIN_FABS || sym == YY___BUILTIN_FABSF || sym == YY___BUILTIN_BSWAP16 || sym == YY___BUILTIN_BSWAP32 || sym == YY___BUILTIN_BSWAP64 || sym == YY___BUILTIN_POPCOUNT || sym == YY___BUILTIN_POPCOUNTL || sym == YY___BUILTIN_POPCOUNTLL || sym == YY___BUILTIN_CLZ || sym == YY___BUILTIN_CLZL || sym == YY___BUILTIN_CLZLL || sym == YY___BUILTIN_CTZ || sym == YY___BUILTIN_CTZL || sym == YY___BUILTIN_CTZLL || sym == YY___BUILTIN_FFS || sym == YY___BUILTIN_FFSL || sym == YY___BUILTIN_FFSLL || sym == YY___BUILTIN_MEMCPY || sym == YY___BUILTIN_MEMSET || sym == YY___BUILTIN_EXPECT || sym == YY___BUILTIN_PREFETCH || sym == YY___BUILTIN_UNREACHABLE || sym == YY___BUILTIN_HUGE_VAL || sym == YY___BUILTIN_HUGE_VALF || sym == YY___BUILTIN_INF || sym == YY___BUILTIN_INFF || sym == YY___BUILTIN_ISUNORDERED || sym == YY___BUILTIN_NAN || sym == YY___BUILTIN_NANF || sym == YY___BUILTIN_ADD_OVERFLOW || sym == YY___BUILTIN_ADD_OVERFLOW_P || sym == YY___BUILTIN_SADD_OVERFLOW || sym == YY___BUILTIN_SADDL_OVERFLOW || sym == YY___BUILTIN_SADDLL_OVERFLOW || sym == YY___BUILTIN_UADD_OVERFLOW || sym == YY___BUILTIN_UADDL_OVERFLOW || sym == YY___BUILTIN_UADDLL_OVERFLOW || sym == YY___BUILTIN_SUB_OVERFLOW || sym == YY___BUILTIN_SUB_OVERFLOW_P || sym == YY___BUILTIN_SSUB_OVERFLOW || sym == YY___BUILTIN_SSUBL_OVERFLOW || sym == YY___BUILTIN_SSUBLL_OVERFLOW || sym == YY___BUILTIN_USUB_OVERFLOW || sym == YY___BUILTIN_USUBL_OVERFLOW || sym == YY___BUILTIN_USUBLL_OVERFLOW || sym == YY___BUILTIN_MUL_OVERFLOW || sym == YY___BUILTIN_MUL_OVERFLOW_P || sym == YY___BUILTIN_SMUL_OVERFLOW || sym == YY___BUILTIN_SMULL_OVERFLOW || sym == YY___BUILTIN_SMULLL_OVERFLOW || sym == YY___BUILTIN_UMUL_OVERFLOW || sym == YY___BUILTIN_UMULL_OVERFLOW || sym == YY___BUILTIN_UMULLL_OVERFLOW || sym == YY___BUILTIN_SHUFFLE || sym == YY___BUILTIN_SHUFFLEVECTOR || sym == YY___BUILTIN_CONSTANT_P || sym == YY___BUILTIN_CLASSIFY_TYPE || sym == YY___BUILTIN_VA_ARG || sym == YY___BUILTIN_CONVERTVECTOR) {
+			sym = parse_assignment_expression(sym, rcc, &v);
+			is_type = 0;
+		} else {
+			yy_error_sym("unexpected", sym);
+		}
+		c_do_generic_type(rcc, &g, v.type, is_type);
 		if (sym != YY__COMMA) {
 			yy_error_sym("',' expected, got", sym);
 		}

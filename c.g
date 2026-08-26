@@ -1078,9 +1078,13 @@ unary_expression(rcc_ctx *rcc, c_value *val):
 	|	CHARACTER(rcc, &v)
 	|	strings(rcc, &v)
 	|                                                      {c_generic g;}
+	                                                       {bool is_type;}
 		"_Generic"                                         {c_do_generic_start(rcc, &g);}
 		"("	                                               {c_value_clear(&v);}
-		assignment_expression(rcc, &v)                     {c_do_generic_type(rcc, &g, v.type);}
+		(	?{!C_IS_ID(sym) || is_typedef_name(rcc, sym)}
+			type_name(rcc, &v.type)                        {is_type = 1;}
+		|   assignment_expression(rcc, &v)                 {is_type = 0;}
+		)                                                  {c_do_generic_type(rcc, &g, v.type, is_type);}
 		(
 			","
 			(	type_name(rcc, &t)

@@ -9690,18 +9690,20 @@ void c_do_generic_start(rcc_ctx *rcc, c_generic *g)
 	g->last_control = rcc->active_ctx->control;
 }
 
-void c_do_generic_type(rcc_ctx *rcc, c_generic *g, const c_type *type)
+void c_do_generic_type(rcc_ctx *rcc, c_generic *g, const c_type *type, bool is_type)
 {
-	if (type->attr & (C_ATTR_CONST|C_ATTR_VOLATILE)) {
-		/* remove top-level qualifiers */
-		c_type *t = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
-		*t = *type;
-		if (rcc->active_scope) t->flags &= ~C_TYPE_GLOBAL;
-		t->attr &= ~(C_ATTR_CONST|C_ATTR_VOLATILE);
-		type = t;
-	}
-	if (type->kind == C_TYPE_FUNC) {
-		type = c_create_pointer_type(rcc, type);
+	if (!is_type) {
+		if (type->attr & (C_ATTR_CONST|C_ATTR_VOLATILE)) {
+			/* remove top-level qualifiers */
+			c_type *t = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
+			*t = *type;
+			if (rcc->active_scope) t->flags &= ~C_TYPE_GLOBAL;
+			t->attr &= ~(C_ATTR_CONST|C_ATTR_VOLATILE);
+			type = t;
+		}
+		if (type->kind == C_TYPE_FUNC) {
+			type = c_create_pointer_type(rcc, type);
+		}
 	}
 	g->type = type;
 }

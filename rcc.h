@@ -1216,7 +1216,7 @@ void c_do_init_expr_start(rcc_ctx *rcc, c_sym *obj, const c_type *t);
 void c_do_init_expr_end(rcc_ctx *rcc, c_value *v, c_sym *obj, size_t size);
 
 void c_do_generic_start(rcc_ctx *rcc, c_generic *g);
-void c_do_generic_type(rcc_ctx *rcc, c_generic *g, const c_type *t);
+void c_do_generic_type(rcc_ctx *rcc, c_generic *g, const c_type *t, bool is_type);
 void c_do_generic_case(rcc_ctx *rcc, c_generic *g, const c_type *t, c_value *v);
 void c_do_generic_default(rcc_ctx *rcc, c_generic *g, c_value *v);
 void c_do_generic_end(rcc_ctx *rcc, c_value *res, c_generic *g);
