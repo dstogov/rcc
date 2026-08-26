@@ -157,11 +157,21 @@ static ir_ref c_value_ref(rcc_ctx *rcc, c_value *val);
 static void c_do_cvt(rcc_ctx *rcc, const c_type *t, ir_type type, c_value *v);
 static void ir_memzero(rcc_ctx *rcc, ir_ref dst, ir_ref size, uint32_t align);
 
-static bool c_valid_alignment(c_value *val)
+static bool c_valid_alignment(rcc_ctx *rcc, c_value *val, const char *prefix, c_name sym)
 {
-	return ((C_IS_TYPE_UNSIGNED(val->type) || val->u.val.i64 >= 0)
-	 && val->u.val.u64 != 0
-	 && (val->u.val.u64 & (val->u.val.u64 - 1)) == 0);
+	if (!c_value_is_const(val) || !C_IS_TYPE_INT(val->type)) {
+		yy_error_fmt("%s\"%s\" value must be an integer constant", prefix, yy_sym2str(rcc, sym));
+		return 0;
+	} else if (!((C_IS_TYPE_UNSIGNED(val->type) || val->u.val.i64 >= 0)
+			&& val->u.val.u64 != 0
+			&& (val->u.val.u64 & (val->u.val.u64 - 1)) == 0)) {
+		yy_error_fmt("%s\"%s\" value must be a power of two", prefix, yy_sym2str(rcc, sym));
+		return 0;
+	} else if (val->u.val.u64 > 0x10000000) {
+		yy_error_fmt("%s\"%s\" value is too big", prefix, yy_sym2str(rcc, sym));
+		return 0;
+	}
+	return 1;
 }
 
 ir_type c_type2ir(rcc_ctx *rcc, const c_type *t)
@@ -2778,15 +2788,9 @@ void c_gcc_attribute_aligned(rcc_ctx *rcc, c_dcl *d, c_name attr, c_value *val)
 {
 	if (!c_value_is_set(val)) {
 		// TODO: ???
-	} else if (!c_value_is_const(val) || !C_IS_TYPE_INT(val->type)) {
-		yy_warning("attribute \"aligned\" value must be an integer constant");
-	} else {
-		if (!c_valid_alignment(val)) {
-			yy_warning("attribute \"aligned\" value must be a power of two");
-		} else {
-			if ((d->attr & C_ATTR_ALIGN_MASK) != 0) yy_warning("multiple alignments");
-			d->attr |= c_align2attr(val->u.val.u64);
-		}
+	} else if (c_valid_alignment(rcc, val, "attribute ", YY_ALIGNED)) {
+		if ((d->attr & C_ATTR_ALIGN_MASK) != 0) yy_warning("multiple alignments");
+		d->attr |= c_align2attr(val->u.val.u64);
 	}
 }
 
@@ -3201,15 +3205,9 @@ void c_asm_alias(rcc_ctx *rcc, c_dcl *d, c_value *val)
 
 void c_declspec_align(rcc_ctx *rcc, c_dcl *d, c_value *val)
 {
-	if (!c_value_is_set(val) || !c_value_is_const(val) || !C_IS_TYPE_INT(val->type)) {
-		yy_warning("declspec \"align\" value must be an integer constant");
-	} else {
-		if (!c_valid_alignment(val)) {
-			yy_warning("declspec \"align\" value must be a power of two");
-		} else {
-			if ((d->attr & C_ATTR_ALIGN_MASK) != 0) yy_warning("multiple alignments");
-			d->attr |= c_align2attr(val->u.val.u64);
-		}
+	if (c_value_is_set(val) && c_valid_alignment(rcc, val, "declspec ", YY_ALIGN)) {
+		if ((d->attr & C_ATTR_ALIGN_MASK) != 0) yy_warning("multiple alignments");
+		d->attr |= c_align2attr(val->u.val.u64);
 	}
 }
 
@@ -3326,7 +3324,7 @@ void c_sizeof_expr(rcc_ctx *rcc, yy_sym op, c_value *expr, ir_ref old_control)
 			}
 		}
 	} else {
-		IR_ASSERT(op == YY___ALIGNOF || op == YY___ALIGNOF__);
+		IR_ASSERT(op == YY__ALIGNOF || op == YY___ALIGNOF || op == YY___ALIGNOF__);
 		if (C_IS_BIT_FIELD(expr->u.proto)) {
 			yy_error_fmt("\"%s\" applied to a bit-field", yy_sym2str(rcc, op));
 		} else if (expr->type->kind == C_TYPE_BOOL
@@ -3358,12 +3356,9 @@ void c_alignof_type(rcc_ctx *rcc, c_value *res, const c_type *type)
 
 void c_alignas_expr(rcc_ctx *rcc, c_dcl *dcl, c_value *expr)
 {
-	if (!c_value_is_const(expr) || !C_IS_TYPE_INT(expr->type)) {
-		yy_error("_Alignas width not an integer constant");
-	} else if (!c_valid_alignment(expr)) {
-		yy_error("_Alignas value must be a power of two");
+	if (c_valid_alignment(rcc, expr, "", YY__ALIGNAS)) {
+		dcl->attr |= c_align2attr(expr->u.val.u64);
 	}
-	dcl->attr |= c_align2attr(expr->u.val.u64);
 }
 
 const c_type *c_typeof_expr(rcc_ctx *rcc, c_value *expr, ir_ref old_control)

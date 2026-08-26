@@ -1131,9 +1131,7 @@ unary_expression(rcc_ctx *rcc, c_value *val):
                                                            {c_value_clear(&v);}
 			unary_expression(rcc, &v)                      {c_sizeof_expr(rcc, op, &v, old);}
 		)
-	|	"_Alignof"
-		"(" type_name(rcc, &t) ")"                         {c_alignof_type(rcc, &v, t);}
-	|	("__alignof__"|"__alignof")
+	|	("_Alignof"|"__alignof__"|"__alignof")
 		(	&"(" "("
 			(	?{!C_IS_ID(sym) || is_typedef_name(rcc, sym)}
 				type_name(rcc, &t)
@@ -1228,6 +1226,20 @@ unary_expression(rcc_ctx *rcc, c_value *val):
 		"("                                                {c_value_clear(&v);}
 		assignment_expression(rcc, &v)                     {c_do_end_nocode(rcc, old);}
 		")"                                                {c_do_builtin_constant_p(rcc, &v);}
+	|                                                      {c_value dummy, *v1, *v2;}
+	                                                       {ir_ref old;}
+	                                                       {bool b;}
+		"__builtin_choose_expr"                            {c_value_clear(&dummy);}
+		"("                                                {c_value_clear(&v);}
+		assignment_expression(rcc, &v)                     {if (!c_value_is_const(&v)) yy_error("first argument to \"__builtin_choose_expr\" not a constant");}
+		                                                   {b = c_value_is_true(&v);}
+														   {v1 = b ? &v : &dummy;}
+														   {v2 = b ? &dummy : &v;}
+		","                                                {if (!b) old = c_do_nocode(rcc);}
+		assignment_expression(rcc, v1)                     {if (!b) c_do_end_nocode(rcc, old);}
+		","                                                {if (b) old = c_do_nocode(rcc);}
+		assignment_expression(rcc, v2)                     {if (b) c_do_end_nocode(rcc, old);}
+		")"
 	|	"__builtin_classify_type"
 		"("
 		(	?{!C_IS_ID(sym) || is_typedef_name(rcc, sym)}

@@ -182,6 +182,7 @@
 	_("__builtin_trap" ,               YY___BUILTIN_TRAP)              \
 	_("__builtin_debugtrap",           YY___BUILTIN_DEBUGTRAP)         \
 	_("__builtin_frame_address",       YY___BUILTIN_FRAME_ADDRESS)     \
+	_("__builtin_choose_expr",         YY___BUILTIN_CHOOSE_EXPR)       \
 	_("__builtin_classify_type",       YY___BUILTIN_CLASSIFY_TYPE)     \
 	_("__builtin_constant_p",          YY___BUILTIN_CONSTANT_P)        \
 	_("__builtin_types_compatible_p",  YY___BUILTIN_TYPES_COMPATIBLE_P)\
