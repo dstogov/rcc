@@ -5502,6 +5502,89 @@ void c_do_builtin_constant_p(rcc_ctx *rcc, c_value *val)
 	c_value_set_const(val, &c_type_i32, IR_I32, v);
 }
 
+void c_do_builtin_classify_type(rcc_ctx *rcc, c_value *val, const c_type *type)
+{
+	enum gcc_type_class {
+		no_type_class = -1,
+		void_type_class, integer_type_class, char_type_class,
+		enumeral_type_class, boolean_type_class,
+		pointer_type_class, reference_type_class, offset_type_class,
+		real_type_class, complex_type_class,
+		function_type_class, method_type_class,
+		record_type_class, union_type_class,
+		array_type_class, string_type_class,
+		lang_type_class, opaque_type_class,
+		bitint_type_class, vector_type_class
+	};
+	ir_val v;
+
+	switch (type->kind) {
+		case C_TYPE_VOID:
+			v.i64 = void_type_class;
+			break;
+		case C_TYPE_U8:
+		case C_TYPE_U16:
+		case C_TYPE_U32:
+		case C_TYPE_UL:
+		case C_TYPE_ULL:
+		case C_TYPE_I8:
+		case C_TYPE_I16:
+		case C_TYPE_I32:
+		case C_TYPE_IL:
+		case C_TYPE_ILL:
+			v.i64 = integer_type_class;
+			break;
+		case C_TYPE_CHAR:
+			v.i64 = char_type_class;
+			break;
+		case C_TYPE_ENUM:
+			v.i64 = enumeral_type_class;
+			break;
+		case C_TYPE_BOOL:
+			v.i64 = boolean_type_class;
+			break;
+		case C_TYPE_POINTER:
+			v.i64 = pointer_type_class;
+			break;
+		case C_TYPE_FLOAT:
+		case C_TYPE_DOUBLE:
+		case C_TYPE_LONG_DOUBLE:
+			v.i64 = real_type_class;
+			break;
+		case C_TYPE_FLOAT_COMPLEX:
+		case C_TYPE_DOUBLE_COMPLEX:
+		case C_TYPE_LONG_DOUBLE_COMPLEX:
+			v.i64 = complex_type_class;
+			break;
+		case C_TYPE_FUNC:
+			v.i64 = function_type_class;
+			break;
+		case C_TYPE_STRUCT:
+			v.i64 = record_type_class;
+			break;
+		case C_TYPE_UNION:
+			v.i64 = union_type_class;
+			break;
+		case C_TYPE_ARRAY:
+			if (type == &c_type_string
+			 || type == &c_type_lstring
+			 || type == &c_type_string_u16
+			 || type == &c_type_string_u32) {
+				v.i64 = string_type_class;
+			} else {
+				v.i64 = array_type_class;
+			}
+			break;
+		case C_TYPE_VECTOR:
+			v.i64 = vector_type_class;
+			break;
+		default:
+			v.i64 = -1;
+			break;
+	}
+	c_value_set_const(val, &c_type_i32, IR_I32, v);
+}
+
 void c_do_builtin_va_arg(rcc_ctx *rcc, c_value *val, const c_type *type)
 {
 	ir_type t;

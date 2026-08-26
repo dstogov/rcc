@@ -1221,6 +1221,16 @@ unary_expression(rcc_ctx *rcc, c_value *val):
 		"("                                                {c_value_clear(&v);}
 		assignment_expression(rcc, &v)                     {c_do_end_nocode(rcc, old);}
 		")"                                                {c_do_builtin_constant_p(rcc, &v);}
+	|	"__builtin_classify_type"
+		"("
+		(	?{!C_IS_ID(sym) || is_typedef_name(rcc, sym)}
+			type_name(rcc, &t)
+		|                                                  {ir_ref old = c_do_nocode(rcc);}
+                                                           {c_value_clear(&v);}
+			assignment_expression(rcc, &v)                 {t = v.type;}
+			                                               {c_do_end_nocode(rcc, old);}
+		)                                                  {c_do_builtin_classify_type(rcc, &v, t);}
+		")"
 	|	"__builtin_va_arg"
 		"("                                                {c_value_clear(&v);}
 		assignment_expression(rcc, &v)

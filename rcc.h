@@ -182,6 +182,7 @@
 	_("__builtin_trap" ,               YY___BUILTIN_TRAP)              \
 	_("__builtin_debugtrap",           YY___BUILTIN_DEBUGTRAP)         \
 	_("__builtin_frame_address",       YY___BUILTIN_FRAME_ADDRESS)     \
+	_("__builtin_classify_type",       YY___BUILTIN_CLASSIFY_TYPE)     \
 	_("__builtin_constant_p",          YY___BUILTIN_CONSTANT_P)        \
 	_("__builtin_abs",                 YY___BUILTIN_ABS)               \
 	_("__builtin_labs",                YY___BUILTIN_LABS)              \
@@ -1161,6 +1162,7 @@ void c_do_struct_field_deref(rcc_ctx *rcc, c_value *v, c_name field);
 c_value *c_do_grow_actual_parameters(rcc_ctx *rcc, c_value *args, uint32_t num_args);
 void c_do_builtin(rcc_ctx *rcc, c_value *val, c_name name, uint32_t num_args, c_value *args);
 void c_do_builtin_constant_p(rcc_ctx *rcc, c_value *val);
+void c_do_builtin_classify_type(rcc_ctx *rcc, c_value *val, const c_type *type);
 void c_do_builtin_va_arg(rcc_ctx *rcc, c_value *val, const c_type *type);
 void c_do_builtin_convertvector(rcc_ctx *rcc, c_value *val, const c_type *type);
 void c_do_call(rcc_ctx *rcc, c_value *func, uint32_t num_args, c_value *args, c_value *res);
