@@ -4369,7 +4369,7 @@ static void c_do_check_cvt(rcc_ctx *rcc, const c_type *type, c_value *val, int32
 			if ((val_type->kind == C_TYPE_POINTER || val_type->kind == C_TYPE_ARRAY || val_type->kind == C_TYPE_FUNC)
 			 && !C_IS_TYPE_FP(type)) {
 				if (arg < 0) {
-					yy_warning("assignment makes integer from pointer without a cast");
+					yy_warning_fmt("%s makes integer from pointer without a cast", arg == -2 ? "initialization" : "assignment");
 					if (arg == -2 && !rcc->active_scope) {
 						yy_error("initializer element is not computable at load time");
 					}
@@ -4381,7 +4381,7 @@ static void c_do_check_cvt(rcc_ctx *rcc, const c_type *type, c_value *val, int32
 			} else {
 incompatible:
 				if (arg < 0) {
-					yy_error("incompatible types in assignment");
+					yy_error_fmt("incompatible types in %s", arg == -2 ? "initialization" : "assignment");
 				} else if (arg > 0) {
 					yy_error_fmt("incompatible type for argument %d", arg);
 				} else {
@@ -4403,7 +4403,7 @@ incompatible:
 				 && type->pointer.type->kind != C_TYPE_BOOL && C_IS_TYPE_INT(type->pointer.type)
 				 && val_type->pointer.type->kind != C_TYPE_BOOL && C_IS_TYPE_INT(val_type->pointer.type)) {
 					if (arg < 0) {
-						yy_warning("pointer targets in assignment differ in signedness");
+						yy_warning_fmt("pointer targets in %s differ in signedness", arg == -2 ? "initialization" : "assignment");
 				    } else if (arg > 0) {
 						yy_warning_fmt("pointer targets in in passing argument %d differ in signedness", arg);
 					} else {
@@ -4411,7 +4411,7 @@ incompatible:
 					}
 				} else {
 					if (arg < 0) {
-						yy_warning("assignment from incompatible pointer type");
+						yy_warning_fmt("%s from incompatible pointer type", arg == -2 ? "initialization" : "assignment");
 					} else if (arg > 0) {
 						yy_warning_fmt("passing argument %d from incompatible pointer type", arg);
 					} else {
@@ -4459,7 +4459,7 @@ check_qualifiers:
 			if (attr) goto check_qualifiers;
 		} else if (C_IS_TYPE_INT(val_type) || val_type->kind == C_TYPE_ENUM) {
 			if (arg < 0) {
-				yy_warning("assignment makes pointer from integer without a cast");
+				yy_warning_fmt("%s makes pointer from integer without a cast", arg == -2 ? "initialization" : "assignment");
 			} else if (arg > 0) {
 				yy_warning_fmt("passing argument %d makes pointer from integer without a cast", arg);
 			} else {
@@ -9424,7 +9424,7 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val)
 			}
 			return;
 		}
-		c_do_check_cvt(rcc, type, val, -1);
+		c_do_check_cvt(rcc, type, val, -2);
 	}
 
 	new_size = init->size;

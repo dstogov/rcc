@@ -8,4 +8,4 @@ void foo() {
 }
 int main() {return 0;}
 --EXPECT--
-./tests/tinycc/tests2/096_04_nodata_wanted.c:2:19: warning: assignment makes integer from pointer without a cast
+./tests/tinycc/tests2/096_04_nodata_wanted.c:2:19: warning: initialization makes integer from pointer without a cast
