@@ -269,21 +269,24 @@ declaration(rcc_ctx *rcc, uint32_t flags):                 {c_dcl d0 = {0};}
 old_style_param_decl(rcc_ctx *rcc, const c_type *t):       {c_dcl d0 = {0};}
                                                            {c_name name;}
 	declaration_specifiers(rcc, &d0)                       {c_dcl d = d0;}
-	declarator(rcc, &d, &name, 0)
-	asm_name(rcc, &d)?
-	attributes(rcc, &d)?                                   {c_declare_func_param_type(rcc, t, name, &d);}
-	(	"="                                                {yy_error_fmt("parameter \"%s\" is initialized", yy_sym2str(rcc, name));}
-		initializer(rcc, NULL)
-	)?
 	(
-		","                                                {d = d0;}
 		declarator(rcc, &d, &name, 0)
 		asm_name(rcc, &d)?
 		attributes(rcc, &d)?                               {c_declare_func_param_type(rcc, t, name, &d);}
 		(	"="                                            {yy_error_fmt("parameter \"%s\" is initialized", yy_sym2str(rcc, name));}
 			initializer(rcc, NULL)
 		)?
-	)*
+		(
+			","                                            {d = d0;}
+			declarator(rcc, &d, &name, 0)
+			asm_name(rcc, &d)?
+			attributes(rcc, &d)?                           {c_declare_func_param_type(rcc, t, name, &d);}
+			(	"="                                        {yy_error_fmt("parameter \"%s\" is initialized", yy_sym2str(rcc, name));}
+				initializer(rcc, NULL)
+			)?
+		)*
+	|	/* empty */                                        {yy_warning("empty declaration");}
+	)
 	";"
 ;
 

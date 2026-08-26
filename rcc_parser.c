@@ -411,22 +411,7 @@ static yy_sym parse_old_style_param_decl(yy_sym sym, rcc_ctx *rcc, const c_type 
 	c_name name;
 	sym = parse_declaration_specifiers(sym, rcc, &d0);
 	c_dcl d = d0;
-	sym = parse_declarator(sym, rcc, &d, &name, 0);
-	if (sym == YY_ASM || sym == YY___ASM || sym == YY___ASM__) {
-		sym = parse_asm_name(sym, rcc, &d);
-	}
-	if (sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__ || sym == YY___DECLSPEC || sym == YY___CDECL || sym == YY___FASTCALL || sym == YY___UNALIGNED) {
-		sym = parse_attributes(sym, rcc, &d);
-	}
-	c_declare_func_param_type(rcc, t, name, &d);
-	if (sym == YY__EQUAL) {
-		sym = get_sym();
-		yy_error_fmt("parameter \"%s\" is initialized", yy_sym2str(rcc, name));
-		sym = parse_initializer(sym, rcc, NULL);
-	}
-	while (sym == YY__COMMA) {
-		sym = get_sym();
-		d = d0;
+	if (sym == YY__STAR || C_IS_ID(sym) || sym == YY__LPAREN) {
 		sym = parse_declarator(sym, rcc, &d, &name, 0);
 		if (sym == YY_ASM || sym == YY___ASM || sym == YY___ASM__) {
 			sym = parse_asm_name(sym, rcc, &d);
@@ -440,6 +425,27 @@ static yy_sym parse_old_style_param_decl(yy_sym sym, rcc_ctx *rcc, const c_type 
 			yy_error_fmt("parameter \"%s\" is initialized", yy_sym2str(rcc, name));
 			sym = parse_initializer(sym, rcc, NULL);
 		}
+		while (sym == YY__COMMA) {
+			sym = get_sym();
+			d = d0;
+			sym = parse_declarator(sym, rcc, &d, &name, 0);
+			if (sym == YY_ASM || sym == YY___ASM || sym == YY___ASM__) {
+				sym = parse_asm_name(sym, rcc, &d);
+			}
+			if (sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__ || sym == YY___DECLSPEC || sym == YY___CDECL || sym == YY___FASTCALL || sym == YY___UNALIGNED) {
+				sym = parse_attributes(sym, rcc, &d);
+			}
+			c_declare_func_param_type(rcc, t, name, &d);
+			if (sym == YY__EQUAL) {
+				sym = get_sym();
+				yy_error_fmt("parameter \"%s\" is initialized", yy_sym2str(rcc, name));
+				sym = parse_initializer(sym, rcc, NULL);
+			}
+		}
+	} else if (sym == YY__SEMICOLON) {
+		yy_warning("empty declaration");
+	} else {
+		yy_error_sym("unexpected", sym);
 	}
 	if (sym != YY__SEMICOLON) {
 		yy_error_sym("';' expected, got", sym);
