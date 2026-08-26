@@ -1238,6 +1238,13 @@ unary_expression(rcc_ctx *rcc, c_value *val):
 			                                               {c_do_end_nocode(rcc, old);}
 		)                                                  {c_do_builtin_classify_type(rcc, &v, t);}
 		")"
+	|
+		"__builtin_types_compatible_p"
+		"("
+		type_name(rcc, &v.type)
+		","
+		type_name(rcc, &t)                                 {c_do_builtin_types_compatible_p(rcc, &v, t);}
+		")"
 	|	"__builtin_va_arg"
 		"("                                                {c_value_clear(&v);}
 		assignment_expression(rcc, &v)

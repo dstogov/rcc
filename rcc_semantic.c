@@ -5585,6 +5585,22 @@ void c_do_builtin_classify_type(rcc_ctx *rcc, c_value *val, const c_type *type)
 	c_value_set_const(val, &c_type_i32, IR_I32, v);
 }
 
+void c_do_builtin_types_compatible_p(rcc_ctx *rcc, c_value *val, const c_type *type)
+{
+	ir_val v;
+
+	v.i64 = c_compatible_types(val->type, type, 1, 0);
+	if (v.i64) {
+		c_type_kind t1_kind = val->type->kind;
+		c_type_kind t2_kind = type->kind;
+		if ((t1_kind == C_TYPE_ARRAY && t2_kind == C_TYPE_POINTER)
+		 || (t1_kind == C_TYPE_POINTER && t2_kind == C_TYPE_ARRAY)) {
+			v.i64 = 0;
+		}
+	}
+	c_value_set_const(val, &c_type_i32, IR_I32, v);
+}
+
 void c_do_builtin_va_arg(rcc_ctx *rcc, c_value *val, const c_type *type)
 {
 	ir_type t;
