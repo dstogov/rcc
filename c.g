@@ -756,7 +756,7 @@ nested_initializer(rcc_ctx *rcc, c_sym *obj, c_init *init, bool b):
 nested_initializer_contents(rcc_ctx *rcc, c_sym *obj, c_init *init):
 	"{"                                                    {uint32_t orig_level = init->level;}
 	(                                                      {if (obj->value.type->attr & C_ATTR_VLA) yy_error("variable length array may not be initialized except with an empty initializer");}
-		(	?{!C_IS_ID(sym) || is_label(rcc, sym)}
+		(	?{!C_IS_ID(sym) || is_label(rcc, sym)}         {init->level = orig_level;}
 			gcc_field_initializer(rcc, obj, init)
 		|	nested_initializer(rcc, obj, init, 0)
 		|                                                  {init->level = orig_level;}
@@ -765,7 +765,7 @@ nested_initializer_contents(rcc_ctx *rcc, c_sym *obj, c_init *init):
 		(	","
 			(	&"}"                                       {break; /* manual conflict resolution */}
 				"}"
-			|	?{!C_IS_ID(sym) || is_label(rcc, sym)}
+			|	?{!C_IS_ID(sym) || is_label(rcc, sym)}     {init->level = orig_level;}
 				gcc_field_initializer(rcc, obj, init)
 			|                                              {c_do_init_next(rcc, obj, init);}
 				nested_initializer(rcc, obj, init, 0)
@@ -796,10 +796,9 @@ designated_initializer(rcc_ctx *rcc, c_sym *obj, c_init *init):
 ;
 
 gcc_field_initializer(rcc_ctx *rcc, c_sym *obj, c_init *init):
-                                                           {uint32_t level = init->level;}
 			                                               {c_name name;}
 	ID(rcc, &name) ":"                                     {c_do_init_field(rcc, obj, init, name);}
-	nested_initializer(rcc, obj, init, 1)                  {c_do_init_rollback(rcc, obj, init, level, level);}
+	nested_initializer(rcc, obj, init, 1)
 ;
 
 static_assert_declaration(rcc_ctx *rcc):                   {c_value cond, msg;}

@@ -9222,7 +9222,6 @@ void c_do_init_rollback(rcc_ctx *rcc, c_sym *obj, c_init *init, uint32_t orig_le
 			level--;
 		}
 	}
-	init->level = level;
 }
 
 void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val)
