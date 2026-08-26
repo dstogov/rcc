@@ -9717,6 +9717,9 @@ void c_do_generic_type(rcc_ctx *rcc, c_generic *g, const c_type *type, bool is_t
 		}
 	}
 	g->type = type;
+	c_do_end_nocode(rcc, g->old_control);
+	g->old_control = c_do_nocode(rcc);
+	g->last_control = rcc->active_ctx->control;
 }
 
 void c_do_generic_case(rcc_ctx *rcc, c_generic *g, const c_type *type, c_value *v)
