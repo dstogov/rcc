@@ -4901,6 +4901,7 @@ void c_do_struct_field(rcc_ctx *rcc, c_value *v, c_name field_name)
 {
 	c_field *field;
 	size_t offset;
+	ir_ref ref;
 	bool is_volatile;
 
 	if (v->type->kind != C_TYPE_STRUCT && v->type->kind != C_TYPE_UNION) {
@@ -4910,9 +4911,10 @@ void c_do_struct_field(rcc_ctx *rcc, c_value *v, c_name field_name)
 		if (!c_fix_incomplete_type(rcc, v->type)) {
 			yy_error_fmt("invalid use of undefined \"%s %s\"",
 				(v->type->kind == C_TYPE_STRUCT) ? "struct" : "union",
-				yy_sym2str(rcc, v->type->pointer.type->record.tag));
+				yy_sym2str(rcc, v->type->record.tag));
 		}
 	}
+
 	field = c_find_struct_field(v->type, field_name, &offset);
 	if (!field) {
 		if (v->type->record.tag) {
@@ -4926,10 +4928,12 @@ void c_do_struct_field(rcc_ctx *rcc, c_value *v, c_name field_name)
 				yy_sym2str(rcc, field_name));
 		}
 	}
-	ir_ref ref = v->u.ref;
+
+	ref = v->u.ref;
 	if (offset) {
 		ref = ir_ADD_A(ref, ir_const_size_t(rcc->active_ctx, offset));
 	}
+
 	is_volatile = ((v->type->attr & C_ATTR_VOLATILE) || (v->u.op & C_VAL_VOLATILE));
 	if (field->type->kind != C_TYPE_ARRAY) {
 		c_value_set_lval(v, field->type, c_type2ir(rcc, field->type), ref);
@@ -4944,49 +4948,12 @@ void c_do_struct_field(rcc_ctx *rcc, c_value *v, c_name field_name)
 
 void c_do_struct_field_deref(rcc_ctx *rcc, c_value *v, c_name field_name)
 {
-	c_field *field;
-	size_t offset;
-	bool is_volatile;
-
 	if (v->type->kind != C_TYPE_POINTER && v->type->kind != C_TYPE_ARRAY) {
 		yy_error("invalid type argument of \"->\"");
-	} else if (v->type->pointer.type->kind != C_TYPE_STRUCT && v->type->pointer.type->kind != C_TYPE_UNION) {
-		yy_error_fmt("request for member \"%s\" in something not a structure or union", yy_sym2str(rcc, field_name));
-	} else if ((v->type->pointer.type->flags & C_TYPE_INCOMPLETE)) {
-		IR_ASSERT(v->type->pointer.type->tag);
-		if (!c_fix_incomplete_type(rcc, v->type->pointer.type)) {
-			yy_error_fmt("invalid use of undefined \"%s %s\"",
-				(v->type->pointer.type->kind == C_TYPE_STRUCT) ? "struct" : "union",
-				yy_sym2str(rcc, v->type->pointer.type->tag));
-		}
 	}
-	field = c_find_struct_field(v->type->pointer.type, field_name, &offset);
-	if (!field) {
-		if (v->type->pointer.type->record.tag) {
-			yy_error_fmt("\"%s %s\" has no member named \"%s\"",
-				(v->type->pointer.type->kind == C_TYPE_STRUCT) ? "struct" : "union",
-				yy_sym2str(rcc, v->type->pointer.type->record.tag),
-				yy_sym2str(rcc, field_name));
-		} else {
-			yy_error_fmt("%s has no member named \"%s\"",
-				(v->type->pointer.type->kind == C_TYPE_STRUCT) ? "struct" : "union",
-				yy_sym2str(rcc, field_name));
-		}
-	}
-	ir_ref ref = c_value_ref(rcc, v);
-	if (offset) {
-		ref = ir_ADD_A(ref, ir_const_size_t(rcc->active_ctx, offset));
-	}
-	is_volatile = (v->type->pointer.type->attr & C_ATTR_VOLATILE) != 0;
-	if (field->type->kind != C_TYPE_ARRAY) {
-		c_value_set_lval(v, field->type, c_type2ir(rcc, field->type), ref);
-		v->u.proto = field->bit_field;
-	} else {
-		c_value_set_rval(v, field->type, c_type2ir(rcc, field->type), ref);
-	}
-	if (is_volatile) {
-		v->u.op |= C_VAL_VOLATILE;
-	}
+	v->u.ref = c_value_ref(rcc, v);
+	v->type = v->type->pointer.type;
+	c_do_struct_field(rcc, v, field_name);
 }
 
 c_value *c_do_grow_actual_parameters(rcc_ctx *rcc, c_value *args, uint32_t num_args)
