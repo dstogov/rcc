@@ -979,6 +979,7 @@ typedef struct {
 	size_t             size;
 	uint32_t           level;
 	uint32_t           ranges;
+	c_type             holder;
 	struct {
 		const c_type  *type;
 		uintptr_t      pos;

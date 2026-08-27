@@ -9281,6 +9281,7 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val)
 				yy_error("excess elements in array initializer");
 			}
 			if (c_value_is_const_str(val)
+			 && init->stack[init->level].pos == 0
 			 && (type->array.type->kind == val->type->array.type->kind
 			  || (val->type->array.type->size == 1
 			   && (type->array.type->kind == C_TYPE_U8
@@ -9421,6 +9422,18 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val)
 					c_create_str_sym(rcc, val),
 					ir_const_size_t(rcc->active_ctx, len),
 					c_attr2align(type->attr));
+			}
+			if (init->stack[init->level].type == type) {
+				if (obj->value.type->attr & C_ATTR_FLEXIBLE) {
+					init->holder = *type;
+					init->holder.attr &= ~C_ATTR_FLEXIBLE;
+					init->holder.array.length = (len / type->array.type->size);
+					init->holder.size = len;
+					init->stack[init->level].type = &init->holder;
+					init->stack[init->level].pos = init->holder.array.length;
+				} else {
+					init->stack[init->level].pos = type->array.length - 1;
+				}
 			}
 			return;
 		}
