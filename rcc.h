@@ -1317,6 +1317,7 @@ void yy_warning_fmt_(rcc_ctx *rcc, uint32_t kind, const char *fmt, ...);
 void *c_linker_allocate_data(rcc_ctx *rcc, c_name name, size_t size, size_t align, bool is_array);
 bool  c_linker_fix_reloc(rcc_ctx *rcc, c_sym *obj, size_t obj_offset, c_value *val);
 void  c_linker_del_reloc(rcc_ctx *rcc, c_sym *obj, size_t obj_offset);
+void  c_linker_del_relocs(rcc_ctx *rcc, c_sym *obj, size_t obj_offset, size_t size);
 
 /* IR compiler */
 void rcc_ir_init(rcc_ctx *rcc, uint32_t flags);

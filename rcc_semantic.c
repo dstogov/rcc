@@ -9581,7 +9581,44 @@ void c_do_init_nested(rcc_ctx *rcc, c_sym *obj, c_init *init, bool b)
 {
 	const c_type *type = init->stack[init->level].type;
 
-	if (!b) {
+	if (b) {
+		/* Designated struct initializer (e.g. [1] = { ... }) may overrite previously initialized data */
+		if (type->kind == C_TYPE_ARRAY || type->kind == C_TYPE_STRUCT || type->kind == C_TYPE_UNION) {
+			size_t offset = 0;
+			uint32_t i;
+
+			for (i = 0; i <= init->level; i++) {
+				const c_type *t = init->stack[i].type;
+				if (t->kind == C_TYPE_ARRAY) {
+					offset += t->array.type->size * init->stack[i].pos;
+				} else if (t->kind == C_TYPE_STRUCT || t->kind == C_TYPE_UNION) {
+					if (init->stack[i].pos < t->record.num_fields) {
+						c_field *f = &t->record.fields[init->stack[i].pos];
+						offset += f->offset;
+					} else {
+						IR_ASSERT(i == init->level);
+					}
+				} else if (t->kind == C_TYPE_VECTOR) {
+					offset += t->vec.type->size * init->stack[i].pos;
+				} else {
+					IR_ASSERT(i == init->level);
+				}
+			}
+			if (offset < init->size) {
+				if (c_value_is_const(&obj->value) || (c_value_is_ref(&obj->value) && IR_IS_CONST_REF(obj->value.u.ref))) {
+					memset((char*)obj->value.u.val.ptr + offset, 0, type->size);
+					/* Using designators it's possible to initialie the same element multiple times.
+					 * We have to remove relocations added previously. */
+					c_linker_del_relocs(rcc, obj, offset, type->size);
+				} else {
+					ir_memzero(rcc,
+						ir_ADD_A(obj->value.u.ref, ir_const_size_t(rcc->active_ctx, offset)),
+						ir_const_size_t(rcc->active_ctx, type->size),
+						c_attr2align(type->attr));
+				}
+			}
+		}
+	} else {
 		if (type->kind == C_TYPE_ARRAY) {
 			if (type->array.length == 0 && !(type->attr & C_ATTR_FLEXIBLE)) {
 				yy_error("excess elements in array initializer");

@@ -666,9 +666,37 @@ void c_linker_del_reloc(rcc_ctx *rcc, c_sym *obj, size_t obj_offset)
 		c_reloc *prev = NULL;
 		c_reloc *reloc = obj->reloc;
 
-
 		do {
 			if (reloc->obj_offset == obj_offset) {
+				if (prev) {
+					prev->next = reloc->next;
+				} else {
+					obj->reloc = reloc->next;
+				}
+				break;
+			}
+			prev = reloc;
+			reloc = reloc->next;
+		} while (reloc);
+	}
+}
+
+void c_linker_del_relocs(rcc_ctx *rcc, c_sym *obj, size_t obj_offset, size_t size)
+{
+	if (c_value_is_ref(&obj->value)) {
+		ir_str str = rcc->active_ctx->ir_base[obj->value.u.ref].val.name;
+
+		IR_ASSERT(IR_IS_EXT_STR(str));
+		obj = rcc->yy_hash.data[IR_EXT_STR(str)].sym;
+	}
+
+	if (obj->reloc) {
+		c_reloc *prev = NULL;
+		c_reloc *reloc = obj->reloc;
+		size_t end = obj_offset + size;
+
+		do {
+			if (reloc->obj_offset >= obj_offset && reloc->obj_offset < end) {
 				if (prev) {
 					prev->next = reloc->next;
 				} else {
