@@ -24,37 +24,44 @@
 #undef _ir_CTX
 #define _ir_CTX rcc->active_ctx
 
-const c_type c_type_void                = {.kind = C_TYPE_VOID,   .flags = C_TYPE_GLOBAL, .size = 0,  .attr = 1};
-const c_type c_type_bool                = {.kind = C_TYPE_BOOL,   .flags = C_TYPE_GLOBAL, .size = 1,  .attr = 1};
-const c_type c_type_char                = {.kind = C_TYPE_CHAR,   .flags = C_TYPE_GLOBAL, .size = 1,  .attr = 1};
-const c_type c_type_u8                  = {.kind = C_TYPE_U8,     .flags = C_TYPE_GLOBAL, .size = 1,  .attr = 1};
-const c_type c_type_i8                  = {.kind = C_TYPE_I8,     .flags = C_TYPE_GLOBAL, .size = 1,  .attr = 1};
-const c_type c_type_u16                 = {.kind = C_TYPE_U16,    .flags = C_TYPE_GLOBAL, .size = 2,  .attr = 2};
-const c_type c_type_i16                 = {.kind = C_TYPE_I16,    .flags = C_TYPE_GLOBAL, .size = 2,  .attr = 2};
-const c_type c_type_u32                 = {.kind = C_TYPE_U32,    .flags = C_TYPE_GLOBAL, .size = 4,  .attr = 3};
-const c_type c_type_i32                 = {.kind = C_TYPE_I32,    .flags = C_TYPE_GLOBAL, .size = 4,  .attr = 3};
-const c_type c_type_ul                  = {.kind = C_TYPE_UL,     .flags = C_TYPE_GLOBAL, .size = C_LONG_SIZE,  .attr = C_LONG_ALIGN};
-const c_type c_type_il                  = {.kind = C_TYPE_IL,     .flags = C_TYPE_GLOBAL, .size = C_LONG_SIZE,  .attr = C_LONG_ALIGN};
+#define IR_UNSUPPORTED_TYPE IR_LAST_TYPE
+
+#define C_TYPE_CONST(_kind, _type, _size, _attr) \
+	{.kind = _kind, .ir_type = _type, .size = _size, .attr = _attr, .flags = C_TYPE_GLOBAL}
+
+const c_type c_type_void                = C_TYPE_CONST(C_TYPE_VOID,   IR_VOID,   0, 1);
+const c_type c_type_bool                = C_TYPE_CONST(C_TYPE_BOOL,   IR_BOOL,   1, 1);
+const c_type c_type_char                = C_TYPE_CONST(C_TYPE_CHAR,   IR_CHAR,   1, 1);
+const c_type c_type_u8                  = C_TYPE_CONST(C_TYPE_U8,     IR_U8,     1, 1);
+const c_type c_type_i8                  = C_TYPE_CONST(C_TYPE_I8,     IR_I8,     1, 1);
+const c_type c_type_u16                 = C_TYPE_CONST(C_TYPE_U16,    IR_U16,    2, 2);
+const c_type c_type_i16                 = C_TYPE_CONST(C_TYPE_I16,    IR_I16,    2, 2);
+const c_type c_type_u32                 = C_TYPE_CONST(C_TYPE_U32,    IR_U32,    4, 3);
+const c_type c_type_i32                 = C_TYPE_CONST(C_TYPE_I32,    IR_I32,    4, 3);
+const c_type c_type_ul                  = C_TYPE_CONST(C_TYPE_UL,     IR_ULONG,  C_LONG_SIZE, C_LONG_ALIGN);
+const c_type c_type_il                  = C_TYPE_CONST(C_TYPE_IL,     IR_LONG,   C_LONG_SIZE, C_LONG_ALIGN);
 #if defined(IR_64) || (defined(IR_TARGET_X86) && defined(_WIN32))
-const c_type c_type_ull                 = {.kind = C_TYPE_ULL,    .flags = C_TYPE_GLOBAL, .size = 8,  .attr = 4};
-const c_type c_type_ill                 = {.kind = C_TYPE_ILL,    .flags = C_TYPE_GLOBAL, .size = 8,  .attr = 4};
+const c_type c_type_ull                 = C_TYPE_CONST(C_TYPE_ULL,    IR_U64,    8, 4);
+const c_type c_type_ill                 = C_TYPE_CONST(C_TYPE_ILL,    IR_I64,    8, 4);
 #elif defined(IR_TARGET_X86)
 /* System V ABI for i386 specifies 4-byte alignment for 64-bit integers */
-const c_type c_type_ull                 = {.kind = C_TYPE_ULL,    .flags = C_TYPE_GLOBAL, .size = 8,  .attr = 3};
-const c_type c_type_ill                 = {.kind = C_TYPE_ILL,    .flags = C_TYPE_GLOBAL, .size = 8,  .attr = 3};
+const c_type c_type_ull                 = C_TYPE_CONST(C_TYPE_ULL,    IR_U64,    8, 3);
+const c_type c_type_ill                 = C_TYPE_CONST(C_TYPE_ILL,    IR_I64,    8, 3);
 #else
 # error "unknown targer"
 #endif
-const c_type c_type_float               = {.kind = C_TYPE_FLOAT,  .flags = C_TYPE_GLOBAL, .size = 4,  .attr = 3};
-const c_type c_type_double              = {.kind = C_TYPE_DOUBLE, .flags = C_TYPE_GLOBAL, .size = 8,  .attr = 4};
+const c_type c_type_float               = C_TYPE_CONST(C_TYPE_FLOAT,  IR_FLOAT,  4, 3);
+const c_type c_type_double              = C_TYPE_CONST(C_TYPE_DOUBLE, IR_DOUBLE, 8, 4);
 // TODO: long double support ???
-const c_type c_type_long_double         = {.kind = C_TYPE_DOUBLE,              .flags = C_TYPE_GLOBAL, .size = 8,  .attr = 4};
-const c_type c_type_float_complex       = {.kind = C_TYPE_FLOAT_COMPLEX,       .flags = C_TYPE_GLOBAL, .size = 8,  .attr = 3};
-const c_type c_type_double_complex      = {.kind = C_TYPE_DOUBLE_COMPLEX,      .flags = C_TYPE_GLOBAL, .size = 16, .attr = 5};
-const c_type c_type_long_double_complex = {.kind = C_TYPE_LONG_DOUBLE_COMPLEX, .flags = C_TYPE_GLOBAL, .size = 32, .attr = 5};
+const c_type c_type_long_double         = C_TYPE_CONST(C_TYPE_DOUBLE, IR_DOUBLE, 8, 4);
+
+const c_type c_type_float_complex       = C_TYPE_CONST(C_TYPE_FLOAT_COMPLEX,       IR_UNSUPPORTED_TYPE, 8,  3);
+const c_type c_type_double_complex      = C_TYPE_CONST(C_TYPE_DOUBLE_COMPLEX,      IR_UNSUPPORTED_TYPE, 16, 5);
+const c_type c_type_long_double_complex = C_TYPE_CONST(C_TYPE_LONG_DOUBLE_COMPLEX, IR_UNSUPPORTED_TYPE, 32, 5);
 
 const c_type c_type_string = {
 	.kind = C_TYPE_ARRAY,
+	.ir_type = IR_ADDR,
 	.flags = C_TYPE_GLOBAL,
 	.size = sizeof(void*),
 	.attr = 1 | C_ATTR_FLEXIBLE,
@@ -64,6 +71,7 @@ const c_type c_type_string = {
 
 const c_type c_type_lstring = {
 	.kind = C_TYPE_ARRAY,
+	.ir_type = IR_ADDR,
 	.flags = C_TYPE_GLOBAL,
 	.size = sizeof(void*),
 	.attr = 3 | C_ATTR_FLEXIBLE,
@@ -73,6 +81,7 @@ const c_type c_type_lstring = {
 
 const c_type c_type_string_u16 = {
 	.kind = C_TYPE_ARRAY,
+	.ir_type = IR_ADDR,
 	.flags = C_TYPE_GLOBAL,
 	.size = sizeof(void*),
 	.attr = 2 | C_ATTR_FLEXIBLE,
@@ -82,6 +91,7 @@ const c_type c_type_string_u16 = {
 
 const c_type c_type_string_u32 = {
 	.kind = C_TYPE_ARRAY,
+	.ir_type = IR_ADDR,
 	.flags = C_TYPE_GLOBAL,
 	.size = sizeof(void*),
 	.attr = 3 | C_ATTR_FLEXIBLE,
@@ -91,14 +101,16 @@ const c_type c_type_string_u32 = {
 
 const c_type c_type_ptr = {
 	.kind = C_TYPE_POINTER,
+	.ir_type = IR_ADDR,
 	.flags = C_TYPE_GLOBAL,
 	.size = sizeof(void*),
 	.attr = 3,
-	.pointer.type = &c_type_void,
+	.pointer.type = &c_type_void
 };
 
 const c_type c_type_const_void = {
 	.kind = C_TYPE_VOID,
+	.ir_type = IR_VOID,
 	.flags = C_TYPE_GLOBAL,
 	.size = 0,
 	.attr = 1 | C_ATTR_CONST
@@ -106,19 +118,21 @@ const c_type c_type_const_void = {
 
 const c_type c_type_const_ptr = {
 	.kind = C_TYPE_POINTER,
+	.ir_type = IR_ADDR,
 	.flags = C_TYPE_GLOBAL,
 	.size = sizeof(void*),
 	.attr = 3,
-	.pointer.type = &c_type_const_void,
+	.pointer.type = &c_type_const_void
 };
 
-const c_type c_type_const_char          = {.kind = C_TYPE_CHAR,   .flags = C_TYPE_GLOBAL, .size = 1,  .attr = 1 | C_ATTR_CONST};
-const c_type c_type_const_u16           = {.kind = C_TYPE_U16,    .flags = C_TYPE_GLOBAL, .size = 2,  .attr = 2 | C_ATTR_CONST};
-const c_type c_type_const_u32           = {.kind = C_TYPE_U32,    .flags = C_TYPE_GLOBAL, .size = 4,  .attr = 3 | C_ATTR_CONST};
-const c_type c_type_const_wchar_t       = {.kind = C_TYPE_WCHAR_T,.flags = C_TYPE_GLOBAL, .size = C_WCHAR_SIZE,  .attr = C_WCHAR_ALIGN | C_ATTR_CONST};
+const c_type c_type_const_char          = C_TYPE_CONST(C_TYPE_CHAR,    IR_CHAR,  1, 1 | C_ATTR_CONST);
+const c_type c_type_const_u16           = C_TYPE_CONST(C_TYPE_U16,     IR_U16,   2, 2 | C_ATTR_CONST);
+const c_type c_type_const_u32           = C_TYPE_CONST(C_TYPE_U32,     IR_U32,   4, 3 | C_ATTR_CONST);
+const c_type c_type_const_wchar_t       = C_TYPE_CONST(C_TYPE_WCHAR_T, IR_WCHAR, C_WCHAR_SIZE, C_WCHAR_ALIGN | C_ATTR_CONST);
 
 const c_type c_type_const_string = {
 	.kind = C_TYPE_ARRAY,
+	.ir_type = IR_ADDR,
 	.flags = C_TYPE_GLOBAL,
 	.size = sizeof(void*),
 	.attr = 1 | C_ATTR_FLEXIBLE,
@@ -128,6 +142,7 @@ const c_type c_type_const_string = {
 
 const c_type c_type_const_lstring = {
 	.kind = C_TYPE_ARRAY,
+	.ir_type = IR_ADDR,
 	.flags = C_TYPE_GLOBAL,
 	.size = sizeof(void*),
 	.attr = 3 | C_ATTR_FLEXIBLE,
@@ -137,6 +152,7 @@ const c_type c_type_const_lstring = {
 
 const c_type c_type_const_string_u16 = {
 	.kind = C_TYPE_ARRAY,
+	.ir_type = IR_ADDR,
 	.flags = C_TYPE_GLOBAL,
 	.size = sizeof(void*),
 	.attr = 2 | C_ATTR_FLEXIBLE,
@@ -146,6 +162,7 @@ const c_type c_type_const_string_u16 = {
 
 const c_type c_type_const_string_u32 = {
 	.kind = C_TYPE_ARRAY,
+	.ir_type = IR_ADDR,
 	.flags = C_TYPE_GLOBAL,
 	.size = sizeof(void*),
 	.attr = 3 | C_ATTR_FLEXIBLE,
@@ -174,63 +191,15 @@ static bool c_valid_alignment(rcc_ctx *rcc, c_value *val, const char *prefix, c_
 	return 1;
 }
 
-ir_type c_type2ir(rcc_ctx *rcc, const c_type *t)
+static ir_type c_type2ir(rcc_ctx *rcc, const c_type *t)
 {
-	c_type_kind kind = t->kind;
-
-repeat:
-	switch (kind) {
-		case C_TYPE_BOOL:    return IR_BOOL;
-		case C_TYPE_I8:      return IR_I8;
-		case C_TYPE_I16:     return IR_I16;
-		case C_TYPE_I32:     return IR_I32;
-		case C_TYPE_IL:      return IR_LONG;
-		case C_TYPE_ILL:     return IR_I64;
-		case C_TYPE_U8:      return IR_U8;
-		case C_TYPE_U16:     return IR_U16;
-		case C_TYPE_U32:     return IR_U32;
-		case C_TYPE_UL:      return IR_ULONG;
-		case C_TYPE_ULL:     return IR_U64;
-		case C_TYPE_FLOAT:   return IR_FLOAT;
-		case C_TYPE_DOUBLE:  return IR_DOUBLE;
-		case C_TYPE_POINTER: return IR_ADDR;
-		case C_TYPE_ARRAY:   return IR_ADDR;
-		case C_TYPE_CHAR:    return IR_CHAR;
-		case C_TYPE_VOID:    return IR_VOID;
-		case C_TYPE_ENUM:    kind = t->enumeration.kind; goto repeat;
-		case C_TYPE_FUNC:    return IR_ADDR;
-		case C_TYPE_STRUCT:  return IR_ADDR;
-		case C_TYPE_UNION:   return IR_ADDR;
-#if IR_SIMD
-		case C_TYPE_VECTOR:
-			switch (t->vec.type->kind) {
-				case C_TYPE_I8:      return IR_MAKE_VECTOR_TYPE(IR_I8,     t->vec.length);
-				case C_TYPE_I16:     return IR_MAKE_VECTOR_TYPE(IR_I16,    t->vec.length);
-				case C_TYPE_I32:     return IR_MAKE_VECTOR_TYPE(IR_I32,    t->vec.length);
-				case C_TYPE_IL:      return IR_MAKE_VECTOR_TYPE(IR_LONG,   t->vec.length);
-				case C_TYPE_ILL:     return IR_MAKE_VECTOR_TYPE(IR_I64,    t->vec.length);
-				case C_TYPE_U8:      return IR_MAKE_VECTOR_TYPE(IR_U8,     t->vec.length);
-				case C_TYPE_U16:     return IR_MAKE_VECTOR_TYPE(IR_U16,    t->vec.length);
-				case C_TYPE_U32:     return IR_MAKE_VECTOR_TYPE(IR_U32,    t->vec.length);
-				case C_TYPE_UL:      return IR_MAKE_VECTOR_TYPE(IR_ULONG,  t->vec.length);
-				case C_TYPE_ULL:     return IR_MAKE_VECTOR_TYPE(IR_U64,    t->vec.length);
-				case C_TYPE_FLOAT:   return IR_MAKE_VECTOR_TYPE(IR_FLOAT,  t->vec.length);
-				case C_TYPE_DOUBLE:  return IR_MAKE_VECTOR_TYPE(IR_DOUBLE, t->vec.length);
-				case C_TYPE_CHAR:    return IR_MAKE_VECTOR_TYPE(IR_I8,     t->vec.length);
-				default:
-					break;
-			}
-			break;
-#endif
-		case C_TYPE_FLOAT_COMPLEX:
-		case C_TYPE_DOUBLE_COMPLEX:
-		case C_TYPE_LONG_DOUBLE_COMPLEX:
-			yy_error("complex numbers are not supported yet"); //???
-		default:
-			break;
+	if (UNEXPECTED(t->ir_type == IR_UNSUPPORTED_TYPE)) {
+		IR_ASSERT(t->kind == C_TYPE_FLOAT_COMPLEX
+			|| t->kind == C_TYPE_DOUBLE_COMPLEX
+			|| t->kind == C_TYPE_LONG_DOUBLE_COMPLEX);
+		yy_error("complex numbers are not supported yet"); //???
 	}
-	IR_ASSERT(0);
-	return IR_VOID;
+	return t->ir_type;
 }
 
 #define MAX_ABI_TYPES 2
@@ -586,6 +555,7 @@ void c_resolve_sym_name(rcc_ctx *rcc, c_value *res, c_name name, yy_sym sym)
 			dcl.flags = C_DCL_EXTERN | C_TYPE_SPEC_TYPE;
 			c_type *type = type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
 			type->kind = C_TYPE_FUNC;
+			type->ir_type = IR_ADDR;
 			type->flags = 0;
 			type->attr = C_ATTR_OLD_FUNC;
 			type->size = sizeof(void*);
@@ -833,6 +803,7 @@ static void c_finalize_type(rcc_ctx *rcc, c_dcl *d)
 		type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
 		type->size = d->vector_size;
 		type->kind = C_TYPE_VECTOR;
+		type->ir_type = IR_MAKE_VECTOR_TYPE(d->type->ir_type, d->vector_size / d->type->size);
 		type->flags = rcc->active_scope ? 0 : C_TYPE_GLOBAL;
 		type->attr = c_align2attr(IR_MIN(d->vector_size, 16)); /* 16 byte allgnment */
 		type->vec.type = d->type;
@@ -1883,6 +1854,7 @@ static c_type *c_create_pointer_type(rcc_ctx *rcc, const c_type *element_type)
 {
 	c_type *type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
 	type->kind = C_TYPE_POINTER;
+	type->ir_type = IR_ADDR;
 	type->flags = rcc->active_scope ? 0 : C_TYPE_GLOBAL;
 	type->attr = c_align2attr(_Alignof(void*));
 	if (element_type->attr & (C_ATTR_VLA|C_ATTR_VMT)) {
@@ -1967,6 +1939,7 @@ void c_make_array_type(rcc_ctx *rcc, c_dcl *d, c_dcl *dim, c_value *len, uint64_
 
 	type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
 	type->kind = C_TYPE_ARRAY;
+	type->ir_type = IR_ADDR;
 	type->flags = rcc->active_scope ? 0 : C_TYPE_GLOBAL;
 	if ((d->type->attr & C_ATTR_ALIGN_MASK) && d->type->size && c_attr2align(d->type->attr) > d->type->size) {
 		yy_error("alignment of array elements is greater than element size");
@@ -2005,12 +1978,14 @@ c_type *c_make_enum_type(rcc_ctx *rcc, c_dcl *d, c_name tag, const c_type *under
 	c_type *type;
 	type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
 	type->kind = C_TYPE_ENUM;
+	type->ir_type = IR_VOID;
 	type->flags = C_TYPE_INCOMPLETE | (rcc->active_scope ? 0 : C_TYPE_GLOBAL);
 	type->attr = (d->attr & C_ENUM_ATTRS);
 	type->size = 0;
 	type->enumeration.tag = tag;
 	if (underlying_type) {
 		IR_ASSERT(C_IS_TYPE_INT(underlying_type));
+		type->ir_type = underlying_type->ir_type;
 		type->enumeration.kind = underlying_type->kind;
 		type->size = underlying_type->size;
 		type->attr |= underlying_type->attr & C_ATTR_ALIGN_MASK;
@@ -2077,39 +2052,48 @@ void c_finish_enum_type(rcc_ctx *rcc, c_type *type, c_dcl *d, int64_t min, uint6
 	type->attr |= d->attr & C_ENUM_ATTRS;
 	if (!type->enumeration.kind) {
 		if ((type->attr & C_ATTR_PACKED) && min >= 0 && max <= 0xFFULL) {
+			type->ir_type = IR_U8;
 			type->enumeration.kind = C_TYPE_U8;
 			type->size = sizeof(uint8_t);
 			type->attr |= c_align2attr(_Alignof(uint8_t));
 		} else if ((type->attr & C_ATTR_PACKED) && min >= -0x7FLL-1 && max <= 0x7FULL) {
+			type->ir_type = IR_I8;
 			type->enumeration.kind = C_TYPE_I8;
 			type->size = sizeof(int8_t);
 			type->attr |= c_align2attr(_Alignof(int8_t));
 		} else if ((type->attr & C_ATTR_PACKED) && min >= 0 && max <= 0xFFFFULL) {
+			type->ir_type = IR_U16;
 			type->enumeration.kind = C_TYPE_U16;
 			type->size = sizeof(uint16_t);
 			type->attr |= c_align2attr(_Alignof(uint16_t));
 		} else if ((type->attr & C_ATTR_PACKED) && min >= -0x7FFFLL-1 && max <= 0x7FFFULL) {
+			type->ir_type = IR_I16;
 			type->enumeration.kind = C_TYPE_I16;
 			type->size = sizeof(int16_t);
 			type->attr |= c_align2attr(_Alignof(int16_t));
 		} else if (min >= 0 && max <= 0xFFFFFFFFULL) {
+			type->ir_type = IR_U32;
 			type->enumeration.kind = C_TYPE_U32;
 			type->size = sizeof(uint32_t);
 			type->attr |= c_align2attr(_Alignof(uint32_t));
 		} else if (min >= 0) {
+			type->ir_type = IR_U64;
 			type->enumeration.kind = C_TYPE_U64;
 			type->size = sizeof(uint64_t);
 			type->attr |= c_align2attr(_Alignof(uint64_t));
 		} else if (min >= -0x7FFFFFFFLL-1 && max <= 0x7FFFFFFFULL) {
+			type->ir_type = IR_I32;
 			type->enumeration.kind = C_TYPE_I32;
 			type->size = sizeof(int32_t);
 			type->attr |= c_align2attr(_Alignof(int32_t));
 		} else if (max <= 0x7FFFFFFFFFFFFFFFULL) {
+			type->ir_type = IR_I64;
 			type->enumeration.kind = C_TYPE_I64;
 			type->size = sizeof(int64_t);
 			type->attr |= c_align2attr(_Alignof(int64_t));
 		} else {
 			yy_warning("enumeration values exceed range of largest integer");
+			type->ir_type = IR_I64;
 			type->enumeration.kind = C_TYPE_I64;
 			type->size = sizeof(int64_t);
 			type->attr |= c_align2attr(_Alignof(int64_t));
@@ -2131,6 +2115,7 @@ c_type *c_make_struct_type(rcc_ctx *rcc, c_dcl *d, c_name tag)
 	c_type *type;
 	type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
 	type->kind = (d->flags & C_TYPE_SPEC_UNION) ? C_TYPE_UNION : C_TYPE_STRUCT;
+	type->ir_type = IR_ADDR;
 	type->flags = C_TYPE_INCOMPLETE | (rcc->active_scope ? 0 : C_TYPE_GLOBAL);
 	type->attr = d->attr & C_STRUCT_ATTRS;
 	type->size = 0;
@@ -2562,6 +2547,7 @@ void c_declare_func_param(rcc_ctx *rcc, c_param **params, uint32_t *num_params, 
 	} else if (param->type->kind == C_TYPE_FUNC) {
 		c_type *type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
 		type->kind = C_TYPE_POINTER;
+		type->ir_type = IR_ADDR;
 		type->flags = rcc->active_scope ? 0 : C_TYPE_GLOBAL;
 		type->attr = c_align2attr(_Alignof(void*));
 		type->size = sizeof(void*);
@@ -2660,6 +2646,7 @@ void c_make_func_type(rcc_ctx *rcc, c_dcl *d, c_param *params, uint32_t num_para
 
 	type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
 	type->kind = C_TYPE_FUNC;
+	type->ir_type = IR_ADDR;
 	type->flags = rcc->active_scope ? 0 : C_TYPE_GLOBAL;
 	type->size = sizeof(void*);
 	type->attr = d->attr & C_FUNC_TYPE_ATTRS;
@@ -2690,6 +2677,7 @@ void c_declare_func_param_type(rcc_ctx *rcc, const c_type *type, c_name name, c_
 	} else if (param->type->kind == C_TYPE_FUNC) {
 		c_type *type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
 		type->kind = C_TYPE_POINTER;
+		type->ir_type = IR_ADDR;
 		type->flags = rcc->active_scope ? 0 : C_TYPE_GLOBAL;
 		type->attr = c_align2attr(_Alignof(void*));
 		type->size = sizeof(void*);
@@ -4324,12 +4312,16 @@ static const c_type *c_opaque_vector_type(rcc_ctx *rcc, const c_type *src_type)
 	type->vec.length = src_type->vec.length;
 
 	if (src_type->vec.type->size == 1) {
+		type->ir_type = IR_MAKE_VECTOR_TYPE(IR_I8, type->size);
 		type->vec.type = &c_type_i8;
 	} else if (src_type->vec.type->size == 2) {
+		type->ir_type = IR_MAKE_VECTOR_TYPE(IR_I16, type->size / 2);
 		type->vec.type = &c_type_i16;
 	} else if (src_type->vec.type->size == 4) {
+		type->ir_type = IR_MAKE_VECTOR_TYPE(IR_I32, type->size / 4);
 		type->vec.type = &c_type_i32;
 	} else if (src_type->vec.type->size == 8) {
+		type->ir_type = IR_MAKE_VECTOR_TYPE(IR_I64, type->size / 8);
 		type->vec.type = &c_type_i64;
 	} else {
 		IR_ASSERT(0);
@@ -5016,6 +5008,7 @@ void c_do_builtin(rcc_ctx *rcc, c_value *val, c_name name, uint32_t num_args, c_
 			if (!type) yy_error("out of memory");
 			memset(type, 0, sizeof(c_type));
 			type->kind = C_TYPE_FUNC;
+			type->ir_type = IR_ADDR;
 			type->func.ret_type = &c_type_void;
 			type->func.num_params = 0;
 			type->func.params = NULL;
@@ -5403,6 +5396,7 @@ void c_do_builtin(rcc_ctx *rcc, c_value *val, c_name name, uint32_t num_args, c_
 			type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
 			type->size = IR_VECTOR_SIZE(t);
 			type->kind = C_TYPE_VECTOR;
+			type->ir_type = IR_MAKE_VECTOR_TYPE(args[0].type->vec.type->ir_type, len);
 			type->flags = rcc->active_scope ? 0 : C_TYPE_GLOBAL;
 			type->attr = c_align2attr(IR_MIN(type->size, 16)); /* 16 byte allgnment */
 			type->vec.type = args[0].type->vec.type;
@@ -5449,6 +5443,7 @@ void c_do_builtin(rcc_ctx *rcc, c_value *val, c_name name, uint32_t num_args, c_
 			type = ir_arena_alloc(&rcc->c_arena, sizeof(c_type));
 			type->size = IR_VECTOR_SIZE(t);
 			type->kind = C_TYPE_VECTOR;
+			type->ir_type = IR_MAKE_VECTOR_TYPE(args[0].type->vec.type->ir_type, len);
 			type->flags = rcc->active_scope ? 0 : C_TYPE_GLOBAL;
 			type->attr = c_align2attr(IR_MIN(type->size, 16)); /* 16 byte allgnment */
 			type->vec.type = args[0].type->vec.type;

@@ -1221,7 +1221,7 @@ static size_t rcc_emit_ir_data(rcc_ctx *rcc, FILE *f, const c_type *type, const 
 		rel = rel->next;
 	}
 	if (C_IS_TYPE_KIND_SCALAR(type->kind) || type->kind == C_TYPE_ENUM) {
-		ir_type t = c_type2ir(rcc, type);
+		ir_type t = type->ir_type;
 		size_t size = ir_type_size[t];
 
 		if (rel && rel->obj_offset == base) {
@@ -1374,7 +1374,7 @@ static size_t rcc_emit_ir_data(rcc_ctx *rcc, FILE *f, const c_type *type, const 
 
 static void rcc_emit_ir_mbstring(rcc_ctx *rcc, FILE *f, const c_type *type, const void *addr, size_t len)
 {
-	ir_type t = c_type2ir(rcc, type);
+	ir_type t = type->ir_type;
 	size_t size = ir_type_size[t];
 
 	switch (size) {
