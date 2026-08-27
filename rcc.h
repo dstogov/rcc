@@ -780,6 +780,7 @@ typedef struct _c_param c_param;
 
 struct _c_type {
 	c_type_kind            kind : 8;
+	ir_type                ir_type : 8;
 	uint8_t                flags : 8;
 	uint32_t               attr;
 	size_t                 size;
@@ -1136,7 +1137,6 @@ const c_type *c_typeof_expr(rcc_ctx *rcc, c_value *expr, ir_ref old_control);
 
 void c_static_assert(rcc_ctx *rcc, c_value *expr, c_value *msg);
 
-ir_type c_type2ir(rcc_ctx *rcc, const c_type *t);
 c_sym *c_global_sym(rcc_ctx *rcc, c_sym *sym);
 yy_sym c_get_current_func_name(rcc_ctx *rcc);
 
