@@ -45,7 +45,7 @@ const c_type c_type_ull                 = C_TYPE_CONST(C_TYPE_ULL,    IR_U64,   
 const c_type c_type_ill                 = C_TYPE_CONST(C_TYPE_ILL,    IR_I64,    8, 4);
 #elif defined(IR_TARGET_X86)
 /* System V ABI for i386 specifies 4-byte alignment for 64-bit integers */
-const c_type c_type_ull                 = C_TYPE_CONST(C_TYPE_ULL,    IR_U64     8, 3);
+const c_type c_type_ull                 = C_TYPE_CONST(C_TYPE_ULL,    IR_U64,    8, 3);
 const c_type c_type_ill                 = C_TYPE_CONST(C_TYPE_ILL,    IR_I64,    8, 3);
 #else
 # error "unknown targer"
