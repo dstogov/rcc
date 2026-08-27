@@ -9274,7 +9274,7 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val)
 	}
 
 	while (1) {
-		if (type == val->type) {
+		if (type == val->type || c_compatible_types(type, val->type, 1, 0)) {
 			break;
 		} else if (type->kind == C_TYPE_ARRAY) {
 			if (type->array.length == 0 && !(type->attr & C_ATTR_FLEXIBLE)) {
