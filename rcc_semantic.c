@@ -9381,6 +9381,9 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val)
 			const void *str = c_value_str_addr(val);
 			size_t len = c_value_str_size(val);
 
+			if (type->attr & C_ATTR_VLA) {
+				yy_error("variable length array may not be initialized except with an empty initializer");
+			}
 			if (len > type->array.length * type->array.type->size && !(type->attr & C_ATTR_FLEXIBLE)) {
 				if (len - type->array.type->size == type->array.length * type->array.type->size) {
 					len -= type->array.type->size;
