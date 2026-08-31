@@ -8878,8 +8878,9 @@ static void c_do_init_patch_flexible_alloca(rcc_ctx *rcc, ir_ref ref, size_t len
 	insn++;
 	if (insn->op == IR_CALL
 	 && insn->inputs_count == 5
-	 && insn->op1 == ref
-//???	 && insn->op2 == memset
+	 && IR_IS_CONST_REF(insn->op2)
+	 && rcc->active_ctx->ir_base[insn->op2].op == IR_FUNC
+	 && IR_EXT_STR(rcc->active_ctx->ir_base[insn->op2].val.str) == YY_MEMSET
 	 && insn->op3 == ref) {
 		ir_ref *ops = insn->ops;
 		ops[5] = size_ref;
