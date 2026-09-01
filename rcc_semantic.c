@@ -274,7 +274,14 @@ static uint32_t c_type_call_conv(rcc_ctx *rcc, const c_type *t)
 			case C_ATTR_CC_PRESERVE_NONE:
 				flags = IR_CC_PRESERVE_NONE;
 				break;
-#if defined(IR_TARGET_X86)
+#if defined(IR_TARGET_X64)
+			case C_ATTR_CC_X86_64_SYSV:
+				flags = IR_CC_X86_64_SYSV;
+				break;
+			case C_ATTR_CC_X86_64_MS:
+				flags = IR_CC_X86_64_MS;
+				break;
+#elif defined(IR_TARGET_X86)
 			case C_ATTR_CC_REGPARM_1:
 			case C_ATTR_CC_REGPARM_2:
 			case C_ATTR_CC_REGPARM_3:
@@ -2849,6 +2856,19 @@ void c_gcc_attribute_vector_size(rcc_ctx *rcc, c_dcl *d, c_name attr, c_value *v
 
 yy_sym c_gcc_attribute(rcc_ctx *rcc, c_dcl *d, c_name attr, yy_sym sym)
 {
+#if defined(IR_TARGET_X64)
+	if (attr == YY_SYSV_ABI || attr == YY___SYSV_ABI__) {
+		if ((d->attr & C_ATTR_CALL_CONV) && (d->attr & C_ATTR_CALL_CONV) != C_ATTR_CC_X86_64_SYSV) {
+			yy_error("multiple calling conventions");
+		}
+		d->attr |= C_ATTR_CC_X86_64_SYSV;
+	} else if (attr == YY_MS_ABI || attr == YY___MS_ABI__) {
+		if ((d->attr & C_ATTR_CALL_CONV) && (d->attr & C_ATTR_CALL_CONV) != C_ATTR_CC_X86_64_MS) {
+			yy_error("multiple calling conventions");
+		}
+		d->attr |= C_ATTR_CC_X86_64_MS;
+	} else
+#endif
 	if (attr == YY_FORMAT
 	 || attr == YY___FORMAT__
 	 || attr == YY_FORMAT_ARG

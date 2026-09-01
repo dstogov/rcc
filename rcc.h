@@ -344,6 +344,8 @@
 	_("__may_alias__",                 YY___MAY_ALIAS__)        /*  t*/\
 	_("mode",                          YY_MODE)                 /* v */\
 	_("__mode__",                      YY___MODE__)             /* v */\
+	_("ms_abi",                        YY_MS_ABI)               /*f  */\
+	_("__ms_abi__",                    YY___MS_ABI__)           /*f  */\
 	_("ms_struct",                     YY_MS_STRUCT)            /*  t*/\
 	_("__ms_struct__",                 YY___MS_STRUCT__)        /*  t*/\
 	_("musttail",                      YY_MUSTTAIL)             /*  s*/\
@@ -378,6 +380,8 @@
 	_("__sseregparam__",               YY___SSEREGPARAM__)      /*f  */\
 	_("stdcall",                       YY_STDCALL)              /*f  */\
 	_("__stdcall__",                   YY___STDCALL__)          /*f  */\
+	_("sysv_abi",                      YY_SYSV_ABI)             /*f  */\
+	_("__sysv_abi__",                  YY___SYSV_ABI__)         /*f  */\
 	_("tls_model",                     YY_TLS_MODEL)            /* v */\
 	_("__tls_model__",                 YY___TLS_MODEL__)        /* v */\
 	_("transparent_union",             YY_TRANSPARENT_UNION)    /*  t*/\
@@ -683,7 +687,10 @@ void pp_list_grow(pp_list *l, uint32_t size);
 #define C_ATTR_CC_FASTCALL       (2U<<28)
 #define C_ATTR_CC_PRESERVE_NONE  (3U<<28)
 
-#if defined(IR_TARGET_X86)
+#if defined(IR_TARGET_X64)
+# define C_ATTR_CC_X86_64_SYSV   (4U<<28)
+# define C_ATTR_CC_X86_64_MS     (5U<<28)
+#elif defined(IR_TARGET_X86)
 # define C_ATTR_CC_REGPARM_1     (4U<<28)
 # define C_ATTR_CC_REGPARM_2     (5U<<28)
 # define C_ATTR_CC_REGPARM_3     (6U<<28)
