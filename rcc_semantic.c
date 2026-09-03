@@ -7777,14 +7777,26 @@ void c_do_bool_or_end(rcc_ctx *rcc, c_value *op1, c_value *op2, ir_ref if_ref)
 	}
 }
 
-void c_do_cond_op(rcc_ctx *rcc, c_value *cond, c_value *op1, c_value *op2)
+void c_do_cond_op(rcc_ctx *rcc, c_value *cond, c_value *op1, c_value *op2, ir_ref if_ref, bool orig_dead_code)
 {
 	const c_type *type;
+	ir_ref end_op1_ref = rcc->active_ctx->ir_base[if_ref].op3;
+	ir_ref end_op2_ref;
+
+	IR_ASSERT(end_op1_ref);
+	rcc->active_ctx->ir_base[if_ref].op3 = IR_UNUSED;
 
 	if (!c_value_is_set(op1)) {
 		*op1 = *cond;
 	}
-	if (op1->type->kind == op2->type->kind && op1->type->kind == C_TYPE_VOID) return;
+
+	if (op1->type->kind == op2->type->kind && op1->type->kind == C_TYPE_VOID) {
+		end_op2_ref = ir_END();
+		ir_MERGE_2(end_op1_ref, end_op2_ref);
+		rcc->c_dead_code = orig_dead_code;
+		return;
+	}
+
 	type = c_common_cond_type(rcc, op1, op2);
 	if (!type) yy_error("type mismatch in conditional expression");
 
@@ -7832,9 +7844,27 @@ void c_do_cond_op(rcc_ctx *rcc, c_value *cond, c_value *op1, c_value *op2)
 				type = t;
 		    }
 		}
-		if (op1->type != type) c_do_cvt(rcc, type, c_type2ir(rcc, type), op1);
+
 		if (op2->type != type) c_do_cvt(rcc, type, c_type2ir(rcc, type), op2);
+		end_op2_ref = ir_END();
+
+		if (op1->type != type) {
+			/* With -O0 we have to keep "valid" instruction order */
+			if ((rcc->c_opt_flags & C_OPT_LEVEL) == 0) {
+				ir_BEGIN(end_op1_ref);
+			}
+			c_do_cvt(rcc, type, c_type2ir(rcc, type), op1);
+			if ((rcc->c_opt_flags & C_OPT_LEVEL) == 0) {
+				end_op1_ref = ir_END();
+			}
+		}
+	} else {
+		end_op2_ref = ir_END();
 	}
+
+	ir_MERGE_2(end_op1_ref, end_op2_ref);
+	rcc->c_dead_code = orig_dead_code;
+
 	// TODO: We might need PHI decause of dominance ???
 	if (type == &c_type_void) {
 		c_value_set_rval(cond, type, IR_VOID, IR_UNUSED);

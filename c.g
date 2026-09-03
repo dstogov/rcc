@@ -1329,8 +1329,7 @@ conditional_expression(rcc_ctx *rcc, c_value *val):        {ir_ref check;}
 	unary_expression(rcc, &op3)
 	infix_expression(rcc, &op3, YY__BAR_BAR)?
 	conditional_expression(rcc, &op3)?                     {c_value_rval(rcc, &op3);}
-		                                                   {c_do_if_end(rcc, check, orig_dead_code);}
-		                                                   {c_do_cond_op(rcc, val, &op2, &op3);}
+		                                                   {c_do_cond_op(rcc, val, &op2, &op3, check, orig_dead_code);}
 ;
 
 assignment_expression(rcc_ctx *rcc, c_value *val):

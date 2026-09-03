@@ -2700,8 +2700,7 @@ static yy_sym parse_conditional_expression(yy_sym sym, rcc_ctx *rcc, c_value *va
 		sym = parse_conditional_expression(sym, rcc, &op3);
 	}
 	c_value_rval(rcc, &op3);
-	c_do_if_end(rcc, check, orig_dead_code);
-	c_do_cond_op(rcc, val, &op2, &op3);
+	c_do_cond_op(rcc, val, &op2, &op3, check, orig_dead_code);
 	return sym;
 }
 

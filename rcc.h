@@ -1183,7 +1183,7 @@ ir_ref c_do_bool_and_start(rcc_ctx *rcc, c_value *v);
 void c_do_bool_and_end(rcc_ctx *rcc, c_value *v, c_value *op2, ir_ref if_ref);
 ir_ref c_do_bool_or_start(rcc_ctx *rcc, c_value *v);
 void c_do_bool_or_end(rcc_ctx *rcc, c_value *v, c_value *op2, ir_ref if_ref);
-void c_do_cond_op(rcc_ctx *rcc, c_value *v, c_value *op2, c_value *op3);
+void c_do_cond_op(rcc_ctx *rcc, c_value *v, c_value *op2, c_value *op3, ir_ref if_ref, bool orig_dead_code);
 void c_do_statement_expression(rcc_ctx *rcc, c_scope *scope, c_value *v);
 
 ir_ref c_do_if(rcc_ctx *rcc, c_value *cond);
