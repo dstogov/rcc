@@ -141,6 +141,26 @@ static void rcc_ir_codegen(rcc_ctx *rcc, c_name name, ir_ctx *ctx, c_sym *sym)
 
 	if (rcc_needs_native_code(rcc)) {
 		ctx->func_name = IR_EXT_STR(name);
+
+		if ((rcc->c_opt_flags & C_OPT_LEVEL) == 0) {
+			/* RCC may insert "static" ALLOCAs (with constant size) anywhere,
+			 * linking them into contol chain of the first Basic Block.
+			 * When optimizations are disable (with -O0), ctx.cfg_map[] initialized only for BB start/end.
+			 * Here we have to update the mapping for the ALLOCA instructions.
+			 */
+			ir_block *bb = &ctx->cfg_blocks[1];
+			ir_ref start = bb->start;
+			ir_ref ref = bb->end;
+			ir_insn *insn = &ctx->ir_base[ref];
+
+			ref = insn->op1;
+			while (ref != start) {
+				ctx->cfg_map[ref] = 1;
+				insn = &ctx->ir_base[ref];
+				ref = insn->op1;
+			}
+		}
+
 		ir_match(ctx);
 	}
 
