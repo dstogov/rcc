@@ -6413,7 +6413,7 @@ static bool c_do_splat(rcc_ctx *rcc, const c_type *type, c_value *val)
 	return 1;
 }
 
-static const c_type *c_common_type(rcc_ctx *rcc, yy_sym sym, c_value *op1, c_value *op2)
+static const c_type *c_common_binop_type(rcc_ctx *rcc, yy_sym sym, c_value *op1, c_value *op2)
 {
 	const c_type *op1_type = op1->type;
 	const c_type *op2_type = op2->type;
@@ -6442,18 +6442,14 @@ static const c_type *c_common_type(rcc_ctx *rcc, yy_sym sym, c_value *op1, c_val
 				return op1_type;
 			}
 		} else if (sym == YY__LESS || sym == YY__LESS_EQUAL || sym == YY__GREATER || sym == YY__GREATER_EQUAL
-			|| sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL || sym == YY__COLON) {
+			|| sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL) {
 			if (t2 == C_TYPE_POINTER || t2 == C_TYPE_ARRAY) {
 				if (op1_type->pointer.type->kind == C_TYPE_VOID) {
 					return op2_type;
 				} else if (op2_type->pointer.type->kind == C_TYPE_VOID) {
 					return op1_type;
 				} else if (!c_compatible_types(op1_type->pointer.type, op2_type->pointer.type, 1, 0)) {
-					if (sym == YY__COLON) return NULL;
 					yy_warning("comparison of distinct pointer types lacks a cast");
-				}
-				if (sym == YY__COLON && op1_type->kind == C_TYPE_ARRAY) {
-					return c_create_pointer_type(rcc, op1_type->array.type);
 				}
 				// TODO: select best type ???
 				return op1_type;
@@ -6463,7 +6459,6 @@ static const c_type *c_common_type(rcc_ctx *rcc, yy_sym sym, c_value *op1, c_val
 					op2->u.type = IR_ADDR;
 					return op1_type;
 				}
-				if (sym == YY__COLON) return NULL;
 				yy_warning("comparison between pointer and integer");
 				return op1_type;
 			} else if (t2 == C_TYPE_FUNC
@@ -6483,14 +6478,13 @@ static const c_type *c_common_type(rcc_ctx *rcc, yy_sym sym, c_value *op1, c_val
 				return op2_type;
 			}
 		} else if (sym == YY__LESS || sym == YY__LESS_EQUAL || sym == YY__GREATER || sym == YY__GREATER_EQUAL
-			|| sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL || sym == YY__COLON) {
+			|| sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL) {
 			if (C_IS_TYPE_INT(op1_type)) {
 				if (c_value_is_const(op1) && op1->u.val.u64 == 0) {
 					op1->type = &c_type_ptr;
 					op1->u.type = IR_ADDR;
 					return op2_type;
 				}
-				if (sym == YY__COLON) return NULL;
 				yy_warning("comparison between pointer and integer");
 				return op2_type;
 			} else if (t1 == C_TYPE_FUNC
@@ -6502,17 +6496,15 @@ static const c_type *c_common_type(rcc_ctx *rcc, yy_sym sym, c_value *op1, c_val
 		return NULL;
 	} else if (t1 == C_TYPE_FUNC) {
 		if (t2 == C_TYPE_FUNC && c_compatible_types(op1_type, op2_type, 1, 0)) {
-			if (sym == YY__COLON) return c_create_pointer_type(rcc, op1_type);
 			return op1_type;
 		} else if (sym == YY__LESS || sym == YY__LESS_EQUAL || sym == YY__GREATER || sym == YY__GREATER_EQUAL
-			|| sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL || sym == YY__COLON) {
+			|| sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL) {
 			if (C_IS_TYPE_INT(op2_type)) {
 				if (c_value_is_const(op2) && op2->u.val.u64 == 0) {
 					op2->type = &c_type_ptr;
 					op2->u.type = IR_ADDR;
 					return op1_type;
 				}
-				if (sym == YY__COLON) return NULL;
 				yy_warning("comparison between pointer and integer");
 				return op1_type;
 			}
@@ -6572,14 +6564,13 @@ static const c_type *c_common_type(rcc_ctx *rcc, yy_sym sym, c_value *op1, c_val
 		}
 	} else if (t2 == C_TYPE_FUNC) {
 		if (sym == YY__LESS || sym == YY__LESS_EQUAL || sym == YY__GREATER || sym == YY__GREATER_EQUAL
-			|| sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL || sym == YY__COLON) {
+			|| sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL) {
 			if (C_IS_TYPE_INT(op1_type)) {
 				if (c_value_is_const(op1) && op1->u.val.u64 == 0) {
 					op1->type = &c_type_ptr;
 					op1->u.type = IR_ADDR;
 					return op2_type;
 				}
-				if (sym == YY__COLON) return NULL;
 				yy_warning("comparison between pointer and integer");
 				return op2_type;
 			}
@@ -6702,7 +6693,185 @@ common_int_type:
 				}
 			}
 		}
-	} else if (sym == YY__COLON) {
+	}
+	return NULL;
+}
+
+static const c_type *c_common_cond_type(rcc_ctx *rcc, c_value *op1, c_value *op2)
+{
+	const c_type *op1_type = op1->type;
+	const c_type *op2_type = op2->type;
+	c_type_kind t1 = op1_type->kind;
+	c_type_kind t2 = op2_type->kind;
+
+	if (t1 == C_TYPE_POINTER || t1 == C_TYPE_ARRAY) {
+		if (t2 == C_TYPE_POINTER || t2 == C_TYPE_ARRAY) {
+			if (op1_type->pointer.type->kind == C_TYPE_VOID) {
+				return op2_type;
+			} else if (op2_type->pointer.type->kind == C_TYPE_VOID) {
+				return op1_type;
+			} else if (c_compatible_types(op1_type->pointer.type, op2_type->pointer.type, 1, 0)) {
+				if (op1_type->kind == C_TYPE_ARRAY) {
+					return c_create_pointer_type(rcc, op1_type->array.type);
+				}
+				// TODO: select best type ???
+				return op1_type;
+			}
+		} else if (C_IS_TYPE_INT(op2_type)) {
+			if (c_value_is_const(op2) && op2->u.val.u64 == 0) {
+				op2->type = &c_type_ptr;
+				op2->u.type = IR_ADDR;
+				return op1_type;
+			}
+		} else if (t2 == C_TYPE_FUNC
+		 && (op1_type->pointer.type->kind == C_TYPE_VOID
+		  || c_compatible_types(op1_type->pointer.type, op2_type, 1, 0))) {
+			return op1_type;
+		}
+	} else if (t2 == C_TYPE_POINTER || t2 == C_TYPE_ARRAY) {
+		if (C_IS_TYPE_INT(op1_type)) {
+			if (c_value_is_const(op1) && op1->u.val.u64 == 0) {
+				op1->type = &c_type_ptr;
+				op1->u.type = IR_ADDR;
+				return op2_type;
+			}
+		} else if (t1 == C_TYPE_FUNC
+		 && (op2_type->pointer.type->kind == C_TYPE_VOID
+		  || c_compatible_types(op2_type->pointer.type, op1_type, 1, 0))) {
+			return op1_type;
+		}
+	} else if (t1 == C_TYPE_FUNC) {
+		if (t2 == C_TYPE_FUNC && c_compatible_types(op1_type, op2_type, 1, 0)) {
+			return c_create_pointer_type(rcc, op1_type);
+		} else {
+			if (C_IS_TYPE_INT(op2_type)) {
+				if (c_value_is_const(op2) && op2->u.val.u64 == 0) {
+					op2->type = &c_type_ptr;
+					op2->u.type = IR_ADDR;
+					return op1_type;
+				}
+			}
+		}
+	} else if (t1 == C_TYPE_VECTOR) {
+		if (t2 == C_TYPE_VECTOR) {
+			if (op1->type->size == op2->type->size) {
+				if (op1->type->vec.type != op2->type->vec.type) {
+					if (op2->type->flags & C_TYPE_OPAQUE) {
+						c_opaque_vector_cast(rcc, op1->type, op2);
+					} else if (op1->type->flags & C_TYPE_OPAQUE) {
+						c_opaque_vector_cast(rcc, op2->type, op1);
+					}
+				}
+				if (op1->type->vec.type == op2->type->vec.type) {
+					return op1->type;
+				}
+			}
+		}
+	} else if (t2 == C_TYPE_FUNC) {
+		if (C_IS_TYPE_INT(op1_type)) {
+			if (c_value_is_const(op1) && op1->u.val.u64 == 0) {
+				op1->type = &c_type_ptr;
+				op1->u.type = IR_ADDR;
+				return op2_type;
+			}
+		}
+	} else if (C_IS_TYPE_KIND_FP(t1)) {
+		if (t1 == t2) {
+			return op1_type;
+		} else if (C_IS_TYPE_KIND_FP(t2)) {
+			if (op1_type->size >= op2_type->size) {
+				return op1_type;
+			} else {
+				return op2_type;
+			}
+		} else if (C_IS_TYPE_KIND_INT(t2) || t2 == C_TYPE_ENUM) {
+			return op1_type;
+		}
+	} else if (C_IS_TYPE_KIND_FP(t2)) {
+		if (C_IS_TYPE_KIND_INT(t1) || t1 == C_TYPE_ENUM) {
+			return op2_type;
+		}
+	} else if (t1 == C_TYPE_ENUM) {
+		if (t2 == C_TYPE_ENUM) {
+			if (op1_type == op2_type || c_compatible_types(op1_type, op2_type, 1, 0)) {
+				// TODO: select best type ???
+				return op1_type;
+			}
+			t1 = op1_type->enumeration.kind;
+			op1_type = c_type_by_kind(t1);
+			IR_ASSERT(C_IS_TYPE_KIND_INT(t1));
+			t2 = op2_type->enumeration.kind;
+			op2_type = c_type_by_kind(t2);
+			IR_ASSERT(C_IS_TYPE_KIND_INT(t2));
+			if (t1 == t2) return op1_type;
+			goto common_int_type;
+		} else if (C_IS_TYPE_KIND_INT(t2)) {
+			t1 = op1_type->enumeration.kind;
+			op1_type = c_type_by_kind(t1);
+			IR_ASSERT(C_IS_TYPE_KIND_INT(t1));
+			if (t1 == t2) return op1_type;
+			goto common_int_type;
+		}
+	} else if (t2 == C_TYPE_ENUM && C_IS_TYPE_KIND_INT(t1)) {
+		t2 = op2_type->enumeration.kind;
+		op2_type = c_type_by_kind(t2);
+		IR_ASSERT(C_IS_TYPE_KIND_INT(t2));
+		if (t1 == t2) return op1_type;
+		goto common_int_type;
+	} else if (C_IS_TYPE_KIND_INT(t1) && C_IS_TYPE_KIND_INT(t2)) {
+common_int_type:
+		if (op1_type->size > 4) {
+			if ((op1_type->size > 4 && C_IS_TYPE_KIND_UNSIGNED(t1)
+			  && (!C_IS_BIT_FIELD(op1->u.proto) || C_BIT_FIELD_SIZE(op1->u.proto) >= 32))
+			 || (op2_type->size > 4 && C_IS_TYPE_KIND_UNSIGNED(t2)
+			  && (!C_IS_BIT_FIELD(op2->u.proto) || C_BIT_FIELD_SIZE(op2->u.proto) >= 32))) {
+				if (sizeof(long long) == sizeof(uint64_t)
+				 && (op1_type->kind == C_TYPE_ILL
+				  || op1_type->kind == C_TYPE_ULL
+				  || op1_type->kind == C_TYPE_ILL
+				  || op1_type->kind == C_TYPE_ULL)) {
+					return &c_type_ull;
+				} else {
+					return &c_type_u64;
+				}
+			} else {
+				if (sizeof(long long) == sizeof(int64_t)
+				 && (op1_type->kind == C_TYPE_ILL
+				  || op1_type->kind == C_TYPE_ULL
+				  || op1_type->kind == C_TYPE_ILL
+				  || op1_type->kind == C_TYPE_ULL)) {
+					return &c_type_ill;
+				} else {
+					return &c_type_i64;
+				}
+			}
+		} else {
+			if ((op1_type->size == 4 && C_IS_TYPE_KIND_UNSIGNED(t1)
+			  && (!C_IS_BIT_FIELD(op1->u.proto) || C_BIT_FIELD_SIZE(op1->u.proto) >= 32))
+			 || (op2_type->size == 4 && C_IS_TYPE_KIND_UNSIGNED(t2)
+			  && (!C_IS_BIT_FIELD(op2->u.proto) || C_BIT_FIELD_SIZE(op2->u.proto) >= 32))) {
+				if (sizeof(long) == sizeof(uint32_t)
+				 && (op1_type->kind == C_TYPE_IL
+				  || op1_type->kind == C_TYPE_UL
+				  || op2_type->kind == C_TYPE_IL
+				  || op2_type->kind == C_TYPE_UL)) {
+					return &c_type_ul;
+				} else {
+					return &c_type_u32;
+				}
+			} else {
+				if (sizeof(long) == sizeof(int32_t)
+				 && (op1_type->kind == C_TYPE_IL
+				  || op1_type->kind == C_TYPE_UL
+				  || op2_type->kind == C_TYPE_IL
+				  || op2_type->kind == C_TYPE_UL)) {
+					return &c_type_il;
+				} else {
+					return &c_type_i32;
+				}
+			}
+		}
+	} else {
 		if (t1 == C_TYPE_VOID || t2 == C_TYPE_VOID) {
 			return &c_type_void;
 		} else if (c_compatible_types(op1_type, op2_type, 1, 0)) {
@@ -7396,7 +7565,7 @@ void c_do_binary_op(rcc_ctx *rcc, yy_sym sym, c_value *op1, c_value *op2)
 
 	c_value_rval(rcc, op1);
 	c_value_rval(rcc, op2);
-	type = c_common_type(rcc, sym, op1, op2);
+	type = c_common_binop_type(rcc, sym, op1, op2);
 	if (!type) yy_error_fmt("invalid operands to binary \"%s\"", yy_sym2str(rcc, sym));
 	switch (sym) {
 		case YY__PLUS:            c_do_add(rcc, type, op1, op2); break;
@@ -7616,7 +7785,7 @@ void c_do_cond_op(rcc_ctx *rcc, c_value *cond, c_value *op1, c_value *op2)
 		*op1 = *cond;
 	}
 	if (op1->type->kind == op2->type->kind && op1->type->kind == C_TYPE_VOID) return;
-	type = c_common_type(rcc, YY__COLON, op1, op2);
+	type = c_common_cond_type(rcc, op1, op2);
 	if (!type) yy_error("type mismatch in conditional expression");
 
 	if (type != &c_type_void && (op1->type != type || op2->type != type)) {
