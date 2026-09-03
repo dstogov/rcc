@@ -6563,8 +6563,8 @@ static const c_type *c_common_type(rcc_ctx *rcc, yy_sym sym, c_value *op1, c_val
 			}
 		}
 		if (c_do_splat(rcc, op2->type, op1)) {
-				if ((sym == YY__LESS || sym == YY__LESS_EQUAL || sym == YY__GREATER || sym == YY__GREATER_EQUAL
-				  || sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL)
+			if ((sym == YY__LESS || sym == YY__LESS_EQUAL || sym == YY__GREATER || sym == YY__GREATER_EQUAL
+			  || sym == YY__EQUAL_EQUAL || sym == YY__BANG_EQUAL)
 				 && !C_IS_TYPE_SIGNED(op2->type->vec.type)) {
 				return c_opaque_vector_type(rcc, op2->type);
 			}
