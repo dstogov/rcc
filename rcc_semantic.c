@@ -3283,7 +3283,13 @@ void c_sizeof_type(rcc_ctx *rcc, c_value *res, const c_type *type)
 
 ir_ref c_do_nocode(rcc_ctx *rcc)
 {
-	ir_ref old_control = rcc->active_ctx->control;
+	ir_ref old_control;
+
+	if ((rcc->c_opt_flags & C_OPT_LEVEL) == 0) {
+		old_control = ir_END();
+	} else {
+		old_control = rcc->active_ctx->control;
+	}
 	rcc->active_ctx->control = IR_UNUSED;
 	ir_BEGIN(IR_UNUSED);
 	return old_control;
@@ -3299,7 +3305,17 @@ void c_do_end_nocode(rcc_ctx *rcc, ir_ref old_control)
 		ir_END();
 		// TODO: cleanup dead code ???
 	}
-	rcc->active_ctx->control = old_control;
+	if ((rcc->c_opt_flags & C_OPT_LEVEL) == 0) {
+		if (old_control == rcc->active_ctx->insns_count - 1) {
+			IR_ASSERT(rcc->active_ctx->ir_base[old_control].op == IR_END);
+			rcc->active_ctx->control = rcc->active_ctx->ir_base[old_control].op1;
+			rcc->active_ctx->insns_count--;
+		} else {
+			ir_BEGIN(old_control);
+		}
+	} else {
+		rcc->active_ctx->control = old_control;
+	}
 }
 
 void c_sizeof_expr(rcc_ctx *rcc, yy_sym op, c_value *expr, ir_ref old_control)
