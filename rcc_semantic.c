@@ -6836,7 +6836,7 @@ static const c_type *c_common_cond_type(rcc_ctx *rcc, c_value *op1, c_value *op2
 		goto common_int_type;
 	} else if (C_IS_TYPE_KIND_INT(t1) && C_IS_TYPE_KIND_INT(t2)) {
 common_int_type:
-		if (op1_type->size > 4) {
+		if (op1_type->size > 4 || op2_type->size > 4) {
 			if ((op1_type->size > 4 && C_IS_TYPE_KIND_UNSIGNED(t1)
 			  && (!C_IS_BIT_FIELD(op1->u.proto) || C_BIT_FIELD_SIZE(op1->u.proto) >= 32))
 			 || (op2_type->size > 4 && C_IS_TYPE_KIND_UNSIGNED(t2)
