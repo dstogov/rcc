@@ -263,6 +263,13 @@ static void rcc_ir_codegen(rcc_ctx *rcc, c_name name, ir_ctx *ctx, c_sym *sym)
 		rcc->protected = 0;
 		ir_mem_unprotect(rcc->code_buffer.start, (char*)rcc->code_buffer.end - (char*)rcc->code_buffer.start);
 		entry = ir_emit_code(ctx, &size);
+		if (!entry) {
+			if (ctx->status == IR_ERROR_CODE_MEM_OVERFLOW) {
+				yy_error("JIT code buffer overflow");
+			} else {
+				yy_error_fmt("internal error in ir_emit_code() [%d]", ctx->status);
+			}
+		}
 		IR_ASSERT(entry);
 		if (c_value_is_const(func)) {
 			if (!sym->is_thunk) yy_error_fmt("external symbol \"%s\" used before the local one", yy_sym2str(rcc, name));
@@ -598,12 +605,17 @@ add_thunk:
 			if (rcc->protected) {
 				ir_mem_unprotect(rcc->code_buffer.start, (char*)rcc->code_buffer.end - (char*)rcc->code_buffer.start);
 			}
+			size = 0;
 			addr = ir_emit_thunk(&rcc->code_buffer, NULL, &size);
 			if (rcc->protected) {
 				ir_mem_protect(rcc->code_buffer.start, (char*)rcc->code_buffer.end - (char*)rcc->code_buffer.start);
 			}
 			if (!addr) {
-				yy_error("internal error");
+				if (size && size > (size_t)((char*)rcc->code_buffer.end - (char*)rcc->code_buffer.pos)) {
+					yy_error("JIT code buffer overflow");
+				} else {
+					yy_error("internal error in ir_emit_thunk()");
+				}
 			}
 			sym->is_thunk = 1;
 			sym->value.u.op |= C_VAL_CONST;
@@ -2080,6 +2092,7 @@ static void rcc_help(const char *cmd)
 #endif
 		"Utility Options\n"
 		"  --emit-llvm                - convert final IR to LLVM code (implementation is incomplete)\n"
+		"  --jit-buffer-size=N        - size of reserved JIT code buffer (default 4MB)\n"
 		"  --dump-size                - print size of generated code\n"
 		"  --dump-time                - print compilation and execution time\n"
 		"  --dump-search-dirs         - print search paths\n"
@@ -2402,6 +2415,37 @@ void rcc_parse_options(rcc_ctx *rcc, const char *str, size_t len)
 	}
 }
 
+size_t rcc_parse_size(rcc_ctx *rcc, const char *str)
+{
+	size_t size = 0;
+
+	while (*str >= '0' && *str <= '9') {
+		size = size * 10 + (*str - '0');
+		str++;
+	}
+	if (*str == 'K') {
+		size *= 1024;
+		str++;
+	} else if (*str == 'M') {
+		size *= 1024 * 1024;
+		str++;
+	} else if (*str == 'G') {
+		size *= 1024 * 1024 * 1024;
+		str++;
+	} else if (!*str) {
+		return size;
+	} else {
+		return 0;
+	}
+	if (*str == 'B') {
+		str++;
+	}
+	if (*str) {
+		return 0;
+	}
+	return size;
+}
+
 void rcc_print_search_dirs(rcc_ctx *rcc)
 {
 	int i;
@@ -2425,6 +2469,7 @@ int main(int argc, const char **argv)
 	int ret = 1;
 	bool dump_dirs = 0;
 	char *includes = NULL;
+	size_t jit_buffer_size = 4 * 1024 * 1024;
 
 	ir_consistency_check();
 
@@ -2510,6 +2555,19 @@ int main(int argc, const char **argv)
 			rcc->c_flags |= C_PERF;
 		} else if (strcmp(argv[i], "-fsyntax-only") == 0) {
 			rcc->c_flags |= C_SYNTAX_ONLY;
+		} else if (strncmp(argv[i], "--jit-buffer-size=", strlen("--jit-buffer-size=")) == 0) {
+			size_t size = rcc_parse_size(rcc, argv[i] + strlen("--jit-buffer-size="));
+			if (!size) {
+				fprintf(stderr, "ERROR: size specified by \"--jit-buffer-size\" is incorrect\n");
+				goto exit;
+			} else if (size < 4096) {
+				fprintf(stderr, "ERROR: size specified by \"--jit-buffer-size\" is too small (should be at least 4K)\n");
+				goto exit;
+			} else if (size % 4096 != 0) {
+				fprintf(stderr, "ERROR: size specified by \"--jit-buffer-size\" should be 4K aligned\n");
+				goto exit;
+			}
+			jit_buffer_size = size;
 		} else if (strcmp(argv[i], "--run") == 0) {
 			rcc->c_flags |= C_RUN;
 			if (i + 1 < argc) {
@@ -2641,14 +2699,13 @@ int main(int argc, const char **argv)
 		ret = 0;
 	} else {
 		if (rcc_needs_native_code(rcc)) {
-			size_t size = 4 * 1024 * 1024;
-			rcc->code_buffer.start = ir_mem_mmap(size);
+			rcc->code_buffer.start = ir_mem_mmap(jit_buffer_size);
 			if (!rcc->code_buffer.start) {
 				fprintf(stderr, "ERROR: Cannot allocate JIT code buffer\n");
 				goto exit;
 			}
 			rcc->code_buffer.pos = rcc->code_buffer.start;
-			rcc->code_buffer.end = (char*)rcc->code_buffer.start + size;
+			rcc->code_buffer.end = (char*)rcc->code_buffer.start + jit_buffer_size;
 
 #if defined(IR_TARGET_X86) || defined(IR_TARGET_X64)
 			uint32_t cpuinfo = ir_cpuinfo();
