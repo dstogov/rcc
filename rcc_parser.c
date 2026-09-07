@@ -2458,12 +2458,11 @@ static yy_sym parse_unary_expression(yy_sym sym, rcc_ctx *rcc, c_value *val) {
 		sym = get_sym();
 		c_value_clear(&v);
 		sym = parse_assignment_expression(sym, rcc, &v);
-		c_do_end_nocode(rcc, old);
 		if (sym != YY__RPAREN) {
 			yy_error_sym("')' expected, got", sym);
 		}
 		sym = get_sym();
-		c_do_builtin_constant_p(rcc, &v);
+		c_do_builtin_constant_p(rcc, &v, old);
 	} else if (sym == YY___BUILTIN_CHOOSE_EXPR) {
 		c_value dummy, *v1, *v2;
 		ir_ref old;

@@ -1223,8 +1223,8 @@ unary_expression(rcc_ctx *rcc, c_value *val):
 	|	                                                   {ir_ref old = c_do_nocode(rcc);}
 		"__builtin_constant_p"
 		"("                                                {c_value_clear(&v);}
-		assignment_expression(rcc, &v)                     {c_do_end_nocode(rcc, old);}
-		")"                                                {c_do_builtin_constant_p(rcc, &v);}
+		assignment_expression(rcc, &v)
+		")"                                                {c_do_builtin_constant_p(rcc, &v, old);}
 	|                                                      {c_value dummy, *v1, *v2;}
 	                                                       {ir_ref old;}
 	                                                       {bool b;}

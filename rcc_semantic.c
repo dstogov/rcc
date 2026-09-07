@@ -5495,7 +5495,7 @@ void c_do_builtin(rcc_ctx *rcc, c_value *val, c_name name, uint32_t num_args, c_
 	if (num_args > C_ALLOCA_PARAMS) ir_mem_free(args);
 }
 
-void c_do_builtin_constant_p(rcc_ctx *rcc, c_value *val)
+void c_do_builtin_constant_p(rcc_ctx *rcc, c_value *val, ir_ref old_control)
 {
 	ir_val v;
 
@@ -5509,6 +5509,7 @@ void c_do_builtin_constant_p(rcc_ctx *rcc, c_value *val)
 		}
 	}
 	c_value_set_const(val, &c_type_i32, IR_I32, v);
+	c_do_end_nocode(rcc, old_control);
 }
 
 void c_do_builtin_classify_type(rcc_ctx *rcc, c_value *val, const c_type *type)

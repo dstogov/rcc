@@ -1171,7 +1171,7 @@ void c_do_struct_field(rcc_ctx *rcc, c_value *v, c_name field);
 void c_do_struct_field_deref(rcc_ctx *rcc, c_value *v, c_name field);
 c_value *c_do_grow_actual_parameters(rcc_ctx *rcc, c_value *args, uint32_t num_args);
 void c_do_builtin(rcc_ctx *rcc, c_value *val, c_name name, uint32_t num_args, c_value *args);
-void c_do_builtin_constant_p(rcc_ctx *rcc, c_value *val);
+void c_do_builtin_constant_p(rcc_ctx *rcc, c_value *val, ir_ref old_control);
 void c_do_builtin_classify_type(rcc_ctx *rcc, c_value *val, const c_type *type);
 void c_do_builtin_types_compatible_p(rcc_ctx *rcc, c_value *val, const c_type *type);
 void c_do_builtin_va_arg(rcc_ctx *rcc, c_value *val, const c_type *type);
