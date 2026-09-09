@@ -3281,6 +3281,20 @@ void c_sizeof_type(rcc_ctx *rcc, c_value *res, const c_type *type)
 	c_value_set_const(res, &c_type_size_t, IR_SIZE_T, val);
 }
 
+static ir_ref c_ir_END(rcc_ctx *rcc)
+{
+	if (rcc->active_ctx->control == rcc->active_ctx->insns_count - 1
+	 && rcc->active_ctx->ir_base[rcc->active_ctx->control].op == IR_BEGIN
+	 && rcc->active_ctx->ir_base[rcc->active_ctx->control].op1 == IR_UNUSED) {
+		rcc->active_ctx->insns_count--;
+		return rcc->active_ctx->control = IR_UNUSED;
+	} else {
+		// TODO: cleanup dead code ???
+		return ir_END();
+
+	}
+}
+
 ir_ref c_do_nocode(rcc_ctx *rcc)
 {
 	ir_ref old_control;
@@ -3297,14 +3311,7 @@ ir_ref c_do_nocode(rcc_ctx *rcc)
 
 void c_do_end_nocode(rcc_ctx *rcc, ir_ref old_control)
 {
-	if (rcc->active_ctx->control == rcc->active_ctx->insns_count - 1
-	 && rcc->active_ctx->ir_base[rcc->active_ctx->control].op == IR_BEGIN
-	 && rcc->active_ctx->ir_base[rcc->active_ctx->control].op1 == IR_UNUSED) {
-		rcc->active_ctx->insns_count--;
-	} else {
-		ir_END();
-		// TODO: cleanup dead code ???
-	}
+	c_ir_END(rcc);
 	if ((rcc->c_opt_flags & C_OPT_LEVEL) == 0) {
 		if (old_control == rcc->active_ctx->insns_count - 1) {
 			IR_ASSERT(rcc->active_ctx->ir_base[old_control].op == IR_END);
@@ -3409,6 +3416,7 @@ static c_label *c_new_label(rcc_ctx *rcc, c_name name, c_scope *scope, c_label *
 		label->is_local = 0;
 	}
 	label->is_unused = 0;
+	label->used = 0;
 	label->dst = IR_UNUSED;
 	label->src_list = IR_UNUSED;
 	label->vla_block = IR_UNUSED;
@@ -5055,13 +5063,13 @@ void c_do_builtin(rcc_ctx *rcc, c_value *val, c_name name, uint32_t num_args, c_
 		ir_CALL(IR_VOID,
 			ir_const_func(rcc->active_ctx, IR_EXT_STR(YY_ABORT),
 				ir_proto_0(rcc->active_ctx, 0, IR_VOID)));
-//???		ir_UNREACHABLE();
-//???		ir_BEGIN(IR_UNUSED);
+		ir_UNREACHABLE();
+		ir_BEGIN(IR_UNUSED);
 		c_value_set_rval(val, &c_type_void, IR_VOID, IR_UNUSED);
 	} else if (name == YY___BUILTIN_UNREACHABLE) {
 		if (num_args != 0) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
-//???		ir_UNREACHABLE();
-//???		ir_BEGIN(IR_UNUSED);
+		ir_UNREACHABLE();
+		ir_BEGIN(IR_UNUSED);
 		c_value_set_rval(val, &c_type_void, IR_VOID, IR_UNUSED);
 	} else if (name == YY___BUILTIN_DEBUGTRAP) {
 		if (num_args != 0) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
@@ -6091,13 +6099,18 @@ static ir_ref ir_inline_call(rcc_ctx *rcc, ir_ctx *ctx, ir_ctx *func_ctx, uint32
 		ir_list_free(&bp_list);
 	}
 
-	/* Merge all RETURN values */
 	if (ret) {
+		/* Merge all RETURN values */
 		if (add_phi) {
 			ret = ir_PHI_list(ret);
 		} else  {
 			ir_MERGE_list(ret);
 			ret = IR_UNUSED;
+		}
+
+		/* Add BLOCK_END if necessary */
+		if (block_begin) {
+			ctx->control = ir_emit2(ctx, IR_BLOCK_END, ctx->control, block_begin);
 		}
 	} else {
 		ir_BEGIN(IR_UNUSED);
@@ -6108,11 +6121,6 @@ static ir_ref ir_inline_call(rcc_ctx *rcc, ir_ctx *ctx, ir_ctx *func_ctx, uint32
 			val.u64 = 0;
 			ret = ir_const(rcc->active_ctx, val, func_ctx->ret_type);
 		}
-	}
-
-	/* Add BLOCK_END if necessary */
-	if (block_begin) {
-		ctx->control = ir_emit2(ctx, IR_BLOCK_END, ctx->control, block_begin);
 	}
 
 	rcc->c_last_call_func_type = NULL;
@@ -7691,8 +7699,23 @@ static void c_ir_IF_FALSE(rcc_ctx *rcc, ir_ref ref)
 	}
 }
 
-#define c_ir_MERGE_WITH_EMPTY_TRUE(_if)     do {ir_ref end = ir_END(); c_ir_IF_TRUE(rcc, _if); ir_MERGE_2(end, ir_END());} while (0)
-#define c_ir_MERGE_WITH_EMPTY_FALSE(_if)    do {ir_ref end = ir_END(); c_ir_IF_FALSE(rcc, _if); ir_MERGE_2(end, ir_END());} while (0)
+#define c_ir_END_list(list) do { \
+		ir_ref end = c_ir_END(rcc); \
+		if (end) { \
+			rcc->active_ctx->ir_base[end].op2 = list; \
+			list = end; \
+		} \
+	} while (0)
+#define c_ir_MERGE_WITH_EMPTY_TRUE(_if) do { \
+		ir_ref end = c_ir_END(rcc); \
+		c_ir_IF_TRUE(rcc, _if); \
+		if (end) ir_MERGE_2(end, ir_END()); \
+	} while (0)
+#define c_ir_MERGE_WITH_EMPTY_FALSE(_if) do { \
+		ir_ref end = c_ir_END(rcc); \
+		c_ir_IF_FALSE(rcc, _if); \
+		if (end) ir_MERGE_2(end, ir_END()); \
+	} while (0)
 
 ir_ref c_do_bool_and_start(rcc_ctx *rcc, c_value *op1)
 {
@@ -7723,12 +7746,17 @@ void c_do_bool_and_end(rcc_ctx *rcc, c_value *op1, c_value *op2, ir_ref if_ref)
 		yy_error("scalar is required");
 	}
 	if (if_ref) {
-		ir_ref ref;
+		ir_ref ref, end;
 
 		c_do_bool(rcc, op2, op2);
 		ref = c_value_ref(rcc, op2);
-		c_ir_MERGE_WITH_EMPTY_FALSE(if_ref);
-		if (c_value_is_const(op1) && c_value_is_const(op2)) {
+		end = c_ir_END(rcc);
+		c_ir_IF_FALSE(rcc, if_ref);
+		if (end) ir_MERGE_2(end, ir_END());
+		if (!end) {
+			val.u64 = 0;
+			c_value_set_const(op1, &c_type_bool, IR_BOOL, val);
+		} else if (c_value_is_const(op1) && c_value_is_const(op2)) {
 			if (c_value_is_true(op1) && c_value_is_true(op2)) {
 				val.u64 = 1;
 				c_value_set_const(op1, &c_type_bool, IR_BOOL, val);
@@ -7773,12 +7801,17 @@ void c_do_bool_or_end(rcc_ctx *rcc, c_value *op1, c_value *op2, ir_ref if_ref)
 		yy_error("scalar is required");
 	}
 	if (if_ref) {
-		ir_ref ref;
+		ir_ref ref, end;
 
 		c_do_bool(rcc, op2, op2);
 		ref = c_value_ref(rcc, op2);
-		c_ir_MERGE_WITH_EMPTY_TRUE(if_ref);
-		if ((c_value_is_const(op1) && c_value_is_true(op1))
+		end = c_ir_END(rcc);
+		c_ir_IF_TRUE(rcc, if_ref);
+		if (end) ir_MERGE_2(end, ir_END());
+		if (!end) {
+			val.u64 = 1;
+			c_value_set_const(op1, &c_type_bool, IR_BOOL, val);
+		} else if ((c_value_is_const(op1) && c_value_is_true(op1))
 		 || (c_value_is_const(op2) && c_value_is_true(op2))) {
 			val.u64 = 1;
 			c_value_set_const(op1, &c_type_bool, IR_BOOL, val);
@@ -7797,27 +7830,25 @@ void c_do_bool_or_end(rcc_ctx *rcc, c_value *op1, c_value *op2, ir_ref if_ref)
 void c_do_cond_op(rcc_ctx *rcc, c_value *cond, c_value *op1, c_value *op2, ir_ref if_ref, bool orig_dead_code)
 {
 	const c_type *type;
-	ir_ref end_op1_ref = rcc->active_ctx->ir_base[if_ref].op3;
-	ir_ref end_op2_ref;
-
-	IR_ASSERT(end_op1_ref);
-	rcc->active_ctx->ir_base[if_ref].op3 = IR_UNUSED;
+	ir_ref end_op1_ref, end_op2_ref;
 
 	if (!c_value_is_set(op1)) {
 		*op1 = *cond;
 	}
 
-	if (op1->type->kind == op2->type->kind && op1->type->kind == C_TYPE_VOID) {
-		end_op2_ref = ir_END();
-		ir_MERGE_2(end_op1_ref, end_op2_ref);
-		rcc->c_dead_code = orig_dead_code;
+	type = c_common_cond_type(rcc, op1, op2);
+	if (!type) yy_error("type mismatch in conditional expression");
+	if (type->kind == C_TYPE_VOID) {
+		c_do_if_end(rcc, if_ref, orig_dead_code);
+		c_value_set_rval(cond, type, IR_VOID, IR_UNUSED);
 		return;
 	}
 
-	type = c_common_cond_type(rcc, op1, op2);
-	if (!type) yy_error("type mismatch in conditional expression");
+	end_op1_ref = rcc->active_ctx->ir_base[if_ref].op3;
+	IR_ASSERT(end_op1_ref >= 0);
+	rcc->active_ctx->ir_base[if_ref].op3 = IR_UNUSED;
 
-	if (type != &c_type_void && (op1->type != type || op2->type != type)) {
+	if (op1->type != type || op2->type != type) {
 		if (op1->type->kind == C_TYPE_POINTER && op2->type->kind == C_TYPE_POINTER) {
 			const c_type *t1 = op1->type->pointer.type;
 			const c_type *t2 = op2->type->pointer.type;
@@ -7861,9 +7892,16 @@ void c_do_cond_op(rcc_ctx *rcc, c_value *cond, c_value *op1, c_value *op2, ir_re
 				type = t;
 		    }
 		}
+	}
+
+	if (!IR_IS_CONST_REF(rcc->active_ctx->ir_base[if_ref].op2)) {
+
+		if (end_op1_ref <= 0) goto return_op2;
 
 		if (op2->type != type) c_do_cvt(rcc, type, c_type2ir(rcc, type), op2);
-		end_op2_ref = ir_END();
+		end_op2_ref = c_ir_END(rcc);
+
+		if (!end_op2_ref) goto return_op1;
 
 		if (op1->type != type) {
 			/* With -O0 we have to keep "valid" instruction order */
@@ -7875,18 +7913,18 @@ void c_do_cond_op(rcc_ctx *rcc, c_value *cond, c_value *op1, c_value *op2, ir_re
 				end_op1_ref = ir_END();
 			}
 		}
-	} else {
-		end_op2_ref = ir_END();
-	}
+		ir_MERGE_2(end_op1_ref, end_op2_ref);
+		ir_type t = c_type2ir(rcc, type);
+		c_value_set_rval(cond, type, t, ir_PHI_2(t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
+	} else if (rcc->active_ctx->ir_base[if_ref].op2 == IR_TRUE) {
+		rcc->active_ctx->ir_base[if_ref].op = IR_END;
+		rcc->active_ctx->ir_base[if_ref].op2 = IR_UNUSED;
+		end_op2_ref = c_ir_END(rcc);
 
-	ir_MERGE_2(end_op1_ref, end_op2_ref);
-	rcc->c_dead_code = orig_dead_code;
-
-	// TODO: We might need PHI decause of dominance ???
-	if (type == &c_type_void) {
-		c_value_set_rval(cond, type, IR_VOID, IR_UNUSED);
-	} else if (c_value_is_const(cond)) {
-		if (c_value_is_true(cond)) {
+return_op1:
+		if (end_op1_ref > 0) {
+			ir_BEGIN(end_op1_ref);
+			if (op1->type != type) c_do_cvt(rcc, type, c_type2ir(rcc, type), op1);
 			if (c_value_is_const(op1)) {
 				*cond = *op1;
 				cond->type = type;
@@ -7894,21 +7932,25 @@ void c_do_cond_op(rcc_ctx *rcc, c_value *cond, c_value *op1, c_value *op2, ir_re
 				c_value_set_rval(cond, type, c_type2ir(rcc, type), c_value_ref(rcc, op1));
 			}
 		} else {
-			if (c_value_is_const(op2)) {
-				*cond = *op2;
-				cond->type = type;
-			} else {
-				c_value_set_rval(cond, type, c_type2ir(rcc, type), c_value_ref(rcc, op2));
-			}
+			ir_BEGIN(IR_UNUSED);
+			c_value_set_rval(cond, type, IR_VOID, IR_UNUSED); // undefined ???
 		}
 	} else {
-		ir_type t = c_type2ir(rcc, type);
-#if 1
-		c_value_set_rval(cond, type, t, ir_PHI_2(t, c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
-#else
-		c_value_set_rval(cond, type, t, ir_COND(t, c_value_ref(rcc, cond), c_value_ref(rcc, op1), c_value_ref(rcc, op2)));
-#endif
+		IR_ASSERT(rcc->active_ctx->ir_base[if_ref].op2 == IR_FALSE);
+		rcc->active_ctx->ir_base[if_ref].op = IR_END;
+		rcc->active_ctx->ir_base[if_ref].op2 = IR_UNUSED;
+
+return_op2:
+		if (op2->type != type) c_do_cvt(rcc, type, c_type2ir(rcc, type), op2);
+		if (c_value_is_const(op2)) {
+			*cond = *op2;
+			cond->type = type;
+		} else {
+			c_value_set_rval(cond, type, c_type2ir(rcc, type), c_value_ref(rcc, op2));
+		}
 	}
+
+	rcc->c_dead_code = orig_dead_code;
 }
 
 void c_do_statement_expression(rcc_ctx *rcc, c_scope *scope, c_value *val)
@@ -7928,6 +7970,8 @@ ir_ref c_do_if(rcc_ctx *rcc, c_value *cond)
 	 || cond->type->kind == C_TYPE_UNION
 	 || cond->type->kind == C_TYPE_VECTOR) {
 		yy_error("scalar is required");
+	} else if (c_value_is_const(cond)) {
+		ref = c_value_is_true(cond) ? IR_TRUE : IR_FALSE;
 	} else if (C_IS_TYPE_FP(cond->type)) {
 		ir_val val;
 		val.u64 = 0;
@@ -7935,21 +7979,36 @@ ir_ref c_do_if(rcc_ctx *rcc, c_value *cond)
 	} else {
 		ref = c_value_ref(rcc, cond);
 	}
-	if (IR_IS_CONST_REF(ref) && !ir_const_is_true(&rcc->active_ctx->ir_base[ref])) rcc->c_dead_code = 1;
+
 	ref = ir_IF(ref);
-	rcc->active_ctx->ir_base[ref].op3 = IR_UNUSED;
-	c_ir_IF_TRUE(rcc, ref);
+	rcc->active_ctx->ir_base[ref].op3 = IR_NULL; /* IR_NULL - no false path */
+	if (!IR_IS_CONST_REF(rcc->active_ctx->ir_base[ref].op2)) {
+		c_ir_IF_TRUE(rcc, ref);
+	} else if (ir_const_is_true(&rcc->active_ctx->ir_base[rcc->active_ctx->ir_base[ref].op2])) {
+		rcc->active_ctx->ir_base[ref].op2 = IR_TRUE;
+		ir_BEGIN(ref);
+	} else {
+		rcc->active_ctx->ir_base[ref].op2 = IR_FALSE;
+		ir_BEGIN(IR_UNUSED);
+		rcc->c_dead_code = 1;
+	}
+
 	return ref;
 }
 
 void c_do_if_else(rcc_ctx *rcc, ir_ref if_ref, bool orig_dead_code)
 {
-	ir_ref end_true_ref = ir_END();
-	rcc->active_ctx->ir_base[if_ref].op3 = end_true_ref;
-	c_ir_IF_FALSE(rcc, if_ref);
-	if (!orig_dead_code) {
-		ir_ref cond = rcc->active_ctx->ir_base[if_ref].op2;
-		rcc->c_dead_code = (IR_IS_CONST_REF(cond) && ir_const_is_true(&rcc->active_ctx->ir_base[cond]));
+	ir_ref end_true_ref = c_ir_END(rcc);
+	rcc->active_ctx->ir_base[if_ref].op3 = end_true_ref; /* IR_UNUSED - true path is dead */
+	if (!IR_IS_CONST_REF(rcc->active_ctx->ir_base[if_ref].op2)) {
+		c_ir_IF_FALSE(rcc, if_ref);
+	} else if (rcc->active_ctx->ir_base[if_ref].op2 == IR_TRUE) {
+		ir_BEGIN(IR_UNUSED);
+		rcc->c_dead_code = 1;
+	} else {
+		IR_ASSERT(rcc->active_ctx->ir_base[if_ref].op2 == IR_FALSE);
+		ir_BEGIN(if_ref);
+		rcc->c_dead_code = orig_dead_code;
 	}
 }
 
@@ -7957,11 +8016,37 @@ void c_do_if_end(rcc_ctx *rcc, ir_ref if_ref, bool orig_dead_code)
 {
 	ir_ref end_true_ref = rcc->active_ctx->ir_base[if_ref].op3;
 
-	if (end_true_ref) {
-		rcc->active_ctx->ir_base[if_ref].op3 = IR_UNUSED;
-		ir_MERGE_2(end_true_ref, ir_END());
+	rcc->active_ctx->ir_base[if_ref].op3 = IR_UNUSED;
+	if (end_true_ref > 0) {
+		/* we have alive true path and alive or dead false path */
+		ir_ref end = c_ir_END(rcc);
+
+		if (end) {
+			ir_MERGE_2(end_true_ref, end);
+		} else {
+			ir_BEGIN(end_true_ref);
+		}
+	} else if (end_true_ref < 0) {
+		/* we have alive or dead true path and don't have false path */
+		if (!IR_IS_CONST_REF(rcc->active_ctx->ir_base[if_ref].op2)) {
+			c_ir_MERGE_WITH_EMPTY_FALSE(if_ref);
+		} else if (rcc->active_ctx->ir_base[if_ref].op2 == IR_TRUE) {
+		} else {
+			IR_ASSERT(rcc->active_ctx->ir_base[if_ref].op2 == IR_FALSE);
+			ir_ref end = c_ir_END(rcc);
+			if (end) {
+				ir_MERGE_2(end, if_ref);
+			} else {
+				ir_BEGIN(if_ref);
+			}
+		}
 	} else {
-		c_ir_MERGE_WITH_EMPTY_FALSE(if_ref);
+		/* we have dead true path and alive or dead false path */
+	}
+
+	if (IR_IS_CONST_REF(rcc->active_ctx->ir_base[if_ref].op2)) {
+		rcc->active_ctx->ir_base[if_ref].op = IR_END;
+		rcc->active_ctx->ir_base[if_ref].op2 = IR_UNUSED;
 	}
 	rcc->c_dead_code = orig_dead_code;
 }
@@ -8212,7 +8297,7 @@ void c_do_case(rcc_ctx *rcc, c_value *v)
 		yy_error("case label does not reduce to an integer constant");
 	}
 	if (rcc->active_ctx->control) {
-		prev = ir_END();
+		prev = c_ir_END(rcc);
 	}
 	if (loop->switch_type != v->type) {
 		c_do_cvt(rcc, loop->switch_type, c_type2ir(rcc, loop->switch_type), v);
@@ -8239,7 +8324,11 @@ void c_do_case_range(rcc_ctx *rcc, c_value *v1, c_value *v2)
 		yy_error("case labels do not reduce to integer constants");
 	}
 	if (rcc->active_ctx->control) {
-		ir_END_list(list);
+		ir_ref end = c_ir_END(rcc);
+		if (end) {
+			rcc->active_ctx->ir_base[end].op2 = list;
+			list = end;
+	    }
 	}
 	if (loop->switch_type != v1->type) {
 		c_do_cvt(rcc, loop->switch_type, c_type2ir(rcc, loop->switch_type), v1);
@@ -8284,7 +8373,11 @@ void c_do_case_range(rcc_ctx *rcc, c_value *v1, c_value *v2)
 			yy_warning("empty range specified");
 		}
 	}
-	ir_MERGE_list(list);
+	if (list) {
+		ir_MERGE_list(list);
+	} else {
+		ir_BEGIN(IR_UNUSED);
+	}
 }
 
 void c_do_case_default(rcc_ctx *rcc)
@@ -8295,7 +8388,7 @@ void c_do_case_default(rcc_ctx *rcc)
 	if (!loop) yy_error("\"default\" label not within a switch statement");
 	if (loop->next) yy_error("multiple default labels in one switch");
 	if (rcc->active_ctx->control) {
-		prev = ir_END();
+		prev = c_ir_END(rcc);
 	}
 	ir_CASE_DEFAULT(loop->check);
 	if (prev) {
@@ -8308,14 +8401,22 @@ void c_do_switch_end(rcc_ctx *rcc, c_loop *loop)
 {
 	if (!loop->next) {
 		if (rcc->active_ctx->control) {
-			ir_END_list(loop->break_list);
+			ir_ref end = c_ir_END(rcc);
+			if (end) {
+				rcc->active_ctx->ir_base[end].op2 = loop->break_list;
+				loop->break_list = end;
+		    }
 		}
 		ir_CASE_DEFAULT(loop->check);
 		ir_END_list(loop->break_list);
 	}
 	if (loop->break_list) {
 		if (rcc->active_ctx->control) {
-			ir_END_list(loop->break_list);
+			ir_ref end = c_ir_END(rcc);
+			if (end) {
+				rcc->active_ctx->ir_base[end].op2 = loop->break_list;
+				loop->break_list = end;
+		    }
 		}
 		ir_MERGE_list(loop->break_list);
 	}
@@ -8344,6 +8445,8 @@ void c_do_loop_check(rcc_ctx *rcc, c_loop *loop, c_value *cond)
 	 || cond->type->kind == C_TYPE_UNION
 	 || cond->type->kind == C_TYPE_VECTOR) {
 		yy_error("scalar is required");
+	} else if (c_value_is_const(cond)) {
+		ref = c_value_is_true(cond) ? IR_TRUE : IR_FALSE;
 	} else if (C_IS_TYPE_FP(cond->type)) {
 		ir_val val;
 		val.u64 = 0;
@@ -8351,8 +8454,23 @@ void c_do_loop_check(rcc_ctx *rcc, c_loop *loop, c_value *cond)
 	} else {
 		ref = c_value_ref(rcc, cond);
 	}
-	loop->check = ir_IF(ref);
-	c_ir_IF_TRUE(rcc, loop->check);
+
+	if (IR_IS_CONST_REF(ref) && ref != IR_FALSE && ref != IR_TRUE) {
+		ref = ir_const_is_true(&rcc->active_ctx->ir_base[ref]) ? IR_TRUE : IR_FALSE;
+	}
+
+	if (!IR_IS_CONST_REF(ref)) {
+		loop->check = ir_IF(ref);
+		c_ir_IF_TRUE(rcc, loop->check);
+	} else if (ref == IR_FALSE) {
+		ir_ref end = c_ir_END(rcc);
+		if (end) {
+			/* add into the break_list */
+			rcc->active_ctx->ir_base[end].op2 = loop->break_list;
+			loop->break_list = end;
+		}
+		ir_BEGIN(IR_UNUSED);
+	}
 }
 
 void c_do_loop_continue_label(rcc_ctx *rcc, c_loop *loop)
@@ -8367,15 +8485,30 @@ void c_do_loop_continue_label(rcc_ctx *rcc, c_loop *loop)
 void c_do_loop_end(rcc_ctx *rcc, c_loop *loop)
 {
 	if (loop->continue_list) {
-		ir_END_list(loop->continue_list);
+		c_ir_END_list(loop->continue_list);
 		ir_MERGE_list(loop->continue_list);
 	}
-	ir_ref end = ir_LOOP_END();
-	rcc->active_ctx->ir_base[loop->start].op2 = end;
-	c_ir_IF_FALSE(rcc, loop->check);
-	if (loop->break_list) {
+
+	if (rcc->active_ctx->control == rcc->active_ctx->insns_count - 1
+	 && rcc->active_ctx->ir_base[rcc->active_ctx->control].op == IR_BEGIN
+	 && rcc->active_ctx->ir_base[rcc->active_ctx->control].op1 == IR_UNUSED) {
+		rcc->active_ctx->insns_count--;
+		rcc->active_ctx->control = IR_UNUSED;
+		rcc->active_ctx->ir_base[loop->start].optx = IR_OPTX(IR_BEGIN, IR_VOID, 1);
+	} else {
+		ir_ref end = ir_LOOP_END();
+		rcc->active_ctx->ir_base[loop->start].op2 = end;
+	}
+
+	if (loop->check) {
+		c_ir_IF_FALSE(rcc, loop->check);
 		ir_END_list(loop->break_list);
+	}
+
+	if (loop->break_list) {
 		ir_MERGE_list(loop->break_list);
+	} else {
+		ir_BEGIN(IR_UNUSED);
 	}
 	rcc->active_loop = loop->prev;
 }
@@ -8483,7 +8616,7 @@ static ir_ref ir_repeat_code_block(ir_ctx *ctx, ir_ref start, ir_ref end, ir_ref
 void c_do_for_end(rcc_ctx *rcc, c_loop *loop)
 {
 	if (loop->continue_list) {
-		ir_END_list(loop->continue_list);
+		c_ir_END_list(loop->continue_list);
 		ir_MERGE_list(loop->continue_list);
 	}
 
@@ -8528,7 +8661,7 @@ void c_do_continue(rcc_ctx *rcc)
 
 	if (!loop) yy_error("continue statement not within a loop");
 	c_leave_scope(rcc, loop->scope);
-	ir_END_list(loop->continue_list);
+	c_ir_END_list(loop->continue_list);
 	ir_BEGIN(IR_UNUSED);
 }
 
@@ -8536,7 +8669,7 @@ void c_do_break(rcc_ctx *rcc)
 {
 	if (!rcc->active_loop) yy_error("break statement not within loop or switch");
 	c_leave_scope(rcc, rcc->active_loop->scope);
-	ir_END_list(rcc->active_loop->break_list);
+	c_ir_END_list(rcc->active_loop->break_list);
 	ir_BEGIN(IR_UNUSED);
 }
 
@@ -8825,6 +8958,8 @@ void c_do_goto(rcc_ctx *rcc, c_name name)
 		label = c_new_label(rcc, name, rcc->active_func_scope, NULL, rcc->active_scope == rcc->active_func_scope);
 	}
 
+	label->used = 1;
+
 	if (rcc->active_scope->cleanup_sym) {
 		if (label->dst && label->cleanup_sym != rcc->active_scope->cleanup_sym) {
 			c_do_cleanup_vars_goto(rcc, rcc->active_scope->cleanup_sym, label->cleanup_sym);
@@ -8864,7 +8999,7 @@ void c_do_goto(rcc_ctx *rcc, c_name name)
 		yy_error_fmt("jump to label \"%s\" into scope with variable modified type", yy_sym2str(rcc, name));
 	}
 
-	ir_END_list(label->src_list);
+	c_ir_END_list(label->src_list);
 	if (rcc->active_scope->cleanup_sym && !label->dst) {
 		/* Remember last cleanup variable of the current scope */
 		c_sym *sym = rcc->active_scope->cleanup_sym;
@@ -8896,7 +9031,7 @@ c_label *c_do_set_label(rcc_ctx *rcc, c_name name)
 	if (label->src_list) {
 		ir_ref ref = label->src_list;
 		uint32_t n = 0;
-		ir_ref *srcs;
+		ir_ref *srcs, end;
 
 		/* count inputs count */
 		do {
@@ -8945,9 +9080,10 @@ c_label *c_do_set_label(rcc_ctx *rcc, c_name name)
 
 		srcs = alloca(sizeof(ir_ref) * (n + 2));
 
-		ref = label->src_list;
 		n = 0;
-		srcs[n++] = ir_END();
+		end = c_ir_END(rcc);
+		if (end) srcs[n++] = end;
+		ref = label->src_list;
 		do {
 			ir_insn *insn = &rcc->active_ctx->ir_base[ref];
 
@@ -8962,7 +9098,14 @@ c_label *c_do_set_label(rcc_ctx *rcc, c_name name)
 
 		label->src_list = IR_UNUSED;
 	} else {
-		ir_MERGE_2(ir_END(), IR_UNUSED);
+		ir_ref end = c_ir_END(rcc);
+		if (end) {
+			ir_MERGE_2(end, IR_UNUSED);
+		} else {
+			/* Use MERGE with 1 uninitialized input */
+			IR_ASSERT(!rcc->active_ctx->control);
+			rcc->active_ctx->control = ir_emit1(rcc->active_ctx, IR_OPTX(IR_MERGE, IR_VOID, 1), IR_UNUSED);
+		}
 	}
 	label->dst = rcc->active_ctx->control;
 
@@ -8992,9 +9135,11 @@ void c_do_finish_label(rcc_ctx *rcc, c_name name, c_label *label)
 
 		IR_ASSERT(insn->op == IR_MERGE);
 		if (!label->src_list) {
-			insn->inputs_count--;
+			if (insn->inputs_count > 1) {
+				insn->inputs_count--;
+			}
 			if (insn->inputs_count == 1) {
-				if (!label->is_unused) {
+				if (!label->used && !label->is_unused) {
 					yy_warning_fmt("label \"%s\" defined but not used", yy_sym2str(rcc, name));
 				}
 				insn->op = IR_BEGIN;
@@ -9008,7 +9153,7 @@ void c_do_finish_label(rcc_ctx *rcc, c_name name, c_label *label)
 				ir_ref prev = IR_UNUSED;
 
 				if (rcc->active_ctx->control) {
-					prev = ir_END(); // TODO: try to avoid this contol split ???
+					prev = c_ir_END(rcc); // TODO: try to avoid this contol split ???
 				}
 				ir_MERGE_list(label->src_list);
 				end = ir_END();
@@ -9019,6 +9164,9 @@ void c_do_finish_label(rcc_ctx *rcc, c_name name, c_label *label)
 			insn = &rcc->active_ctx->ir_base[label->dst];
 			ops = insn->ops;
 			ops[insn->inputs_count] = end;
+			if (insn->inputs_count == 1) {
+				insn->op = IR_BEGIN;
+			}
 		}
 	} else if (label->src_list) {
 		yy_error_fmt("label \"%s\" used but not defined", yy_sym2str(rcc, name));
@@ -9037,6 +9185,7 @@ void c_do_label_value(rcc_ctx *rcc, c_value *res, c_name label_name)
 	if (!label) {
 		label = c_new_label(rcc, label_name, rcc->active_func_scope, NULL, rcc->active_scope == rcc->active_func_scope);
 	}
+	label->used = 1;
 	if (!label->value_sym) {
 		ir_ref end = ir_END();
 
@@ -10321,15 +10470,20 @@ void c_do_func_end(rcc_ctx *rcc, c_name name, c_dcl *d, c_scope *scope)
 
 			/* re-link BEGIN node corresponding to label address */
 			merge = &rcc->active_ctx->ir_base[insn->op1];
-			IR_ASSERT(merge->op == IR_MERGE);
-			insn->op1 = merge->op1;
-			n = merge->inputs_count;
-			for (i = 1; i < n; i++) {
-				ir_ref input = ir_insn_op(merge, i + 1);
-				ir_insn_set_op(merge, i, input);
+			if (merge->op == IR_MERGE) {
+				insn->op1 = merge->op1;
+				n = merge->inputs_count;
+				for (i = 1; i < n; i++) {
+					ir_ref input = ir_insn_op(merge, i + 1);
+					ir_insn_set_op(merge, i, input);
+				}
+				ir_insn_set_op(merge, i, IR_UNUSED);
+				merge->inputs_count = i - 1;
+			} else {
+				IR_ASSERT(merge->op == IR_BEGIN);
+				insn->op1 = merge->op1;
+				merge->op1 = IR_UNUSED;
 			}
-			ir_insn_set_op(merge, i, IR_UNUSED);
-			merge->inputs_count = i - 1;
 		} while (ref);
 		rcc->c_computed_goto_targets = IR_UNUSED;
 	}

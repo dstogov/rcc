@@ -971,7 +971,8 @@ struct _c_loop {
 
 struct _c_label {
 	bool      is_local;
-	bool      is_unused;
+	bool      is_unused;      /* label with __attribute__(unused) */
+	bool      used;
 	ir_ref    dst;
 	ir_ref    src_list;
 	ir_ref    vla_block;
