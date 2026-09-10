@@ -7731,7 +7731,16 @@ ir_ref c_do_bool_and_start(rcc_ctx *rcc, c_value *op1)
 	}
 	c_do_bool(rcc, op1, op1);
 	ir_ref ref = ir_IF(c_value_ref(rcc, op1));
-	c_ir_IF_TRUE(rcc, ref);
+	if (!IR_IS_CONST_REF(rcc->active_ctx->ir_base[ref].op2)) {
+		c_ir_IF_TRUE(rcc, ref);
+	} else if (ir_const_is_true(&rcc->active_ctx->ir_base[rcc->active_ctx->ir_base[ref].op2])) {
+		rcc->active_ctx->ir_base[ref].op2 = IR_TRUE;
+		ir_BEGIN(ref);
+	} else {
+		rcc->active_ctx->ir_base[ref].op2 = IR_FALSE;
+		ir_BEGIN(IR_UNUSED);
+		rcc->c_dead_code = 1;
+	}
 	return ref;
 }
 
@@ -7745,27 +7754,34 @@ void c_do_bool_and_end(rcc_ctx *rcc, c_value *op1, c_value *op2, ir_ref if_ref)
 	 || op2->type->kind == C_TYPE_VECTOR) {
 		yy_error("scalar is required");
 	}
-	if (if_ref) {
-		ir_ref ref, end;
 
-		c_do_bool(rcc, op2, op2);
-		ref = c_value_ref(rcc, op2);
-		end = c_ir_END(rcc);
-		c_ir_IF_FALSE(rcc, if_ref);
-		if (end) ir_MERGE_2(end, ir_END());
-		if (!end) {
-			val.u64 = 0;
-			c_value_set_const(op1, &c_type_bool, IR_BOOL, val);
-		} else if (c_value_is_const(op1) && c_value_is_const(op2)) {
-			if (c_value_is_true(op1) && c_value_is_true(op2)) {
-				val.u64 = 1;
-				c_value_set_const(op1, &c_type_bool, IR_BOOL, val);
+	if (if_ref) {
+		if (!IR_IS_CONST_REF(rcc->active_ctx->ir_base[if_ref].op2)) {
+			ir_ref ref, end;
+
+			c_do_bool(rcc, op2, op2);
+			ref = c_value_ref(rcc, op2);
+			end = c_ir_END(rcc);
+			c_ir_IF_FALSE(rcc, if_ref);
+			if (end) {
+				ir_MERGE_2(end, ir_END());
+				c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_PHI_2(IR_BOOL, ref, IR_FALSE));
 			} else {
 				val.u64 = 0;
 				c_value_set_const(op1, &c_type_bool, IR_BOOL, val);
 			}
+		} else if (rcc->active_ctx->ir_base[if_ref].op2 == IR_TRUE) {
+			rcc->active_ctx->ir_base[if_ref].op = IR_END;
+			rcc->active_ctx->ir_base[if_ref].op2 = IR_UNUSED;
+			c_do_bool(rcc, op1, op2);
 		} else {
-			c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_PHI_2(IR_BOOL, ref, IR_FALSE));
+			IR_ASSERT(rcc->active_ctx->ir_base[if_ref].op2 == IR_FALSE);
+			rcc->active_ctx->ir_base[if_ref].op = IR_END;
+			rcc->active_ctx->ir_base[if_ref].op2 = IR_UNUSED;
+			c_ir_END(rcc);
+			ir_BEGIN(if_ref);
+			val.u64 = 0;
+			c_value_set_const(op1, &c_type_bool, IR_BOOL, val);
 		}
 	} else {
 		c_do_bool(rcc, op1, op2);
@@ -7786,7 +7802,16 @@ ir_ref c_do_bool_or_start(rcc_ctx *rcc, c_value *op1)
 	}
 	c_do_bool(rcc, op1, op1);
 	ir_ref ref = ir_IF(c_value_ref(rcc, op1));
-	c_ir_IF_FALSE(rcc, ref);
+	if (!IR_IS_CONST_REF(rcc->active_ctx->ir_base[ref].op2)) {
+		c_ir_IF_FALSE(rcc, ref);
+	} else if (ir_const_is_true(&rcc->active_ctx->ir_base[rcc->active_ctx->ir_base[ref].op2])) {
+		rcc->active_ctx->ir_base[ref].op2 = IR_TRUE;
+		ir_BEGIN(IR_UNUSED);
+		rcc->c_dead_code = 1;
+	} else {
+		rcc->active_ctx->ir_base[ref].op2 = IR_FALSE;
+		ir_BEGIN(ref);
+	}
 	return ref;
 }
 
@@ -7800,27 +7825,34 @@ void c_do_bool_or_end(rcc_ctx *rcc, c_value *op1, c_value *op2, ir_ref if_ref)
 	 || op2->type->kind == C_TYPE_VECTOR) {
 		yy_error("scalar is required");
 	}
-	if (if_ref) {
-		ir_ref ref, end;
 
-		c_do_bool(rcc, op2, op2);
-		ref = c_value_ref(rcc, op2);
-		end = c_ir_END(rcc);
-		c_ir_IF_TRUE(rcc, if_ref);
-		if (end) ir_MERGE_2(end, ir_END());
-		if (!end) {
+	if (if_ref) {
+		if (!IR_IS_CONST_REF(rcc->active_ctx->ir_base[if_ref].op2)) {
+			ir_ref ref, end;
+
+			c_do_bool(rcc, op2, op2);
+			ref = c_value_ref(rcc, op2);
+			end = c_ir_END(rcc);
+			c_ir_IF_TRUE(rcc, if_ref);
+			if (end) {
+				ir_MERGE_2(end, ir_END());
+				c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_PHI_2(IR_BOOL, ref, IR_TRUE));
+			} else {
+				val.u64 = 1;
+				c_value_set_const(op1, &c_type_bool, IR_BOOL, val);
+			}
+		} else if (rcc->active_ctx->ir_base[if_ref].op2 == IR_TRUE) {
+			rcc->active_ctx->ir_base[if_ref].op = IR_END;
+			rcc->active_ctx->ir_base[if_ref].op2 = IR_UNUSED;
+			c_ir_END(rcc);
+			ir_BEGIN(if_ref);
 			val.u64 = 1;
-			c_value_set_const(op1, &c_type_bool, IR_BOOL, val);
-		} else if ((c_value_is_const(op1) && c_value_is_true(op1))
-		 || (c_value_is_const(op2) && c_value_is_true(op2))) {
-			val.u64 = 1;
-			c_value_set_const(op1, &c_type_bool, IR_BOOL, val);
-		} else if (c_value_is_const(op1) && !c_value_is_true(op1)
-		 && c_value_is_const(op2) && !c_value_is_true(op2)) {
-			val.u64 = 0;
 			c_value_set_const(op1, &c_type_bool, IR_BOOL, val);
 		} else {
-			c_value_set_rval(op1, &c_type_bool, IR_BOOL, ir_PHI_2(IR_BOOL, ref, IR_TRUE));
+			IR_ASSERT(rcc->active_ctx->ir_base[if_ref].op2 == IR_FALSE);
+			rcc->active_ctx->ir_base[if_ref].op = IR_END;
+			rcc->active_ctx->ir_base[if_ref].op2 = IR_UNUSED;
+			c_do_bool(rcc, op1, op2);
 		}
 	} else {
 		c_do_bool(rcc, op1, op2);
