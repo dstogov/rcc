@@ -138,42 +138,37 @@ static void rcc_ir_codegen(rcc_ctx *rcc, c_name name, ir_ctx *ctx, c_sym *sym)
 
 	IR_ASSERT(sym->has_code < C_CODE_STARTED);
 	sym->has_code = C_CODE_STARTED;
+	ctx->func_name = IR_EXT_STR(name);
 
-	if (rcc_needs_native_code(rcc)) {
-		ctx->func_name = IR_EXT_STR(name);
+	if ((rcc->c_opt_flags & C_OPT_LEVEL) == 0) {
+		/* RCC may insert "static" ALLOCAs (with constant size) anywhere,
+		 * linking them into contol chain of the first Basic Block.
+		 * When optimizations are disable (with -O0), ctx.cfg_map[] initialized only for BB start/end.
+		 * Here we have to update the mapping for the ALLOCA instructions.
+		 */
+		ir_block *bb = &ctx->cfg_blocks[1];
+		ir_ref start = bb->start;
+		ir_ref ref = bb->end;
+		ir_insn *insn = &ctx->ir_base[ref];
 
-		if ((rcc->c_opt_flags & C_OPT_LEVEL) == 0) {
-			/* RCC may insert "static" ALLOCAs (with constant size) anywhere,
-			 * linking them into contol chain of the first Basic Block.
-			 * When optimizations are disable (with -O0), ctx.cfg_map[] initialized only for BB start/end.
-			 * Here we have to update the mapping for the ALLOCA instructions.
-			 */
-			ir_block *bb = &ctx->cfg_blocks[1];
-			ir_ref start = bb->start;
-			ir_ref ref = bb->end;
-			ir_insn *insn = &ctx->ir_base[ref];
-
+		ref = insn->op1;
+		while (ref != start) {
+			ctx->cfg_map[ref] = 1;
+			insn = &ctx->ir_base[ref];
 			ref = insn->op1;
-			while (ref != start) {
-				ctx->cfg_map[ref] = 1;
-				insn = &ctx->ir_base[ref];
-				ref = insn->op1;
-			}
 		}
-
-		ir_match(ctx);
 	}
 
-	if ((rcc->c_opt_flags & C_OPT_LEVEL) > 0 || rcc_needs_native_code(rcc)) {
-		ir_assign_virtual_registers(ctx);
-		if (rcc->c_flags & C_DUMP_IR_AFTER_CODE_MATCHING) {
-			if (rcc->c_flags & C_DUMP_DOT) {
-				ir_dump_dot(ctx, yy_sym2str(rcc, name), "(after code matching)", stderr);
-			} else {
-				rcc_dump_func_proto(rcc, name, 0, stderr);
-				fprintf(stderr, "# (after code matching)\n");
-				ir_save(ctx, rcc->ir_save_flags | IR_SAVE_CFG | IR_SAVE_RULES, stderr);
-			}
+	ir_match(ctx);
+
+	ir_assign_virtual_registers(ctx);
+	if (rcc->c_flags & C_DUMP_IR_AFTER_CODE_MATCHING) {
+		if (rcc->c_flags & C_DUMP_DOT) {
+			ir_dump_dot(ctx, yy_sym2str(rcc, name), "(after code matching)", stderr);
+		} else {
+			rcc_dump_func_proto(rcc, name, 0, stderr);
+			fprintf(stderr, "# (after code matching)\n");
+			ir_save(ctx, rcc->ir_save_flags | IR_SAVE_CFG | IR_SAVE_RULES, stderr);
 		}
 	}
 
@@ -206,24 +201,22 @@ static void rcc_ir_codegen(rcc_ctx *rcc, c_name name, ir_ctx *ctx, c_sym *sym)
 			}
 		}
 
-		if (rcc_needs_native_code(rcc)) {
-			ir_reg_alloc(ctx);
-			if (rcc->c_flags & C_DUMP_IR_AFTER_REGALLOC) {
-				if (rcc->c_flags & C_DUMP_DOT) {
-					ir_dump_dot(ctx, yy_sym2str(rcc, name), "(after regalloc)", stderr);
-				} else {
-					rcc_dump_func_proto(rcc, name, 0, stderr);
-					fprintf(stderr, "# (after regalloc)\n");
-					ir_save(ctx, rcc->ir_save_flags | IR_SAVE_CFG | IR_SAVE_RULES | IR_SAVE_REGS, stderr);
-					if (rcc->c_flags & C_DUMP_LIVE_RANGES) {
-						ir_dump_live_ranges(ctx, stderr);
-					}
+		ir_reg_alloc(ctx);
+		if (rcc->c_flags & C_DUMP_IR_AFTER_REGALLOC) {
+			if (rcc->c_flags & C_DUMP_DOT) {
+				ir_dump_dot(ctx, yy_sym2str(rcc, name), "(after regalloc)", stderr);
+			} else {
+				rcc_dump_func_proto(rcc, name, 0, stderr);
+				fprintf(stderr, "# (after regalloc)\n");
+				ir_save(ctx, rcc->ir_save_flags | IR_SAVE_CFG | IR_SAVE_RULES | IR_SAVE_REGS, stderr);
+				if (rcc->c_flags & C_DUMP_LIVE_RANGES) {
+					ir_dump_live_ranges(ctx, stderr);
 				}
 			}
 		}
 
 		ir_schedule_blocks(ctx);
-	} else if (rcc_needs_native_code(rcc)) {
+	} else {
 		ir_compute_dessa_moves(ctx);
 		ir_reg_alloc_simple(ctx);
 		if (rcc->c_flags & C_DUMP_IR_AFTER_REGALLOC) {
@@ -255,65 +248,63 @@ static void rcc_ir_codegen(rcc_ctx *rcc, c_name name, ir_ctx *ctx, c_sym *sym)
 	ir_check(ctx);
 #endif
 
-	if (rcc_needs_native_code(rcc)) {
-		size_t size;
-		void *entry;
+	size_t size;
+	void *entry;
 
-		ctx->code_buffer = &rcc->code_buffer;
-		rcc->protected = 0;
-		ir_mem_unprotect(rcc->code_buffer.start, (char*)rcc->code_buffer.end - (char*)rcc->code_buffer.start);
-		entry = ir_emit_code(ctx, &size);
-		if (!entry) {
-			if (ctx->status == IR_ERROR_CODE_MEM_OVERFLOW) {
-				yy_error("JIT code buffer overflow");
-			} else {
-				yy_error_fmt("internal error in ir_emit_code() [%d]", ctx->status);
-			}
+	ctx->code_buffer = &rcc->code_buffer;
+	rcc->protected = 0;
+	ir_mem_unprotect(rcc->code_buffer.start, (char*)rcc->code_buffer.end - (char*)rcc->code_buffer.start);
+	entry = ir_emit_code(ctx, &size);
+	if (!entry) {
+		if (ctx->status == IR_ERROR_CODE_MEM_OVERFLOW) {
+			yy_error("JIT code buffer overflow");
+		} else {
+			yy_error_fmt("internal error in ir_emit_code() [%d]", ctx->status);
 		}
-		IR_ASSERT(entry);
-		if (c_value_is_const(func)) {
-			if (!sym->is_thunk) yy_error_fmt("external symbol \"%s\" used before the local one", yy_sym2str(rcc, name));
-			ir_fix_thunk(func->u.val.ptr, entry);
-			sym->is_thunk = 0;
-		}
-#ifndef _WIN32
-		if (rcc->c_flags & C_GDB) {
-			ir_gdb_register(yy_sym2str(rcc, name), entry, size, sizeof(void*), 0);
-		}
-#endif
-		ir_mem_protect(rcc->code_buffer.start, (char*)rcc->code_buffer.end - (char*)rcc->code_buffer.start);
-		rcc->protected = 1;
-
-		if (rcc->c_flags & C_DUMP_ASM) {
-//			ir_ref i;
-//			ir_insn *insn;
-//
-			ir_disasm_add_symbol(yy_sym2str(rcc, name), (uintptr_t)entry, size);
-//
-//			for (i = IR_UNUSED + 1, insn = ctx->ir_base - i; i < ctx->consts_count; i++, insn--) {
-//				if (insn->op == IR_FUNC) {
-//					const char *name = ir_get_str(ctx, insn->val.name);
-//					void *addr = ir_loader_resolve_sym_name(loader, name, 0);
-//
-//					IR_ASSERT(addr);
-//					ir_disasm_add_symbol(name, (uintptr_t)addr, IR_UNKNOWN_SIZE);
-//TODO:			} else if (insn->op == IR_SYM) {
-//				}
-//			}
-			ir_disasm(yy_sym2str(rcc, name), entry, size, 0, ctx, rcc->output);
-		}
-
-#ifndef _WIN32
-		if (rcc->c_flags & C_PERF) {
-			ir_perf_map_register(yy_sym2str(rcc, name), entry, size);
-			ir_perf_jitdump_register(yy_sym2str(rcc, name), entry, size);
-		}
-#endif
-
-		func->u.op |= C_VAL_CONST;
-		func->u.type = IR_ADDR;
-		func->u.val.ptr = entry;
 	}
+	IR_ASSERT(entry);
+	if (c_value_is_const(func)) {
+		if (!sym->is_thunk) yy_error_fmt("external symbol \"%s\" used before the local one", yy_sym2str(rcc, name));
+		ir_fix_thunk(func->u.val.ptr, entry);
+		sym->is_thunk = 0;
+	}
+#ifndef _WIN32
+	if (rcc->c_flags & C_GDB) {
+		ir_gdb_register(yy_sym2str(rcc, name), entry, size, sizeof(void*), 0);
+	}
+#endif
+	ir_mem_protect(rcc->code_buffer.start, (char*)rcc->code_buffer.end - (char*)rcc->code_buffer.start);
+	rcc->protected = 1;
+
+	if (rcc->c_flags & C_DUMP_ASM) {
+//		ir_ref i;
+//		ir_insn *insn;
+//
+		ir_disasm_add_symbol(yy_sym2str(rcc, name), (uintptr_t)entry, size);
+//
+//		for (i = IR_UNUSED + 1, insn = ctx->ir_base - i; i < ctx->consts_count; i++, insn--) {
+//			if (insn->op == IR_FUNC) {
+//				const char *name = ir_get_str(ctx, insn->val.name);
+//				void *addr = ir_loader_resolve_sym_name(loader, name, 0);
+//
+//				IR_ASSERT(addr);
+//				ir_disasm_add_symbol(name, (uintptr_t)addr, IR_UNKNOWN_SIZE);
+//TODO		} else if (insn->op == IR_SYM) {
+//			}
+//		}
+		ir_disasm(yy_sym2str(rcc, name), entry, size, 0, ctx, rcc->output);
+	}
+
+#ifndef _WIN32
+	if (rcc->c_flags & C_PERF) {
+		ir_perf_map_register(yy_sym2str(rcc, name), entry, size);
+		ir_perf_jitdump_register(yy_sym2str(rcc, name), entry, size);
+	}
+#endif
+
+	func->u.op |= C_VAL_CONST;
+	func->u.type = IR_ADDR;
+	func->u.val.ptr = entry;
 
 	sym->has_code = C_CODE_DONE;
 }
@@ -482,33 +473,43 @@ void rcc_ir_compile(rcc_ctx *rcc, c_name name, c_dcl *d, c_sym *sym)
 
 	if ((rcc->c_opt_flags & C_OPT_INLINE)
 	 && name != YY_MAIN
+	 && !(d->attr2 & (C_ATTR2_CONSTRUCTOR|C_ATTR2_DESTRUCTOR))
 	 && !c_value_is_const(func)
 	 && rcc_may_inline(func, ctx)) {
 		sym->value.u.op |= C_VAL_INLINE;
 		if (!RCC_DELAY_CODE_GEN) {
-			goto delay_codegen;
+			/* Remember IR for inlining (don't generate native code) */
+			ir_ctx *copy = ir_mem_malloc(sizeof(ir_ctx));
+			if (!copy) yy_error("out of memory");
+			memcpy(copy, ctx, sizeof(ir_ctx));
+			sym->ctx = copy;
+			return;
 		}
 	}
 
 	if (!RCC_DELAY_CODE_GEN) {
-		rcc_ir_codegen(rcc, name, ctx, sym);
+		if (rcc_needs_native_code(rcc)) {
+			rcc_ir_codegen(rcc, name, ctx, sym);
+		}
 		ir_free(ctx);
 	} else {
 		ir_ctx *copy;
 
-		if ((((rcc->c_flags & C_SINGLE_FILE) ? name == YY_MAIN : sym->linkage == C_LINK_EXTERNAL)
+		if (rcc_needs_native_code(rcc)
+		 && (((rcc->c_flags & C_SINGLE_FILE) ? name == YY_MAIN : sym->linkage == C_LINK_EXTERNAL)
 		  || (d->attr2 & (C_ATTR2_CONSTRUCTOR|C_ATTR2_DESTRUCTOR)))
 		 && !sym->has_code) {
 			sym->has_code = C_CODE_SCHEDULED;
 			if (!ir_list_capasity(&rcc->codegen_queue)) ir_list_init(&rcc->codegen_queue, 32);
 			ir_list_push(&rcc->codegen_queue, name);
 		}
-delay_codegen:
 		copy = ir_mem_malloc(sizeof(ir_ctx));
 		if (!copy) yy_error("out of memory");
 		memcpy(copy, ctx, sizeof(ir_ctx));
 		sym->ctx = copy;
 	}
+
+	if (!(rcc->c_flags & C_RUN)) return;
 
 	if (d->attr2 & C_ATTR2_CONSTRUCTOR) {
 		rcc->constructors = ir_mem_realloc(rcc->constructors, sizeof(c_name) * (rcc->constructors_count + 1));
@@ -909,7 +910,7 @@ bool c_linker_fix_reloc(rcc_ctx *rcc, c_sym *obj, size_t obj_offset, c_value *va
 			val->u.val.addr = sym->value.u.val.addr + offset;
 		} else {
 			val->u.val.addr = 0;
-			if (sym->kind == C_SYM_FUNC && !sym->has_code) {
+			if (rcc_needs_native_code(rcc) && sym->kind == C_SYM_FUNC && !sym->has_code) {
 				sym->has_code = C_CODE_SCHEDULED;
 				if (!ir_list_capasity(&rcc->codegen_queue)) ir_list_init(&rcc->codegen_queue, 32);
 				ir_list_push(&rcc->codegen_queue, n);
