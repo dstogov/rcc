@@ -767,6 +767,7 @@ typedef enum {
 #define C_IS_TYPE_NUM(t)           (C_IS_TYPE_INT(t) || C_IS_TYPE_FP(t))
 #define C_IS_TYPE_SCALAR_OR_PTR(t) (C_IS_TYPE_SCALAR(t) || (t)->kind == C_TYPE_ENUM || (t)->kind == C_TYPE_POINTER)
 #define C_IS_TYPE_INT_OR_PTR(t)    (C_IS_TYPE_INT(t) || (t)->kind == C_TYPE_ENUM || (t)->kind == C_TYPE_POINTER)
+#define C_IS_TYPE_INT_OR_PTR_OR_FUNC(t) (C_IS_TYPE_INT(t) || (t)->kind == C_TYPE_ENUM || (t)->kind == C_TYPE_POINTER || (t)->kind == C_TYPE_FUNC)
 
 typedef enum {
 	C_TYPE_INCOMPLETE = (1<<0), /* incomplete (not defined) enum, struct, union */

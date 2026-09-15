@@ -3823,7 +3823,7 @@ static void c_do_trunc(rcc_ctx *rcc, const c_type *t, ir_type type, c_value *v)
 	ir_val val;
 
 	IR_ASSERT(C_IS_TYPE_INT_OR_PTR(t)
-		&& ((C_IS_TYPE_INT_OR_PTR(v->type) && t->size < v->type->size)
+		&& ((C_IS_TYPE_INT_OR_PTR_OR_FUNC(v->type) && t->size < v->type->size)
 		 || ((v->type->kind == C_TYPE_ARRAY || v->type->kind == C_TYPE_FUNC) && t->size < sizeof(void*))));
 	IR_ASSERT(IR_IS_TYPE_INT(type) && IR_IS_TYPE_INT(v->u.type) && ir_type_size[type] < ir_type_size[v->u.type]);
 	if (c_value_is_ref(v)) {
@@ -3880,7 +3880,7 @@ static void c_do_sext(rcc_ctx *rcc, const c_type *t, ir_type type, c_value *v)
 {
 	ir_val val;
 
-	IR_ASSERT(C_IS_TYPE_INT_OR_PTR(t) && C_IS_TYPE_INT_OR_PTR(v->type) && t->size > v->type->size);
+	IR_ASSERT(C_IS_TYPE_INT_OR_PTR(t) && C_IS_TYPE_INT_OR_PTR_OR_FUNC(v->type) && t->size > v->type->size);
 	IR_ASSERT(IR_IS_TYPE_INT(type) && IR_IS_TYPE_INT(v->u.type) && ir_type_size[type] > ir_type_size[v->u.type]);
 	if (c_value_is_ref(v)) {
 		c_value_set_rval(v, t, type, ir_SEXT(type, c_value_ref(rcc, v)));
@@ -3904,7 +3904,7 @@ static void c_do_zext(rcc_ctx *rcc, const c_type *t, ir_type type, c_value *v)
 {
 	ir_val val;
 
-	IR_ASSERT(C_IS_TYPE_INT_OR_PTR(t) && C_IS_TYPE_INT_OR_PTR(v->type) && t->size > v->type->size);
+	IR_ASSERT(C_IS_TYPE_INT_OR_PTR(t) && C_IS_TYPE_INT_OR_PTR_OR_FUNC(v->type) && t->size > v->type->size);
 	IR_ASSERT(IR_IS_TYPE_INT(type) && IR_IS_TYPE_INT(v->u.type) && ir_type_size[type] > ir_type_size[v->u.type]);
 	if (c_value_is_ref(v)) {
 		c_value_set_rval(v, t, type, ir_ZEXT(type, c_value_ref(rcc, v)));
