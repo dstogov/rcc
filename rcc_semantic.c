@@ -6449,7 +6449,11 @@ static const c_type *c_common_binop_type(rcc_ctx *rcc, yy_sym sym, c_value *op1,
 		if (sym == YY__PLUS) {
 			if (C_IS_TYPE_KIND_INT(t2) || t2 == C_TYPE_ENUM) {
 				if (op2_type->size != op1_type->size) {
-					c_do_cvt(rcc, &c_type_size_t, IR_SIZE_T, op2);
+					if (C_IS_TYPE_KIND_SIGNED(t2)) {
+						c_do_cvt(rcc, &c_type_ssize_t, IR_SSIZE_T, op2);
+					} else {
+						c_do_cvt(rcc, &c_type_size_t, IR_SIZE_T, op2);
+					}
 				}
 				if (op1_type->kind == C_TYPE_ARRAY) return c_create_pointer_type(rcc, op1_type->array.type);
 				return op1_type;
@@ -6457,7 +6461,11 @@ static const c_type *c_common_binop_type(rcc_ctx *rcc, yy_sym sym, c_value *op1,
 		} else if (sym == YY__MINUS) {
 			if (C_IS_TYPE_KIND_INT(t2) || t2 == C_TYPE_ENUM) {
 				if (op2_type->size != op1_type->size) {
-					c_do_cvt(rcc, &c_type_size_t, IR_SIZE_T, op2);
+					if (C_IS_TYPE_KIND_SIGNED(t2)) {
+						c_do_cvt(rcc, &c_type_ssize_t, IR_SSIZE_T, op2);
+					} else {
+						c_do_cvt(rcc, &c_type_size_t, IR_SIZE_T, op2);
+					}
 				}
 				if (op1_type->kind == C_TYPE_ARRAY) return c_create_pointer_type(rcc, op1_type->array.type);
 				return op1_type;
@@ -6497,7 +6505,11 @@ static const c_type *c_common_binop_type(rcc_ctx *rcc, yy_sym sym, c_value *op1,
 		if (sym == YY__PLUS) {
 			if (C_IS_TYPE_KIND_INT(t1) || t1 == C_TYPE_ENUM) {
 				if (op1_type->size != op2_type->size) {
-					c_do_cvt(rcc, &c_type_size_t, IR_SIZE_T, op1);
+					if (C_IS_TYPE_KIND_SIGNED(t1)) {
+						c_do_cvt(rcc, &c_type_ssize_t, IR_SSIZE_T, op1);
+					} else {
+						c_do_cvt(rcc, &c_type_size_t, IR_SIZE_T, op1);
+					}
 				}
 				if (op2_type->kind == C_TYPE_ARRAY) return c_create_pointer_type(rcc, op2_type->array.type);
 				return op2_type;
