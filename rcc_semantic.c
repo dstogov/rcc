@@ -2849,6 +2849,8 @@ void c_gcc_attribute_vector_size(rcc_ctx *rcc, c_dcl *d, c_name attr, c_value *v
 		yy_error_fmt("attribute \"%s\" value must be a positive integer constant", yy_sym2str(rcc, attr));
 	} else if ((val->u.val.u64 & (val->u.val.u64 - 1)) != 0) {
 		yy_error_fmt("attribute \"%s\" value must be a power of two", yy_sym2str(rcc, attr));
+	} else if (val->u.val.u64 > 0x40000000) {
+		yy_error_fmt("attribute \"%s\" value is too large", yy_sym2str(rcc, attr));
 	}
 
 	d->vector_size = val->u.val.u32;
