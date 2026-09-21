@@ -10053,6 +10053,14 @@ void c_do_init_nested(rcc_ctx *rcc, c_sym *obj, c_init *init, bool b)
 
 void c_do_init_end(rcc_ctx *rcc, c_sym *obj, c_init *init)
 {
+	if (c_value_is_var(&obj->value)
+	 && obj->value.u.ref == rcc->active_ctx->insns_count - 1 /* empty initializer = {} */
+	 && C_IS_TYPE_SCALAR_OR_PTR(obj->value.type)) {
+		ir_val val;
+
+		val.u64 = 0;
+		ir_VSTORE(obj->value.u.ref, ir_const(rcc->active_ctx, val, obj->value.type->ir_type));
+	}
 	if (obj->value.type->attr & C_ATTR_FLEXIBLE) {
 		if (obj->value.type->kind == C_TYPE_ARRAY) {
 			/* Convert "flexible" array to regular */
