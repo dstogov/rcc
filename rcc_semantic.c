@@ -2387,7 +2387,7 @@ void c_finish_struct_type(rcc_ctx *rcc, c_type *type, c_dcl *d)
 				type->attr &= ~C_ATTR_ALIGN_MASK;
 				type->attr |= c_align2attr(struct_align);
 			}
-			type->size = size;
+			type->size = struct_align ? IR_ALIGNED_SIZE(size, struct_align) : size;
 		} else {
 			uint32_t last_offset = 0;
 			uint32_t last_bit = 0;
