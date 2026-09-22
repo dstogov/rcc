@@ -4149,17 +4149,47 @@ static ir_ref c_do_store_bit_field(rcc_ctx *rcc, ir_ref addr, uint32_t first_bit
 	ret = ref = c_value_ref(rcc, val);
 	if (val->u.type != type) {
 		if (ir_type_size[type] < ir_type_size[val->u.type]) {
-			ref = ir_TRUNC(type, ref);
+			if (IR_IS_CONST_REF(ref)) {
+				switch (ir_type_size[type]) {
+					case 4: v.u64 = rcc->active_ctx->ir_base[ref].val.u32; break;
+					case 2: v.u64 = rcc->active_ctx->ir_base[ref].val.u16; break;
+					case 1: v.u64 = rcc->active_ctx->ir_base[ref].val.u8; break;
+					default: IR_ASSERT(0); break;
+				}
+				ref = ir_const(rcc->active_ctx, v, type);
+			} else {
+				ref = ir_TRUNC(type, ref);
+			}
 		} else if (ir_type_size[type] == ir_type_size[val->u.type]) {
-			ref = ir_BITCAST(type, ref);
+			if (IR_IS_CONST_REF(ref)) {
+				ref = ir_const(rcc->active_ctx, rcc->active_ctx->ir_base[ref].val, type);
+			} else {
+				ref = ir_BITCAST(type, ref);
+			}
 		} else {
-			ref = ir_ZEXT(type, ref);
+			if (IR_IS_CONST_REF(ref)) {
+				switch (ir_type_size[val->u.type]) {
+					case 4: v.u64 = rcc->active_ctx->ir_base[ref].val.u32; break;
+					case 2: v.u64 = rcc->active_ctx->ir_base[ref].val.u16; break;
+					case 1: v.u64 = rcc->active_ctx->ir_base[ref].val.u8; break;
+					default: IR_ASSERT(0); break;
+				}
+				ref = ir_const(rcc->active_ctx, v, type);
+			} else {
+				ref = ir_ZEXT(type, ref);
+			}
 		}
 	}
 
 	if (first_bit + bits != ir_type_size[type] * 8) {
 		v.u64 = (1ULL<<bits)-1;
-		ref = ir_AND(type, ref, ir_const(rcc->active_ctx, v, type));
+		if (IR_IS_CONST_REF(ref)) {
+			ir_val v2;
+			v2.u64 = rcc->active_ctx->ir_base[ref].val.u64 & v.u64;
+			ref = ir_const(rcc->active_ctx, v2, type);
+		} else {
+			ref = ir_AND(type, ref, ir_const(rcc->active_ctx, v, type));
+		}
 	}
 
 	if (val->u.type == type) ret = ref;
@@ -4167,7 +4197,20 @@ static ir_ref c_do_store_bit_field(rcc_ctx *rcc, ir_ref addr, uint32_t first_bit
 	if (first_bit) {
 		v.u64 = first_bit;
 		IR_ASSERT(v.u64 < ir_type_size[type] * 8);
-		ref = ir_SHL(type, ref, ir_const(rcc->active_ctx, v, type));
+		if (IR_IS_CONST_REF(ref)) {
+			ir_val v2 = {0};
+
+			switch (ir_type_size[type]) {
+				case 8: v2.u64 = rcc->active_ctx->ir_base[ref].val.u64 << v.u64; break;
+				case 4: v2.u32 = rcc->active_ctx->ir_base[ref].val.u32 << v.u32; break;
+				case 2: v2.u16 = rcc->active_ctx->ir_base[ref].val.u16 << v.u16; break;
+				case 1: v2.u8 = rcc->active_ctx->ir_base[ref].val.u8 << v.u8; break;
+				default: IR_ASSERT(0); break;
+			}
+			ref = ir_const(rcc->active_ctx, v2, type);
+		} else {
+			ref = ir_SHL(type, ref, ir_const(rcc->active_ctx, v, type));
+		}
 	}
 
 	v.u64 = ~(((1ULL<<bits)-1)<<first_bit);
@@ -4203,14 +4246,30 @@ static ir_ref c_do_store_bit_field(rcc_ctx *rcc, ir_ref addr, uint32_t first_bit
 	if (IR_IS_TYPE_SIGNED(val->u.type) && val->type->kind != C_TYPE_ENUM) {
 		v.u64 = ir_type_size[val->u.type] * 8 - bits;
 		if (v.u64) {
-			ir_ref c = ir_const(rcc->active_ctx, v, val->u.type);
-			IR_ASSERT(v.u64 < ir_type_size[val->u.type] * 8);
-			ret = ir_SHL(val->u.type, ret, c);
-			ret = ir_SAR(val->u.type, ret, c);
+			if (IR_IS_CONST_REF(ret)) {
+				switch (ir_type_size[val->u.type]) {
+					case 8: v.i64 = (rcc->active_ctx->ir_base[ret].val.i64 << v.i64) >> v.i64; break;
+					case 4: v.i32 = (rcc->active_ctx->ir_base[ret].val.i32 << v.i32) >> v.i32; break;
+					case 2: v.i16 = (rcc->active_ctx->ir_base[ret].val.i16 << v.i16) >> v.i16; break;
+					case 1: v.i8 = (rcc->active_ctx->ir_base[ret].val.i8 << v.i8) >> v.i8; break;
+					default: IR_ASSERT(0); break;
+				}
+				ret = ir_const(rcc->active_ctx, v, val->u.type);
+			} else {
+				ir_ref c = ir_const(rcc->active_ctx, v, val->u.type);
+				IR_ASSERT(v.u64 < ir_type_size[val->u.type] * 8);
+				ret = ir_SHL(val->u.type, ret, c);
+				ret = ir_SAR(val->u.type, ret, c);
+			}
 		}
 	} else if (val->u.type != type) {
 		v.u64 = (1ULL<<bits)-1;
-		ret = ir_AND(val->u.type, ret, ir_const(rcc->active_ctx, v, val->u.type));
+		if (IR_IS_CONST_REF(ret)) {
+			v.u64 = rcc->active_ctx->ir_base[ret].val.u64 & v.u64;
+			ret = ir_const(rcc->active_ctx, v, val->u.type);
+		} else {
+			ret = ir_AND(val->u.type, ret, ir_const(rcc->active_ctx, v, val->u.type));
+		}
 	}
 	return ret;
 }
@@ -4968,7 +5027,13 @@ void c_do_struct_field(rcc_ctx *rcc, c_value *v, c_name field_name)
 	}
 
 	ref = v->u.ref;
-	if (offset) {
+	if (!offset) {
+		/* pass */
+	} else if (IR_IS_CONST_REF(ref) && !IR_IS_SYM_CONST(rcc->active_ctx->ir_base[ref].op)) {
+		ir_val v = {0};
+		v.addr = rcc->active_ctx->ir_base[ref].val.addr + offset;
+		ref = ir_const(rcc->active_ctx, v, IR_ADDR);
+	} else {
 		ref = ir_ADD_A(ref, ir_const_size_t(rcc->active_ctx, offset));
 	}
 
@@ -6951,6 +7016,8 @@ static void c_do_add(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op
 				}
 				if (element_size == 1 && !(element_type->attr & C_ATTR_VLA)) {
 					ref = c_value_ref(rcc, op2);
+				} else if (c_value_is_const(op2) && !(element_type->attr & C_ATTR_VLA)) {
+					ref = ir_const_ssize_t(rcc->active_ctx, op2->u.val.addr * element_type->size);
 				} else {
 					ref = ir_MUL(IR_SSIZE_T, c_value_ref(rcc, op2), c_type_ssize(rcc, element_type));
 				}
@@ -6960,6 +7027,8 @@ static void c_do_add(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op
 				}
 				if (element_size == 1 && !(element_type->attr & C_ATTR_VLA)) {
 					ref = c_value_ref(rcc, op2);
+				} else if (c_value_is_const(op2) && !(element_type->attr & C_ATTR_VLA)) {
+					ref = ir_const_size_t(rcc->active_ctx, op2->u.val.addr * element_type->size);
 				} else {
 					ref = ir_MUL(IR_SIZE_T, c_value_ref(rcc, op2), c_type_size(rcc, element_type));
 				}
@@ -6991,6 +7060,8 @@ static void c_do_add(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op
 				}
 				if (element_size == 1 && !(element_type->attr & C_ATTR_VLA)) {
 					ref = c_value_ref(rcc, op1);
+				} else if (c_value_is_const(op1) && !(element_type->attr & C_ATTR_VLA)) {
+					ref = ir_const_ssize_t(rcc->active_ctx, op1->u.val.addr * element_type->size);
 				} else {
 					ref = ir_MUL(IR_SSIZE_T, c_value_ref(rcc, op1), c_type_ssize(rcc, element_type));
 				}
@@ -7000,6 +7071,8 @@ static void c_do_add(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op
 				}
 				if (element_size == 1 && !(element_type->attr & C_ATTR_VLA)) {
 					ref = c_value_ref(rcc, op1);
+				} else if (c_value_is_const(op1) && !(element_type->attr & C_ATTR_VLA)) {
+					ref = ir_const_size_t(rcc->active_ctx, op1->u.val.addr * element_type->size);
 				} else {
 					ref = ir_MUL(IR_SIZE_T, c_value_ref(rcc, op1), c_type_size(rcc, element_type));
 				}
@@ -7073,6 +7146,8 @@ static void c_do_sub(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op
 					}
 					if (element_size == 1 && !(element_type->attr & C_ATTR_VLA)) {
 						ref = c_value_ref(rcc, op2);
+					} else if (c_value_is_const(op2) && !(element_type->attr & C_ATTR_VLA)) {
+						ref = ir_const_ssize_t(rcc->active_ctx, op2->u.val.addr * element_type->size);
 					} else {
 						ref = ir_MUL(IR_SSIZE_T, c_value_ref(rcc, op2), c_type_ssize(rcc, element_type));
 					}
@@ -7082,6 +7157,8 @@ static void c_do_sub(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op
 					}
 					if (element_size == 1 && !(element_type->attr & C_ATTR_VLA)) {
 						ref = c_value_ref(rcc, op2);
+					} else if (c_value_is_const(op2) && !(element_type->attr & C_ATTR_VLA)) {
+						ref = ir_const_size_t(rcc->active_ctx, op2->u.val.addr * element_type->size);
 					} else {
 						ref = ir_MUL(IR_SIZE_T, c_value_ref(rcc, op2), c_type_size(rcc, element_type));
 					}
