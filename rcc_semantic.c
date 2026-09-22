@@ -4244,20 +4244,20 @@ static ir_ref c_do_store_bit_field(rcc_ctx *rcc, ir_ref addr, uint32_t first_bit
 	}
 
 	if (IR_IS_TYPE_SIGNED(val->u.type) && val->type->kind != C_TYPE_ENUM) {
-		v.u64 = ir_type_size[val->u.type] * 8 - bits;
+		v.u64 = (ir_type_size[val->u.type] * 8 - bits) & (ir_type_size[val->u.type] * 8 - 1);
 		if (v.u64) {
+			IR_ASSERT(v.u64 < ir_type_size[val->u.type] * 8);
 			if (IR_IS_CONST_REF(ret)) {
 				switch (ir_type_size[val->u.type]) {
-					case 8: v.i64 = (rcc->active_ctx->ir_base[ret].val.i64 << v.i64) >> v.i64; break;
-					case 4: v.i32 = (rcc->active_ctx->ir_base[ret].val.i32 << v.i32) >> v.i32; break;
-					case 2: v.i16 = (rcc->active_ctx->ir_base[ret].val.i16 << v.i16) >> v.i16; break;
-					case 1: v.i8 = (rcc->active_ctx->ir_base[ret].val.i8 << v.i8) >> v.i8; break;
+					case 8: v.i64 = (int64_t)(rcc->active_ctx->ir_base[ret].val.u64 << v.u64) >> v.i64; break;
+					case 4: v.i64 = (int32_t)(rcc->active_ctx->ir_base[ret].val.u32 << v.u32) >> v.i32; break;
+					case 2: v.i64 = (int16_t)(rcc->active_ctx->ir_base[ret].val.u16 << v.u16) >> v.i16; break;
+					case 1: v.i64 = (int8_t)(rcc->active_ctx->ir_base[ret].val.u8 << v.u8) >> v.i8; break;
 					default: IR_ASSERT(0); break;
 				}
 				ret = ir_const(rcc->active_ctx, v, val->u.type);
 			} else {
 				ir_ref c = ir_const(rcc->active_ctx, v, val->u.type);
-				IR_ASSERT(v.u64 < ir_type_size[val->u.type] * 8);
 				ret = ir_SHL(val->u.type, ret, c);
 				ret = ir_SAR(val->u.type, ret, c);
 			}
