@@ -8640,7 +8640,7 @@ void c_do_for_next_start(rcc_ctx *rcc, c_loop *loop)
 {
 	/* store "control" link in BEGIN.op2 */
 	loop->next = rcc->active_ctx->control =
-		ir_emit3(rcc->active_ctx, IR_BEGIN, IR_UNUSED, rcc->active_ctx->control, rcc->active_ctx->flags);
+		ir_emit3(rcc->active_ctx, IR_BEGIN, 1, rcc->active_ctx->control, rcc->active_ctx->flags);
 	/* disable FOLDING */
 	rcc->active_ctx->flags &= ~IR_OPT_FOLDING;
 }
@@ -8648,13 +8648,16 @@ void c_do_for_next_start(rcc_ctx *rcc, c_loop *loop)
 void c_do_for_next_end(rcc_ctx *rcc, c_loop *loop)
 {
 	ir_ref end = ir_END();
+	ir_ref next = loop->next;
+
 	/* restore "control" link from BEGIN.op2 */
-	rcc->active_ctx->control = rcc->active_ctx->ir_base[loop->next].op2;
+	rcc->active_ctx->control = rcc->active_ctx->ir_base[next].op2;
 	/* restore FOLDING */
-	rcc->active_ctx->flags = rcc->active_ctx->ir_base[loop->next].op3;
+	rcc->active_ctx->flags = rcc->active_ctx->ir_base[next].op3;
 	/* store END of "next" block in BEGIN.op2 */
-	rcc->active_ctx->ir_base[loop->next].op2 = end;
-			rcc->active_ctx->ir_base[loop->next].op3 = IR_UNUSED;
+	rcc->active_ctx->ir_base[next].op2 = end;
+	/* remember if we the "next" code somehow contains "break" or "continue" */
+	rcc->active_ctx->ir_base[next].op3 = (loop->continue_list > next) || (loop->break_list > next);
 }
 
 /* This function is usef to move FOR NEXT cofe "for(;;NEXT)" to the end of the loop body */
@@ -8745,9 +8748,24 @@ void c_do_for_end(rcc_ctx *rcc, c_loop *loop)
 
 	if (loop->next) {
 		ir_ref start = loop->next;
-		ir_ref end = rcc->active_ctx->ir_base[loop->next].op2;
-		rcc->active_ctx->control = ir_repeat_code_block(rcc->active_ctx, start, end, rcc->active_ctx->control);
-		memset(&rcc->active_ctx->ir_base[start], 0, sizeof(ir_insn) * ((end - start) + 1));
+
+		/* check if we the "next" code somehow contains "break" or "continue" */
+		if (EXPECTED(!rcc->active_ctx->ir_base[loop->next].op3)) {
+			ir_ref end = rcc->active_ctx->ir_base[loop->next].op2;
+			rcc->active_ctx->control = ir_repeat_code_block(rcc->active_ctx, start, end, rcc->active_ctx->control);
+			memset(&rcc->active_ctx->ir_base[start], 0, sizeof(ir_insn) * ((end - start) + 1));
+		} else {
+			/* relink instead of repeat*/
+			ir_ref last = ir_END();
+			ir_ref start = loop->next;
+			ir_insn *insn = &rcc->active_ctx->ir_base[start];
+			ir_ref end = insn->op2;
+
+			insn->op1 = last;
+			insn->op2 = IR_UNUSED;
+			insn->op3 = IR_UNUSED;
+			ir_BEGIN(end);
+		}
 	}
 
 	ir_ref end = ir_LOOP_END();
