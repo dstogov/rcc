@@ -812,7 +812,8 @@ static void c_finalize_type(rcc_ctx *rcc, c_dcl *d)
 		type->kind = C_TYPE_VECTOR;
 		type->ir_type = IR_MAKE_VECTOR_TYPE(d->type->ir_type, d->vector_size / d->type->size);
 		type->flags = rcc->active_scope ? 0 : C_TYPE_GLOBAL;
-		type->attr = c_align2attr(IR_MIN(d->vector_size, 16)); /* 16 byte allgnment */
+		// TODO: use at least 4-byte alignment to fix small vecotr access, see gcc/testsuite/gcc.dg/pr96239.c ???
+		type->attr = c_align2attr(IR_MIN(IR_MAX(d->vector_size, 4), 16)); /* 16 byte allgnment */
 		type->vec.type = d->type;
 		type->vec.length = d->vector_size / d->type->size;
 		d->type = type;
@@ -1565,6 +1566,9 @@ c_sym *c_declare(rcc_ctx *rcc, c_name name, c_dcl *d)
 		}
 		IR_ASSERT((d->flags & (C_DCL_STORAGE_CLASS-(C_DCL_EXTERN|C_DCL_STATIC|C_DCL_THREAD_LOCAL|C_DCL_AUTO|C_DCL_REGISTER))) == 0);
 		sym->kind = C_SYM_VAR;
+		if (!(d->attr & C_ATTR_ALIGN_MASK)) {
+			d->attr |= d->type->attr & C_ATTR_ALIGN_MASK;
+		}
 		if (!scope && (d->flags & C_DCL_REGISTER)) {
 			/* global register variable */
 			if (!(d->flags & C_DCL_REG_VAR)) yy_error_fmt("register name not specified for global register variable \"%s\"", yy_sym2str(rcc, name));
@@ -1628,7 +1632,7 @@ c_sym *c_declare(rcc_ctx *rcc, c_name name, c_dcl *d)
 						if (!addr) yy_error("not enough memory to allocate data");
 					} else {
 						addr = c_linker_allocate_data(rcc, name,
-							d->type->size, c_attr2align(d->type->attr), d->type->kind == C_TYPE_ARRAY);
+							d->type->size, c_attr2align(d->attr), d->type->kind == C_TYPE_ARRAY);
 					}
 					sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
 					sym->value.u.val.ptr = addr;
@@ -1643,7 +1647,7 @@ c_sym *c_declare(rcc_ctx *rcc, c_name name, c_dcl *d)
 						if (!addr) yy_error("not enough memory to allocate data");
 					} else {
 						addr = c_linker_allocate_data(rcc, sym_name,
-							d->type->size, c_attr2align(d->type->attr), d->type->kind == C_TYPE_ARRAY);
+							d->type->size, c_attr2align(d->attr), d->type->kind == C_TYPE_ARRAY);
 					}
 					rcc->yy_hash.data[sym_name].sym->value.u.optx = IR_OPT(C_VAL_CONST, IR_ADDR);
 					rcc->yy_hash.data[sym_name].sym->value.u.val.ptr = addr;
@@ -1675,13 +1679,20 @@ c_sym *c_declare(rcc_ctx *rcc, c_name name, c_dcl *d)
 						}
 					}
 					ref = ir_ALLOCA(size);
+					if (d->attr & C_ATTR_ALIGN_MASK) {
+						size_t align = c_attr2align(d->attr);
+						if (align > d->type->size) {
+							/* request non defalt alignment */
+							rcc->active_ctx->ir_base[ref].op3 = align;
+						}
+					}
 					if (d->flags & C_DCL_DEFINITION) {
-						ir_memzero(rcc, ref, size, c_attr2align(d->type->attr));
+						ir_memzero(rcc, ref, size, c_attr2align(d->attr));
 					}
 					c_value_set_rval(&sym->value, d->type, c_type2ir(rcc, d->type), ref);
 				} else {
 					size_t size = (d->type->attr & C_ATTR_FLEXIBLE) ? (size_t)-1 : d->type->size;
-					ref = c_do_alloca(rcc, size, c_attr2align(d->type->attr), (d->flags & C_DCL_DEFINITION) != 0);
+					ref = c_do_alloca(rcc, size, c_attr2align(d->attr), (d->flags & C_DCL_DEFINITION) != 0);
 					c_value_set_rval(&sym->value, d->type, c_type2ir(rcc, d->type), ref);
 				}
 			} else if (d->type->kind == C_TYPE_STRUCT || d->type->kind == C_TYPE_UNION) {
@@ -1690,14 +1701,14 @@ c_sym *c_declare(rcc_ctx *rcc, c_name name, c_dcl *d)
 					int n = c_abi_lower_struct_arg(d->type, types);
 
 					if (n == 1) {
-						ref = c_do_alloca(rcc, d->type->size, c_attr2align(d->type->attr), (d->flags & C_DCL_DEFINITION) != 0);
+						ref = c_do_alloca(rcc, d->type->size, c_attr2align(d->attr), (d->flags & C_DCL_DEFINITION) != 0);
 						c_value_set_lval(&sym->value, d->type, types[0], ref);
 					} else {
 						IR_ASSERT(n == 0);
 						c_value_set_lval(&sym->value, d->type, IR_ADDR, IR_UNUSED);
 					}
 				} else {
-					ref = c_do_alloca(rcc, d->type->size, c_attr2align(d->type->attr), (d->flags & C_DCL_DEFINITION) != 0);
+					ref = c_do_alloca(rcc, d->type->size, c_attr2align(d->attr), (d->flags & C_DCL_DEFINITION) != 0);
 					c_value_set_lval(&sym->value, d->type, c_type2ir(rcc, d->type), ref);
 				}
 			} else if (d->flags & C_DCL_REG_VAR) {
@@ -1725,6 +1736,13 @@ c_sym *c_declare(rcc_ctx *rcc, c_name name, c_dcl *d)
 				c_value_set_reg(&sym->value, d->type, c_type2ir(rcc, d->type), d->reg);
 			} else {
 				ref = ir_var_ex(rcc->active_ctx, c_type2ir(rcc, d->type), 1, IR_EXT_STR(name));
+				if (d->attr & C_ATTR_ALIGN_MASK) {
+					size_t align = c_attr2align(d->attr);
+					if (align > d->type->size) {
+						/* request non defalt alignment */
+						rcc->active_ctx->ir_base[ref].op3 = align;
+					}
+				}
 				c_value_set_var(&sym->value, d->type, c_type2ir(rcc, d->type), ref);
 			}
 		}
@@ -3546,6 +3564,8 @@ ir_ref c_do_alloca(rcc_ctx *rcc, size_t size, uint32_t align, bool zero)
 	}
 
 	ref = ir_ALLOCA(size_ref);
+	rcc->active_ctx->ir_base[ref].op3 = align;
+
 	if (zero) {
 		ir_memzero(rcc, ref, size_ref, align);
 	}
@@ -5959,6 +5979,7 @@ static ir_ref ir_inline_call(rcc_ctx *rcc, ir_ctx *ctx, ir_ctx *func_ctx, uint32
 				/* copy struct passed by value */
 				int size = ir_const_size_t(ctx, arg_insn->op2);
 				ir_ref dst = ir_ALLOCA(size);
+				ctx->ir_base[dst].op3 = arg_insn->op3;
 				ir_ref src = arg_insn->op1;
 				ir_ref op3 = arg_insn->op3;
 				MAKE_NOP(arg_insn);
