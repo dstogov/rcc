@@ -812,8 +812,7 @@ static void c_finalize_type(rcc_ctx *rcc, c_dcl *d)
 		type->kind = C_TYPE_VECTOR;
 		type->ir_type = IR_MAKE_VECTOR_TYPE(d->type->ir_type, d->vector_size / d->type->size);
 		type->flags = rcc->active_scope ? 0 : C_TYPE_GLOBAL;
-		// TODO: use at least 4-byte alignment to fix small vecotr access, see gcc/testsuite/gcc.dg/pr96239.c ???
-		type->attr = c_align2attr(IR_MIN(IR_MAX(d->vector_size, 4), 16)); /* 16 byte allgnment */
+		type->attr = c_align2attr(IR_MIN(d->vector_size, 16)); /* 16 byte allgnment */
 		type->vec.type = d->type;
 		type->vec.length = d->vector_size / d->type->size;
 		d->type = type;
