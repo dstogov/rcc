@@ -3364,6 +3364,7 @@ void c_sizeof_expr(rcc_ctx *rcc, yy_sym op, c_value *expr, ir_ref old_control)
 		} else {
 			if (expr->type->kind == C_TYPE_BOOL
 			 && c_value_is_ref(expr)
+			 && !c_value_is_lval(expr)
 			 && rcc->active_ctx->ir_base[expr->u.ref].op != IR_LOAD
 			 && rcc->active_ctx->ir_base[expr->u.ref].op != IR_LOAD_v
 			 && rcc->active_ctx->ir_base[expr->u.ref].op != IR_VLOAD
@@ -3380,6 +3381,7 @@ void c_sizeof_expr(rcc_ctx *rcc, yy_sym op, c_value *expr, ir_ref old_control)
 			yy_error_fmt("\"%s\" applied to a bit-field", yy_sym2str(rcc, op));
 		} else if (expr->type->kind == C_TYPE_BOOL
 		 && c_value_is_ref(expr)
+		 && !c_value_is_lval(expr)
 		 && rcc->active_ctx->ir_base[expr->u.ref].op != IR_LOAD
 		 && rcc->active_ctx->ir_base[expr->u.ref].op != IR_LOAD_v
 		 && rcc->active_ctx->ir_base[expr->u.ref].op != IR_VLOAD
