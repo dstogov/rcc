@@ -209,7 +209,7 @@ static int c_abi_lower_struct(const c_type *t, ir_type *types)
 #ifdef IR_TARGET_X86
 	return 0; /* always pass structires on stack */
 #elif defined(IR_TARGET_X64) && defined(_WIN64)
-	if (t->size == 1) {
+	if (t->size <= 1) {
 		types[0] = IR_U8;
 		return 1;
 	} else if (t->size == 2) {
@@ -227,7 +227,7 @@ static int c_abi_lower_struct(const c_type *t, ir_type *types)
 #else
 	// TODO: Full support for different ABIs is not implemented yet ???
 	if (t->size <= sizeof(void*)) {
-		if (t->size == 1) {
+		if (t->size <= 1) {
 			types[0] = IR_U8;
 		} else if (t->size == 2) {
 			types[0] = IR_U16;
@@ -5722,9 +5722,21 @@ void c_do_builtin_va_arg(rcc_ctx *rcc, c_value *val, const c_type *type)
 		}
 		n = c_abi_lower_struct_arg(type, types);
 		if (n == 1) {
+			size_t size = IR_MIN(type->size, 8);
+			size_t align = c_attr2align(type->attr);
+
+			if (size == 0) {
+				size = 1;
+			} else if (size == 3) {
+				size = 4;
+				align = IR_MAX(align, 4);
+			} else if (size > 4) {
+				size = 8;
+				align = IR_MAX(align, 8);
+			}
 			t = types[0];
 			ref = ir_VA_ARG(c_va_list_addr(rcc, val), t);
-			alloca = c_do_alloca(rcc, type->size, c_attr2align(type->attr), 0);
+			alloca = c_do_alloca(rcc, size, align, 0);
 			ir_STORE(alloca, ref);
 			c_value_set_lval(val, type, IR_ADDR, alloca);
 		} else {
