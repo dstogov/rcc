@@ -218,7 +218,7 @@ static void rcc_ir_codegen(rcc_ctx *rcc, c_name name, ir_ctx *ctx, c_sym *sym)
 		ir_schedule_blocks(ctx);
 	} else {
 		ir_compute_dessa_moves(ctx);
-		ir_reg_alloc_simple(ctx);
+		ir_reg_alloc_O0(ctx);
 		if (rcc->c_flags & C_DUMP_IR_AFTER_REGALLOC) {
 			if (rcc->c_flags & C_DUMP_DOT) {
 				ir_dump_dot(ctx, yy_sym2str(rcc, name), "(after regalloc)", stderr);
