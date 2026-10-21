@@ -13,5 +13,5 @@ int main() {
 	return 0;
 }
 --EXPECT--
-./tests/rcc/enum-003.c:5:27: warning: "packed" attribure ignored
+./tests/rcc/enum-003.c:5:27: warning: "packed" attribute ignored
 4 4 4 4

@@ -13,4 +13,4 @@ __attribute__((stuff)) int fink() {return 0;}
 int main() {return 0;}
 --EXPECT--
 ./tests/tinycc/tests2/060_63_errors_and_warnings.c:1:83: warning: unsupported option "-Wstuff"
-./tests/tinycc/tests2/060_63_errors_and_warnings.c:7:21: warning: unsupported attribure "stuff"
+./tests/tinycc/tests2/060_63_errors_and_warnings.c:7:21: warning: unsupported attribute "stuff"

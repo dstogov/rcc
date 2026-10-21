@@ -13,6 +13,6 @@ __attribute__((stuff)) int fink() {return 0;}
 int main() {return 0;}
 --EXPECT--
 ./tests/tinycc/tests2/060_65_errors_and_warnings.c:5:9: warning: implicit declaration of function "fink"
-./tests/tinycc/tests2/060_65_errors_and_warnings.c:7:21: error: unsupported attribure "stuff"
+./tests/tinycc/tests2/060_65_errors_and_warnings.c:7:21: error: unsupported attribute "stuff"
 
 exit code = 1

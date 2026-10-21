@@ -21,7 +21,7 @@ int main()
 	return 0;
 }
 --EXPECT--
-./tests/rcc/cleanup-01.c:9:37: warning: __attribure__((cleanup(foo))) ignored, it only applies to local variables
-./tests/rcc/cleanup-01.c:14:45: warning: __attribure__((cleanup(foo))) ignored, it only applies to local variables
+./tests/rcc/cleanup-01.c:9:37: warning: __attribute__((cleanup(foo))) ignored, it only applies to local variables
+./tests/rcc/cleanup-01.c:14:45: warning: __attribute__((cleanup(foo))) ignored, it only applies to local variables
 foo(4)
 foo(2)

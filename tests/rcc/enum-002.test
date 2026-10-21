@@ -43,8 +43,8 @@ int main() {
 	return 0;
 }
 --EXPECT--
-./tests/rcc/enum-002.c:4:20: warning: "packed" attribure ignored
-./tests/rcc/enum-002.c:7:36: warning: "packed" attribure ignored
+./tests/rcc/enum-002.c:4:20: warning: "packed" attribute ignored
+./tests/rcc/enum-002.c:7:36: warning: "packed" attribute ignored
 ./tests/rcc/enum-002.c:18:43: warning: enumeration values exceed range of largest integer
 ./tests/rcc/enum-002.c:19:38: warning: incremented enumerator value is not representable in the largest integer type
 4 4

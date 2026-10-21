@@ -1756,22 +1756,22 @@ c_sym *c_declare(rcc_ctx *rcc, c_name name, c_dcl *d)
 		c_sym *f = rcc->yy_hash.data[d->cleanup_func].sym;
 
 		if (sym->kind != C_SYM_VAR || !sym->scope || sym->linkage != C_LINK_NONE) {
-			yy_warning_fmt("__attribure__((cleanup(%s))) ignored, it only applies to local variables",
+			yy_warning_fmt("__attribute__((cleanup(%s))) ignored, it only applies to local variables",
 				yy_sym2str(rcc, d->cleanup_func));
 		} else if (c_value_is_reg(&sym->value)) {
-			yy_error_fmt("__attribure__((cleanup(%s))) cannot be applyed to register variable",
+			yy_error_fmt("__attribute__((cleanup(%s))) cannot be applyed to register variable",
 				yy_sym2str(rcc, d->cleanup_func));
 		} else if (!f || f->value.type->kind != C_TYPE_FUNC) {
-			yy_error_fmt("__attribure__((cleanup(%s))) argument is not a function",
+			yy_error_fmt("__attribute__((cleanup(%s))) argument is not a function",
 				yy_sym2str(rcc, d->cleanup_func));
 		} else if (f->value.type->func.num_params != 1) {
-			yy_error_fmt("__attribure__((cleanup(%s))) function must take 1 parameter",
+			yy_error_fmt("__attribute__((cleanup(%s))) function must take 1 parameter",
 				yy_sym2str(rcc, d->cleanup_func));
 		} else if (!f->value.type->func.params[0].type
 		 || f->value.type->func.params[0].type->kind != C_TYPE_POINTER
 		 || (f->value.type->func.params[0].type->pointer.type->kind != C_TYPE_VOID
 		  && !c_compatible_types(f->value.type->func.params[0].type->pointer.type, sym->value.type, 1, 0))) {
-			yy_error_fmt("__attribure__((cleanup(%s))) function parameter is incompatible with type of variable",
+			yy_error_fmt("__attribute__((cleanup(%s))) function parameter is incompatible with type of variable",
 				yy_sym2str(rcc, d->cleanup_func));
 		} else {
 			sym->cleanup_func = d->cleanup_func;
@@ -1798,7 +1798,7 @@ void c_empty_declaration(rcc_ctx *rcc, c_dcl *d)
 		yy_warning("useless type specifier in empty declaration");
 	}
 	if (d->cleanup_func) {
-		yy_warning_fmt("__attribure__((cleanup(%s))) ignored, it only applies to local variables",
+		yy_warning_fmt("__attribute__((cleanup(%s))) ignored, it only applies to local variables",
 			yy_sym2str(rcc, d->cleanup_func));
 	}
 }
@@ -2814,14 +2814,14 @@ void c_gcc_attribute_packed(rcc_ctx *rcc, c_dcl *d, c_name attr)
 	  && (d->type->flags & C_TYPE_INCOMPLETE))) {
 		d->attr |= C_ATTR_PACKED;
 	} else {
-		yy_warning_fmt("\"%s\" attribure ignored", yy_sym2str(rcc, attr));
+		yy_warning_fmt("\"%s\" attribute ignored", yy_sym2str(rcc, attr));
 	}
 }
 
 void c_gcc_attribute_cleanup(rcc_ctx *rcc, c_dcl *d, c_name attr, c_name func)
 {
 	if (d->cleanup_func && d->cleanup_func != func) {
-		yy_error_fmt("duplicate __attribure__((%s))", yy_sym2str(rcc, attr));
+		yy_error_fmt("duplicate __attribute__((%s))", yy_sym2str(rcc, attr));
 	}
 
 	d->cleanup_func = func;
@@ -2853,7 +2853,7 @@ void c_gcc_attribute_regparm(rcc_ctx *rcc, c_dcl *d, c_name attr, c_value *val)
 		return;
 	}
 #endif
-	yy_warning_ex_fmt(E_UNSUPPORTED, "unsupported attribure \"%s(%d)\"", yy_sym2str(rcc, attr), val->u.val.u32);
+	yy_warning_ex_fmt(E_UNSUPPORTED, "unsupported attribute \"%s(%d)\"", yy_sym2str(rcc, attr), val->u.val.u32);
 }
 
 void c_gcc_attribute_vector_size(rcc_ctx *rcc, c_dcl *d, c_name attr, c_value *val)
@@ -2901,7 +2901,7 @@ yy_sym c_gcc_attribute(rcc_ctx *rcc, c_dcl *d, c_name attr, yy_sym sym)
 	) {
 		/* silently ignore some known attributes */
 	} else {
-		yy_warning_ex_fmt(E_UNSUPPORTED, "unsupported attribure \"%s\"", yy_sym2str(rcc, attr));
+		yy_warning_ex_fmt(E_UNSUPPORTED, "unsupported attribute \"%s\"", yy_sym2str(rcc, attr));
 	}
 
 	if (sym == YY__LPAREN) {
@@ -2926,7 +2926,7 @@ yy_sym c_gcc_attribute(rcc_ctx *rcc, c_dcl *d, c_name attr, yy_sym sym)
 void c_gcc_attribute_alias(rcc_ctx *rcc, c_dcl *d, c_name attr, c_value *val)
 {
 	if (d->alias) {
-		yy_error("duplicate __attribure__((alias())) or __asm__() specifiers");
+		yy_error("duplicate __attribute__((alias())) or __asm__() specifiers");
 	}
 
 	if ((d->flags & C_DCL_STORAGE_CLASS) == C_DCL_EXTERN
@@ -3202,7 +3202,7 @@ error:
 void c_asm_alias(rcc_ctx *rcc, c_dcl *d, c_value *val)
 {
 	if (d->alias) {
-		yy_error("duplicate __attribure__((alias())) or __asm__() specifiers");
+		yy_error("duplicate __attribute__((alias())) or __asm__() specifiers");
 	}
 
 	if ((d->flags & C_DCL_STORAGE_CLASS) == C_DCL_REGISTER) {

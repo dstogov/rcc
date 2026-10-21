@@ -42,7 +42,7 @@ int main()
    return 0;
 }
 --EXPECT--
-./tests/tinycc/tests2/003_struct.c:14:2: warning: __attribure__((cleanup(fred$))) ignored, it only applies to local variables
+./tests/tinycc/tests2/003_struct.c:14:2: warning: __attribute__((cleanup(fred$))) ignored, it only applies to local variables
 12
 34
 12
