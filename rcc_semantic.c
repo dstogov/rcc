@@ -4171,12 +4171,7 @@ static ir_ref c_do_store_bit_field(rcc_ctx *rcc, ir_ref addr, uint32_t first_bit
 	if (val->u.type != type) {
 		if (ir_type_size[type] < ir_type_size[val->u.type]) {
 			if (IR_IS_CONST_REF(ref)) {
-				switch (ir_type_size[type]) {
-					case 4: v.u64 = rcc->active_ctx->ir_base[ref].val.u32; break;
-					case 2: v.u64 = rcc->active_ctx->ir_base[ref].val.u16; break;
-					case 1: v.u64 = rcc->active_ctx->ir_base[ref].val.u8; break;
-					default: IR_ASSERT(0); break;
-				}
+				v.u64 = ir_fix_int(type, rcc->active_ctx->ir_base[ref].val.u64);
 				ref = ir_const(rcc->active_ctx, v, type);
 			} else {
 				ref = ir_TRUNC(type, ref);
@@ -4189,12 +4184,7 @@ static ir_ref c_do_store_bit_field(rcc_ctx *rcc, ir_ref addr, uint32_t first_bit
 			}
 		} else {
 			if (IR_IS_CONST_REF(ref)) {
-				switch (ir_type_size[val->u.type]) {
-					case 4: v.u64 = rcc->active_ctx->ir_base[ref].val.u32; break;
-					case 2: v.u64 = rcc->active_ctx->ir_base[ref].val.u16; break;
-					case 1: v.u64 = rcc->active_ctx->ir_base[ref].val.u8; break;
-					default: IR_ASSERT(0); break;
-				}
+				v.u64 = ir_fix_int(type, rcc->active_ctx->ir_base[ref].val.u64);
 				ref = ir_const(rcc->active_ctx, v, type);
 			} else {
 				ref = ir_ZEXT(type, ref);
@@ -4228,6 +4218,9 @@ static ir_ref c_do_store_bit_field(rcc_ctx *rcc, ir_ref addr, uint32_t first_bit
 				case 1: v2.u8 = rcc->active_ctx->ir_base[ref].val.u8 << v.u8; break;
 				default: IR_ASSERT(0); break;
 			}
+			if (IR_IS_TYPE_SIGNED(type)) {
+				v2.u64 = ir_fix_signed(type, v2.u64);
+			}
 			ref = ir_const(rcc->active_ctx, v2, type);
 		} else {
 			ref = ir_SHL(type, ref, ir_const(rcc->active_ctx, v, type));
@@ -4237,9 +4230,7 @@ static ir_ref c_do_store_bit_field(rcc_ctx *rcc, ir_ref addr, uint32_t first_bit
 	v.u64 = ~(((1ULL<<bits)-1)<<first_bit);
 
 	if (IR_IS_CONST_REF(ref) && rcc->active_ctx->ir_base[ref].val.u64 == 0) {
-		if (ir_type_size[type] < 8) {
-			v.u64 &= (1ULL << (ir_type_size[type] * 8)) - 1;
-		}
+		v.u64 = ir_fix_int(type, v.u64);
 		ir_STORE(
 			addr,
 			ir_AND(type,
@@ -4252,9 +4243,7 @@ static ir_ref c_do_store_bit_field(rcc_ctx *rcc, ir_ref addr, uint32_t first_bit
 				ir_LOAD(type, addr),
 				ref));
 	} else {
-		if (ir_type_size[type] < 8) {
-			v.u64 &= (1ULL << (ir_type_size[type] * 8)) - 1;
-		}
+		v.u64 = ir_fix_int(type, v.u64);
 		ir_STORE(
 			addr,
 			ir_OR(type,
@@ -4311,7 +4300,7 @@ static ir_ref c_do_store_bit_field_packed(rcc_ctx *rcc, ir_ref addr, uint32_t fi
 
 	shift.i64 = 0;
 	if (first_bit) {
-		mask.u64 = ~(((1ULL<<(8-first_bit))-1)<<first_bit);
+		mask.u64 = ir_fix_int(type, ~(((1ULL<<(8-first_bit))-1)<<first_bit));
 		shift.u64 = first_bit;
 		IR_ASSERT(shift.u64 < ir_type_size[val->u.type] * 8);
 		ref = ir_SHL(val->u.type, ret, ir_const(rcc->active_ctx, shift, val->u.type));
@@ -4354,10 +4343,10 @@ static ir_ref c_do_store_bit_field_packed(rcc_ctx *rcc, ir_ref addr, uint32_t fi
 			ref = ir_TRUNC_U8(ref);
 		}
 
-		mask.u64 = (1ULL<<bits)-1;
+		mask.u64 = ir_fix_int(type, (1ULL<<bits)-1);
 		ref = ir_AND(type, ref, ir_const(rcc->active_ctx, mask, type));
 
-		mask.u64 = ~((1ULL<<bits)-1);
+		mask.u64 = ir_fix_int(type, ~((1ULL<<bits)-1));
 		ir_STORE(
 			a,
 				ir_OR(type,
