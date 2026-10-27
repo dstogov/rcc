@@ -7030,7 +7030,8 @@ static void c_do_add(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op
 		IR_ASSERT(C_IS_TYPE_INT(op2->type) || op2->type->kind == C_TYPE_ENUM);
 		if (c_value_is_const(op1) && !c_value_is_const_str(op1) && c_value_is_const(op2)
 		 && !(element_type->attr & C_ATTR_VLA)) {
-			val.u64 = op1->u.val.addr + op2->u.val.u64 * element_size;
+			val.u64 = 0;
+			val.addr = op1->u.val.addr + op2->u.val.u64 * element_size;
 			c_value_set_const(op1, type, IR_ADDR, val);
 		} else {
 			if (C_IS_TYPE_SIGNED(op2->type)) {
@@ -7074,7 +7075,8 @@ static void c_do_add(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op
 		IR_ASSERT(C_IS_TYPE_INT(op1->type) || op1->type->kind == C_TYPE_ENUM);
 		if (c_value_is_const(op1) && c_value_is_const(op2) && !c_value_is_const_str(op2)
 		 && !(element_type->attr & C_ATTR_VLA)) {
-			val.u64 = op2->u.val.addr + op1->u.val.u64 * element_size;
+			val.u64 = 0;
+			val.addr = op2->u.val.addr + op1->u.val.u64 * element_size;
 			c_value_set_const(op1, type, IR_ADDR, val);
 		} else {
 			if (C_IS_TYPE_SIGNED(op1->type)) {
@@ -7160,7 +7162,8 @@ static void c_do_sub(rcc_ctx *rcc, const c_type *type, c_value *op1, c_value *op
 			IR_ASSERT(C_IS_TYPE_INT(op2->type) || op2->type->kind == C_TYPE_ENUM);
 			if (c_value_is_const(op1) && !c_value_is_const_str(op1) && c_value_is_const(op2)
 			 && !(element_type->attr & C_ATTR_VLA)) {
-				val.u64 = op1->u.val.addr - op2->u.val.u64 * element_size;
+				val.u64 = 0;
+				val.addr = op1->u.val.addr - op2->u.val.u64 * element_size;
 				c_value_set_const(op1, type, IR_ADDR, val);
 			} else {
 				if (C_IS_TYPE_SIGNED(op2->type)) {
