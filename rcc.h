@@ -191,6 +191,10 @@
 	_("__builtin_llabs",               YY___BUILTIN_LLABS)             \
 	_("__builtin_fabs",                YY___BUILTIN_FABS)              \
 	_("__builtin_fabsf",               YY___BUILTIN_FABSF)             \
+	_("__builtin_fmax",                YY___BUILTIN_FMAX)              \
+	_("__builtin_fmaxf",               YY___BUILTIN_FMAXF)             \
+	_("__builtin_fmin",                YY___BUILTIN_FMIN)              \
+	_("__builtin_fminf",               YY___BUILTIN_FMINF)             \
 	_("__builtin_bswap16",             YY___BUILTIN_BSWAP16)           \
 	_("__builtin_bswap32",             YY___BUILTIN_BSWAP32)           \
 	_("__builtin_bswap64",             YY___BUILTIN_BSWAP64)           \

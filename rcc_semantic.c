@@ -5242,6 +5242,54 @@ void c_do_builtin(rcc_ctx *rcc, c_value *val, c_name name, uint32_t num_args, c_
 		}
 		ref = ir_ABS(args[0].u.type, c_value_ref(rcc, &args[0]));
 		c_value_set_rval(val, args[0].type, args[0].u.type, ref);
+	} else if (name == YY___BUILTIN_FMAX) {
+		ir_ref ref;
+
+		if (num_args != 2) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
+		if (args[0].type->kind != C_TYPE_DOUBLE) {
+			c_do_check_cvt(rcc, &c_type_double, &args[0], 1);
+		}
+		if (args[1].type->kind != C_TYPE_DOUBLE) {
+			c_do_check_cvt(rcc, &c_type_double, &args[1], 1);
+		}
+		ref = ir_MAX(args[0].u.type, c_value_ref(rcc, &args[0]), c_value_ref(rcc, &args[1]));
+		c_value_set_rval(val, args[0].type, args[0].u.type, ref);
+	} else if (name == YY___BUILTIN_FMAXF) {
+		ir_ref ref;
+
+		if (num_args != 2) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
+		if (args[0].type->kind != C_TYPE_FLOAT) {
+			c_do_check_cvt(rcc, &c_type_float, &args[0], 1);
+		}
+		if (args[1].type->kind != C_TYPE_FLOAT) {
+			c_do_check_cvt(rcc, &c_type_float, &args[1], 1);
+		}
+		ref = ir_MAX(args[0].u.type, c_value_ref(rcc, &args[0]), c_value_ref(rcc, &args[1]));
+		c_value_set_rval(val, args[0].type, args[0].u.type, ref);
+	} else if (name == YY___BUILTIN_FMIN) {
+		ir_ref ref;
+
+		if (num_args != 2) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
+		if (args[0].type->kind != C_TYPE_DOUBLE) {
+			c_do_check_cvt(rcc, &c_type_double, &args[0], 1);
+		}
+		if (args[1].type->kind != C_TYPE_DOUBLE) {
+			c_do_check_cvt(rcc, &c_type_double, &args[1], 1);
+		}
+		ref = ir_MIN(args[0].u.type, c_value_ref(rcc, &args[0]), c_value_ref(rcc, &args[1]));
+		c_value_set_rval(val, args[0].type, args[0].u.type, ref);
+	} else if (name == YY___BUILTIN_FMINF) {
+		ir_ref ref;
+
+		if (num_args != 2) yy_error_fmt("wrong number of arguments in %s() call", yy_sym2str(rcc, name));
+		if (args[0].type->kind != C_TYPE_FLOAT) {
+			c_do_check_cvt(rcc, &c_type_float, &args[0], 1);
+		}
+		if (args[1].type->kind != C_TYPE_FLOAT) {
+			c_do_check_cvt(rcc, &c_type_float, &args[1], 1);
+		}
+		ref = ir_MIN(args[0].u.type, c_value_ref(rcc, &args[0]), c_value_ref(rcc, &args[1]));
+		c_value_set_rval(val, args[0].type, args[0].u.type, ref);
 	} else if (name == YY___BUILTIN_BSWAP16) {
 		ir_val v;
 
