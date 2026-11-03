@@ -1143,6 +1143,7 @@ void c_declspec_align(rcc_ctx *rcc, c_dcl *dcl, c_value *v);
 yy_sym c_declspec(rcc_ctx *rcc, c_dcl *dcl, c_name attr, yy_sym sym);
 
 void c_sizeof_type(rcc_ctx *rcc, c_value *res, const c_type *type);
+ir_ref c_sizeof_expr_start(rcc_ctx *rcc);
 void c_sizeof_expr(rcc_ctx *rcc, yy_sym op, c_value *expr, ir_ref old_control);
 void c_alignof_type(rcc_ctx *rcc, c_value *res, const c_type *type);
 void c_alignas_expr(rcc_ctx *rcc, c_dcl *dcl, c_value *expr);

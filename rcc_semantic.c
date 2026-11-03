@@ -3339,9 +3339,25 @@ void c_do_end_nocode(rcc_ctx *rcc, ir_ref old_control)
 		} else {
 			ir_BEGIN(old_control);
 		}
+	} else if (rcc->active_ctx->ir_base[old_control].op == IR_END) {
+		rcc->active_ctx->control = rcc->active_ctx->ir_base[old_control].op1;
+		if (old_control == rcc->active_ctx->insns_count - 1) {
+			rcc->active_ctx->insns_count--;
+		} else {
+			rcc->active_ctx->ir_base[old_control].op = IR_NOP;
+			rcc->active_ctx->ir_base[old_control].op1 = IR_UNUSED;
+		}
 	} else {
 		rcc->active_ctx->control = old_control;
 	}
+}
+
+ir_ref c_sizeof_expr_start(rcc_ctx *rcc)
+{
+	ir_ref old_control = ir_END();
+	rcc->active_ctx->control = IR_UNUSED;
+	ir_BEGIN(IR_UNUSED);
+	return old_control;
 }
 
 void c_sizeof_expr(rcc_ctx *rcc, yy_sym op, c_value *expr, ir_ref old_control)
@@ -3357,8 +3373,12 @@ void c_sizeof_expr(rcc_ctx *rcc, yy_sym op, c_value *expr, ir_ref old_control)
 			yy_error_fmt("invalid application of \"%s\" to incomplete type", "sizeof");
 		} else if (expr->type->attr & C_ATTR_VLA) {
 			IR_ASSERT(expr->type->kind == C_TYPE_ARRAY);
-			c_do_end_nocode(rcc, old_control);
 			c_value_set_rval(expr, &c_type_size_t, IR_SIZE_T, c_type_size(rcc, expr->type));
+			/* sizeof expression for VLA must be evaluated */
+			IR_ASSERT(rcc->active_ctx->ir_base[old_control].op == IR_END);
+			IR_ASSERT(rcc->active_ctx->ir_base[old_control + 1].op == IR_BEGIN);
+			IR_ASSERT(rcc->active_ctx->ir_base[old_control + 1].op1 == IR_UNUSED);
+			rcc->active_ctx->ir_base[old_control + 1].op1 = old_control;
 			return;
 		} else {
 			if (expr->type->kind == C_TYPE_BOOL

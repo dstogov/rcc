@@ -1116,7 +1116,7 @@ unary_expression(rcc_ctx *rcc, c_value *val):
 				type_name(rcc, &t)
 				")"
 				dummy_value(rcc, t)?                       {c_sizeof_type(rcc, &v, t);}
-			|                                              {old_control = c_do_nocode(rcc);}
+			|                                              {old_control = c_sizeof_expr_start(rcc);}
                                                            {c_value_clear(&v);}
 				expression(rcc, &v)
 				")"
@@ -1126,7 +1126,7 @@ unary_expression(rcc_ctx *rcc, c_value *val):
 				"}"
 				")"
 			)
-		|                                                  {ir_ref old = c_do_nocode(rcc);}
+		|                                                  {ir_ref old = c_sizeof_expr_start(rcc);}
                                                            {c_value_clear(&v);}
 			unary_expression(rcc, &v)                      {c_sizeof_expr(rcc, op, &v, old);}
 		)
