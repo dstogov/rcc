@@ -1,7 +1,5 @@
 --TEST--
 TCC 15
---ARGS--
--E -P
 --CODE--
 // insert a space between two tokens if otherwise they
 // would form a single token when read back

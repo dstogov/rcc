@@ -1,7 +1,5 @@
 --TEST--
 Paul 11
---ARGS--
--E -P
 --CODE--
 #define CONCAT_1(a, b) CONCAT_1_D(a, b)
 #define CONCAT_1_D(a, b) a ## b

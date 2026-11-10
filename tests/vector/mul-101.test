@@ -2,8 +2,6 @@
 MUL.101: 128-bit vectors (NEON)
 --TARGET--
 aarch64
---ARGS--
---run
 --CODE--
 #define N 16
 #define I 1

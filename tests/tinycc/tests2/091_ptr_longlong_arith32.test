@@ -1,7 +1,5 @@
 --TEST--
 tinycc 091: ptr longlong arith32
---ARGS--
---run
 --CODE--
 int printf(const char *, ...);
 char t[] = "012345678";

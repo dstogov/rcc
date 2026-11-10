@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.12: error and warnings
---ARGS--
---run
 --CODE--
 enum e4;
 enum e5;

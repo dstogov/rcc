@@ -1,7 +1,5 @@
 --TEST--
 tinycc 050: logical second arg
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

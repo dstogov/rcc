@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.19: error and warnings
---ARGS--
---run
 --CODE--
 int bar(const char *());     // abstract declarator here is okay
 int bar (const char *(*g)()) // should match this 'g' argument

@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.52: error and warnings
---ARGS--
---run
 --CODE--
 struct c1 { int a; int b[]; };
 struct c1 c1 = { 1, { 2, 3, 4 } };

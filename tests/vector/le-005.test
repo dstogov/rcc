@@ -1,9 +1,10 @@
 --TEST--
-LE.005: 64-bit vectors SSE2
+LE.005: 64-bit vectors
 --TARGET--
 x86*
 --ARGS--
 -mno-sse4 -mno-avx2 --run
+-mavx -mno-avx2 --run
 --CODE--
 #define N 8
 #define I 0

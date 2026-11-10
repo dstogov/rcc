@@ -1,7 +1,5 @@
 --TEST--
 tinycc 098: al ax extend
---ARGS--
---run
 --XFAIL--
 asm support not implemented yet
 --CODE--

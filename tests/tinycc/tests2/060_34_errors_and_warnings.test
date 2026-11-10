@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.34: error and warnings
---ARGS--
---run
 --CODE--
   struct s t[3];
 --EXPECT--

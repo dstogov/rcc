@@ -1,7 +1,5 @@
 --TEST--
 tinycc 049: bracket evaluation
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

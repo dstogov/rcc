@@ -1,7 +1,5 @@
 --TEST--
 tinycc 131: return struct in reg
---ARGS--
---run
 --CODE--
 #include<stdio.h>
 

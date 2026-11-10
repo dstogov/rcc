@@ -1,7 +1,5 @@
 --TEST--
 TCC 17
---ARGS--
--E -P
 --CODE--
 #define STR1(u) # u
 #define pass(a) a

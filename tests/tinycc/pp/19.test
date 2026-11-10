@@ -1,7 +1,5 @@
 --TEST--
 TCC 19
---ARGS--
--E -P
 --CODE--
 #define M_C2I(a, ...)       a ## __VA_ARGS__
 #define M_C(a, ...)         M_C2I(a, __VA_ARGS__)

@@ -1,7 +1,5 @@
 --TEST--
 tinycc 027: sizeof
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

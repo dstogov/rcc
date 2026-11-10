@@ -1,7 +1,5 @@
 --TEST--
 Paul 09
---ARGS--
--E -P
 --CODE--
 #define A(m) m( B(f)
 #define B(x) A(x)

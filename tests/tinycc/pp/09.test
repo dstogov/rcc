@@ -1,7 +1,5 @@
 --TEST--
 TCC 09
---ARGS--
--E -P
 --CODE--
 #define C(a,b,c) a##b##c
 #define N(x,y) C(x,_,y)

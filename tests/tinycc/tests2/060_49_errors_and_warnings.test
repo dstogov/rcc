@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.49: error and warnings
---ARGS--
---run
 --XFAIL--
 stray handling
 --CODE--

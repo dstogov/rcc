@@ -1,7 +1,5 @@
 --TEST--
 tinycc 011: precedence
---ARGS--
---run
 --CODE--
 //#include <stdio.h>
 extern int printf(const char *, ...);

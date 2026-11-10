@@ -1,7 +1,5 @@
 --TEST--
 TCC 11
---ARGS--
--E -P
 --CODE--
 #define D1(s, ...) s
 #define D2(s, ...) s D1(__VA_ARGS__)

@@ -1,7 +1,5 @@
 --TEST--
 Macro 001 - valid empty macros
---ARGS--
--E -P
 --CODE--
 #define A1
 #define A2()

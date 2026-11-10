@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.45: error and warnings
---ARGS--
---run
 --CODE--
 #define P(n,v) printf("%-5s: %d ; %d\n", __FUNCTION__, n, v)
 int bar();

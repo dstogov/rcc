@@ -1,7 +1,5 @@
 --TEST--
 tinycc 043: void param
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

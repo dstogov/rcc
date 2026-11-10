@@ -1,7 +1,5 @@
 --TEST--
 tinycc 047: switch return
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

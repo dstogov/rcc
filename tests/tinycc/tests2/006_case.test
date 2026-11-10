@@ -1,7 +1,5 @@
 --TEST--
 tinycc 006: case
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

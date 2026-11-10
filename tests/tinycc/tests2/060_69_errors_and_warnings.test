@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.69: error and warnings
---ARGS--
---run
 --CODE--
 int f() { ({ return 78; }); }
 int main() { return f(); }

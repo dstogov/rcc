@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.72: error and warnings
---ARGS--
---run
 --CODE--
 struct A;
 void f(struct A *);

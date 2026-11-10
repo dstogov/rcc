@@ -1,9 +1,10 @@
 --TEST--
-CONVERT.SEXT.004: 256-bit vectors AVX
+CONVERT.SEXT.004: 256-bit vectors
 --TARGET--
 x86*
 --ARGS--
 -mavx -mno-avx2 --run
+-mavx -mavx2 --run
 --CODE--
 int printf(const char *, ...);
 

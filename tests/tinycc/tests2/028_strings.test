@@ -1,7 +1,5 @@
 --TEST--
 tinycc 028: strings
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 #include <string.h>

@@ -1,7 +1,5 @@
 --TEST--
 TCC 20
---ARGS--
--E -P
 --CODE--
 /* Various things I encountered while hacking the pre processor */
 #define wrap(x) x

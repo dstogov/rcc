@@ -1,7 +1,5 @@
 --TEST--
 tinycc 114: bound signal
---ARGS--
---run
 --TARGET--
 x86*-sysv
 --CODE--

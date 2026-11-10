@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.31: error and warnings
---ARGS--
---run
 --CODE--
  _Static_assert(0,"");
 --EXPECT--

@@ -1,7 +1,5 @@
 --TEST--
 tinycc 029: array address
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 #include <string.h>

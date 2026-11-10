@@ -1,7 +1,5 @@
 --TEST--
 TCC 14
---ARGS--
--E -P
 --CODE--
 #define W Z
 #define Z(X) W(X,2)

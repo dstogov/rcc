@@ -1,7 +1,5 @@
 --TEST--
 tinycc 023: type coercion
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

@@ -1,7 +1,5 @@
 --TEST--
 tinycc 048: nested break
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

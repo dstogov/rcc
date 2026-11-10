@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.64: error and warnings
---ARGS--
---run
 --CODE--
 #pragma comment(option, "-Wwrite-strings -Werror=discarded-qualifiers")
 void func()

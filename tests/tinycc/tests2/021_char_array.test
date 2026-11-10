@@ -1,7 +1,5 @@
 --TEST--
 tinycc 021: char array
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

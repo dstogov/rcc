@@ -1,7 +1,5 @@
 --TEST--
 Paul 01
---ARGS--
--E -P
 --CODE--
 #define OBJECT 123
 

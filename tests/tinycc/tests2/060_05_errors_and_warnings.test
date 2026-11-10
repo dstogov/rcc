@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060: error and warnings
---ARGS--
---run
 --CODE--
 int (*fct)[42](int x);
 --EXPECT--

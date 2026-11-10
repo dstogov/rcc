@@ -1,7 +1,5 @@
 --TEST--
 tinycc 073: arm64
---ARGS--
---run
 --XFAIL--
 long double is not supported yet
 --CODE--

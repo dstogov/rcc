@@ -1,7 +1,5 @@
 --TEST--
 TCC 03
---ARGS--
--E -P
 --CODE--
 #define str(s) # s
 #define xstr(s) str(s)

@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.35: error and warnings
---ARGS--
---run
 --CODE--
   typedef void f(void);
   const f t[3];

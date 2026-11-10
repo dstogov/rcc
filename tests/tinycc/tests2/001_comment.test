@@ -1,7 +1,5 @@
 --TEST--
 tinycc 001: comment
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

@@ -1,7 +1,5 @@
 --TEST--
 tinycc 122: vla reuse
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

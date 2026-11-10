@@ -1,7 +1,5 @@
 --TEST--
 tinycc 032: led
---ARGS--
---run
 --CODE--
 /* example from http://barnyard.syr.edu/quickies/led.c */
 

@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.13: error and warnings
---ARGS--
---run
 --CODE--
 enum e6 { E1 = -1, E0 };
 void f3(enum e6);

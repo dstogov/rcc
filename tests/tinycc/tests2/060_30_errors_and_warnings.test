@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.30: error and warnings
---ARGS--
---run
 --CODE--
  _Static_assert(1);
 struct z {  _Static_assert(0); }

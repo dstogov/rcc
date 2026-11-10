@@ -1,7 +1,5 @@
 --TEST--
 Paul 12
---ARGS--
--E -P
 --CODE--
 #define INTERNAL_CAT(a, b) INTERNAL_PRIMITIVE_CAT(a, b)
 #define INTERNAL_PRIMITIVE_CAT(a, b) a ## b

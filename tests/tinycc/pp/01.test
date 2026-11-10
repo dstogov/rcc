@@ -1,7 +1,5 @@
 --TEST--
 TCC 01
---ARGS--
--E -P
 --CODE--
 #define hash_hash # ## #
 #define mkstr(a) # a

@@ -1,7 +1,5 @@
 --TEST--
 tinycc 118: switch
---ARGS--
---run
 --CODE--
 #include <limits.h>
 #include <stdio.h>

@@ -1,7 +1,5 @@
 --TEST--
 Paul 13
---ARGS--
--E -P
 --CODE--
 #define A() ...
 

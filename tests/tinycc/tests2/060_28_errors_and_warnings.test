@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.28: error and warnings
---ARGS--
---run
 --CODE--
 #define ONE 0
  _Static_assert(ONE == 0, "don't show me this");

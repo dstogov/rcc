@@ -1,7 +1,5 @@
 --TEST--
 tinycc 008: while
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

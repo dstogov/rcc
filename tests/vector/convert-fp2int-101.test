@@ -2,8 +2,6 @@
 CONVERT.FP2INT.101: 128-bit vectors (NEON)
 --TARGET--
 aarch64
---ARGS--
---run
 --CODE--
 int printf(const char *, ...);
 

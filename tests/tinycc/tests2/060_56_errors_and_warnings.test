@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.56: error and warnings
---ARGS--
---run
 --CODE--
 int f(){"12"3;} // second const token killed the value of the first
 --EXPECT--

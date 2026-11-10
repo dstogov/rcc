@@ -1,7 +1,5 @@
 --TEST--
 tinycc 072: long long constant
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

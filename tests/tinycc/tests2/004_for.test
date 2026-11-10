@@ -1,7 +1,5 @@
 --TEST--
 tinycc 004: for
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

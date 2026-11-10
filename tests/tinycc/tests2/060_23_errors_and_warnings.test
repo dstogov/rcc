@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.23: error and warnings
---ARGS--
---run
 --CODE--
 enum E {
     x = 1 / 0

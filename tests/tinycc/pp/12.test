@@ -1,7 +1,5 @@
 --TEST--
 TCC 12
---ARGS--
--E -P
 --CODE--
 #define SRC(y...)                       \
         9999: y;                        \

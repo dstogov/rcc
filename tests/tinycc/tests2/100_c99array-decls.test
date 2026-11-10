@@ -1,7 +1,5 @@
 --TEST--
 tinycc 100: c99array decls
---ARGS--
---run
 --CODE--
 void foo(int [5]);
 void fooc(int x[const 5]);

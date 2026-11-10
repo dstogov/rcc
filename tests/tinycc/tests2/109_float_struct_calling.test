@@ -1,7 +1,5 @@
 --TEST--
 tinycc 109: float struct calling
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

@@ -2,8 +2,6 @@
 SHUFFLE.104: 128-bit INT64 vectors SSE2 optimized constant mask (NEON)
 --TARGET--
 aarch64
---ARGS--
---run
 --CODE--
 #define N 16
 

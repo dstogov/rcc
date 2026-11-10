@@ -1,7 +1,5 @@
 --TEST--
 ifdef 004 - #ifndef (nested)
---ARGS--
--E -P
 --CODE--
 #define B
 0

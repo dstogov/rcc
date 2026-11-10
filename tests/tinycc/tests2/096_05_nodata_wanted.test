@@ -1,7 +1,5 @@
 --TEST--
 tinycc 096.05: nodata wanted
---ARGS--
---run
 --CODE--
 #define SKIP 0
 

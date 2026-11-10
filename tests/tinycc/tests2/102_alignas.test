@@ -1,7 +1,5 @@
 --TEST--
 tinycc 102: alignas
---ARGS--
---run
 --CODE--
 _Alignas(16) int i1;
 int _Alignas(16) i2;

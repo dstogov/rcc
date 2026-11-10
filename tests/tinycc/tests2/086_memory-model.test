@@ -1,7 +1,5 @@
 --TEST--
 tinycc 086: memory model
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

@@ -1,7 +1,5 @@
 --TEST--
 tinycc 051: static
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

@@ -1,7 +1,5 @@
 --TEST--
 tinycc 085: asm outside function
---ARGS--
---run
 --XFAIL--
 asm support not implemented yet
 --CODE--

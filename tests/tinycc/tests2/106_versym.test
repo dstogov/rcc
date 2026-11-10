@@ -1,7 +1,5 @@
 --TEST--
 tinycc 106: versym
---ARGS--
---run
 --TARGET--
 !*-windows
 --CODE--

@@ -1,7 +1,5 @@
 --TEST--
 tinycc 039: typedef
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

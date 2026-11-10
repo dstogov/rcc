@@ -1,7 +1,5 @@
 --TEST--
 tinycc 093: integer promotion
---ARGS--
---run
 --CODE--
 /* integer promotion */
 

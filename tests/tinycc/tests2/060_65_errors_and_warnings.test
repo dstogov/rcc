@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.65: error and warnings
---ARGS--
---run
 --CODE--
 #pragma comment(option, "-Wunsupported -Werror -Wno-error=implicit-function-declaration")
 void func()

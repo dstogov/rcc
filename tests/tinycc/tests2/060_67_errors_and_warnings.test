@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.67: error and warnings
---ARGS--
---run
 --CODE--
 void func(int a, int if);
 --EXPECT--

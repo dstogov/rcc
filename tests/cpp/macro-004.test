@@ -1,7 +1,5 @@
 --TEST--
 Macro 004 - valid macros join
---ARGS--
--E -P
 --CODE--
 #define A2(a,b) a ## b 
 #define A3(a,b...) a ## b 

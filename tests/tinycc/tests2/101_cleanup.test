@@ -1,7 +1,5 @@
 --TEST--
 tinycc 101: cleanup
---ARGS--
---run
 --CODE--
 extern int printf(const char*, ...);
 static int glob_i = 0;

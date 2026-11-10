@@ -1,7 +1,5 @@
 --TEST--
 tinycc 132: bound test
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 #include <float.h>

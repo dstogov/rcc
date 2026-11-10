@@ -1,7 +1,5 @@
 --TEST--
 tinycc 121: struct return
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

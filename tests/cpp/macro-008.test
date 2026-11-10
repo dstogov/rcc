@@ -1,7 +1,5 @@
 --TEST--
 Macro 008 - wrong macro name
---ARGS--
--E -P
 --CODE--
 #define 1
 --EXPECT--

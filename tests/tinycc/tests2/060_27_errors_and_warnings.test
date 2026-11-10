@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.27: error and warnings
---ARGS--
---run
 --CODE--
 /* _Alignas is no type qualifier */
 void * _Alignas(16) p1;

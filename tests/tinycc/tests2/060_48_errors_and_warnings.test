@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.48: error and warnings
---ARGS--
---run
 --XFAIL--
 long double is not supported yet
 --CODE--

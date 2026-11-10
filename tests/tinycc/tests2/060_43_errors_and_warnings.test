@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.43: error and warnings
---ARGS--
---run
 --CODE--
 int main () {
     static

@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060: error and warnings
---ARGS--
---run
 --CODE--
 void foo(void) {
 static enum myenum { L = -1 } L;                                                

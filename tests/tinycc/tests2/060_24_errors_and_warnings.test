@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.24: error and warnings
---ARGS--
---run
 --CODE--
 int i;
 void foo(void) {

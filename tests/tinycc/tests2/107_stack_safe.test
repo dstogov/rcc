@@ -1,7 +1,5 @@
 --TEST--
 tinycc 107: stack safe
---ARGS--
---run
 --CODE--
 extern int printf(const char *, ...);
 

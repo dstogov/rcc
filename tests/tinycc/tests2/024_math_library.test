@@ -1,7 +1,5 @@
 --TEST--
 tinycc 024: math library
---ARGS--
---run
 --CODE--
 #define _ISOC99_SOURCE 1
 

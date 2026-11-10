@@ -1,7 +1,5 @@
 --TEST--
 tinycc 095: bitfileds_ms
---ARGS--
---run
 --TARGET--
 !x86
 --CODE--

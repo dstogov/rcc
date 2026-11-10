@@ -1,7 +1,5 @@
 --TEST--
 tinycc 052: unnamed enum
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

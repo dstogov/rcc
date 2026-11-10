@@ -1,7 +1,5 @@
 --TEST--
 tinycc 076: dollars in identifiers
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

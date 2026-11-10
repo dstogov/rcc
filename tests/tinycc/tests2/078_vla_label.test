@@ -1,7 +1,5 @@
 --TEST--
 tinycc 078: vla label
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

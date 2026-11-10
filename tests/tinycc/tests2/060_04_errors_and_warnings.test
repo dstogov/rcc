@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.04: error and warnings
---ARGS--
---run
 --CODE--
 int xxx = 1;
 int xxx;

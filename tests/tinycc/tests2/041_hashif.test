@@ -1,7 +1,5 @@
 --TEST--
 tinycc 041: hashif
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

@@ -1,7 +1,5 @@
 --TEST--
 TCC 05
---ARGS--
--E -P
 --CODE--
 #define t(x,y,z) x ## y ## z
 #define xxx(s) int s[] = { t(1,2,3), t(,4,5), t(6,,7), t(8,9,), \

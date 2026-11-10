@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.53: error and warnings
---ARGS--
---run
 --CODE--
 /* similar to test_var_array2 but with string initializers */
 struct A { int a; char b[]; };

@@ -1,7 +1,5 @@
 --TEST--
 Macro 013 - duplicate macro parameter
---ARGS--
--E -P
 --CODE--
 #define A1(x,x)
 --EXPECT--

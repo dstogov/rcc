@@ -2,8 +2,6 @@
 REPLACE.102: replace variable lane (NEON)
 --TARGET--
 aarch64
---ARGS--
---run
 --CODE--
 #define N 16
 #define I 1

@@ -1,7 +1,5 @@
 --TEST--
 tinycc 044: scoped declarations 
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

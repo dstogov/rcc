@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.29: error and warnings
---ARGS--
---run
 --CODE--
  _Static_assert(1, "1"" is 1");
 struct y {  _Static_assert(0, "0"" is 0"); };

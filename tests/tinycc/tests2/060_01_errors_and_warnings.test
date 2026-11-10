@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.01: error and warnings
---ARGS--
---run
 --CODE--
 struct A {} int i;
 --EXPECT--

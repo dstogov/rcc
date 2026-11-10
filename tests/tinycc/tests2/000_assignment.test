@@ -1,7 +1,5 @@
 --TEST--
 tinycc 000: assignment
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

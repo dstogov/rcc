@@ -1,7 +1,5 @@
 --TEST--
 Macro 009 - missing macro name
---ARGS--
--E -P
 --CODE--
 #define
 --EXPECT--

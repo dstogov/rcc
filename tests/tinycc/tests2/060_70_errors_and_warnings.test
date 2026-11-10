@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.70: error and warnings
---ARGS--
---run
 --CODE--
 int main() {
     char *str = "\Uffffffff";

@@ -1,7 +1,5 @@
 --TEST--
 tinycc 105: local extern
---ARGS--
---run
 --CODE--
 extern int printf(const char *, ...);
 void f(void);

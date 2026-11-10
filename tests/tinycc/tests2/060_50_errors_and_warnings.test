@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.50: error and warnings
---ARGS--
---run
 --CODE--
 int printf(const char*, ...);
 int main()

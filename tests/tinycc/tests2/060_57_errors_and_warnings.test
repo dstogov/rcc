@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.57: error and warnings
---ARGS--
---run
 --CODE--
 struct S {
   int a, a;

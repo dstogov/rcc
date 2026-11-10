@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.62: error and warnings
---ARGS--
---run
 --CODE--
 #pragma comment(option, "-Wall")
 void func()

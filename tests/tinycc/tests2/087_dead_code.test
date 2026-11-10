@@ -1,7 +1,5 @@
 --TEST--
 tinycc 087: dead code
---ARGS--
---run
 --CODE--
 /* This checks various ways of dead code inside if statements
    where there are non-obvious ways of how the code is actually

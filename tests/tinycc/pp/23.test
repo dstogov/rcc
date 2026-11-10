@@ -1,7 +1,5 @@
 --TEST--
 TCC 23
---ARGS--
--E -P
 --CODE--
 #define M_DEFERRED_COMMA            ,
 

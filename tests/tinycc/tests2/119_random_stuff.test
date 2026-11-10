@@ -1,7 +1,5 @@
 --TEST--
 tinycc 119: random stuff
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

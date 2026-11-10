@@ -1,7 +1,5 @@
 --TEST--
 tinycc 116: bound setjmp2
---ARGS--
---run
 --TARGET--
 !*-windows
 --CODE--

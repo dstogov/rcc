@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.02: error and warnings
---ARGS--
---run
 --CODE--
 char int i;
 --EXPECT--

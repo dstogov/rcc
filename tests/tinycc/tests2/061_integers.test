@@ -1,7 +1,5 @@
 --TEST--
 tinycc 061: integers
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

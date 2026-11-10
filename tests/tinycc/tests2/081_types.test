@@ -1,7 +1,5 @@
 --TEST--
 tinycc 081: types
---ARGS--
---run
 --CODE--
 /* The following are all valid decls, even though some subtypes
    are incomplete.  */

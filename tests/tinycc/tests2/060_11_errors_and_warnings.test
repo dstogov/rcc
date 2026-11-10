@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.11: error and warnings
---ARGS--
---run
 --CODE--
 void (*f1)(void);
 void f2(void) {}

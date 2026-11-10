@@ -1,5 +1,5 @@
 --TEST--
-CONVERT.FP2FP.003: 256-bit vectors AVX
+CONVERT.FP2FP.003: 256-bit vectors
 --TARGET--
 x86*
 --ARGS--

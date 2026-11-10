@@ -1,7 +1,5 @@
 --TEST--
 tinycc 080: flexarray
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 struct wchar {

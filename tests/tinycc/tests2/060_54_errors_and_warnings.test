@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.54: error and warnings
---ARGS--
---run
 --CODE--
 n; // warn
 f(); // don't warn

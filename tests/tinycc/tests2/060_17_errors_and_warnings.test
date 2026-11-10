@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.17: error and warnings
---ARGS--
---run
 --CODE--
 static enum myenum { L = -1 } L;                                                
 --EXPECT--

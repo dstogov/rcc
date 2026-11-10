@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.68: error and warnings
---ARGS--
---run
 --CODE--
 int amain(int argc, char *argv[static argc + 1])
 {

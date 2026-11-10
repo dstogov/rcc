@@ -1,7 +1,5 @@
 --TEST--
 ifdef 001 - #ifdef
---ARGS--
--E -P
 --CODE--
 #define A
 0

@@ -1,7 +1,5 @@
 --TEST--
 tinycc 092: enum bitfield
---ARGS--
---run
 --CODE--
 /* This checks if enums needing 8 bit but only having positive
    values are correctly zero extended (instead of sign extended)

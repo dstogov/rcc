@@ -1,7 +1,5 @@
 --TEST--
 tinycc 012: hashdefine
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

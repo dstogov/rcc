@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.61: error and warnings
---ARGS--
---run
 --CODE--
 void v() {}
 int f() { return v(); }

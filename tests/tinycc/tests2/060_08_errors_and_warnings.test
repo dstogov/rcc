@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.08: error and warnings
---ARGS--
---run
 --CODE--
 enum {
     FOO,

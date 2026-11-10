@@ -1,7 +1,5 @@
 --TEST--
 tinycc 130: large argument 
---ARGS--
---run
 --CODE--
 #include<stdio.h>
 

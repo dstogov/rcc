@@ -1,7 +1,5 @@
 --TEST--
 TCC pp-counter
---ARGS--
--E -P
 --CODE--
 X1 __COUNTER__
 X2 __COUNTER__

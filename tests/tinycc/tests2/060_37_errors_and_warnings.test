@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.37: error and warnings
---ARGS--
---run
 --CODE--
 int iii[] = { 1,2,3 };
 extern int iii[];

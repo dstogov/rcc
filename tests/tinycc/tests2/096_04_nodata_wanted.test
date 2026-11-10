@@ -1,7 +1,5 @@
 --TEST--
 tinycc 096.04: nodata wanted
---ARGS--
---run
 --CODE--
 void foo() {
     short w = &foo; /* 2 cast warnings */

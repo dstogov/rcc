@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.06: error and warnings
---ARGS--
---run
 --CODE--
 enum color { RED, GREEN, BLUE };
 enum color { R, G, B };

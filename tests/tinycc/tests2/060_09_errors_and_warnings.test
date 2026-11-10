@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.09: error and warnings
---ARGS--
---run
 --CODE--
 enum rgb3 c = 42;
 --EXPECT--

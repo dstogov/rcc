@@ -1,7 +1,5 @@
 --TEST--
 tinycc 103: implicit memmove 
---ARGS--
---run
 --CODE--
 /* Test that the memmove TCC is emitting for the struct copy
    and hence implicitely declares can be declared properly also

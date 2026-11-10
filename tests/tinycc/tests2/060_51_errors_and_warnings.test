@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.51: error and warnings
---ARGS--
---run
 --CODE--
 static struct var { int i; const char str[]; } var = { 1, "zzz" };
 static struct var_len { int i; const char str[]; } var_array[] =

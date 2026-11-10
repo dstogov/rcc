@@ -1,7 +1,5 @@
 --TEST--
 TCC 13
---ARGS--
--E -P
 --EXT--
 .s
 --CODE--

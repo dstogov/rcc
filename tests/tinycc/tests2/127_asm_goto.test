@@ -1,7 +1,5 @@
 --TEST--
 tinycc 127: asm goto
---ARGS--
---run
 --XFAIL--
 asm support not implemented yet
 --CODE--

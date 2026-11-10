@@ -1,7 +1,5 @@
 --TEST--
 tinycc 019: pointer arithmetic
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

@@ -1,7 +1,5 @@
 --TEST--
 TCC 21
---ARGS--
--E -P
 --CODE--
 /* accept 'defined' as result of substitution */
 

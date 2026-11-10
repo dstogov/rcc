@@ -1,7 +1,5 @@
 --TEST--
 TCC 02
---ARGS--
--E -P
 --CODE--
 #define x 3
 #define f(a) f(x * (a))

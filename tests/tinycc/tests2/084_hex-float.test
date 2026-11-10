@@ -1,7 +1,5 @@
 --TEST--
 tinycc 084: hex float
---ARGS--
---run
 --CODE--
 extern int printf(const char *format, ...);
 

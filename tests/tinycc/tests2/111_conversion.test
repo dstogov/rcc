@@ -1,7 +1,5 @@
 --TEST--
 tinycc 111: conversion
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

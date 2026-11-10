@@ -1,7 +1,5 @@
 --TEST--
 tinycc 089: nocode wanted
---ARGS--
---run
 --CODE--
 extern int printf(const char *format, ...);
 static void kb_wait_1(void)

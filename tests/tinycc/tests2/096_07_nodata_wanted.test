@@ -1,7 +1,5 @@
 --TEST--
 tinycc 096.07: nodata wanted
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 int main(int argc, char **argv)

@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.33: error and warnings
---ARGS--
---run
 --CODE--
   enum e t[3];
 --EXPECT--

@@ -2,8 +2,6 @@
 EXTRACT.001: extract variable lane
 --TARGET--
 x86*
---ARGS--
---run
 --CODE--
 #define N 16
 #define I 1

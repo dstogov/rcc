@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.21: error and warnings
---ARGS--
---run
 --CODE--
 int ga = 0.42 { 2 };
 --EXPECT--

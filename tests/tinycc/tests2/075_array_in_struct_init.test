@@ -1,7 +1,5 @@
 --TEST--
 tinycc 075: array in struct init
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

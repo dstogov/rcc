@@ -1,7 +1,5 @@
 --TEST--
 tinycc 003: struct
---ARGS--
---run
 --CODE--
 extern int printf(const char*, ...);
 

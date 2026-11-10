@@ -1,7 +1,5 @@
 --TEST--
 tinycc 030: hanoi
---ARGS--
---run
 --CODE--
 /* example from http://barnyard.syr.edu/quickies/hanoi.c */
 

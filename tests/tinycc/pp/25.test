@@ -1,7 +1,5 @@
 --TEST--
 TCC 25
---ARGS--
--E -P
 --CODE--
 #define FUNC_LIKE(a,b) (a+b+c)
 #define FUNC_LIKE(b,a) (b+a+c)

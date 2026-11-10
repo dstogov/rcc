@@ -1,7 +1,5 @@
 --TEST--
 tinycc 016: nesting
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

@@ -1,7 +1,5 @@
 --TEST--
 tinycc 033: ternary op
---ARGS--
---run
 --CODE--
 #include <assert.h>
 extern int printf(const char*, ...);

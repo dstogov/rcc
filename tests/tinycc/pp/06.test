@@ -1,7 +1,5 @@
 --TEST--
 TCC 06
---ARGS--
--E -P
 --CODE--
 #define X(a,b, \
 	c,d) \

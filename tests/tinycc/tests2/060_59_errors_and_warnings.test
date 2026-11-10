@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.59: error and warnings
---ARGS--
---run
 --CODE--
 extern int array[2];
 int array[] = { 1, 2, 3 };

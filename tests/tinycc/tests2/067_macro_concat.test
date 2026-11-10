@@ -1,7 +1,5 @@
 --TEST--
 tinycc 067: macro concat
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.41: error and warnings
---ARGS--
---run
 --CODE--
 static int hello(int);
 int main () {

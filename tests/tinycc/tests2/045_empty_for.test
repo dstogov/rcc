@@ -1,7 +1,5 @@
 --TEST--
 tinycc 045: empty for
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

@@ -1,7 +1,5 @@
 --TEST--
 tinycc 036: array initializers
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

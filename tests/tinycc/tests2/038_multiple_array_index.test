@@ -1,7 +1,5 @@
 --TEST--
 tinycc 038: multiple array index
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

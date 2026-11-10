@@ -1,7 +1,5 @@
 --TEST--
 TCC 22
---ARGS--
--E -P
 --CODE--
 #define TRACE(a,b,c) X a X b X c X
 #define rettrue(x) 1

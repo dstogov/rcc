@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.14: error and warnings
---ARGS--
---run
 --CODE--
 void f() { _Generic((int const *[]){0}, int:0); }
 --EXPECT--

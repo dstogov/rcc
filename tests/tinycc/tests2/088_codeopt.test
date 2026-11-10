@@ -1,7 +1,5 @@
 --TEST--
 tinycc 088: codeopt
---ARGS--
---run
 --CODE--
 /* Check some way in where code suppression caused various
    miscompilations.  */

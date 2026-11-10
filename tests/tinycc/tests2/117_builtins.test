@@ -1,7 +1,5 @@
 --TEST--
 tinycc 117: builtins
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

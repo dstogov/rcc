@@ -1,7 +1,5 @@
 --TEST--
 tinycc 064: macro nesting
---ARGS--
---run
 --CODE--
 #include <stdio.h>	// printf()
 

@@ -1,7 +1,5 @@
 --TEST--
 Macro 010 - incorrect argument name
---ARGS--
--E -P
 --CODE--
 #define A1(__VA_ARGS__) z
 --EXPECT--

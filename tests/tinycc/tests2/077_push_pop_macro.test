@@ -1,7 +1,5 @@
 --TEST--
 tinycc 077: push pop macro
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.26: error and warnings
---ARGS--
---run
 --CODE--
 int X=1;
 

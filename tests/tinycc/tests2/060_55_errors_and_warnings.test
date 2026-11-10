@@ -1,7 +1,5 @@
 --TEST--
 tinycc 060.55: error and warnings
---ARGS--
---run
 --CODE--
 int n[sizeof({3;})]; // crashed in block() due to missing local scope
 --EXPECT--

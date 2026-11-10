@@ -1,7 +1,5 @@
 --TEST--
 Macro 012 - argument after variadic
---ARGS--
--E -P
 --CODE--
 #define A1(...,b)
 --EXPECT--

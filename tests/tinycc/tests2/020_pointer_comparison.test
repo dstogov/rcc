@@ -1,7 +1,5 @@
 --TEST--
 tinycc 020: pointer comparison
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

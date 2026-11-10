@@ -1,7 +1,5 @@
 --TEST--
 tinycc 015: recursion
---ARGS--
---run
 --CODE--
 #include <stdio.h>
 

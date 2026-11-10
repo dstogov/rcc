@@ -1,7 +1,5 @@
 --TEST--
 TCC 04
---ARGS--
--E -P
 --CODE--
 #define foobar 1
 #define C(x,y) x##y

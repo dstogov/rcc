@@ -1,7 +1,5 @@
 --TEST--
 TCC 16
---ARGS--
--E -P
 --CODE--
 /* The following should warn */
 #define A ...

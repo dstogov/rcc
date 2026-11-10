@@ -1,7 +1,5 @@
 --TEST--
 tinycc 128.02: run atexit
---ARGS--
---run
 --TARGET--
 !*-windows
 --CODE--

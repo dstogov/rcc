@@ -1,7 +1,5 @@
 --TEST--
 TCC 18
---ARGS--
--E -P
 --CODE--
 #define M_RETI_ARG27(x,y,z,aa, ...)    aa
 #define M_RET_ARG27(...)        M_RETI_ARG27(__VA_ARGS__)

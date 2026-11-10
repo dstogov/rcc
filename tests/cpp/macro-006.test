@@ -1,7 +1,5 @@
 --TEST--
 Macro 006 - unterminated #define
---ARGS--
--E -P
 --CODE--
 #define A1(x
 --EXPECT--
