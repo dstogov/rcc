@@ -2,6 +2,8 @@
 SHUFFLE.105: 128-bit FLOAT vectors SSE2 optimized constant mask (NEON)
 --TARGET--
 aarch64
+--ARGS--
+--run
 --CODE--
 #define N 16
 
