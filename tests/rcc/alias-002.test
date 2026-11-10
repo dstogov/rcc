@@ -1,7 +1,9 @@
 --TEST--
 Alias 002:
 --ARGS--
---run
+-O0 --run
+-O1 --run
+-O2 --run
 --CODE--
 int printf(const char *, ...);
 const char x[] = "OK\n";

@@ -1,7 +1,9 @@
 --TEST--
 VLA 007:
 --ARGS--
---run
+-O0 --run
+-O1 --run
+-O2 --run
 --CODE--
 int main() {
 	int n = 5;

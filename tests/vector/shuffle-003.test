@@ -3,7 +3,11 @@ SHUFFLE.003: 128-bit DOUBLE vectors SSE2 optimized constant mask
 --TARGET--
 x86*
 --ARGS--
--mno-sse4 -mno-avx2 --run
+-mno-sse4 -mno-sse3 -mno-ssse3 -mno-avx2 --run
+-mno-avx2 --run
+-mavx -mno-avx2 --run
+-mavx --run
+-O0 --run
 --CODE--
 #define N 16
 

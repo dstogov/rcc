@@ -2,6 +2,8 @@
 generic 002:
 --ARGS--
 -fno-inline --run
+-O1 --run
+-O2 --run
 --CODE--
 extern int printf(const char *, ...);
 

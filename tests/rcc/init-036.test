@@ -1,7 +1,9 @@
 --TEST--
 Initializers 036: initialization with range designator evaluates expression once
 --ARGS--
---run
+-O0 --run
+-O1 --run
+-O2 --run
 --CODE--
 int printf(const char *, ...);
 int main()

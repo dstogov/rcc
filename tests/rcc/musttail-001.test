@@ -1,7 +1,5 @@
 --TEST--
 __attribute__((musttail)) 001:
---ARGS--
---run
 --CODE--
 __attribute__((musttail)) int bar(int x) {
 	return x * 2;

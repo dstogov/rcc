@@ -1,7 +1,9 @@
 --TEST--
 Initializers 021:
 --ARGS--
---run
+-O0 --run
+-O1 --run
+-O2 --run
 --CODE--
 typedef struct {int x,y;} t;
 int test(int x, int y)

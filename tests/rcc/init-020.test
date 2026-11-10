@@ -1,7 +1,8 @@
 --TEST--
 Initializers 020:
 --ARGS--
---run
+-O1 --run
+-O2 --run
 --CODE--
 extern const char *printf(const char *msg, ...);
 struct {int x; char a[];} s = {1, "abcd"}; 

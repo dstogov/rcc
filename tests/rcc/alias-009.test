@@ -1,7 +1,9 @@
 --TEST--
 Alias 009:
 --ARGS--
---run
+-O0 --run
+-O1 --run
+-O2 --run
 --CODE--
 int puts(const char *);
 int x(const char * f, ...) {

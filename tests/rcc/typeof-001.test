@@ -1,7 +1,9 @@
 --TEST--
 typeof 001:
 --ARGS--
---run
+-O0 --run
+-O1 --run
+-O2 --run
 --CODE--
 extern int printf(const char *, ...);
 int test(void) {

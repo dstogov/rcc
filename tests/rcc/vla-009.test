@@ -1,7 +1,5 @@
 --TEST--
 VLA 009:
---ARGS--
---run
 --CODE--
 int main() {
 	int n = 5;

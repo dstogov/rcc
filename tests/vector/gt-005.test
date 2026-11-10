@@ -1,9 +1,13 @@
 --TEST--
-GT.005: 64-bit vectors SSE2
+GT.005: 64-bit vectors
 --TARGET--
 x86*
 --ARGS--
--mno-sse4 -mno-avx2 --run
+-mno-sse4 -mno-sse3 -mno-ssse3 -mno-avx2 --run
+-mno-avx2 --run
+-mavx -mno-avx2 --run
+-mavx --run
+-O0 --run
 --CODE--
 #define N 8
 #define I 0

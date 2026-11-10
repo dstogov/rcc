@@ -1,7 +1,9 @@
 --TEST--
 Alias 006:
 --ARGS--
---run
+-O0 --run
+-O1 --run
+-O2 --run
 --CODE--
 int x(const char *, ...) __asm__("printf");
 int main() {

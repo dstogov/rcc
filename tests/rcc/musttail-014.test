@@ -1,7 +1,5 @@
 --TEST--
 __attribute__((musttail)) 014:
---ARGS--
---run
 --CODE--
 int printf(const char *, ...);
 void dtor(int *x)

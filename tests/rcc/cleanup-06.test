@@ -1,7 +1,8 @@
 --TEST--
 __attribute__((cleanup)) 006:
 --ARGS--
---run
+-O1 --run
+-O2 --run
 --CODE--
 int printf(const char *, ...);
 

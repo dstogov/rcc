@@ -1,7 +1,9 @@
 --TEST--
 Initializers 039: initialization of flexable array with array range designator
 --ARGS--
---run
+-O0 --run
+-O1 --run
+-O2 --run
 --CODE--
 #define array_size(a) (sizeof a / sizeof a[0])
 

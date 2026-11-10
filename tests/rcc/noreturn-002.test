@@ -1,7 +1,9 @@
 --TEST--
 noreturn 002:
 --ARGS--
---run
+-O0 --run
+-O1 --run
+-O2 --run
 --CODE--
 extern _Noreturn void exit(int);
 int main() {

@@ -3,8 +3,11 @@ CONVERT.FP2FP.001: 128-bit vectors
 --TARGET--
 x86*
 --ARGS--
--mno-sse4 -mno-avx2 --run
+-mno-sse4 -mno-sse3 -mno-ssse3 -mno-avx2 --run
+-mno-avx2 --run
+-mavx -mno-avx2 --run
 -mavx --run
+-O0 --run
 --CODE--
 int printf(const char *, ...);
 

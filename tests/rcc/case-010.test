@@ -1,7 +1,5 @@
 --TEST--
 case 010:
---ARGS--
---run
 --CODE--
 extern int printf(const char *, ...);
 int test(int c) {

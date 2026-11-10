@@ -1,7 +1,9 @@
 --TEST--
 noreturn 003:
 --ARGS--
---run
+-O0 --run
+-O1 --run
+-O2 --run
 --CODE--
 extern __attribute__((noreturn)) void exit(int);
 int main() {

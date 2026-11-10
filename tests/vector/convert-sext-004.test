@@ -5,6 +5,7 @@ x86*
 --ARGS--
 -mavx -mno-avx2 --run
 -mavx -mavx2 --run
+-O0 -mavx --run
 --CODE--
 int printf(const char *, ...);
 

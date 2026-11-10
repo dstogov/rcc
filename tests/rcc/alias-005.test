@@ -1,7 +1,5 @@
 --TEST--
 Alias 005:
---ARGS--
---run
 --CODE--
 int printf(const char *, ...);
 int x(const char *, ...) __attribute__((alias("printf")));

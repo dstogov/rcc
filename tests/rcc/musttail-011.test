@@ -1,7 +1,5 @@
 --TEST--
 __attribute__((musttail)) 011:
---ARGS--
---run
 --CODE--
 int printf(const char *, ...);
 int bar(int *x) {

@@ -1,7 +1,9 @@
 --TEST--
 Alias 001:
 --ARGS--
---run
+-O0 --run
+-O1 --run
+-O2 --run
 --CODE--
 int printf(const char *, ...);
 void x(void) {

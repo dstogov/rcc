@@ -1,7 +1,9 @@
 --TEST--
 Enum 003: (Use __attribute instead of __attribute__ for workaround)
 --ARGS--
---run
+-O0 --run
+-O1 --run
+-O2 --run
 --CODE--
 #include <stdio.h>
 
