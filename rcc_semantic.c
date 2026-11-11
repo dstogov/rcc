@@ -10429,26 +10429,48 @@ void c_do_generic_type(rcc_ctx *rcc, c_generic *g, const c_type *type, bool is_t
 	c_do_end_nocode(rcc, g->old_control);
 	g->old_control = c_do_nocode(rcc);
 	g->last_control = rcc->active_ctx->control;
+
+	if ((rcc->c_opt_flags & C_OPT_LEVEL) == 0) {
+		/* With -O0 we have to wrap each _Generic case into a separate basick block */
+		g->last_control = ir_END();
+		ir_BEGIN(g->last_control);
+	}
 }
 
 void c_do_generic_case(rcc_ctx *rcc, c_generic *g, const c_type *type, c_value *v)
 {
+	ir_ref end = rcc->active_ctx->control;
+
+	if ((rcc->c_opt_flags & C_OPT_LEVEL) == 0) {
+		/* With -O0 we have to wrap each _Generic case into a separate basick block */
+		end = ir_END();
+		ir_BEGIN(end);
+	}
+
 	if (c_compatible_types(g->type, type, 0, 0)) {
 		if (c_value_is_set(&g->matched_value)) yy_error("duplicate matched type case in \"_Generic\"");
 		g->matched_value = *v;
 		g->matched_control_start = g->last_control;
-		g->matched_control_end = rcc->active_ctx->control;
+		g->matched_control_end = end;
 	}
-	g->last_control = rcc->active_ctx->control;
+	g->last_control = end;
 }
 
 void c_do_generic_default(rcc_ctx *rcc, c_generic *g, c_value *v)
 {
+	ir_ref end = rcc->active_ctx->control;
+
+	if ((rcc->c_opt_flags & C_OPT_LEVEL) == 0) {
+		/* With -O0 we have to wrap each _Generic case into a separate basick block */
+		end = ir_END();
+		ir_BEGIN(end);
+	}
+
 	if (c_value_is_set(&g->default_value)) yy_error("duplicate \"default\" case in \"_Generic\"");
 	g->default_value = *v;
 	g->default_control_start = g->last_control;
-	g->default_control_end = rcc->active_ctx->control;
-	g->last_control = rcc->active_ctx->control;
+	g->default_control_end = end;
+	g->last_control = end;
 }
 
 void c_do_generic_end(rcc_ctx *rcc, c_value *res, c_generic *g)
