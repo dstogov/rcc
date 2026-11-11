@@ -9264,9 +9264,11 @@ c_label *c_do_set_label(rcc_ctx *rcc, c_name name)
 
 	label->vla_block = rcc->active_scope->last_vla_block;
 	if (label->src_list) {
+		ir_ref prev_input = IR_UNUSED;
 		ir_ref ref = label->src_list;
 		uint32_t n = 0;
 		ir_ref *srcs, end;
+		ir_ref link = IR_UNUSED;
 
 		/* count inputs count */
 		do {
@@ -9275,15 +9277,58 @@ c_label *c_do_set_label(rcc_ctx *rcc, c_name name)
 			IR_ASSERT(insn->op == IR_END);
 			if (insn->op3) {
 				/* Cleanup Variables */
+				ir_ref cleanup_ref = insn->op3;
 				ir_ref orig_control = rcc->active_ctx->control;
 
-				rcc->active_ctx->control =
-					rcc->active_ctx->ir_base[insn->op1].op == IR_BLOCK_END ?
-						rcc->active_ctx->ir_base[insn->op1].op1 : insn->op1;
-				c_do_cleanup_vars_goto(rcc, c_ref_to_cleanup_sym(rcc, insn->op3), rcc->active_scope->cleanup_sym);
+				if ((rcc->c_opt_flags & C_OPT_LEVEL) == 0) {
+					/* With -O0 we have to put cleanp calls into a separate basick block */
+					if (orig_control && !link) {
+						link = ir_END();
+						orig_control = IR_UNUSED;
+					}
+					rcc->active_ctx->control = IR_UNUSED;
+					ir_BEGIN(ref);
+				} else {
+					/* With -O1 (and above) we may link cleanup calls into the control chain */
+					rcc->active_ctx->control =
+						rcc->active_ctx->ir_base[insn->op1].op == IR_BLOCK_END ?
+							rcc->active_ctx->ir_base[insn->op1].op1 : insn->op1;
+				}
+
+				c_do_cleanup_vars_goto(rcc, c_ref_to_cleanup_sym(rcc, cleanup_ref), rcc->active_scope->cleanup_sym);
+
 				insn = &rcc->active_ctx->ir_base[ref];
-				insn->op1 = rcc->active_ctx->control;
-				insn->op3 = IR_UNUSED;
+				if ((rcc->c_opt_flags & C_OPT_LEVEL) == 0) {
+					/* With -O0 we have to put cleanp calls into a separate basick block */
+					ir_ref next = insn->op2;
+					ir_insn *prev_insn = &rcc->active_ctx->ir_base[insn->op1];
+					ir_ref block_end = IR_UNUSED;
+
+					if (prev_insn->op == IR_BLOCK_END) {
+						insn->op1 = prev_insn->op1;
+						block_end = prev_insn->op2;
+						prev_insn->op = IR_NOP;
+						prev_insn->op1 = IR_UNUSED;
+						prev_insn->op2 = IR_UNUSED;
+					}
+					insn->op2 = IR_UNUSED;
+					insn->op3 = IR_UNUSED;
+					if (block_end) {
+						ir_BLOCK_END(block_end);
+					}
+					ref = ir_END();
+					if (prev_input) {
+						rcc->active_ctx->ir_base[prev_input].op2 = ref;
+					} else {
+						label->src_list = ref;
+					}
+					insn = &rcc->active_ctx->ir_base[ref];
+					insn->op2 = next;
+				} else {
+					/* With -O1 (and above) we may link cleanup calls into the control chain */
+					insn->op1 = rcc->active_ctx->control;
+					insn->op3 = IR_UNUSED;
+				}
 				rcc->active_ctx->control = orig_control;
 			}
 			/* fix BLOCK_END instructions inseted by forward GOTO */
@@ -9309,9 +9354,14 @@ c_label *c_do_set_label(rcc_ctx *rcc, c_name name)
 			} else if (label->vla_block) {
 				yy_error_fmt("jump to label \"%s\" into scope with variable modified type", yy_sym2str(rcc, name));
 			}
+			prev_input = ref;
 			ref = insn->op2;
 			n++;
 		} while (ref != IR_UNUSED);
+
+		if (link) {
+			ir_BEGIN(link);
+		}
 
 		srcs = alloca(sizeof(ir_ref) * (n + 2));
 

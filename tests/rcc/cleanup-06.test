@@ -1,6 +1,7 @@
 --TEST--
 __attribute__((cleanup)) 006:
 --ARGS--
+-O0 --run
 -O1 --run
 -O2 --run
 --CODE--
