@@ -1,6 +1,7 @@
 --TEST--
 Initializers 020:
 --ARGS--
+-O0 --run
 -O1 --run
 -O2 --run
 --CODE--
@@ -14,5 +15,6 @@ int main() {
 	return 0;
 }
 --EXPECT--
-abcd
-dcba
+./tests/rcc/init-020.c:5:43: error: non-static initialization of flexible array member is not allowed
+
+exit code = 1

@@ -10031,6 +10031,9 @@ void c_do_init_set(rcc_ctx *rcc, c_sym *obj, c_init *init, c_value *val)
 			if (type->attr & C_ATTR_FLEXIBLE) {
 				if (obj->value.type == type) {
 					new_size = len;
+				} else if (!c_value_is_const(&obj->value)
+				 && !(c_value_is_ref(&obj->value) && IR_IS_CONST_REF(obj->value.u.ref))) {
+					yy_error("non-static initialization of flexible array member is not allowed");
 				} else if (obj->value.type->kind == C_TYPE_STRUCT
 				 && obj->value.type->record.fields[obj->value.type->record.num_fields-1].type == type) {
 					/* last element of struct */
