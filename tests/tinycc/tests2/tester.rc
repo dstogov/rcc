@@ -1,2 +1,3 @@
 --ARGS--
 --run
+-O0 --run
