@@ -901,7 +901,7 @@ bool c_linker_fix_reloc(rcc_ctx *rcc, c_sym *obj, size_t obj_offset, c_value *va
 		n = IR_EXT_STR(name);
 		sym = rcc->yy_hash.data[n].sym;
 		IR_ASSERT(sym && (sym->kind == C_SYM_VAR || (sym->kind == C_SYM_FUNC && offset == 0)));
-		if (rcc->c_flags & C_DUMP_IR) {
+		if (rcc->c_flags & (C_DUMP_IR|C_DUMP_LLVM|C_DUMP_C)) {
 			c_linker_add_reloc(rcc, obj, obj_offset, n, offset);
 		}
 		if (c_value_is_const(&sym->value)) {
@@ -915,7 +915,7 @@ bool c_linker_fix_reloc(rcc_ctx *rcc, c_sym *obj, size_t obj_offset, c_value *va
 				ir_list_push(&rcc->codegen_queue, n);
 			}
 			if (rcc->c_flags & C_RUN) {
-				if (!(rcc->c_flags & C_DUMP_IR)) {
+				if (!(rcc->c_flags & (C_DUMP_IR|C_DUMP_LLVM|C_DUMP_C))) {
 					/* reloc was already added before */
 					c_linker_add_reloc(rcc, obj, obj_offset, n, offset);
 				}
@@ -934,7 +934,7 @@ bool c_linker_fix_reloc(rcc_ctx *rcc, c_sym *obj, size_t obj_offset, c_value *va
 
 		IR_ASSERT(IR_IS_EXT_STR(name));
 		n = IR_EXT_STR(name);
-		if (rcc->c_flags & (C_DUMP_IR|C_RUN)) {
+		if (rcc->c_flags & (C_DUMP_IR|C_DUMP_LLVM|C_DUMP_C|C_RUN)) {
 			c_linker_add_reloc(rcc, obj, obj_offset, n, 0);
 		}
 		if (rcc->c_flags & C_RUN) {
@@ -958,7 +958,7 @@ bool c_linker_fix_reloc(rcc_ctx *rcc, c_sym *obj, size_t obj_offset, c_value *va
 		c_sym *sym = yy_hash.data[n].sym;
 
 		IR_ASSERT(sym && sym->kind == C_SYM_FUNC && offset == 0);
-		if (rcc->c_flags & C_DUMP_IR) {
+		if (rcc->c_flags & (C_DUMP_IR|C_DUMP_LLVM|C_DUMP_C)) {
 			c_linker_add_reloc(obj, obj_offset, n, 0);
 		}
 		if (c_value_is_const(&sym->value)) {
@@ -1575,6 +1575,7 @@ static void rcc_emit_llvm(rcc_ctx *rcc, FILE *f)
 		if (p->sym && p->sym->kind == C_SYM_VAR) {
 			uint32_t flags = 0;
 			const char *str;
+			size_t size;
 
 			if (p->sym->linkage == C_LINK_INTERNAL) {
 				flags |= IR_STATIC;
@@ -1589,9 +1590,47 @@ static void rcc_emit_llvm(rcc_ctx *rcc, FILE *f)
 			} else {
 				str = p->str;
 			}
+			if (p->sym->is_implemented) {
+				flags |= IR_INITIALIZED;
+			}
+			if (p->sym->is_string) {
+				flags |= IR_CONST_STRING;
+				size = (size_t)p->sym->value.u.ref;
+			} else {
+				size = p->sym->value.type->size;
+			}
 			//TODO: type ???
-			ir_emit_llvm_sym_decl(str, flags, f);
-			//TODO: initializer ???
+			ir_emit_llvm_sym_decl(str, flags, size, f);
+
+			if (p->sym->is_implemented) {
+				if (p->sym->is_string && p->sym->value.type->array.type->size == 1) {
+					ir_emit_llvm_sym_data_str(0, p->sym->value.u.val.ptr, size, f);
+				} else {
+					size_t pos = 0;
+
+					if (p->sym->reloc) {
+						c_reloc *rel;
+
+						rcc_sort_relocs(p->sym);
+						rel = p->sym->reloc;
+						while (rel) {
+							if (rel->obj_offset > pos) {
+								ir_emit_llvm_sym_data(pos, (char*)p->sym->value.u.val.ptr + pos, rel->obj_offset - pos, f);
+								pos += rel->obj_offset - pos;
+							}
+							// TODO: SY, FUNC or LABEL ???
+							ir_emit_llvm_sym_data_ref(pos, IR_SYM, yy_sym2str(rcc, rel->name), rel->name_offset, f);
+							pos += sizeof(void*);
+							rel = rel->next;
+						}
+					}
+
+					if (size > pos) {
+						ir_emit_llvm_sym_data(pos, (char*)p->sym->value.u.val.ptr + pos, size - pos, f);
+					}
+				}
+				ir_emit_llvm_sym_data_end(flags, f);
+			}
 		}
 	}
 
@@ -1637,6 +1676,7 @@ static void rcc_emit_c(rcc_ctx *rcc, FILE *f)
 		if (p->sym && p->sym->kind == C_SYM_VAR) {
 			uint32_t flags = 0;
 			const char *str;
+			size_t size;
 
 			if (p->sym->linkage == C_LINK_INTERNAL) {
 				flags |= IR_STATIC;
@@ -1651,9 +1691,47 @@ static void rcc_emit_c(rcc_ctx *rcc, FILE *f)
 			} else {
 				str = p->str;
 			}
+			if (p->sym->is_implemented) {
+				flags |= IR_INITIALIZED;
+			}
+			if (p->sym->is_string) {
+				flags |= IR_CONST_STRING;
+				size = (size_t)p->sym->value.u.ref;
+			} else {
+				size = p->sym->value.type->size;
+			}
 			//TODO: type ???
-			ir_emit_c_sym_decl(str, flags, f);
-			//TODO: initializer ???
+			ir_emit_c_sym_decl(str, flags, size, f);
+
+			if (p->sym->is_implemented) {
+				if (p->sym->is_string && p->sym->value.type->array.type->size == 1) {
+					ir_emit_c_sym_data_str(0, p->sym->value.u.val.ptr, size, f);
+				} else {
+					size_t pos = 0;
+
+					if (p->sym->reloc) {
+						c_reloc *rel;
+
+						rcc_sort_relocs(p->sym);
+						rel = p->sym->reloc;
+						while (rel) {
+							if (rel->obj_offset > pos) {
+								ir_emit_c_sym_data(pos, (char*)p->sym->value.u.val.ptr + pos, rel->obj_offset - pos, f);
+								pos += rel->obj_offset - pos;
+							}
+							// TODO: SY, FUNC or LABEL ???
+							ir_emit_c_sym_data_ref(pos, IR_SYM, yy_sym2str(rcc, rel->name), rel->name_offset, f);
+							pos += sizeof(void*);
+							rel = rel->next;
+						}
+					}
+
+					if (size > pos) {
+						ir_emit_c_sym_data(pos, (char*)p->sym->value.u.val.ptr + pos, size - pos, f);
+					}
+				}
+				ir_emit_c_sym_data_end(flags, f);
+			}
 		}
 	}
 
