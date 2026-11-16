@@ -3587,13 +3587,13 @@ ir_ref c_do_alloca(rcc_ctx *rcc, size_t size, uint32_t align, bool zero)
 	ref = ir_ALLOCA(size_ref);
 	rcc->active_ctx->ir_base[ref].op3 = align;
 
-	if (zero) {
-		ir_memzero(rcc, ref, size_ref, align);
-	}
-
 	if (rcc->c_prologue_end) {
 		rcc->active_ctx->ir_base[rcc->c_prologue_end].op1 = rcc->active_ctx->control;
 		rcc->active_ctx->control = old_control;
+	}
+
+	if (zero) {
+		ir_memzero(rcc, ref, size_ref, align);
 	}
 
 	return ref;
