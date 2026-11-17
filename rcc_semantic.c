@@ -8732,9 +8732,16 @@ void c_do_loop_end(rcc_ctx *rcc, c_loop *loop)
 
 void c_do_for_next_start(rcc_ctx *rcc, c_loop *loop)
 {
+	ir_ref end;
+
+	if (rcc->c_opt_flags & C_OPT_LEVEL) {
+		end = rcc->active_ctx->control;
+    } else {
+		end = ir_END();
+	}
 	/* store "control" link in BEGIN.op2 */
 	loop->next = rcc->active_ctx->control =
-		ir_emit3(rcc->active_ctx, IR_BEGIN, 1, rcc->active_ctx->control, rcc->active_ctx->flags);
+		ir_emit3(rcc->active_ctx, IR_BEGIN, 1, end, rcc->active_ctx->flags);
 	/* disable FOLDING */
 	rcc->active_ctx->flags &= ~IR_OPT_FOLDING;
 }
@@ -8745,7 +8752,11 @@ void c_do_for_next_end(rcc_ctx *rcc, c_loop *loop)
 	ir_ref next = loop->next;
 
 	/* restore "control" link from BEGIN.op2 */
-	rcc->active_ctx->control = rcc->active_ctx->ir_base[next].op2;
+	if ((rcc->c_opt_flags & C_OPT_LEVEL) == 0) {
+		ir_BEGIN(rcc->active_ctx->ir_base[next].op2);
+	} else {
+		rcc->active_ctx->control = rcc->active_ctx->ir_base[next].op2;
+	}
 	/* restore FOLDING */
 	rcc->active_ctx->flags = rcc->active_ctx->ir_base[next].op3;
 	/* store END of "next" block in BEGIN.op2 */

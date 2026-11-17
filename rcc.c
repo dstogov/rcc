@@ -1001,6 +1001,8 @@ void rcc_ir_init(rcc_ctx *rcc, uint32_t flags)
 	flags |= IR_FUNCTION;
 	if ((rcc->c_opt_flags & C_OPT_LEVEL) > 0) {
 		flags |= IR_OPT_FOLDING | IR_OPT_CFG | IR_OPT_CODEGEN;
+	} else {
+		flags |= IR_NO_OPT;
 	}
 	if (rcc->c_opt_flags & C_OPT_TAILCALL) {
 		flags |= IR_OPT_TAILCALL;
