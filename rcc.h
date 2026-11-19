@@ -1477,6 +1477,7 @@ struct _rcc_ctx {
 	uint32_t              ir_flags;                /* IR context flags (see IR_* defines in ir.h) */
 	uint32_t              ir_mflags;               /* CPU specific flags (see IR_X86_... in ir.h) */
 	uint32_t              ir_mflags_disabled;      /* CPU specific flags (see IR_X86_... in ir.h) */
+	uint32_t              ir_debug_flags;          /* Debug flags (see IR_DEBUG_... in ir.h) */
 	uint64_t              ir_debug_regset;
 	uint32_t              ir_save_flags;           /* modificators for IR dumps (see IR_SAVE_* in ir.h) */
 	ir_code_buffer        code_buffer;             /* pre-allocated JIT code area */

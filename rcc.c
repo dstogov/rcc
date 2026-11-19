@@ -1010,6 +1010,7 @@ void rcc_ir_init(rcc_ctx *rcc, uint32_t flags)
 	flags |= rcc->ir_flags;
 	ir_init(ctx, flags, 256, 1024);
 	ctx->mflags = rcc->ir_mflags;
+	ctx->debug_flags = rcc->ir_debug_flags;
 	ctx->fixed_regset = ~rcc->ir_debug_regset | rcc->c_fixed_regset;
 	ctx->loader = &rcc->c_linker.l;
 }
@@ -2169,6 +2170,7 @@ static void rcc_help(const char *cmd)
 		"  --debug-regalloc           - debug register allocator\n"
 		"  --debug-regset <bit-mask>  - restrict available register set\n"
 		"  --debug-bb-scheduling      - debug BB PLCEMENT optimization pass\n"
+		"  --debug-dessa              - debug SSA destruction\n"
 #endif
 		"Utility Options\n"
 		"  --emit-llvm                - convert final IR to LLVM code (implementation is incomplete)\n"
@@ -2421,17 +2423,19 @@ static int rcc_parse_option(rcc_ctx *rcc, const char *opt, const char *arg, bool
 		rcc->c_flags |= C_DUMP_DOT;
 #ifdef IR_DEBUG
 	} else if (strcmp(opt, "--debug-sccp") == 0) {
-		rcc->ir_flags |= IR_DEBUG_SCCP;
+		rcc->ir_debug_flags |= IR_DEBUG_SCCP;
 	} else if (strcmp(opt, "--debug-gcm") == 0) {
-		rcc->ir_flags |= IR_DEBUG_GCM;
+		rcc->ir_debug_flags |= IR_DEBUG_GCM;
 	} else if (strcmp(opt, "--debug-gcm-split") == 0) {
-		rcc->ir_flags |= IR_DEBUG_GCM_SPLIT;
+		rcc->ir_debug_flags |= IR_DEBUG_GCM_SPLIT;
 	} else if (strcmp(opt, "--debug-scheduling") == 0) {
-		rcc->ir_flags |= IR_DEBUG_SCHEDULE;
+		rcc->ir_debug_flags |= IR_DEBUG_SCHEDULE;
 	} else if (strcmp(opt, "--debug-regalloc") == 0) {
-		rcc->ir_flags |= IR_DEBUG_RA;
+		rcc->ir_debug_flags |= IR_DEBUG_RA;
 	} else if (strcmp(opt, "--debug-bb-scheduling") == 0) {
-		rcc->ir_flags |= IR_DEBUG_BB_SCHEDULE;
+		rcc->ir_debug_flags |= IR_DEBUG_BB_SCHEDULE;
+	} else if (strcmp(opt, "--debug-dessa") == 0) {
+		rcc->ir_debug_flags |= IR_DEBUG_DESSA;
 #endif
 	} else if (strcmp(opt, "--debug-regset") == 0) {
 		if (!arg || arg[0] == '-') {
